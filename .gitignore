@@ -154,6 +154,7 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+.pylint.d/
 .dmypy.json
 dmypy.json
 
@@ -205,7 +206,9 @@ sam-installation
 TAGS
 bin/
 *.whl
-samconfig.toml
+samconfig*.toml
+.samconfig*.toml
+samconfig.toml-*
 .envrc
 .env
 .op
@@ -218,3 +221,4 @@ etc/planttracer-nginx-patch.*
 .beads-credential-key
 .beads/proxieddb/
 *.ptb
+samconfigs/

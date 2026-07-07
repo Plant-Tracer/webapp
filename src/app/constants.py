@@ -6,8 +6,44 @@ Constants are created in classes so we can import the class and don't have to im
 
 import logging
 import os
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as installed_package_version
+from pathlib import Path
+import tomllib
 
-__version__ = '0.9.8.2'
+PACKAGE_NAME = 'webapp'
+PYPROJECT_FILENAME = 'pyproject.toml'
+PYPROJECT_PROJECT = 'project'
+PYPROJECT_VERSION = 'version'
+
+
+def pyproject_version(pyproject_path):
+    """Return the project version from pyproject.toml."""
+    with pyproject_path.open('rb') as stream:
+        pyproject = tomllib.load(stream)
+    version = pyproject.get(PYPROJECT_PROJECT, {}).get(PYPROJECT_VERSION)
+    if not isinstance(version, str) or not version.strip():
+        raise RuntimeError(
+            f"could not read {PYPROJECT_PROJECT}.{PYPROJECT_VERSION} from {pyproject_path}"
+        )
+    return version.strip()
+
+
+def application_version():
+    """Return the Plant Tracer application version."""
+    for directory in Path(__file__).resolve().parents:
+        pyproject_path = directory / PYPROJECT_FILENAME
+        if pyproject_path.is_file():
+            return pyproject_version(pyproject_path)
+    try:
+        return installed_package_version(PACKAGE_NAME)
+    except PackageNotFoundError as exc:
+        raise RuntimeError(
+            f"could not locate {PYPROJECT_FILENAME} or package metadata for {PACKAGE_NAME}"
+        ) from exc
+
+
+__version__ = application_version()
 
 # these aren't strictly constants...
 log_level = os.getenv("LOG_LEVEL","INFO").upper()
@@ -42,9 +78,15 @@ class C:
     TABLE_CREATE_SLEEP_TIME = 1.0 # in seconds
 
     # Environment variables for AWS Configuration
-    # SERVER_EMAIL: sender address for all outgoing email (env var name; value default admin@planttracer.com, configured in SES)
+    # SERVER_EMAIL: sender address for outgoing email; configured/verified in SES.
+    LOG_LEVEL = 'LOG_LEVEL'
+    MAILER_DRY_RUN = 'MAILER_DRY_RUN'
     SERVER_EMAIL = 'SERVER_EMAIL'
+    SERVER_EMAIL_NAME = 'SERVER_EMAIL_NAME'
+    PLANTTRACER_BASE_DOMAIN = 'PLANTTRACER_BASE_DOMAIN'
+    PLANTTRACER_HOSTED_ZONE_ID = 'PLANTTRACER_HOSTED_ZONE_ID'
     PLANTTRACER_S3_BUCKET = 'PLANTTRACER_S3_BUCKET'
+    PLANTTRACER_STACK_NAME = 'PLANTTRACER_STACK_NAME'
     PLANTTRACER_API_BASE='PLANTTRACER_API_BASE'
     PLANTTRACER_STATIC_BASE='PLANTTRACER_STATIC_BASE'
     PLANTTRACER_LAMBDA_API_BASE='PLANTTRACER_LAMBDA_API_BASE'
@@ -140,6 +182,38 @@ class C:
         'trim_start_frame', 'trim_end_frame', 'needs_retracing',
     )
     MOVIE_PROPS_STR = ('fps', 'fpm', 'trackpoint_origin')
+
+
+STACK_PARAMETER_BASE_DOMAIN = 'BaseDomain'
+STACK_PARAMETER_DYNAMODB_TABLE_PREFIX = 'DynamoDBTablePrefix'
+STACK_PARAMETER_HOSTED_ZONE_ID = 'HostedZoneId'
+STACK_PARAMETER_IMAGE_BUCKET_NAME = 'ImageBucketName'
+STACK_PARAMETER_LOG_LEVEL = 'LogLevel'
+STACK_PARAMETER_MAILER_DRY_RUN = 'MailerDryRun'
+STACK_PARAMETERS = 'stack_parameters'
+STACK_NAME = 'stack_name'
+
+STACK_PARAMETER_ENVIRONMENT = (
+    (STACK_PARAMETER_HOSTED_ZONE_ID, C.PLANTTRACER_HOSTED_ZONE_ID),
+    (STACK_PARAMETER_BASE_DOMAIN, C.PLANTTRACER_BASE_DOMAIN),
+    (STACK_PARAMETER_IMAGE_BUCKET_NAME, C.PLANTTRACER_S3_BUCKET),
+    (STACK_PARAMETER_LOG_LEVEL, C.LOG_LEVEL),
+    (STACK_PARAMETER_MAILER_DRY_RUN, C.MAILER_DRY_RUN),
+    (STACK_PARAMETER_DYNAMODB_TABLE_PREFIX, C.DYNAMODB_TABLE_PREFIX),
+)
+
+
+def stack_parameter_overrides():
+    """Return deployment parameters exposed for ping diagnostics."""
+    return {
+        parameter_name: os.environ.get(environment_name, "")
+        for parameter_name, environment_name in STACK_PARAMETER_ENVIRONMENT
+    }
+
+
+def stack_name():
+    """Return the CloudFormation stack name for diagnostics."""
+    return os.environ.get(C.PLANTTRACER_STACK_NAME, "")
 
 
 def configure_local_environment(*, include_tracing_queue=False, include_tracking_queue=False):

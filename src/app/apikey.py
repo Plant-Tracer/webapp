@@ -29,26 +29,35 @@ def in_demo_mode():
     logger.debug("in_demo_mode env_demo=%s host_demo=%s host=%s", env_demo, host_demo, host)
     return env_demo or host_demo
 
-# Specify the base for the API and for the static files by Environment variables.
-# This allows them to be served from different web servers.
-# If they are not set, they default to '' which is the same site that serves the HTML pages.
-# (note: we no longer use '/' because that causes a problem when deploying at URLs like
-# https://sixybak7yh.execute-api.us-east-1.amazonaws.com/Prod/)
-# STATIC is used to serve JavaScript
-# API_BASE is used for the server API
+# Browser API bases are empty for same-origin calls, or absolute URLs ending in
+# "/" when explicitly configured. Static assets stay same-origin under /static.
 
-api_base    = os.getenv(C.PLANTTRACER_API_BASE,'')
-static_base = os.getenv(C.PLANTTRACER_STATIC_BASE,'')
+def browser_base(value):
+    """Normalize a browser URL base for string concatenation with API paths."""
+    value = (value or '').strip()
+    if not value:
+        return ''
+    return value if value.endswith('/') else value + '/'
+
+
+api_base = browser_base(env_value(C.PLANTTRACER_API_BASE,''))
 
 
 def get_lambda_api_base():
-    """Lambda HTTP API base URL (e.g. https://stackname-lambda.planttracer.com/) for status and tracking."""
-    explicit_base = env_value(C.PLANTTRACER_LAMBDA_API_BASE, "")
+    """Lambda HTTP API base URL for status, frame, movie-data, and tracing calls."""
+    if C.PLANTTRACER_LAMBDA_API_BASE in os.environ:
+        return browser_base(env_value(C.PLANTTRACER_LAMBDA_API_BASE, ""))
+    explicit_base = browser_base(env_value(C.PLANTTRACER_LAMBDA_API_BASE, ""))
     if explicit_base:
-        return explicit_base if explicit_base.endswith("/") else explicit_base + "/"
+        return explicit_base
     hostname = env_value("HOSTNAME", "")
     domain = env_value("DOMAIN", "")
-    return f"https://{hostname}-lambda.{domain}/" if (hostname and domain) else ""
+    if hostname and domain:
+        return browser_base(f"https://{hostname}.{domain}")
+    try:
+        return browser_base(request.url_root)
+    except RuntimeError:
+        return ""
 
 @functools.cache
 def git_head_time():
@@ -202,12 +211,11 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False):
     except (AttributeError, KeyError, TypeError):
         movie_id = 0            # to avoid errors
 
-    # Lambda HTTP API base URL (e.g. https://stackname-lambda.planttracer.com/) for status and start-processing
+    # Lambda HTTP API base URL for resize-owned browser calls.
     lambda_api_base = get_lambda_api_base()
 
     ret= {
         C.API_BASE: api_base,
-        C.STATIC_BASE: static_base,
         'lambda_api_base': lambda_api_base,
         'favicon_base64':favicon_base64(),
         'api_key': api_key,     # the API key that is currently active

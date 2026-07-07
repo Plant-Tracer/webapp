@@ -78,6 +78,22 @@ class CourseUser(BaseModel):
     course_id: str
 
 
+class AdminCourse(BaseModel):
+    """Course administered by a user."""
+
+    course_id: str
+    course_name: str
+
+
+class CourseAdmin(BaseModel):
+    """Operator-facing course administrator summary."""
+
+    user_id: str
+    email: str
+    user_name: str
+    courses: List[AdminCourse]
+
+
 class Movie(BaseModel):
     """DynamoDB movies table"""
 

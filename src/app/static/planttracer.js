@@ -485,7 +485,7 @@ function play_clicked( e ) {
   }
   // ask the movie-data service for JSON information about the movie,
   // which will be a signed S3 GET URL
-  const apiUrl = `${base}/api/v1/movie-data?api_key=${api_key}&movie_id=${movie_id}&format=json`;
+  const apiUrl = `${base}/resize-api/v1/movie-data?api_key=${api_key}&movie_id=${movie_id}&format=json`;
   const tr = e.closest('tr');
   const row = dt.row(tr);
   row.child('<td colspan="8"><span class="loading">Loading…</span></td>').show();

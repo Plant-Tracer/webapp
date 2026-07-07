@@ -14,7 +14,7 @@ Welcome and Registration
 .. image:: tutorial_images/register.png
    :alt: Plant Tracer registration form with Name, Email Address, and Course Key input fields and a Register button
 
-- Once you are registered, look for an email from `admin@planttracer.com`. Click the **Log in to Plant Tracer** button to log in. From there you can upload movies or view a list of existing movies to work with.
+- Once you are registered, look for an email from Plant Tracer. Click the **Log in to Plant Tracer** button to log in. From there you can upload movies or view a list of existing movies to work with.
 
 .. image:: tutorial_images/admin_email_link.png
     :alt: Plant Tracer login email highlighting the Log in to Plant Tracer button

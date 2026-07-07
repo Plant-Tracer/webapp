@@ -30,6 +30,18 @@ Every commit message should reference a GitHub Issue number (preferred) or PR nu
 
 Every PR body must include `fixes #N` or `refs #N` for each Issue the PR resolves or references. This is the canonical place GitHub uses to auto-close Issues on merge and that release note tooling uses to associate PRs with Issues.
 
+## Beads Workflow
+
+This repository uses Beads for local/agent task tracking. Beads issue data is stored in a Dolt database and syncs separately from normal Git commits.
+
+- Before starting issue work, run `bd ready` or `bd list`, then inspect the relevant issue with `bd show <id>`.
+- For the lambda-only migration, use epic `webapp-cgr` and its child issues (`webapp-cgr.1`, etc.) as the Beads work breakdown. Keep GitHub references (`gh-450`, `gh-699`, `gh-1110`) in Beads `external_ref` or metadata.
+- Claim work with `bd update <id> --claim`; update status/comments as work progresses.
+- Pull and push Beads data with `bd dolt pull` and `bd dolt push`. A normal `git push` is not enough unless the installed Beads hook successfully auto-pushes Dolt data; when in doubt, run `bd dolt push` explicitly.
+- Commit only lightweight Beads project files such as `.beads/config.yaml`, `.beads/metadata.json`, `.beads/README.md`, `.beads/hooks/*`, `.beads/.gitignore`, `.beads/interactions.jsonl`, and optionally `.beads/issues.jsonl`.
+- Do **not** commit live/runtime Beads data such as `.beads/embeddeddolt/`, `.beads/dolt/`, `.beads/backup/`, lock files, sockets, `export-state.json`, `last-touched`, or `.beadso/`.
+- Beads issues complement GitHub Issues; commit messages and PR bodies must still reference GitHub Issue or PR numbers per the Git workflow above.
+
 ## Common Commands
 
 ```bash
@@ -43,12 +55,15 @@ make mypy          # Type checking (optional)
 make check         # Full CI: lint + pytest + jscoverage
 make pytest        # Python tests (requires local DynamoDB + Minio running)
 make pytest-coverage  # Python tests with HTML coverage in htmlcov/
+make lambda-web-check     # Lambda-web adapter lint/tests; does not replace Flask local tests
+make lambda-resize-check  # Lambda-resize lint/tests
+make template-lint        # SAM/cfn-lint validation
 make jscoverage    # JavaScript Jest tests with coverage
 npm test           # JS tests directly
 npm run test-debug # JS tests with verbose output
 
 # Run a single Python test module
-AWS_REGION=local PYTHONPATH="lambda-resize/src:src" poetry run pytest tests/endpoint_test.py -v
+env -u AWS_PROFILE -u AWS_DEFAULT_PROFILE AWS_REGION=local PYTHONPATH=".:src:lambda-web/src:lambda-resize/src" poetry run pytest tests/endpoint_test.py -v
 
 # Local development
 python3 bin/local_services.py minio start       # Start Minio (S3 emulator, ports 9000/9001)
@@ -85,12 +100,30 @@ Route handlers should be thin; put business logic in `odb.py`, `mailer.py`, `s3_
 ### Lambda (`lambda-resize/`)
 A separate Poetry project. App code from the main package is vendored into `resize_app/src/app/` via `make -C lambda-resize vend-app` before linting/testing. Imports in Lambda code use `from .src.app import odb` style — do not change these to import the top-level `app` package.
 
+### Lambda-only Migration
+
+The accepted migration goal for #450/#699 is a lambda-only distribution with no virtual machine in the SAM deployment path:
+
+- Add a separate `lambda-web` function for Flask HTML pages and Flask `/api/*` metadata/application routes.
+- Keep the existing `lambda-resize` function as the vision/video/SQS tracing service; do not merge web traffic into the vision package.
+- Expose the application through one public HTTPS hostname/front door. The two Lambda functions do not require separate product domain names; route HTML, Flask `/api/*`, and `/static/*` to `lambda-web`, and `/resize-api/*` to `lambda-resize`.
+- Remove VM resources and parameters from the SAM path, including EC2, VPC/subnet/route-table resources, security groups, EIP, instance profile, SSH/reload workflows, `GitRepoUrl`, and `GitBranch`.
+- Deploy current built artifacts from the current checkout/branch; do not rely on instance boot-time `git clone` or branch checkout.
+- Keep application static assets served by `lambda-web` for the initial migration, as Flask serves them now. Do not move static assets to S3/CloudFront until there is a versioned filename or asset-manifest plan.
+- Keep the movie S3 bucket pre-existing and long-lived. Keep DynamoDB tables external to CloudFormation and created through `src/dbutil.py` from `etc/dynamodb_tables.json`.
+- Keep path routing explicit on that single front door: `/resize-api/*` goes to `lambda-resize`; HTML, Flask `/api/*`, and `/static/*` go to `lambda-web`. Movie-data is resize-owned and lives at `/resize-api/v1/movie-data`; do not reintroduce `/api/v1/movie-data` compatibility.
+- `lambda-web` uses SnapStart on the published `live` alias. `lambda-resize` does not use SnapStart unless measured and deliberately enabled later.
+- `make sam-deploy` and `make sam-deploy-guided` refuse redeploying the same app version to the same stack; bump `pyproject.toml` before deploying again.
+- All build, test, local service, static publish, SAM validation, deployment, and smoke workflows should be Makefile targets.
+- Local Flask development and testing remain required. `make run-local-debug`, `make run-local-demo-debug`, and `make pytest` are still the primary local workflow.
+- Lambda-web handler tests and SAM local tests are additive checks for API Gateway/Lambda event shape. They do not replace normal Flask route tests.
+
 ## Testing Strategy
 
 Tests run against **real local services** (DynamoDB Local + Minio), not mocks. Fixtures in `tests/conftest.py` and `tests/fixtures/` handle setup automatically.
 
 - Use `make pytest` / `make check` rather than running `pytest` directly — the Makefile sets the correct environment.
-- If running `pytest` directly, always set `AWS_REGION=local` and `PYTHONPATH="lambda-resize/src:src"`.
+- If running `pytest` directly, always unset `AWS_PROFILE`/`AWS_DEFAULT_PROFILE`, set `AWS_REGION=local`, and use `PYTHONPATH=".:src:lambda-web/src:lambda-resize/src"`.
 - When AWS credential errors appear in tests, **do not change code** — first verify the environment is set correctly.
 - Tests must **fail** when prerequisites are missing. Do not make tests skip or pass silently — that is the project owner's decision.
 - Write function-style tests only (`def test_*()`); no test classes.
@@ -213,8 +246,7 @@ The PR title should be `Add ver-X.Y.Z to ReleaseHistory` (no issue number in the
 
 Before tagging, the version number **must** be updated via a normal feature branch + PR and merged to `main`. Once the version bump PR is merged:
 
-1. **Bump the version number** (via feature branch + PR, merged before tagging). Update exactly these two files:
-   - `src/app/constants.py` — `__version__ = 'X.Y.Z'`
+1. **Bump the version number** (via feature branch + PR, merged before tagging). Update exactly this file:
    - `pyproject.toml` — `version = "X.Y.Z"`
 
 2. **Run the full CI check** and confirm it passes:

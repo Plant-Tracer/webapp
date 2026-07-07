@@ -39,9 +39,9 @@ The movie list requests:
 
 .. code-block:: text
 
-   GET LAMBDA_API_BASE/api/v1/movie-data?api_key=...&movie_id=...&format=json
+   GET LAMBDA_API_BASE/resize-api/v1/movie-data?api_key=...&movie_id=...&format=json
 
-The compatibility route returns signed movie and optional ZIP URLs. The browser
+The resize movie-data route returns signed movie and optional ZIP URLs. The browser
 sets the video element source to the signed movie URL so playback bytes come
 from S3/MinIO.
 
