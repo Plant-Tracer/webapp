@@ -209,6 +209,7 @@ bin/
 samconfig*.toml
 .samconfig*.toml
 samconfig.toml-*
+samconfigs/
 .envrc
 .env
 .op
