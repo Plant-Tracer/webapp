@@ -620,7 +620,7 @@ lambda-web-check: lambda-web-lint
 	$(MAKE) vend-lambda-web
 	PYTHONPATH=.:src:lambda-web/src poetry run pytest lambda-web/tests -q --cov=lambda-web/src/lambda_web --cov-report=term -o junit_family=legacy --log-cli-level=DEBUG
 
-.PHONY: lambda-resize/src/requirements.txt lambda-web/src/requirements.txt template-lint sam-config-path-check sam-config-check sam-version-check sam-deploy-version-check stamp-sam-deploy-metadata sam-status
+.PHONY: lambda-resize/src/requirements.txt lambda-web/src/requirements.txt template-lint sam-config-path-check sam-config-check sam-config-guided-bootstrap sam-version-check sam-deploy-version-check stamp-sam-deploy-metadata sam-status
 lambda-resize/src/requirements.txt:
 	poetry export --with lambda --without dev --without vm --format=requirements.txt --output lambda-resize/src/requirements.txt --without-hashes
 
@@ -662,6 +662,25 @@ sam-config-check: sam-config-path-check
 		echo "Refusing to use SAM: $(SAM_CONFIG) does not exist."; \
 		echo "Run STACK=<name> make sam-deploy-guided to create it, or pass SAM_CONFIG=<path>."; \
 		exit 1; \
+	fi
+
+sam-config-guided-bootstrap: sam-config-path-check
+	mkdir -p "$(dir $(SAM_CONFIG))"
+	@if [ ! -f "$(SAM_CONFIG)" ]; then \
+		if [ -n "$(STACK)" ]; then \
+			printf 'version = 0.1\n\n[default.deploy.parameters]\nstack_name = "%s"\n' "$(STACK)" > "$(SAM_CONFIG)"; \
+		else \
+			printf 'version = 0.1\n' > "$(SAM_CONFIG)"; \
+		fi; \
+		echo "Created $(SAM_CONFIG) for SAM guided deploy."; \
+	elif [ -n "$(STACK)" ] && ! grep -q '^[[:space:]]*stack_name[[:space:]]*=' "$(SAM_CONFIG)"; then \
+		if grep -q '^[[:space:]]*\[default\.deploy\.parameters\]' "$(SAM_CONFIG)"; then \
+			echo "Refusing to repair $(SAM_CONFIG): [default.deploy.parameters] exists but stack_name is missing."; \
+			echo "Add stack_name = \"$(STACK)\" to $(SAM_CONFIG)."; \
+			exit 1; \
+		fi; \
+		printf '\n[default.deploy.parameters]\nstack_name = "%s"\n' "$(STACK)" >> "$(SAM_CONFIG)"; \
+		echo "Added stack_name=$(STACK) to $(SAM_CONFIG)."; \
 	fi
 
 stamp-sam-deploy-metadata: sam-version-check
@@ -793,8 +812,8 @@ ifeq ($(AWS_REGION),local)
 	@echo cannot deploy to local. Please specify AWS_REGION.  && exit 1
 endif
 	$(MAKE) sam-version-check
-	$(MAKE) sam-config-path-check
-	@if [ -f "$(SAM_CONFIG)" ]; then \
+	$(MAKE) sam-config-guided-bootstrap
+	@if grep -q '^[[:space:]]*stack_name[[:space:]]*=' "$(SAM_CONFIG)"; then \
 		$(MAKE) sam-deploy-version-check; \
 	fi
 	$(MAKE) stamp-sam-deploy-metadata
@@ -802,11 +821,6 @@ endif
 	@echo ===============================
 	@echo use one of these S3 buckets:
 	aws s3 ls
-	mkdir -p "$(dir $(SAM_CONFIG))"
-	@if [ ! -f "$(SAM_CONFIG)" ]; then \
-		printf 'version = 0.1\n' > "$(SAM_CONFIG)"; \
-		echo "Created $(SAM_CONFIG) for SAM guided deploy."; \
-	fi
 	sam deploy --config-file "$(SAM_CONFIG)" --guided $(if $(STACK),--stack-name "$(STACK)",) --capabilities CAPABILITY_IAM
 	$(MAKE) sam-status
 
