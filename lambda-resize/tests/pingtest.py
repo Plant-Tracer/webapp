@@ -6,7 +6,19 @@ from unittest.mock import patch
 
 import pytest
 
-from resize_app.main import api_ping, lambda_handler
+from resize_app.main import DEPLOYED_AT_ENV, api_ping, deploy_metadata, lambda_handler
+from resize_app.src.app.constants import (
+    C,
+    STACK_PARAMETER_BASE_DOMAIN,
+    STACK_PARAMETER_DYNAMODB_TABLE_PREFIX,
+    STACK_PARAMETER_HOSTED_ZONE_ID,
+    STACK_PARAMETER_IMAGE_BUCKET_NAME,
+    STACK_PARAMETER_LOG_LEVEL,
+    STACK_PARAMETER_MAILER_DRY_RUN,
+    STACK_NAME,
+    STACK_PARAMETERS,
+    __version__,
+)
 
 
 ENDPOINT = "/resize-api/v1/ping"
@@ -53,7 +65,16 @@ def test_ping_status_code():
 
 def test_ping_response_shape():
     data = api_ping()
-    assert set(data.keys()) == {"error", "status", "time", "path"}
+    assert set(data.keys()) == {
+        "error",
+        "status",
+        "time",
+        "path",
+        "app_version",
+        "deployed_at",
+        STACK_NAME,
+        STACK_PARAMETERS,
+    }
 
 
 def test_ping_error_is_false():
@@ -74,6 +95,57 @@ def test_ping_time_is_recent():
 
 def test_ping_path_matches_sys_path():
     assert api_ping()["path"] == sys.path
+
+
+def test_ping_app_version_matches_application_version():
+    assert api_ping()["app_version"] == __version__
+
+
+def test_ping_stack_name(monkeypatch):
+    monkeypatch.setenv(C.PLANTTRACER_STACK_NAME, "slgstack")
+    assert api_ping()[STACK_NAME] == "slgstack"
+
+
+def test_ping_stack_parameters(monkeypatch):
+    monkeypatch.setenv(C.PLANTTRACER_HOSTED_ZONE_ID, "Z02875141U8JDG1N8N5BO")
+    monkeypatch.setenv(C.PLANTTRACER_BASE_DOMAIN, "planttracer.com")
+    monkeypatch.setenv(C.PLANTTRACER_S3_BUCKET, "planttracer-prod")
+    monkeypatch.setenv(C.LOG_LEVEL, "INFO")
+    monkeypatch.setenv(C.MAILER_DRY_RUN, "false")
+    monkeypatch.setenv(C.DYNAMODB_TABLE_PREFIX, "prod")
+    assert api_ping()[STACK_PARAMETERS] == {
+        STACK_PARAMETER_HOSTED_ZONE_ID: "Z02875141U8JDG1N8N5BO",
+        STACK_PARAMETER_BASE_DOMAIN: "planttracer.com",
+        STACK_PARAMETER_IMAGE_BUCKET_NAME: "planttracer-prod",
+        STACK_PARAMETER_LOG_LEVEL: "INFO",
+        STACK_PARAMETER_MAILER_DRY_RUN: "false",
+        STACK_PARAMETER_DYNAMODB_TABLE_PREFIX: "prod",
+    }
+    assert "WildcardCertificateArn" not in api_ping()[STACK_PARAMETERS]
+
+
+def test_ping_deployed_at_defaults_to_unknown(monkeypatch):
+    monkeypatch.delenv(DEPLOYED_AT_ENV, raising=False)
+    assert api_ping()["deployed_at"] == "unknown"
+
+
+def test_ping_deployed_at_can_come_from_environment(monkeypatch):
+    deployed_at = "2026-07-04T22:50:00Z"
+    monkeypatch.setenv(DEPLOYED_AT_ENV, deployed_at)
+    assert api_ping()["deployed_at"] == deployed_at
+
+
+def test_deploy_metadata_reads_stamped_file(tmp_path, monkeypatch):
+    monkeypatch.setenv(DEPLOYED_AT_ENV, "env-value")
+    metadata_path = tmp_path / "deploy_metadata.json"
+    metadata_path.write_text(
+        '{"deployed_at": "2026-07-04T22:55:00Z", "app_version": "9.9.9"}',
+        encoding="utf-8",
+    )
+    assert deploy_metadata(metadata_path) == {
+        "app_version": "9.9.9",
+        "deployed_at": "2026-07-04T22:55:00Z",
+    }
 
 
 def test_ping_content_type_is_json():

@@ -21,7 +21,10 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from . import apikey
 
 from .flask_api import api_bp
-from .constants import __version__, GET, GET_POST, C, log_level, logger
+from .constants import (
+    __version__, GET, GET_POST, C, log_level, logger,
+    stack_name, stack_parameter_overrides, STACK_NAME, STACK_PARAMETERS,
+)
 from .auth import AuthError
 from .apikey import cookie_name, page_dict
 from .odb import (InvalidAPI_Key, InvalidUser_Email,
@@ -126,7 +129,7 @@ def _config_error_page_context(error_title: str, error_message: str):
     """Build template context for config_error.html without touching the DB."""
     ret = {
         C.API_BASE: apikey.api_base,
-        C.STATIC_BASE: apikey.static_base,
+        'lambda_api_base': apikey.get_lambda_api_base(),
         'favicon_base64': apikey.favicon_base64(),
         'api_key': None,
         'user_id': None,
@@ -305,7 +308,15 @@ def func_logout():
 
 @app.route("/ping")
 def ping():
-    return jsonify({C.KEY_STATUS: C.STATUS_OK, C.API_KEY_MESSAGE: "pong"})
+    return jsonify({
+        C.KEY_STATUS: C.STATUS_OK,
+        C.API_KEY_MESSAGE: "pong",
+        "app_version": __version__,
+        "path": sys.path,
+        STACK_NAME: stack_name(),
+        STACK_PARAMETERS: stack_parameter_overrides(),
+        "time": time.time(),
+    })
 
 
 @app.route("/status")
@@ -324,16 +335,14 @@ def func_register():
      for inclusion in the email. This is the only place where the endpoint needs to be explicitly included.
     """
     return render_template('register.html',
-                           title='Plant Tracer Registration Page',
-                           hostname=request.host,
+                           **page_dict('Registration Page'),
                            register=True)
 
 @app.route('/resend', methods=GET)
 def func_resend():
     """/resend sends the register.html template which loads register.js with register variable set to False"""
     return render_template('register.html',
-                           title='Plant Tracer Resend Registration Link',
-                           hostname = request.host,
+                           **page_dict('Resend Registration Link'),
                            register=False)
 
 @app.route('/tos', methods=GET)

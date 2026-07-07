@@ -14,6 +14,7 @@ import configparser
 import time
 from email.parser import BytesParser
 from email import policy
+from email.utils import formataddr
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
@@ -52,9 +53,23 @@ class NoMailerConfiguration(Exception):
     """No mailer configured (no SMTP credentials and SES not available)."""
 
 
+DEFAULT_SERVER_EMAIL = 'admin@planttracer.com'
+DEFAULT_SERVER_EMAIL_NAME = 'Plant Tracer'
+
+
 def get_server_email():
     """Return the From address for outgoing mail (env SERVER_EMAIL or default)."""
-    return env_value(C.SERVER_EMAIL, 'admin@planttracer.com')
+    return env_value(C.SERVER_EMAIL, DEFAULT_SERVER_EMAIL)
+
+
+def get_server_email_name():
+    """Return the display name for outgoing mail."""
+    return env_value(C.SERVER_EMAIL_NAME, DEFAULT_SERVER_EMAIL_NAME)
+
+
+def get_server_from_header():
+    """Return the MIME From header using SERVER_EMAIL_NAME and SERVER_EMAIL."""
+    return formataddr((get_server_email_name(), get_server_email()))
 
 
 def get_smtp_config():
@@ -172,10 +187,11 @@ def send_links(*, email, planttracer_endpoint, new_api_key, debug=False):
 
     to_addrs = [email]
     from_addr = get_server_email()
+    from_header = get_server_from_header()
     msg = _render_mime_template(
         C.LOGIN_EMAIL_TEMPLATE_FNAME,
         to_addrs=",".join([email]),
-        from_addr=from_addr,
+        from_header=from_header,
         planttracer_endpoint=planttracer_endpoint,
         api_key=new_api_key,
     )
@@ -205,17 +221,20 @@ def send_course_created_email(*,
                               planttracer_endpoint: str,
                               api_key: str,
                               course_key: str = None,
-                              from_addr: str = None):
+                              from_addr: str = None,
+                              from_header: str = None):
     """Send course-created verification email with magic link. Uses SMTP or SES."""
     if from_addr is None:
         from_addr = get_server_email()
+    if from_header is None:
+        from_header = get_server_from_header() if from_addr == get_server_email() else from_addr
     if course_key is None:
         course = odb.lookup_course_by_id(course_id=course_id) or {}
         course_key = course.get(odb.COURSE_KEY, "")
     msg = _render_mime_template(
         C.COURSE_CREATED_EMAIL_TEMPLATE_FNAME,
         to_addrs=to_addr,
-        from_addr=from_addr,
+        from_header=from_header,
         course_name=course_name,
         course_id=course_id,
         course_key=course_key,

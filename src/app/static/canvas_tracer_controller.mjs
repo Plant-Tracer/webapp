@@ -111,9 +111,8 @@ function create_default_markers() {
     return DEFAULT_MARKERS.map(m => ({...m}));
 }
 
-// NOTE ./static is needed below but not above!
 setOptions({
-  workerURL: './static/unzipit-worker.module.mjs',
+  workerURL: new URL('./unzipit-worker.module.mjs', import.meta.url).href,
   numWorkers: 2,
 });
 

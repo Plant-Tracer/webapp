@@ -1,33 +1,22 @@
 # -----------------------------------------------------------------------------
-# Planttracer stack.
+# Plant Tracer Lambda-only stack.
+#
 # Creates:
-# - VM
-# - Lambda to Resize and Track
-# - SQS to allow tracer to queue longer traces and return
+# - HTTP API custom domain
+# - lambda-web for Flask HTML, Flask /api/*, and /static/*
+# - lambda-resize for /resize-api/* and SQS trace work
+# - SQS queue for long-running traces
 #
-# Deploy (guided the first time):
-#      sam deploy --guided
-#
-#    Subsequent deploys:
-#      sam deploy
+# Durable data is external to this stack:
+# - The movie/frame S3 bucket already exists and must outlive the stack.
+# - DynamoDB tables are created by src/dbutil.py from etc/dynamodb_tables.json.
 # -----------------------------------------------------------------------------
 
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
-  Single EC2 instance + IAM access to DynamoDB + Route53 DNS A record to an Elastic IP.
-  (No load balancer.)
-
-Globals:
-  Function:
-    Environment:
-      Variables:
-        POWERTOOLS_SERVICE_NAME: "planttracer"
-        LOG_LEVEL: !Ref LogLevel
-        TABLE_PREFIX: !Ref DynamoDBTablePrefix
-        POWERTOOLS_EVENT_HANDLER_AUTO_JSON_DECIMAL: "true"
-    Layers:
-      - arn:aws:lambda:us-east-1:017000801446:layer:AWSLambdaPowertoolsPythonV2-Arm64:60
+  Plant Tracer Lambda-only web stack. One HTTP API routes Flask web traffic to
+  lambda-web and video/tracing traffic to lambda-resize.
 
 Parameters:
   HostedZoneId:
@@ -37,71 +26,30 @@ Parameters:
 
   BaseDomain:
     Type: String
-    Description: "base domain in which the hostnames are created"
+    Description: "Base domain in which the application hostname is created."
     Default: "planttracer.com"
 
   WildcardCertificateArn:
     Type: String
     Default: "arn:aws:acm:us-east-1:343218180669:certificate/66c18f6a-49b3-4be7-a232-a371cbfef29b"
-    Description: "wildcard certificate; leave blank to create a certificate on the fly."
-
-  EC2KeyPairName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: "EC2 KeyPair name for SSH access to server. Keypair must be uploaded to EC2"
+    Description: "Wildcard certificate for the application hostname."
 
   ImageBucketName:
     Type: String
-    Description: "Existing S3 bucket for videos; must outlive the stack (long-term archive). Do not include s3://"
+    Description: "Existing S3 bucket for videos; must outlive the stack. Do not include s3://."
     Default: planttracer2
-
-  UbuntuAmiId:
-    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
-    Description: "Ubuntu 24.04 LTS (arm64) via SSM"
-    Default: /aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id
-
-  InstanceType:
-    Type: String
-    Default: t4g.small
-    AllowedValues:
-      - t4g.nano
-      - t4g.micro
-      - t4g.small
-      - t4g.medium
-    Description: "Choose an instance type compatible with your AMI architecture."
-
-  GitRepoUrl:
-    Type: String
-    Description: "Git repository URL to clone on boot (e.g., https://github.com/Plant-Tracer/webapp.git)."
-    Default: "https://github.com/Plant-Tracer/webapp.git"
-
-  GitBranch:
-    Type: String
-    Default: main
-    Description: "Git branch/tag to checkout."
-
-  AdminEmail:
-    Type: String
-    Default: plantadmin@planttracer.com
-    Description: "Email address for course administrator of first course"
-
-  CourseId:
-    Type: String
-    Description: "Course ID for the first course (e.g. Course1)"
-
-  AdminName:
-    Type: String
-    Description: "Display name of the course administrator"
-
-  CourseName:
-    Type: String
-    Default: "Plant motion 101"
-    Description: "Name of first course"
 
   LogLevel:
     Type: String
     Default: INFO
     AllowedValues: [CRITICAL, ERROR, WARNING, INFO, DEBUG, NOTSET]
-    Description: Default LOG_LEVEL environment value for the function
+    Description: Default LOG_LEVEL environment value for the functions.
+
+  MailerDryRun:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: "Set true for non-production stacks without SES sender access; email is logged instead of sent."
 
   DynamoDBTablePrefix:
     Type: String
@@ -111,191 +59,13 @@ Parameters:
     AllowedPattern: "[A-Za-z0-9_.-]+"
     ConstraintDescription: "Use only letters, numbers, dots, hyphens, and underscores."
 
-
+Mappings:
+  StackConstants:
+    Mail:
+      ServerEmail: admin@planttracer.com
+      ServerEmailName: Plant Tracer
 
 Resources:
-  # --- Minimal networking: VPC + one public subnet + IGW + route table ---
-  Vpc:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: 10.30.0.0/16
-      EnableDnsHostnames: true
-      EnableDnsSupport: true
-      Tags:
-        - Key: Name
-          Value: !Sub "${AWS::StackName}-vpc"
-
-  InternetGateway:
-    Type: AWS::EC2::InternetGateway
-
-  VpcGatewayAttachment:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId: !Ref Vpc
-      InternetGatewayId: !Ref InternetGateway
-
-  PublicSubnet:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref Vpc
-      CidrBlock: 10.30.10.0/24
-      MapPublicIpOnLaunch: true
-      AvailabilityZone: !Select [0, !GetAZs ""]
-      Tags:
-        - Key: Name
-          Value: !Sub "${AWS::StackName}-public-subnet"
-
-  PublicRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref Vpc
-
-  PublicRoute:
-    Type: AWS::EC2::Route
-    DependsOn: VpcGatewayAttachment
-    Properties:
-      RouteTableId: !Ref PublicRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
-
-  PublicSubnetRouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnet
-      RouteTableId: !Ref PublicRouteTable
-
-  # --- Security Group: open 22/80/443 to the world ---
-  InstanceSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: "Open inbound 22,80,443 from the world."
-      VpcId: !Ref Vpc
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: 0.0.0.0/0
-
-  # --- Logs ---
-  LambdaFunctionLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub "/aws/lambda/${LambdaFunction}"
-      RetentionInDays: 30
-    DeletionPolicy: Retain
-    UpdateReplacePolicy: Retain
-
-  # --- Stable public IP + DNS name ---
-  InstanceEip:
-    Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
-
-  # Create DNS record for the VM's primary name
-  VmDnsARecord:
-    Type: AWS::Route53::RecordSet
-    Properties:
-      HostedZoneId: !Ref HostedZoneId
-      Name: !Sub "${AWS::StackName}.${BaseDomain}."
-      Type: A
-      TTL: 30
-      ResourceRecords:
-        - !Ref InstanceEip
-
-  # Create DNS record for the VM-demo name.
-  VmDemoDnsARecord:
-    Type: AWS::Route53::RecordSet
-    Properties:
-      HostedZoneId: !Ref HostedZoneId
-      Name: !Sub "${AWS::StackName}-demo.${BaseDomain}."
-      Type: A
-      TTL: 30
-      ResourceRecords:
-        - !Ref InstanceEip
-
-  # --- EC2 instance ---
-  AppInstance:
-    Type: AWS::EC2::Instance
-    Properties:
-      MetadataOptions: { HttpTokens: required, HttpEndpoint: enabled }
-      ImageId: !Ref UbuntuAmiId
-      InstanceType: !Ref InstanceType
-      KeyName: !Ref EC2KeyPairName
-      IamInstanceProfile: !Ref Ec2InstanceProfile
-      SubnetId: !Ref PublicSubnet
-      SecurityGroupIds: [!Ref InstanceSecurityGroup]
-      BlockDeviceMappings:
-        - DeviceName: /dev/sda1
-          Ebs:
-            VolumeSize: 20
-            VolumeType: gp3
-            DeleteOnTermination: true
-      CreditSpecification:
-        CPUCredits: unlimited
-      Tags:
-        - Key: Name
-          Value: !Sub "${AWS::StackName}-app"
-      UserData:
-        Fn::Base64:
-          Fn::Sub:
-            - |
-              #!/usr/bin/env bash
-              exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
-              set -euo pipefail
-
-              lsblk
-              df -h
-              # Create the environment variables. Values are quoted so
-              # /etc/environment.d/10-planttracer.conf preserves spaces when
-              # sourced by bash and when read by systemd EnvironmentFile=.
-              mkdir -p /etc/environment.d
-              touch /etc/environment.d/10-planttracer.conf
-              echo "ADMIN_EMAIL=\"${AdminEmail}\""            >> /etc/environment.d/10-planttracer.conf
-              echo "ADMIN_NAME=\"${AdminName}\""              >> /etc/environment.d/10-planttracer.conf
-              echo "COURSE_ID=\"${CourseId}\""                >> /etc/environment.d/10-planttracer.conf
-              echo "COURSE_NAME=\"${CourseName}\""            >> /etc/environment.d/10-planttracer.conf
-              echo "DOMAIN=\"${BaseDomain}\""                 >> /etc/environment.d/10-planttracer.conf
-              echo "DYNAMODB_TABLE_PREFIX=\"${DynamoDBTablePrefix}\"">> /etc/environment.d/10-planttracer.conf
-              echo "HOSTNAME=\"${AWS::StackName}\""           >> /etc/environment.d/10-planttracer.conf
-              echo "LAMBDA_RESIZE_ARN=\"${LambdaResizeArn}\""  >> /etc/environment.d/10-planttracer.conf
-              echo "LOG_LEVEL=\"${LogLevel}\""                >> /etc/environment.d/10-planttracer.conf
-              echo "PLANTTRACER_S3_BUCKET=\"${ImageBucketName}\"">> /etc/environment.d/10-planttracer.conf
-              echo "SERVER_EMAIL=\"admin@planttracer.com\""   >> /etc/environment.d/10-planttracer.conf
-
-              # Install essentials
-              export DEBIAN_FRONTEND=noninteractive
-              apt-get update -y
-              apt-get install -y git ca-certificates curl make python3-poetry
-              snap install --classic aws-cli
-              snap install --classic emacs
-
-              # Clone webapp
-              install -d -m 0755 /opt/
-              git clone --branch "${GitBranch}" --depth 1 "${GitRepoUrl}" /opt/webapp
-
-              # Bucket ${ImageBucketName} must already exist (long-term archive); bootstrap configures CORS only
-              export PATH=$PATH:/snap/bin
-
-              echo Set permissions and run bootstrap
-              sudo chown -R ubuntu:ubuntu /opt/webapp
-              runuser -l ubuntu -c 'cd /opt/webapp && bash etc/bootstrap.sh 2>&1 | col -b'
-              echo "User data finished executing."
-            - LambdaResizeArn: !GetAtt LambdaFunction.Arn
-
-  InstanceEipAssociation:
-    Type: AWS::EC2::EIPAssociation
-    Properties:
-      AllocationId: !GetAtt InstanceEip.AllocationId
-      InstanceId: !Ref AppInstance
-
   ################################################################
   ### DynamoDB tables are created outside CloudFormation.
   ### Run src/dbutil.py createdb with DYNAMODB_TABLE_PREFIX set; table
@@ -309,79 +79,28 @@ Resources:
         EnableIamAuthorizer: true
         DefaultAuthorizer: AWS_IAM
       Domain:
-        DomainName: !Sub "${AWS::StackName}-lambda.${BaseDomain}"
+        DomainName: !Sub "${AWS::StackName}.${BaseDomain}"
         CertificateArn: !Ref WildcardCertificateArn
         Route53:
           HostedZoneId: !Ref HostedZoneId
 
-  # --- IAM: EC2 Role ---
-  Ec2Role:
-    Type: AWS::IAM::Role
+  LambdaWebLogGroup:
+    Type: AWS::Logs::LogGroup
     Properties:
-      AssumeRolePolicyDocument:
-        Version: "2012-10-17"
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: ec2.amazonaws.com
-            Action: "sts:AssumeRole"
-      ManagedPolicyArns:
-        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AmazonSSMManagedInstanceCore"
-      Policies:
-        - PolicyName: Ec2DdbAndS3Access
-          PolicyDocument:
-            Version: "2012-10-17"
-            Statement:
-              - Effect: Allow
-                Action:
-                  - dynamodb:GetItem
-                  - dynamodb:PutItem
-                  - dynamodb:UpdateItem
-                  - dynamodb:DeleteItem
-                  - dynamodb:Query
-                  - dynamodb:Scan
-                  - dynamodb:BatchGetItem
-                  - dynamodb:BatchWriteItem
-                  - dynamodb:DescribeTable
-                Resource:
-                  - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTablePrefix}*"
-                  - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTablePrefix}*/index/*"
-              - Effect: Allow
-                Action: ["dynamodb:ListTables"]
-                Resource: ["*"]
-              - Effect: Allow
-                Action:
-                  - s3:GetBucketCORS
-                  - s3:PutBucketCORS
-                  - s3:GetBucketLocation
-                  - s3:GetObject
-                  - s3:PutObject
-                  - s3:DeleteObject
-                  - s3:ListBucket
-                  - s3:GetBucketNotification
-                  - s3:PutBucketNotification
-                  - s3:GetBucketNotificationConfiguration
-                  - s3:PutBucketNotificationConfiguration
-                Resource:
-                  - !Sub "arn:${AWS::Partition}:s3:::${ImageBucketName}"
-                  - !Sub "arn:${AWS::Partition}:s3:::${ImageBucketName}/*"
-              - Effect: Allow
-                Action:
-                  - ses:VerifyEmailIdentity
-                  - ses:ListIdentities
-                  - ses:GetSendQuota
-                  - ses:SendEmail
-                  - ses:SendRawEmail
-                Resource: "*"
+      LogGroupName: !Sub "/aws/lambda/${LambdaWebFunction}"
+      RetentionInDays: 30
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
 
-  # --- Instance Profile ---
-  Ec2InstanceProfile:
-    Type: AWS::IAM::InstanceProfile
+  LambdaResizeLogGroup:
+    Type: AWS::Logs::LogGroup
     Properties:
-      Roles: [!Ref Ec2Role]
+      LogGroupName: !Sub "/aws/lambda/${LambdaResizeFunction}"
+      RetentionInDays: 30
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
 
-  # --- Lambda Role ---
-  LambdaExecutionRole:
+  LambdaWebExecutionRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -394,7 +113,61 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
-        - PolicyName: LambdaS3AndDdbAccess
+        - PolicyName: LambdaWebS3DdbAndMailAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetBucketCORS
+                  - s3:PutBucketCORS
+                  - s3:GetBucketLocation
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:ListBucket
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:s3:::${ImageBucketName}"
+                  - !Sub "arn:${AWS::Partition}:s3:::${ImageBucketName}/*"
+              - Effect: Allow
+                Action:
+                  - dynamodb:BatchGetItem
+                  - dynamodb:BatchWriteItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:DescribeTable
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:UpdateItem
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTablePrefix}*"
+                  - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTablePrefix}*/index/*"
+              - Effect: Allow
+                Action:
+                  - ses:SendRawEmail
+                Resource:
+                  - !Sub
+                    - "arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/${ServerEmail}"
+                    - ServerEmail: !FindInMap [StackConstants, Mail, ServerEmail]
+                Condition:
+                  StringEquals:
+                    ses:FromAddress: !FindInMap [StackConstants, Mail, ServerEmail]
+
+  LambdaResizeExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: "sts:AssumeRole"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: LambdaResizeS3DdbAndSqsAccess
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
@@ -409,23 +182,25 @@ Resources:
                   - !Sub "arn:${AWS::Partition}:s3:::${ImageBucketName}/*"
               - Effect: Allow
                 Action:
+                  - dynamodb:BatchGetItem
+                  - dynamodb:BatchWriteItem
+                  - dynamodb:DeleteItem
                   - dynamodb:DescribeTable
                   - dynamodb:GetItem
                   - dynamodb:PutItem
-                  - dynamodb:DeleteItem
-                  - dynamodb:UpdateItem
                   - dynamodb:Query
                   - dynamodb:Scan
+                  - dynamodb:UpdateItem
                 Resource:
                   - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTablePrefix}*"
                   - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTablePrefix}*/index/*"
               - Effect: Allow
                 Action:
-                  - sqs:SendMessage
-                  - sqs:ReceiveMessage
                   - sqs:DeleteMessage
                   - sqs:GetQueueAttributes
                   - sqs:GetQueueUrl
+                  - sqs:ReceiveMessage
+                  - sqs:SendMessage
                 Resource: !GetAtt TracingQueue.Arn
 
   TracingQueue:
@@ -435,29 +210,41 @@ Resources:
     Properties:
       VisibilityTimeout: 900
 
-  LambdaFunction:
+  LambdaWebFunction:
     Type: AWS::Serverless::Function
     Metadata:
       BuildMethod: python3.12
       BuildProperties:
-        # Must be inside CodeUri so --use-container mount can see it.
         RequirementsFile: requirements.txt
     Properties:
-      Role: !GetAtt LambdaExecutionRole.Arn
+      Role: !GetAtt LambdaWebExecutionRole.Arn
       Runtime: python3.12
       Architectures: [arm64]
       PackageType: Zip
-      CodeUri: lambda-resize/src/
-      Handler: resize_app.main.lambda_handler
-      Timeout: 900
-      MemorySize: 1024
+      CodeUri: lambda-web/src/
+      Handler: lambda_web.main.lambda_handler
+      AutoPublishAlias: live
+      SnapStart:
+        ApplyOn: PublishedVersions
+      Timeout: 30
+      MemorySize: 512
       Environment:
         Variables:
           DYNAMODB_TABLE_PREFIX: !Ref DynamoDBTablePrefix
+          LOG_LEVEL: !Ref LogLevel
+          MAILER_DRY_RUN: !Ref MailerDryRun
+          PLANTTRACER_BASE_DOMAIN: !Ref BaseDomain
+          PLANTTRACER_HOSTED_ZONE_ID: !Ref HostedZoneId
+          PLANTTRACER_LAMBDA_API_BASE: !Sub "https://${AWS::StackName}.${BaseDomain}/"
           PLANTTRACER_S3_BUCKET: !Ref ImageBucketName
-          TRACING_QUEUE_URL: !Ref TracingQueue
+          PLANTTRACER_STACK_NAME: !Ref AWS::StackName
+          PLANTTRACER_WEB_RUNTIME: lambda
+          POWERTOOLS_LOG_LEVEL: !Ref LogLevel
+          POWERTOOLS_SERVICE_NAME: "planttracer-web"
+          SERVER_EMAIL: !FindInMap [StackConstants, Mail, ServerEmail]
+          SERVER_EMAIL_NAME: !FindInMap [StackConstants, Mail, ServerEmailName]
       Events:
-        AnyRoot:
+        WebRoot:
           Type: HttpApi
           Properties:
             ApiId: !Ref HomeHttpApi
@@ -466,11 +253,51 @@ Resources:
             PayloadFormatVersion: "2.0"
             Auth:
               Authorizer: NONE
-        AnyProxy:
+        WebProxy:
           Type: HttpApi
           Properties:
             ApiId: !Ref HomeHttpApi
             Path: /{proxy+}
+            Method: ANY
+            PayloadFormatVersion: "2.0"
+            Auth:
+              Authorizer: NONE
+
+  LambdaResizeFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: python3.12
+      BuildProperties:
+        RequirementsFile: requirements.txt
+    Properties:
+      Role: !GetAtt LambdaResizeExecutionRole.Arn
+      Runtime: python3.12
+      Architectures: [arm64]
+      PackageType: Zip
+      CodeUri: lambda-resize/src/
+      Handler: resize_app.main.lambda_handler
+      Timeout: 900
+      MemorySize: 1024
+      Layers:
+        - arn:aws:lambda:us-east-1:017000801446:layer:AWSLambdaPowertoolsPythonV2-Arm64:60
+      Environment:
+        Variables:
+          DYNAMODB_TABLE_PREFIX: !Ref DynamoDBTablePrefix
+          LOG_LEVEL: !Ref LogLevel
+          PLANTTRACER_BASE_DOMAIN: !Ref BaseDomain
+          PLANTTRACER_HOSTED_ZONE_ID: !Ref HostedZoneId
+          PLANTTRACER_S3_BUCKET: !Ref ImageBucketName
+          PLANTTRACER_STACK_NAME: !Ref AWS::StackName
+          POWERTOOLS_EVENT_HANDLER_AUTO_JSON_DECIMAL: "true"
+          POWERTOOLS_SERVICE_NAME: "planttracer"
+          TABLE_PREFIX: !Ref DynamoDBTablePrefix
+          TRACING_QUEUE_URL: !Ref TracingQueue
+      Events:
+        ResizeApiProxy:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HomeHttpApi
+            Path: /resize-api/{proxy+}
             Method: ANY
             PayloadFormatVersion: "2.0"
             Auth:
@@ -487,15 +314,21 @@ Outputs:
   ApiId:
     Description: HTTP API ID
     Value: !Ref HomeHttpApi
-  VmElasticIp:
-    Description: Elastic IP attached to the EC2 VM
-    Value: !Ref InstanceEip
-  VmDnsName:
-    Description: DNS name for the EC2 VM
+  ApplicationDnsName:
+    Description: DNS name for the Lambda-only application
     Value: !Sub "${AWS::StackName}.${BaseDomain}"
+  ApplicationUrl:
+    Description: HTTPS URL for the Lambda-only application
+    Value: !Sub "https://${AWS::StackName}.${BaseDomain}/"
   LambdaDnsName:
-    Description: DNS name for the Lambda HTTP API custom domain
-    Value: !Sub "${AWS::StackName}-lambda.${BaseDomain}"
-  LambdaFunction:
-    Description: PlantTracer Lambda function name
-    Value: !Ref LambdaFunction
+    Description: DNS name for compatibility with existing Makefile smoke checks
+    Value: !Sub "${AWS::StackName}.${BaseDomain}"
+  LambdaWebFunction:
+    Description: Plant Tracer Flask web Lambda function name
+    Value: !Ref LambdaWebFunction
+  LambdaResizeFunction:
+    Description: Plant Tracer video/trace Lambda function name
+    Value: !Ref LambdaResizeFunction
+  TracingQueueUrl:
+    Description: SQS queue URL for trace work
+    Value: !Ref TracingQueue
