@@ -803,6 +803,10 @@ endif
 	@echo use one of these S3 buckets:
 	aws s3 ls
 	mkdir -p "$(dir $(SAM_CONFIG))"
+	@if [ ! -f "$(SAM_CONFIG)" ]; then \
+		printf 'version = 0.1\n' > "$(SAM_CONFIG)"; \
+		echo "Created $(SAM_CONFIG) for SAM guided deploy."; \
+	fi
 	sam deploy --config-file "$(SAM_CONFIG)" --guided $(if $(STACK),--stack-name "$(STACK)",) --capabilities CAPABILITY_IAM
 	$(MAKE) sam-status
 

@@ -344,6 +344,10 @@ Use one visible, ignored SAM config file per stack. For example:
 
    STACK=alice-test make sam-deploy-guided
 
+If ``samconfigs/alice-test.toml`` does not exist yet, the Makefile creates a
+minimal ignored config file before invoking SAM because the SAM CLI requires the
+``--config-file`` path to be readable even in guided mode.
+
 For a stack named ``app``, the selected config is ``samconfigs/app.toml`` and
 the template creates ``https://app.planttracer.com/`` when ``BaseDomain`` is
 ``planttracer.com``. The Makefile passes ``--stack-name app`` during guided
