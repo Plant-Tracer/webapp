@@ -43,6 +43,15 @@ Medium
   Impact: medium; replaces scattered ``fetch``/``$.post`` calls and inline
   handlers with one small client layer and shared error handling. Files: 8-14.
 
+* Standardize public API namespace versioning.
+  Impact: medium; ``/api/*`` is the legacy unversioned Flask API surface while
+  ``/resize-api/v1/*`` is the newer versioned Lambda resize service API. The
+  asymmetry is understandable historically, but it confuses deployment smoke
+  checks, client contracts, and future API design. Keep existing routes stable,
+  document the legacy/new-service distinction, and introduce any future
+  versioned web API path with explicit compatibility and migration rules. Files:
+  5-10.
+
 * Add real local Lambda integration coverage for upload/analyze/retrace.
   Impact: high; exercises Flask, DynamoDB Local, MinIO, and the local
   ``lambda-resize`` bridge together. Files: 6-10.
