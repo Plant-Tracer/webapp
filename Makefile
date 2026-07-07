@@ -633,6 +633,11 @@ template-lint: .venv/pyvenv.cfg
 	AWS_REGION=us-east-1 poetry run cfn-lint template.yaml
 
 sam-config-path-check:
+	@if [ -n "$(stack)" ] && [ -z "$(STACK)" ]; then \
+		echo "Refusing to use SAM: found lowercase stack=$(stack), but this Makefile expects STACK=<name>."; \
+		echo "Make variables are case-sensitive; rerun with STACK=$(stack)."; \
+		exit 1; \
+	fi
 	@if [ -z "$(SAM_CONFIG)" ]; then \
 		echo "Refusing to use SAM: SAM_CONFIG is not set."; \
 		echo "Pass STACK=<name> to use $(SAM_CONFIG_DIR)/<name>.toml, or pass SAM_CONFIG=<path>."; \
@@ -781,21 +786,23 @@ sam-deploy-version-check: sam-config-check sam-version-check
 	if [ -z "$$APP_URL" ] || [ "$$APP_URL" = "None" ]; then \
 		echo "WARNING: could not resolve deployed URL for $(STACK_NAME); allowing deploy."; \
 	else \
-		VERSION_URL="$${APP_URL%/}/api/ver"; \
-		VERSION_BODY=$$(curl -fsS --max-time 10 "$$VERSION_URL" 2>/dev/null || true); \
-		DEPLOYED_VERSION=$$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("__version__", ""))' 2>/dev/null <<< "$$VERSION_BODY" || true); \
-		if [ -z "$$DEPLOYED_VERSION" ]; then \
-			echo "WARNING: could not read deployed version from $$VERSION_URL; allowing deploy."; \
-		elif [ "$$DEPLOYED_VERSION" = "$(APP_VERSION)" ] && [ "$(SAM_DEPLOY_ALLOW_SAME_VERSION)" != "1" ]; then \
-			echo "Refusing to deploy $(STACK_NAME): deployed stack already reports version $(APP_VERSION) at $$VERSION_URL."; \
-			echo "Bump pyproject.toml before deploying again."; \
-			echo "This matters for Lambda SnapStart: lambda-web snapshots published versions, so each normal deploy should publish a deliberately new application version."; \
-			echo "For an intentional same-version redeploy, set SAM_DEPLOY_ALLOW_SAME_VERSION=1."; \
-			exit 1; \
-		else \
-			echo "Deploy version check passed for $(STACK_NAME): deployed=$$DEPLOYED_VERSION local=$(APP_VERSION)."; \
-		fi; \
-	fi
+			VERSION_URL="$${APP_URL%/}/api/ver"; \
+			VERSION_BODY=$$(curl -fsS --max-time 10 "$$VERSION_URL" 2>/dev/null || true); \
+			DEPLOYED_VERSION=$$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("__version__", ""))' 2>/dev/null <<< "$$VERSION_BODY" || true); \
+			DEPLOYED_STACK=$$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("stack_name", ""))' 2>/dev/null <<< "$$VERSION_BODY" || true); \
+			if [ -z "$$DEPLOYED_VERSION" ]; then \
+				echo "WARNING: could not read deployed version from $$VERSION_URL; allowing deploy."; \
+			elif [ "$$DEPLOYED_VERSION" = "$(APP_VERSION)" ] && [ "$(SAM_DEPLOY_ALLOW_SAME_VERSION)" != "1" ]; then \
+				echo "Refusing to deploy $(STACK_NAME): deployed stack already reports version $(APP_VERSION) at $$VERSION_URL."; \
+				echo "Deployed endpoint stack_name: $${DEPLOYED_STACK:-unavailable}."; \
+				echo "Bump pyproject.toml before deploying again."; \
+				echo "This matters for Lambda SnapStart: lambda-web snapshots published versions, so each normal deploy should publish a deliberately new application version."; \
+				echo "For an intentional same-version redeploy, set SAM_DEPLOY_ALLOW_SAME_VERSION=1."; \
+				exit 1; \
+			else \
+				echo "Deploy version check passed for $(STACK_NAME): deployed=$$DEPLOYED_VERSION local=$(APP_VERSION) endpoint_stack=$${DEPLOYED_STACK:-unavailable}."; \
+			fi; \
+		fi
 
 sam-deploy: $(REQ)
 ifeq ($(AWS_REGION),local)
@@ -879,25 +886,31 @@ sam-status: sam-config-check
 		VERSION_BODY=$$(echo "$$VERSION_RESP" | sed '$$d'); \
 		VERSION_OK=$$(python3 -c 'import json,sys; data=json.load(sys.stdin); print("1" if data.get("__version__") and data.get("sys_version") else "")' 2>/dev/null <<< "$$VERSION_BODY" || true); \
 		DEPLOYED_VERSION=$$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("__version__", ""))' 2>/dev/null <<< "$$VERSION_BODY" || true); \
+		VERSION_STACK=$$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("stack_name", ""))' 2>/dev/null <<< "$$VERSION_BODY" || true); \
 		if [ "$$VERSION_CODE" = "200" ] && [ -n "$$VERSION_OK" ]; then \
 			echo "Lambda version API: operational ($$VERSION_URL)"; \
 			echo "  response: $$VERSION_BODY"; \
 			echo "  deployed version: $$DEPLOYED_VERSION"; \
+			echo "  stack name: $${VERSION_STACK:-unavailable}"; \
 		else \
 			echo "Lambda version API: FAIL (HTTP $$VERSION_CODE) ($$VERSION_URL)"; \
 			echo "  response: $$VERSION_BODY"; \
+			echo "  stack name: $${VERSION_STACK:-unavailable}"; \
 			VERIFY_FAILED=1; \
 		fi; \
 		WEB_URL="$$BASE_URL/ping"; \
 		WEB_RESP=$$(curl -s -w "\n%{http_code}" --max-time 10 "$$WEB_URL" 2>/dev/null); \
 		WEB_CODE=$$(echo "$$WEB_RESP" | tail -1); \
 		WEB_BODY=$$(echo "$$WEB_RESP" | sed '$$d'); \
+		WEB_STACK=$$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("stack_name", ""))' 2>/dev/null <<< "$$WEB_BODY" || true); \
 		if [ "$$WEB_CODE" = "200" ] && echo "$$WEB_BODY" | grep -q '"status"[[:space:]]*:[[:space:]]*"ok"'; then \
 			echo "Lambda web ping: operational ($$WEB_URL)"; \
 			echo "  response: $$WEB_BODY"; \
+			echo "  stack name: $${WEB_STACK:-unavailable}"; \
 		else \
 			echo "Lambda web ping: FAIL (HTTP $$WEB_CODE) ($$WEB_URL)"; \
 			echo "  response: $$WEB_BODY"; \
+			echo "  stack name: $${WEB_STACK:-unavailable}"; \
 			VERIFY_FAILED=1; \
 		fi; \
 		STATIC_URL="$$BASE_URL/static/planttracer.js"; \
@@ -915,14 +928,17 @@ sam-status: sam-config-check
 		RESIZE_BODY=$$(echo "$$RESIZE_RESP" | sed '$$d'); \
 		RESIZE_APP_VERSION=$$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("app_version", ""))' 2>/dev/null <<< "$$RESIZE_BODY" || true); \
 		RESIZE_DEPLOYED_AT=$$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("deployed_at", ""))' 2>/dev/null <<< "$$RESIZE_BODY" || true); \
+		RESIZE_STACK=$$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("stack_name", ""))' 2>/dev/null <<< "$$RESIZE_BODY" || true); \
 		if echo "$$RESIZE_BODY" | grep -q '"status"[[:space:]]*:[[:space:]]*"ok"'; then \
 			echo "Lambda resize status: operational ($$RESIZE_URL)"; \
 			if [ -n "$$RESIZE_APP_VERSION" ] || [ -n "$$RESIZE_DEPLOYED_AT" ]; then \
 				echo "  app version: $${RESIZE_APP_VERSION:-unavailable}; deployed at: $${RESIZE_DEPLOYED_AT:-unavailable}"; \
 			fi; \
+			echo "  stack name: $${RESIZE_STACK:-unavailable}"; \
 		else \
 			echo "Lambda resize status: FAIL (HTTP $$RESIZE_CODE) ($$RESIZE_URL)"; \
 			echo "  response: $$RESIZE_BODY"; \
+			echo "  stack name: $${RESIZE_STACK:-unavailable}"; \
 		fi; \
 	fi; \
 	echo ""; \

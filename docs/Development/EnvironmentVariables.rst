@@ -80,11 +80,11 @@ Lambda Stack Diagnostics
    Route53 hosted zone id used by the stack domain mapping. The SAM template
    passes this to both Lambda functions for ``/ping`` diagnostics.
 
-The ``/ping`` endpoints report ``stack_name`` plus a ``stack_parameters``
-object with selected CloudFormation parameter values: ``HostedZoneId``,
-``BaseDomain``, ``ImageBucketName``, ``LogLevel``, ``MailerDryRun``, and
-``DynamoDBTablePrefix``. They intentionally do not report
-``WildcardCertificateArn``.
+The ``/ping`` endpoints and ``/api/ver`` report ``stack_name``. The ``/ping``
+endpoints also report a ``stack_parameters`` object with selected CloudFormation
+parameter values: ``HostedZoneId``, ``BaseDomain``, ``ImageBucketName``,
+``LogLevel``, ``MailerDryRun``, and ``DynamoDBTablePrefix``. They intentionally
+do not report ``WildcardCertificateArn``.
 
 Demo Mode
 ---------

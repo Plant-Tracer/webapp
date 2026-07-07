@@ -1,2 +1,3 @@
 App version: {{__version__}}
 Python version: {{sys_version}}
+Stack name: {{stack_name}}

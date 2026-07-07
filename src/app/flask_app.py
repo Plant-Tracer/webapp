@@ -322,7 +322,7 @@ def ping():
 @app.route("/status")
 def status():
     """Lightweight health/status for Lambda; frontend uses this to verify Lambda is operational."""
-    return jsonify({C.KEY_STATUS: C.STATUS_OK})
+    return jsonify({C.KEY_STATUS: C.STATUS_OK, STACK_NAME: stack_name()})
 
 @app.route('/privacy', methods=GET)
 def func_privacy():
@@ -415,6 +415,7 @@ def func_ver():
     app.logger.info("/ver")
     response = make_response(render_template('version.txt',
                                              __version__=__version__,
-                                             sys_version= sys.version))
+                                             sys_version= sys.version,
+                                             stack_name=stack_name()))
     response.headers['Content-Type'] = 'text/plain'
     return response

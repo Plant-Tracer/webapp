@@ -26,7 +26,10 @@ from . import mailer
 from . import apikey
 from .apikey import get_user_api_key, get_user_dict, in_demo_mode
 from .auth import AuthError,EmailNotInDatabase
-from .constants import C, E, POST, GET_POST, __version__, logger, log_level, printable80
+from .constants import (
+    C, E, POST, GET_POST, __version__, logger, log_level, printable80,
+    stack_name, STACK_NAME,
+)
 from .odb import (
     InvalidAPI_Key,
     InvalidMovie_Id,
@@ -1019,7 +1022,7 @@ def api_ver():
     Run the dictionary below through the VERSION_TEAMPLTE with jinja2.
     """
     current_app.logger.error("api_ver")
-    return {'__version__': __version__, 'sys_version': sys.version}
+    return {'__version__': __version__, 'sys_version': sys.version, STACK_NAME: stack_name()}
 
 @api_bp.route('/config-check', methods=GET_POST)
 def api_config_check():

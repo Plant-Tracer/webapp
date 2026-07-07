@@ -338,6 +338,9 @@ Use one visible, ignored SAM config file per stack. For example:
    STACK=alice-test make sam-deploy
    STACK=prod make sam-deploy
 
+``STACK`` must be uppercase. GNU Make variables are case-sensitive, so
+``stack=prod`` is not the same variable and is rejected by the SAM config guard.
+
 ``sam deploy --guided`` can also create the selected stack config:
 
 .. code-block:: console
@@ -429,8 +432,10 @@ Manual smoke checks on the non-production stack:
 
 * open ``https://{stack}.planttracer.com/`` and verify the home page and static
   assets load;
-* verify ``/ping`` returns ``{"status": "ok"}`` with ``stack_parameters``;
-* verify ``/api/ver`` returns ``__version__`` and ``sys_version``;
+* verify ``/ping`` returns ``{"status": "ok"}`` with ``stack_name`` and
+  ``stack_parameters``;
+* verify ``/api/ver`` returns ``__version__``, ``sys_version``, and
+  ``stack_name``;
 * verify ``/resize-api/v1/ping`` returns ``{"status": "ok"}``,
   ``app_version``, ``deployed_at``, and ``stack_parameters``;
 * register a test user and confirm the registration email path works;
