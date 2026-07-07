@@ -1,5 +1,4 @@
 # Beads Configuration File
-<<<<<<< HEAD
 # This file configures default behavior for bd commands in this repository.
 
 issue-prefix: "webapp-"
@@ -8,7 +7,7 @@ agents.file: "AGENTS.md"
 
 export.auto: true
 export.path: "issues.jsonl"
-=======
+
 # This file configures default behavior for all bd commands in this repository
 # All settings can also be set via environment variables (BD_* prefix)
 # or overridden with command-line flags
@@ -76,6 +75,3 @@ export.path: "issues.jsonl"
 # - github.token    → use GITHUB_TOKEN env var instead
 
 sync.remote: "git+ssh://git@github.com/Plant-Tracer/webapp.git"
-
-export.auto: true
->>>>>>> origin/main
