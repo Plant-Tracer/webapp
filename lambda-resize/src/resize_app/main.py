@@ -34,7 +34,13 @@ from aws_lambda_powertools.utilities.batch import (
 from . import movie_glue
 from . import mpeg_jpeg_zip
 from . import lambda_tracing_handler
-from .src.app.constants import __version__
+from .src.app.constants import (
+    __version__,
+    stack_name,
+    stack_parameter_overrides,
+    STACK_NAME,
+    STACK_PARAMETERS,
+)
 
 LOGGER = Logger(service="planttracer")
 DEPLOYED_AT_ENV = "PLANTTRACER_DEPLOYED_AT"
@@ -106,6 +112,8 @@ def api_ping() -> Dict[str, Any]:
         PING_STATUS: "ok",
         PING_TIME: time.time(),
         PING_PATH: sys.path,
+        STACK_NAME: stack_name(),
+        STACK_PARAMETERS: stack_parameter_overrides(),
         **deploy_metadata(),
     }
 
