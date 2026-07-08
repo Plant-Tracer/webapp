@@ -8,6 +8,8 @@
 # Environment variables:
 # PLANTTRACER_CREDENTIALS - the config.ini file that includes [smtp] and [imap] configuration the your production system
 #
+# Example deploy:
+# DYNAMODB_TABLE_PREFIX=prod STACK=demo make sam-build sam-deploy-guided
 
 SHELL := /bin/bash
 PYLINT_THRESHOLD := 10.0
