@@ -900,21 +900,6 @@ sam-status: sam-config-check
 			echo "  stack name: $${VERSION_STACK:-unavailable}"; \
 			VERIFY_FAILED=1; \
 		fi; \
-		WEB_URL="$$BASE_URL/ping"; \
-		WEB_RESP=$$(curl -s -w "\n%{http_code}" --max-time 10 "$$WEB_URL" 2>/dev/null); \
-		WEB_CODE=$$(echo "$$WEB_RESP" | tail -1); \
-		WEB_BODY=$$(echo "$$WEB_RESP" | sed '$$d'); \
-		WEB_STACK=$$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("stack_name", ""))' 2>/dev/null <<< "$$WEB_BODY" || true); \
-		if [ "$$WEB_CODE" = "200" ] && echo "$$WEB_BODY" | grep -q '"status"[[:space:]]*:[[:space:]]*"ok"'; then \
-			echo "Lambda web ping: operational ($$WEB_URL)"; \
-			echo "  response: $$WEB_BODY"; \
-			echo "  stack name: $${WEB_STACK:-unavailable}"; \
-		else \
-			echo "Lambda web ping: FAIL (HTTP $$WEB_CODE) ($$WEB_URL)"; \
-			echo "  response: $$WEB_BODY"; \
-			echo "  stack name: $${WEB_STACK:-unavailable}"; \
-			VERIFY_FAILED=1; \
-		fi; \
 		STATIC_URL="$$BASE_URL/static/planttracer.js"; \
 		STATIC_RESP=$$(curl -s -w "\n%{http_code}" --max-time 10 "$$STATIC_URL" 2>/dev/null); \
 		STATIC_CODE=$$(echo "$$STATIC_RESP" | tail -1); \

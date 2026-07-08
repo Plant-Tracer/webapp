@@ -295,9 +295,11 @@ Validation Requirements
 Before PR #1113 is ready to merge, validate at least:
 
 * existing Flask local tests still pass through ``make pytest``;
-* ``lambda-web`` serves ``/ping`` or equivalent health, one static asset, and a
-  representative Flask route through API Gateway event handling, including
-  named-stage paths such as ``/prod/api/ver``;
+* ``lambda-web`` serves one static asset and a representative Flask route
+  through API Gateway event handling, including named-stage paths such as
+  ``/prod/api/ver``. Do not use root-level ``/ping`` or ``/sping`` for API
+  Gateway custom-domain checks because AWS reserves those paths for service
+  health checks;
 * ``lambda-resize`` still serves ``/resize-api/v1/ping`` and keeps SQS trace
   event handling;
 * SAM template validation/linting passes;
@@ -399,11 +401,11 @@ Deploy:
 * run ``STACK=<name> make sam-deploy`` for an
   existing configured stack, or
   ``STACK=<name> make sam-deploy-guided`` for a new stack;
-* let ``make sam-status`` verify ``/ping``, ``/api/ver``,
+* let ``make sam-status`` verify ``/api/ver``,
   ``/static/planttracer.js``, and ``/resize-api/v1/ping``. The deploy targets
   stamp the built ``lambda-resize`` artifact before ``sam deploy``. The web
-  ping and version API responses are printed in full, and resize ping should
-  report the application version and UTC deployment timestamp;
+  version API response is printed in full, and resize ping should report the
+  application version and UTC deployment timestamp;
 * inspect recent logs with ``make sam-logs-web`` and ``make sam-logs-resize``
   if any smoke check reports a failure.
 
@@ -432,8 +434,6 @@ Manual smoke checks on the non-production stack:
 
 * open ``https://{stack}.planttracer.com/`` and verify the home page and static
   assets load;
-* verify ``/ping`` returns ``{"status": "ok"}`` with ``stack_name`` and
-  ``stack_parameters``;
 * verify ``/api/ver`` returns ``__version__``, ``sys_version``, and
   ``stack_name``;
 * verify ``/resize-api/v1/ping`` returns ``{"status": "ok"}``,
