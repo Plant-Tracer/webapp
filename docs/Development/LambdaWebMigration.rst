@@ -218,19 +218,20 @@ adding SnapStart or provisioned concurrency.
 Deploy Version Guard
 --------------------
 
-``make sam-deploy`` and ``make sam-deploy-guided`` require
-``src/app/constants.py`` and ``pyproject.toml`` to contain the same application
-version. For an existing stack, the deploy guard resolves the deployed
-application URL from CloudFormation and fetches ``/api/ver``. If the deployed
-application reports the same version as the local checkout, deploy is refused
-unless the operator explicitly sets ``SAM_DEPLOY_ALLOW_SAME_VERSION=1`` for an
-intentional same-version redeploy.
+``make sam-deploy`` and ``make sam-deploy-guided`` read the application version
+from ``pyproject.toml``. Runtime code exposes the same value through
+``app.constants.__version__`` for existing version-display and API callers. For
+an existing stack, the deploy guard resolves the deployed application URL from
+CloudFormation and fetches ``/api/ver``. If the deployed application reports the
+same version as the local checkout, deploy is refused unless the operator
+explicitly sets ``SAM_DEPLOY_ALLOW_SAME_VERSION=1`` for an intentional
+same-version redeploy.
 
 The version bump is required because ``lambda-web`` uses SnapStart on published
 Lambda versions. A normal deployment should publish a deliberately new
 application version so the SnapStart snapshot and the user-visible version move
-together. If deployment is blocked by the same-version guard, update both
-``src/app/constants.py`` and ``pyproject.toml`` before deploying again.
+together. If deployment is blocked by the same-version guard, update
+``pyproject.toml`` before deploying again.
 
 The deployed-version check is recovery tolerant. If the stack does not exist,
 CloudFormation outputs are missing, DNS is not usable, or ``/api/ver`` cannot
@@ -364,7 +365,7 @@ commits that nobody else can inspect or rebuild.
 Preflight:
 
 * confirm ``git status`` is clean and the branch has no unpushed commits;
-* confirm ``src/app/constants.py`` and ``pyproject.toml`` have the same version;
+* confirm ``pyproject.toml`` has the intended version;
 * confirm ``SAM_CONFIG`` points to an untracked local SAM config for the
   intended non-production stack and table prefix;
 * confirm the S3 movie bucket and DynamoDB table prefix are the intended test
@@ -413,9 +414,9 @@ Manual smoke checks on the non-production stack:
 
 * open ``https://{stack}.planttracer.com/`` and verify the home page and static
   assets load;
-* verify ``/ping`` returns ``{"status": "ok"}``;
+* verify ``/ping`` returns ``{"status": "ok"}`` with ``stack_parameters``;
 * verify ``/resize-api/v1/ping`` returns ``{"status": "ok"}``,
-  ``app_version``, and ``deployed_at``;
+  ``app_version``, ``deployed_at``, and ``stack_parameters``;
 * register a test user and confirm the registration email path works;
 * resend a login link and confirm the user can log in;
 * for ``MailerDryRun=true`` stacks, confirm the login email appears in Lambda

@@ -443,10 +443,11 @@ Verification Targets
 
 Local testing should cover at least these cases:
 
-* ``GET /resize-api/v1/ping`` returns ``status=ok`` with ``app_version`` and
-  ``deployed_at`` metadata. Local runs report ``deployed_at=unknown`` unless
-  ``PLANTTRACER_DEPLOYED_AT`` is set; Makefile-driven SAM deploys stamp the
-  built Lambda artifact with the UTC deploy timestamp.
+* ``GET /resize-api/v1/ping`` returns ``status=ok`` with ``app_version``,
+  ``deployed_at``, and ``stack_parameters`` metadata. Local runs report
+  ``deployed_at=unknown`` unless ``PLANTTRACER_DEPLOYED_AT`` is set;
+  Makefile-driven SAM deploys stamp the built Lambda artifact with the UTC
+  deploy timestamp.
 * ``GET /resize-api/v1/first-frame`` returns a JPEG for a movie in MinIO.
 * ``POST /resize-api/v1/trace-movie`` returns quickly and starts background
   tracing.

@@ -64,6 +64,28 @@ Application URLs
    ``https://{HOSTNAME}.{DOMAIN}/``. If those are also absent, Flask uses the
    current request origin.
 
+Lambda Stack Diagnostics
+------------------------
+
+``PLANTTRACER_STACK_NAME``
+   CloudFormation stack name for a deployed Lambda-only stack. The SAM template
+   passes this to both Lambda functions for diagnostics.
+
+``PLANTTRACER_BASE_DOMAIN``
+   Base domain used to create the stack hostname, such as
+   ``planttracer.com``. The SAM template passes this to both Lambda functions
+   for ``/ping`` diagnostics.
+
+``PLANTTRACER_HOSTED_ZONE_ID``
+   Route53 hosted zone id used by the stack domain mapping. The SAM template
+   passes this to both Lambda functions for ``/ping`` diagnostics.
+
+The ``/ping`` endpoints report ``stack_name`` plus a ``stack_parameters``
+object with selected CloudFormation parameter values: ``HostedZoneId``,
+``BaseDomain``, ``ImageBucketName``, ``LogLevel``, ``MailerDryRun``, and
+``DynamoDBTablePrefix``. They intentionally do not report
+``WildcardCertificateArn``.
+
 Demo Mode
 ---------
 

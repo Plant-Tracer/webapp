@@ -35,8 +35,7 @@ export LOG_LEVEL ?= DEBUG
 SAM_CONFIG ?= samconfig.toml
 SAM_BUILD_DIR=.aws-sam/build
 STACK_NAME = $(shell grep "stack_name" $(SAM_CONFIG) 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
-APP_VERSION := $(shell awk -F"'" '/^__version__/ {print $$2; exit}' src/app/constants.py)
-PACKAGE_VERSION := $(shell awk -F'"' '/^version[[:space:]]*=/ {print $$2; exit}' pyproject.toml)
+APP_VERSION := $(shell python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml","rb"))["project"]["version"])')
 
 # Only show events from the last N minutes (filter-log-events returns ascending order, so without this we get oldest events).
 SAM_LOGS_LIMIT ?= 1000
@@ -578,6 +577,7 @@ vend-lambda-resize:
 	mkdir -p lambda-resize/src/resize_app/src/app
 	rsync --verbose --archive $(VEND_FILES) \
 		lambda-resize/src/resize_app/src/app/
+	cp pyproject.toml lambda-resize/src/resize_app/src/app/pyproject.toml
 
 # Install lambda group so root venv can run lambda-resize lint/tests (single pyproject).
 install-lambda-deps: $(REQ)
@@ -604,6 +604,7 @@ vend-lambda-web:
 		--exclude '*.pyc' \
 		--exclude static-instrumented \
 		src/app/ lambda-web/src/app/
+	cp pyproject.toml lambda-web/src/app/pyproject.toml
 
 # Install lambda-web group so root venv can run lambda-web lint/tests.
 install-lambda-web-deps: $(REQ)
@@ -726,15 +727,7 @@ sam-audit-size:
 
 sam-version-check:
 	@if [ -z "$(APP_VERSION)" ]; then \
-		echo "Refusing to deploy: could not read __version__ from src/app/constants.py."; \
-		exit 1; \
-	fi
-	@if [ -z "$(PACKAGE_VERSION)" ]; then \
 		echo "Refusing to deploy: could not read version from pyproject.toml."; \
-		exit 1; \
-	fi
-	@if [ "$(APP_VERSION)" != "$(PACKAGE_VERSION)" ]; then \
-		echo "Refusing to deploy: src/app/constants.py version $(APP_VERSION) does not match pyproject.toml version $(PACKAGE_VERSION)."; \
 		exit 1; \
 	fi
 	@echo "Application version check passed for version $(APP_VERSION)."
@@ -761,7 +754,7 @@ sam-deploy-version-check: sam-config-check sam-version-check
 			echo "WARNING: could not read deployed version from $$VERSION_URL; allowing deploy."; \
 		elif [ "$$DEPLOYED_VERSION" = "$(APP_VERSION)" ] && [ "$(SAM_DEPLOY_ALLOW_SAME_VERSION)" != "1" ]; then \
 			echo "Refusing to deploy $(STACK_NAME): deployed stack already reports version $(APP_VERSION) at $$VERSION_URL."; \
-			echo "Bump src/app/constants.py and pyproject.toml before deploying again."; \
+			echo "Bump pyproject.toml before deploying again."; \
 			echo "This matters for Lambda SnapStart: lambda-web snapshots published versions, so each normal deploy should publish a deliberately new application version."; \
 			echo "For an intentional same-version redeploy, set SAM_DEPLOY_ALLOW_SAME_VERSION=1."; \
 			exit 1; \
