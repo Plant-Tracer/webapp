@@ -402,7 +402,7 @@ def func_ver():
     app.logger.info("/ver")
     response = make_response(render_template('version.txt',
                                              __version__=__version__,
-                                             sys_version= sys.version,
+                                             sys_version=sys.version,
                                              stack_name=stack_name()))
     response.headers['Content-Type'] = 'text/plain'
     return response
