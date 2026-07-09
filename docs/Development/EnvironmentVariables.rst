@@ -183,3 +183,14 @@ commands:
    make run-local-debug
    make run-local-demo-debug
    make run-local-lambda-debug
+
+To configure the current shell for direct local-debug commands, evaluate the
+shell assignments emitted by ``show-local-vars``:
+
+.. code-block:: bash
+
+   eval "$(make show-local-vars)"
+
+This selects DynamoDB Local, MinIO, Mailpit, the ``demo-`` table prefix, and the
+local resize-lambda debug endpoint. It unsets AWS profile and demo-mode
+variables.

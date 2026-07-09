@@ -90,25 +90,27 @@ parameters because courses and users live in DynamoDB, and DynamoDB data now
 outlives individual lambda-only stacks.
 
 Operators can list current course administrators with ``make admin-list``. The
-target runs ``src/dbutil.py admin-list`` against the selected AWS/DynamoDB
+target runs ``poetry run dbutil admin-list`` against the selected AWS/DynamoDB
 environment and prints each administrator's display name, email address,
 ``user_id``, and administered courses. Set ``AWS_REGION`` and
 ``DYNAMODB_TABLE_PREFIX`` for the target environment before running it; local
-development defaults still use DynamoDB Local and the ``demo-`` prefix.
+development defaults still use DynamoDB Local and the ``demo-`` prefix. If the
+prefix is missing, ``dbutil`` prints ``poetry run dbutil list-prefixes`` output
+so the operator can select an available ``DYNAMODB_TABLE_PREFIX``.
 The operator-facing administrator list is built by
 ``app.course_management.list_admins`` so future web administration pages can
 reuse the same read model.
 
 Operators can list all registered users with ``make user-list``. The target
-runs ``src/dbutil.py user-list`` and prints each user's display name, email
+runs ``poetry run dbutil user-list`` and prints each user's display name, email
 address, ``user_id``, enabled flag, primary course, course memberships,
 administered courses, and ``super_role``. Operators can list only users with
 cross-course super roles with ``make super-admin-list``. The underlying
-``src/dbutil.py super-admin-list`` command accepts ``--role super_admin`` or
+``poetry run dbutil super-admin-list`` command accepts ``--role super_admin`` or
 ``--role super_auditor`` to narrow the output.
 
 Operators can create or update course administrators with ``make admin-create``.
-The target runs ``src/dbutil.py admin-create``. In an interactive terminal it
+The target runs ``poetry run dbutil admin-create``. In an interactive terminal it
 asks for administrator email/name, lists courses where that user is not already
 an administrator, and accepts one or more selected courses. Non-interactive
 automation can pass ``ADMIN_CREATE_FLAGS``, for example
@@ -120,23 +122,23 @@ through the configured mail path. Use ``--planttracer_endpoint`` or set
 render mail without sending it.
 
 Operators can add or remove course-admin access for an existing user with
-``src/dbutil.py add-admin --email teacher@example.edu --course_id BIO101`` and
-``src/dbutil.py remove-admin --email teacher@example.edu --course_id BIO101``.
+``poetry run dbutil add-admin --email teacher@example.edu --course_id BIO101`` and
+``poetry run dbutil remove-admin --email teacher@example.edu --course_id BIO101``.
 The older ``--admin_email`` spelling is still accepted by both commands.
 
 Operators can grant or remove cross-course roles by email address with
-``src/dbutil.py add-super-admin --email ops@example.edu``,
-``src/dbutil.py remove-super-admin --email ops@example.edu``,
-``src/dbutil.py add-super-auditor --email auditor@example.edu``, and
-``src/dbutil.py remove-super-auditor --email auditor@example.edu``. The general
-``src/dbutil.py set-super-role --email ops@example.edu --role super_admin``
+``poetry run dbutil add-super-admin --email ops@example.edu``,
+``poetry run dbutil remove-super-admin --email ops@example.edu``,
+``poetry run dbutil add-super-auditor --email auditor@example.edu``, and
+``poetry run dbutil remove-super-auditor --email auditor@example.edu``. The
+general ``poetry run dbutil set-super-role --email ops@example.edu --role super_admin``
 command accepts ``none``, ``super_auditor``, or ``super_admin``. The CLI refuses
 to demote or remove the last remaining ``super_admin``. Users can be
 ``super_admin`` or ``super_auditor``, but not both, because ``super_role`` is a
 single enum field.
 
 Operators can create courses with ``make course-create``. The target runs
-``src/dbutil.py create-course --send-email``. In an interactive terminal it asks
+``poetry run dbutil create-course --send-email``. In an interactive terminal it asks
 for course id/number, course name, and course administrator. Existing course
 administrators are listed first so the operator can select one; pressing Enter
 creates a new administrator from the prompted email/name. Non-interactive
@@ -154,14 +156,14 @@ For a deployed Lambda-only stack, prefer ``make sam-course-create``. It reads
 ``stack_name`` from the selected ignored ``SAM_CONFIG`` file, resolves the
 stack's ``DynamoDBTablePrefix``, ``ApplicationUrl``, and ``MailerDryRun``
 settings from CloudFormation, and then delegates to
-``src/dbutil.py create-course --send-email``. Pass the same
+``poetry run dbutil create-course --send-email``. Pass the same
 ``COURSE_CREATE_FLAGS`` used by ``make course-create``. This keeps course
 initialization separate from stack deployment while reducing the chance of
 creating course data in the wrong table prefix or sending links for the wrong
 host.
 
 The demo course has its own narrower target: ``make demo-course-create``. That
-target runs ``src/dbutil.py create-demo-course`` and ensures only the durable
+target runs ``poetry run dbutil create-demo-course`` and ensures only the durable
 demo course data exists: ``demo-course``, the demo course administrator, the
 demo user, and the fixed demo-mode API key. It does not create tables, upload
 objects, or seed demo movies. Run it after deploying a demo stack, or any time

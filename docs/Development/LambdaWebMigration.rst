@@ -163,7 +163,7 @@ Data Ownership
 DynamoDB tables are external to CloudFormation ownership. The stack receives
 the table prefix and grants prefix-scoped permissions, but table creation and
 schema maintenance remain handled by repository tooling such as
-``src/dbutil.py`` and ``etc/dynamodb_tables.json``.
+``poetry run dbutil`` and ``etc/dynamodb_tables.json``.
 
 The migration must not make stack deletion delete the long-lived S3 archive or
 the DynamoDB data model.
@@ -422,7 +422,7 @@ CloudFormation resource creation. After the stack is deployed and the intended
      make sam-course-create
 
 The target reads the table prefix, application URL, and ``MailerDryRun`` value
-from the selected stack, then delegates to ``src/dbutil.py create-course
+from the selected stack, then delegates to ``poetry run dbutil create-course
 --send-email``. Rerunning it is safe when the course already exists with the
 same name: it verifies the course administrator relationship and sends the
 course setup/login email again. If the existing course id has a different

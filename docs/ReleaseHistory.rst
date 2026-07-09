@@ -83,6 +83,7 @@ Unreleased Summary
     * Developer: add ``src/dbbackup.py`` for default full and selective Plant Tracer ``.ptb`` backups, restores, archive inspection, dry-run restore-link sending, and course migration
     * Developer: add verbose backup inspection with per-record summaries and grouped frame-trackpoint ranges
     * Developer: add ``dbbackup list-prefixes`` to discover complete DynamoDB table prefixes and report course/user/movie counts with an aligned UTC ``from``/``to`` date range
+    * Developer: add ``dbutil list-prefixes``, show available prefixes when ``DYNAMODB_TABLE_PREFIX`` is missing, and add ``make show-local-vars`` for direct local-debug commands
     * Developer: make ``dbbackup list-prefixes`` offer ``aws sso login`` and retry when AWS SSO token retrieval fails
     * Developer: make ``dbbackup backup`` report progress to stderr and skip missing movie MP4 objects with manifest warnings instead of failing after writing a partial archive
     * Developer: make ``dbbackup backup`` refuse to overwrite an archive from a different DynamoDB table prefix and reuse already archived movie MP4 objects when refreshing a same-prefix backup

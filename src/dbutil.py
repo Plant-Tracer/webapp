@@ -25,7 +25,8 @@ from app.odb import (
     MOVIE_STATUS, MOVIE_STATE_READY, TITLE,
 )
 from app.odb_movie_data import set_movie_data
-from app.constants import C, env_value
+from app.constants import C, configure_local_environment, env_value
+from app.dynamodb_prefixes import format_list_prefixes, prefix_summaries
 
 DEMO_COURSE_ID='demo-course'
 DEMO_COURSE_NAME='Demo Course'
@@ -38,6 +39,7 @@ DEFAULT_ADMIN_NAME = 'Plant Tracer Demo Admin'
 
 NO_COURSES_MESSAGE = "No courses are available for this administrator."
 CREATE_COURSE_REQUIRED_FLAGS = ["--course_id", "--course_name", "--admin_email", "--admin_name"]
+PREFIXLESS_COMMANDS = {"list-prefixes", "list_prefixes"}
 
 DESCRIPTION="""
 Plant Tracer DynamoDB Database Maintenance Program.
@@ -194,6 +196,30 @@ def print_report():
     ddbo = DDBO()
     odbmaint.report(ddbo)
     print_course_report(ddbo)
+
+
+def dynamodb_resource_for_prefix_listing():
+    """Return a DynamoDB resource for prefix discovery."""
+    if C.AWS_REGION not in os.environ:
+        configure_local_environment()
+    return DDBO.resource()
+
+
+def list_prefixes():
+    for line in format_list_prefixes(prefix_summaries(dynamodb_resource_for_prefix_listing())):
+        print(line)
+
+
+def print_available_table_prefixes(stream):
+    print("Available DYNAMODB_TABLE_PREFIX values:", file=stream)
+    try:
+        lines = format_list_prefixes(prefix_summaries(dynamodb_resource_for_prefix_listing()))
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        print(f"  Could not list table prefixes: {exc}", file=stream)
+        return
+    for line in lines:
+        print(f"  {line}", file=stream)
+    print("Set DYNAMODB_TABLE_PREFIX to one of the listed prefixes and retry.", file=stream)
 
 
 def format_admin_course(course):
@@ -755,6 +781,11 @@ def build_parser():
 
     subparsers.add_parser("report", help="Print database tables, courses, and students")
     subparsers.add_parser(
+        "list-prefixes",
+        aliases=["list_prefixes"],
+        help="List complete DynamoDB table prefixes with counts and date ranges",
+    )
+    subparsers.add_parser(
         "admin-list",
         aliases=["admin_list"],
         help="List course administrators and their administered courses",
@@ -951,10 +982,15 @@ def main():  # pragma: no cover
     args = parser.parse_args()
     clogging.setup(level=args.loglevel)
 
-    if C.DYNAMODB_TABLE_PREFIX not in os.environ:
+    if args.command not in PREFIXLESS_COMMANDS and C.DYNAMODB_TABLE_PREFIX not in os.environ:
+        print(f"{C.AWS_REGION}={os.environ.get(C.AWS_REGION, 'local')}", file=sys.stderr)
         print(f"ERROR: Environment variable {C.DYNAMODB_TABLE_PREFIX} is not set", file=sys.stderr)
+        print_available_table_prefixes(sys.stderr)
         return 1
 
+    if args.command in PREFIXLESS_COMMANDS:
+        list_prefixes()
+        return 0
     if args.command == "report":
         print_report()
         return 0

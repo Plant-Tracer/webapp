@@ -5,9 +5,6 @@
 # - Updated to handle virtual environment
 # - Simple CRUD management of local database instance for developers
 #
-# Environment variables:
-# PLANTTRACER_CREDENTIALS - the config.ini file that includes [smtp] and [imap] configuration for the production system
-#
 # Example deploy:
 # aws sso login && DYNAMODB_TABLE_PREFIX=prod STACK=demo make sam-build sam-deploy-guided
 
@@ -21,7 +18,7 @@ LOCAL_LAMBDA_PORT=9811
 LOCAL_LAMBDA_BASE=http://127.0.0.1:$(LOCAL_LAMBDA_PORT)/
 DYNAMODB_LOCAL_ENDPOINT=http://localhost:8000/
 MINIO_ENDPOINT=http://localhost:9000/
-DBUTIL=src/dbutil.py
+DBUTIL=dbutil
 MAILPIT_SMTP_CONFIG={"SMTP_HOST":"127.0.0.1","SMTP_PORT":"1025","SMTP_NO_TLS":"1","SMTP_USERNAME":"","SMTP_PASSWORD":""}
 LOCAL_AWS_ENV=env -u AWS_PROFILE -u AWS_DEFAULT_PROFILE AWS_REGION=local AWS_DEFAULT_REGION=local AWS_EC2_METADATA_DISABLED=true AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_ENDPOINT_URL_DYNAMODB=$(DYNAMODB_LOCAL_ENDPOINT) AWS_ENDPOINT_URL_S3=$(MINIO_ENDPOINT) PLANTTRACER_S3_BUCKET=$(LOCAL_BUCKET) DYNAMODB_TABLE_PREFIX=demo- SMTPCONFIG_JSON='$(MAILPIT_SMTP_CONFIG)'
 LOCAL_FLASK_ENV=$(LOCAL_AWS_ENV) PLANTTRACER_LAMBDA_API_BASE=$(LOCAL_LAMBDA_BASE)
@@ -44,6 +41,7 @@ export LOG_LEVEL ?= DEBUG
 AWS_REGION_INPUT := $(AWS_REGION)
 DYNAMODB_TABLE_PREFIX_INPUT := $(DYNAMODB_TABLE_PREFIX)
 PLANTTRACER_S3_BUCKET_INPUT := $(PLANTTRACER_S3_BUCKET)
+SHOW_LOCAL_VARS := $(filter show-local-vars,$(MAKECMDGOALS))
 REMOTE_AWS_ENV=env -u AWS_ENDPOINT_URL_DYNAMODB -u AWS_ENDPOINT_URL_S3 -u AWS_ENDPOINT_URL_SQS
 
 STACK ?=
@@ -77,7 +75,9 @@ VEND_FILES := src/app/odb.py \
 # the normal AWS SDK credential chain. Remote mode must not inherit local
 # AWS_ENDPOINT_URL_* overrides.
 ifeq ($(AWS_REGION),)
+ifeq ($(SHOW_LOCAL_VARS),)
     $(warning AWS_REGION is not set. Defaulting to local MinIO/DynamoDB configuration.)
+endif
     export AWS_REGION                ?= local
 endif
 ifeq ($(AWS_REGION),local)
@@ -92,7 +92,9 @@ endif
 export PYLINTHOME ?= $(CURDIR)/.pylint.d
 
 ifeq ($(DYNAMODB_TABLE_PREFIX),)
+ifeq ($(SHOW_LOCAL_VARS),)
     $(info DYNAMODB_TABLE_PREFIX not set. Defaulting to demo-)
+endif
     export DYNAMODB_TABLE_PREFIX=demo-
 endif
 
@@ -116,12 +118,12 @@ distclean:
 
 ################################################################
 # Main targets used by CI/CD system and developers
-.PHONY: all check coverage tags show-storage-mode user-list admin-list admin-create super-admin-list course-create demo-course-create sam-course-create
+.PHONY: all check coverage tags show-local-vars show-storage-mode user-list admin-list admin-create super-admin-list course-create demo-course-create sam-course-create
 
 all:
 	@echo verify syntax and then restart
 	$(MAKE) lint
-	$(MAKE) run-local
+	$(MAKE) run-local-debug
 
 check:
 	$(MAKE) lint
@@ -136,6 +138,21 @@ coverage:
 tags:
 	etags src/app/*.py tests/*.py tests/fixtures/*.py src/app/static/*.js lambda-web/src/lambda_web/*.py lambda-resize/src/resize_app/*.py
 
+show-local-vars:
+	@printf '%s\n' \
+		'unset AWS_PROFILE AWS_DEFAULT_PROFILE AWS_ENDPOINT_URL_SQS DEMO_MODE DEMO_COURSE_ID;' \
+		"export AWS_REGION='local';" \
+		"export AWS_DEFAULT_REGION='local';" \
+		"export AWS_EC2_METADATA_DISABLED='true';" \
+		"export AWS_ACCESS_KEY_ID='minioadmin';" \
+		"export AWS_SECRET_ACCESS_KEY='minioadmin';" \
+		"export AWS_ENDPOINT_URL_DYNAMODB='$(DYNAMODB_LOCAL_ENDPOINT)';" \
+		"export AWS_ENDPOINT_URL_S3='$(MINIO_ENDPOINT)';" \
+		"export PLANTTRACER_S3_BUCKET='$(LOCAL_BUCKET)';" \
+		"export DYNAMODB_TABLE_PREFIX='demo-';" \
+		'export SMTPCONFIG_JSON='"'"'$(MAILPIT_SMTP_CONFIG)'"'"';' \
+		"export PLANTTRACER_LAMBDA_API_BASE='$(LOCAL_LAMBDA_BASE)';"
+
 show-storage-mode:
 	@echo "AWS_REGION=$(AWS_REGION)"
 	@echo "DYNAMODB_TABLE_PREFIX=$(DYNAMODB_TABLE_PREFIX)"
@@ -149,25 +166,25 @@ show-storage-mode:
 	fi
 
 admin-list:
-	poetry run python $(DBUTIL) admin-list
+	poetry run $(DBUTIL) admin-list
 
 user-list:
-	poetry run python $(DBUTIL) user-list
+	poetry run $(DBUTIL) user-list
 
 super-admin-list:
-	poetry run python $(DBUTIL) super-admin-list
+	poetry run $(DBUTIL) super-admin-list
 
 ADMIN_CREATE_FLAGS ?=
 admin-create:
-	poetry run python $(DBUTIL) admin-create $(ADMIN_CREATE_FLAGS)
+	poetry run $(DBUTIL) admin-create $(ADMIN_CREATE_FLAGS)
 
 COURSE_CREATE_FLAGS ?=
 course-create:
-	poetry run python $(DBUTIL) create-course --send-email $(COURSE_CREATE_FLAGS)
+	poetry run $(DBUTIL) create-course --send-email $(COURSE_CREATE_FLAGS)
 
 DEMO_COURSE_CREATE_FLAGS ?=
 demo-course-create:
-	poetry run python $(DBUTIL) create-demo-course $(DEMO_COURSE_CREATE_FLAGS)
+	poetry run $(DBUTIL) create-demo-course $(DEMO_COURSE_CREATE_FLAGS)
 
 ################################################################
 ## Program development: static analysis tools
@@ -257,9 +274,9 @@ make-local-demo:
 	@echo creating local demo tables, course, and movies with the prefix demo-
 	$(MAKE) start-local-services
 	$(MAKE) make-local-bucket
-	$(LOCAL_AWS_ENV) poetry run python $(DBUTIL) createdb
-	$(LOCAL_AWS_ENV) poetry run python $(DBUTIL) create-demo-course
-	$(LOCAL_AWS_ENV) poetry run python $(DBUTIL) seed-demo-movies
+	$(LOCAL_AWS_ENV) poetry run $(DBUTIL) createdb
+	$(LOCAL_AWS_ENV) poetry run $(DBUTIL) create-demo-course
+	$(LOCAL_AWS_ENV) poetry run $(DBUTIL) seed-demo-movies
 	$(LOCAL_AWS_ENV) aws s3 ls --recursive s3://$(LOCAL_BUCKET)
 
 ensure-local-lambda-debug:
@@ -290,8 +307,9 @@ run-local-lambda-debug:
 
 run-local-debug:
 	@echo run Flask locally against the local demo dataset, but not in demo mode
+	$(MAKE) make-local-demo
 	$(MAKE) ensure-local-lambda-debug
-	$(LOCAL_NONDEMO_ENV) poetry run python $(DBUTIL) makelink $(LOCAL_ADMIN_EMAIL) --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
+	$(LOCAL_NONDEMO_ENV) poetry run $(DBUTIL) makelink $(LOCAL_ADMIN_EMAIL) --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
 	$(LOCAL_NONDEMO_ENV) $(FLASK_DEBUG_RUN)
 
 run-local-demo-debug:
@@ -919,7 +937,7 @@ endif
 	echo "Creating or verifying course for stack $(STACK_NAME) using DYNAMODB_TABLE_PREFIX=$$DDB_PREFIX and endpoint $$APP_URL"; \
 	env -u AWS_ENDPOINT_URL_DYNAMODB -u AWS_ENDPOINT_URL_S3 \
 		DYNAMODB_TABLE_PREFIX="$$DDB_PREFIX" MAILER_DRY_RUN="$$MAILER_DRY_RUN_STACK" \
-		poetry run python $(DBUTIL) create-course --send-email --planttracer_endpoint "$$APP_URL" $(COURSE_CREATE_FLAGS)
+		poetry run $(DBUTIL) create-course --send-email --planttracer_endpoint "$$APP_URL" $(COURSE_CREATE_FLAGS)
 
 
 # After deploy: verify Lambda URLs. Use curl -s (no -f) so we capture and show body on 4xx/5xx.
@@ -966,7 +984,7 @@ sam-status: sam-config-check
 		else \
 			echo "Lambda static status: FAIL (HTTP $$STATIC_CODE) ($$STATIC_URL)"; \
 			VERIFY_FAILED=1; \
-			fi; \
+		fi; \
 		RESIZE_URL="$$BASE_URL/resize-api/v1/ping"; \
 		RESIZE_RESP=$$(curl -s -w "\n%{http_code}" --max-time 10 "$$RESIZE_URL" 2>/dev/null); \
 		RESIZE_CODE=$$(echo "$$RESIZE_RESP" | tail -1); \
@@ -985,7 +1003,7 @@ sam-status: sam-config-check
 			echo "  response: $$RESIZE_BODY"; \
 			echo "  stack name: $${RESIZE_STACK:-unavailable}"; \
 			VERIFY_FAILED=1; \
-			fi; \
+		fi; \
 	fi; \
 	echo ""; \
 	echo "Recent Lambda web log events (newest first) for troubleshooting:"; \

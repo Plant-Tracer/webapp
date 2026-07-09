@@ -1,9 +1,11 @@
+import sys
 import uuid
 from types import SimpleNamespace
 
 import pytest
 
 from app import odb
+from app.dynamodb_prefixes import PrefixSummary
 from app import odb_movie_data
 from app.odb import MOVIE_ID
 from app.schema import AdminCourse
@@ -19,6 +21,10 @@ DOMAIN_ENV = "DOMAIN"
 
 def parse_args(*args):
     return dbutil.build_parser().parse_args(args)
+
+
+def fake_dynamodb_resource():
+    return object()
 
 
 def test_dbutil_commands_do_not_use_option_prefix():
@@ -262,6 +268,76 @@ def test_dbutil_has_user_list_command():
     args = parse_args("user-list")
 
     assert args.command == "user-list"
+
+
+def test_dbutil_has_list_prefixes_command():
+    args = parse_args("list-prefixes")
+
+    assert args.command == "list-prefixes"
+
+
+def test_dbutil_does_not_have_table_list_command():
+    with pytest.raises(SystemExit):
+        parse_args("table-list")
+
+
+def test_dbutil_missing_prefix_prints_available_prefixes(monkeypatch, capsys):
+    monkeypatch.delenv(dbutil.C.DYNAMODB_TABLE_PREFIX, raising=False)
+    monkeypatch.setenv(dbutil.C.AWS_REGION, "us-east-1")
+    monkeypatch.setattr(sys, "argv", ["dbutil", "report"])
+    monkeypatch.setattr(dbutil, "dynamodb_resource_for_prefix_listing", fake_dynamodb_resource)
+    monkeypatch.setattr(
+        dbutil,
+        "prefix_summaries",
+        lambda _dynamodb: [
+            PrefixSummary(
+                prefix="demo-",
+                courses=1,
+                users=2,
+                movies=3,
+                date_from=1_700_000_000,
+                date_to=1_700_000_060,
+            )
+        ],
+    )
+
+    assert dbutil.main() == 1
+
+    captured = capsys.readouterr()
+    assert captured.err.splitlines()[0] == "AWS_REGION=us-east-1"
+    assert "ERROR: Environment variable DYNAMODB_TABLE_PREFIX is not set" in captured.err
+    assert "Available DYNAMODB_TABLE_PREFIX values:" in captured.err
+    assert "demo-" in captured.err
+    assert "Set DYNAMODB_TABLE_PREFIX to one of the listed prefixes and retry." in captured.err
+
+
+def test_dbutil_list_prefixes_runs_without_selected_prefix(monkeypatch, capsys):
+    monkeypatch.delenv(dbutil.C.DYNAMODB_TABLE_PREFIX, raising=False)
+    monkeypatch.setattr(sys, "argv", ["dbutil", "list-prefixes"])
+    monkeypatch.setattr(dbutil, "dynamodb_resource_for_prefix_listing", fake_dynamodb_resource)
+    monkeypatch.setattr(
+        dbutil,
+        "prefix_summaries",
+        lambda _dynamodb: [
+            PrefixSummary(
+                prefix="demo-",
+                courses=1,
+                users=2,
+                movies=3,
+                date_from=1_700_000_000,
+                date_to=1_700_000_060,
+            )
+        ],
+    )
+
+    assert dbutil.main() == 0
+
+    captured = capsys.readouterr()
+    assert captured.out.splitlines() == [
+        "prefix  courses  users  movies  from                  to",
+        "demo-         1      2       3  2023-11-14T22:13:20Z  2023-11-14T22:14:20Z",
+    ]
+    assert captured.err == ""
 
 
 def test_dbutil_has_super_admin_list_command():
