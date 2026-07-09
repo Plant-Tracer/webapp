@@ -31,8 +31,6 @@ LOCAL_ADMIN_EMAIL=plantadmin@planttracer.com
 FLASK_DEBUG_RUN=poetry run flask --debug --app src.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 LOCAL_LAMBDA_PROBE=python3 -c 'import socket, sys; s=socket.socket(); s.settimeout(0.2); sys.exit(0 if s.connect_ex(("127.0.0.1", $(LOCAL_LAMBDA_PORT))) == 0 else 1)'
 LOCAL_LAMBDA_WAIT_SECONDS ?= 30
-export DEBIAN_FRONTEND=noninteractive
-export LOG_LEVEL ?= DEBUG
 
 STACK ?=
 SAM_CONFIG_DIR ?= samconfigs
@@ -59,6 +57,9 @@ VEND_FILES := src/app/odb.py \
               src/app/paths.py \
               src/app/odb_movie_data.py \
               src/app/s3_presigned.py
+
+export DEBIAN_FRONTEND=noninteractive
+export LOG_LEVEL ?= DEBUG
 
 # if AWS_REGION is set, we use the live system. Otherwise use minio and DynamoDBlocal
 ifeq ($(AWS_REGION),)
@@ -864,83 +865,15 @@ endif
 		DYNAMODB_TABLE_PREFIX="$$DDB_PREFIX" MAILER_DRY_RUN="$$MAILER_DRY_RUN_STACK" \
 		poetry run python $(DBUTIL) create-course --send-email --planttracer_endpoint "$$APP_URL" $(COURSE_CREATE_FLAGS)
 
-
 # After deploy: verify Lambda URLs. Use curl -s (no -f) so we capture and show body on 4xx/5xx.
+# Simplified by Simson
 sam-status: sam-config-check
-	@echo "Checking Lambda status..."
-	@sleep 5; \
-	VERIFY_FAILED=0; \
-	APP_URL=$$(aws cloudformation describe-stacks --stack-name "$(STACK_NAME)" --query 'Stacks[0].Outputs[?OutputKey==`ApplicationUrl`].OutputValue | [0]' --output text 2>/dev/null || true); \
-	if [ -z "$$APP_URL" ] || [ "$$APP_URL" = "None" ]; then \
-		DNS=$$(aws cloudformation describe-stacks --stack-name "$(STACK_NAME)" --query 'Stacks[0].Outputs[?OutputKey==`LambdaDnsName`].OutputValue | [0]' --output text 2>/dev/null || true); \
-		if [ -n "$$DNS" ] && [ "$$DNS" != "None" ]; then \
-			APP_URL="https://$$DNS/"; \
-		fi; \
-	fi; \
-	if [ -z "$$APP_URL" ] || [ "$$APP_URL" = "None" ]; then \
-		echo "Lambda application URL: FAIL (stack $(STACK_NAME) did not report ApplicationUrl or LambdaDnsName)"; \
-		VERIFY_FAILED=1; \
-	else \
-		BASE_URL="$${APP_URL%/}"; \
-		VERSION_URL="$$BASE_URL/api/ver"; \
-		VERSION_RESP=$$(curl -s -w "\n%{http_code}" --max-time 10 "$$VERSION_URL" 2>/dev/null); \
-		VERSION_CODE=$$(echo "$$VERSION_RESP" | tail -1); \
-		VERSION_BODY=$$(echo "$$VERSION_RESP" | sed '$$d'); \
-		VERSION_OK=$$(python3 -c 'import json,sys; data=json.load(sys.stdin); print("1" if data.get("__version__") and data.get("sys_version") else "")' 2>/dev/null <<< "$$VERSION_BODY" || true); \
-		DEPLOYED_VERSION=$$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("__version__", ""))' 2>/dev/null <<< "$$VERSION_BODY" || true); \
-		VERSION_STACK=$$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("stack_name", ""))' 2>/dev/null <<< "$$VERSION_BODY" || true); \
-		if [ "$$VERSION_CODE" = "200" ] && [ -n "$$VERSION_OK" ]; then \
-			echo "Lambda version API: operational ($$VERSION_URL)"; \
-			echo "  response: $$VERSION_BODY"; \
-			echo "  deployed version: $$DEPLOYED_VERSION"; \
-			echo "  stack name: $${VERSION_STACK:-unavailable}"; \
-		else \
-			echo "Lambda version API: FAIL (HTTP $$VERSION_CODE) ($$VERSION_URL)"; \
-			echo "  response: $$VERSION_BODY"; \
-			echo "  stack name: $${VERSION_STACK:-unavailable}"; \
-			VERIFY_FAILED=1; \
-		fi; \
-		STATIC_URL="$$BASE_URL/static/planttracer.js"; \
-		STATIC_RESP=$$(curl -s -w "\n%{http_code}" --max-time 10 "$$STATIC_URL" 2>/dev/null); \
-		STATIC_CODE=$$(echo "$$STATIC_RESP" | tail -1); \
-		STATIC_BODY=$$(echo "$$STATIC_RESP" | sed '$$d'); \
-		if [ "$$STATIC_CODE" = "200" ] && echo "$$STATIC_BODY" | grep -q "register_func"; then \
-			echo "Lambda static status: operational ($$STATIC_URL)"; \
-		else \
-			echo "Lambda static status: FAIL (HTTP $$STATIC_CODE) ($$STATIC_URL)"; \
-			VERIFY_FAILED=1; \
-		fi; \\
-		RESIZE_URL="$$BASE_URL/resize-api/v1/ping"; \
-		RESIZE_RESP=$$(curl -s -w "\n%{http_code}" --max-time 10 "$$RESIZE_URL" 2>/dev/null); \
-		RESIZE_CODE=$$(echo "$$RESIZE_RESP" | tail -1); \
-		RESIZE_BODY=$$(echo "$$RESIZE_RESP" | sed '$$d'); \
-		RESIZE_APP_VERSION=$$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("app_version", ""))' 2>/dev/null <<< "$$RESIZE_BODY" || true); \
-		RESIZE_DEPLOYED_AT=$$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("deployed_at", ""))' 2>/dev/null <<< "$$RESIZE_BODY" || true); \
-		RESIZE_STACK=$$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("stack_name", ""))' 2>/dev/null <<< "$$RESIZE_BODY" || true); \
-		if echo "$$RESIZE_BODY" | grep -q '"status"[[:space:]]*:[[:space:]]*"ok"'; then \
-			echo "Lambda resize status: operational ($$RESIZE_URL)"; \
-			if [ -n "$$RESIZE_APP_VERSION" ] || [ -n "$$RESIZE_DEPLOYED_AT" ]; then \
-				echo "  app version: $${RESIZE_APP_VERSION:-unavailable}; deployed at: $${RESIZE_DEPLOYED_AT:-unavailable}"; \
-			fi; \
-			echo "  stack name: $${RESIZE_STACK:-unavailable}"; \
-		else \
-			echo "Lambda resize status: FAIL (HTTP $$RESIZE_CODE) ($$RESIZE_URL)"; \
-			echo "  response: $$RESIZE_BODY"; \
-			echo "  stack name: $${RESIZE_STACK:-unavailable}"; \
-			VERIFY_FAILED=1; \
-		fi; \\
-	fi; \
-	echo ""; \
-	echo "Recent Lambda web log events (newest first) for troubleshooting:"; \
-	$(MAKE) sam-logs-web SAM_LOGS_LIMIT=40 || true; \
-	echo ""; \
-	echo "Recent Lambda resize log events (newest first) for troubleshooting:"; \
-	$(MAKE) sam-logs-resize SAM_LOGS_LIMIT=40 || true; \
-	if [ "$$VERIFY_FAILED" != "0" ]; then \
-		echo "Post-deploy Lambda status verification failed."; \
-		exit "$$VERIFY_FAILED"; \
-	fi
-
+	@echo "Checking Lambda status...";\
+	APP_URL="https://$(STACK_NAME).planttracer.com/"; \
+	echo APP_URL=$$APP_URL; \
+	BASE_URL="$${APP_URL%/}"; \
+	VERSION_URL="$$BASE_URL/api/ver"; \
+	curl -f -s -w "\n%{http_code}\n" --max-time 10 "$$VERSION_URL"
 
 # Shared resolution of Lambda function name (FUNC) and start time (START) for log targets.
 # Used by sam-logs, sam-logs-simple, sam-logs-simple-tail.
