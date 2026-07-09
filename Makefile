@@ -908,7 +908,8 @@ sam-status: sam-config-check
 			echo "Lambda static status: operational ($$STATIC_URL)"; \
 		else \
 			echo "Lambda static status: FAIL (HTTP $$STATIC_CODE) ($$STATIC_URL)"; \
-		fi; \
+			VERIFY_FAILED=1; \
+		fi; \\
 		RESIZE_URL="$$BASE_URL/resize-api/v1/ping"; \
 		RESIZE_RESP=$$(curl -s -w "\n%{http_code}" --max-time 10 "$$RESIZE_URL" 2>/dev/null); \
 		RESIZE_CODE=$$(echo "$$RESIZE_RESP" | tail -1); \
