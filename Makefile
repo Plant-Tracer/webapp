@@ -927,7 +927,8 @@ sam-status: sam-config-check
 			echo "Lambda resize status: FAIL (HTTP $$RESIZE_CODE) ($$RESIZE_URL)"; \
 			echo "  response: $$RESIZE_BODY"; \
 			echo "  stack name: $${RESIZE_STACK:-unavailable}"; \
-		fi; \
+			VERIFY_FAILED=1; \
+		fi; \\
 	fi; \
 	echo ""; \
 	echo "Recent Lambda web log events (newest first) for troubleshooting:"; \
