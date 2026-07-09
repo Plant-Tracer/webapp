@@ -27,6 +27,15 @@ class User(BaseModel):
     primary_course_id: str
     primary_course_name: str
     courses: List[str]
+    super_role: Literal["none", "super_auditor", "super_admin"] = "none"
+
+    @field_validator("super_role", mode="before")
+    @classmethod
+    def normalize_super_role(cls, value):
+        """Treat missing legacy role data as an ordinary non-super user."""
+        if value in (None, "", 0, False):
+            return "none"
+        return value
 
 
 # Function to validate a single prop and value using the User schema

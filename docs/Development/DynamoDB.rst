@@ -111,6 +111,11 @@ One record per registered user.
    * - ``enabled``
      - Integer (0/1)
      - Whether the account is active
+   * - ``super_role``
+     - String enum
+     - Cross-course admin role: ``none``, ``super_auditor`` for read-only admin access,
+       or ``super_admin`` for read/write admin access. Legacy rows without the field are
+       treated as ``none``.
    * - ``primary_course_id``
      - String
      - The course the user registered through; used as default context

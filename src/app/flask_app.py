@@ -19,6 +19,8 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 # Bottle creates a large number of no-member errors, so we just remove the warning
 # pylint: disable=no-member
 from . import apikey
+from . import odb
+from .admin_api import admin_api_bp
 
 from .flask_api import api_bp
 from .constants import (
@@ -68,6 +70,7 @@ if os.environ.get('DISABLE_PROXYFIX', '').lower() not in ('1', 'true', 'yes'):
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 app.register_blueprint(api_bp, url_prefix='/api')
+app.register_blueprint(admin_api_bp, url_prefix='/api/admin')
 
 logging.basicConfig(format=C.LOGGING_CONFIG, level=log_level, force=True)
 app.logger.setLevel(log_level)
@@ -279,6 +282,14 @@ def func_error() -> str:
 def func_audit() -> str:
     """Serve the audit page."""
     return render_template('audit.html', **page_dict("Audit", require_auth=True))
+
+@app.route('/admin', methods=GET)
+def func_admin() -> str | tuple[str, int]:
+    """Serve the read-only admin page."""
+    user_dict = apikey.get_user_dict()
+    if not odb.admin_read_access(user_dict).allowed:
+        return "<h1>403 Forbidden</h1><p>Admin read access required.</p>", 403
+    return render_template('admin.html', **page_dict("Admin", require_auth=True))
 
 @app.route('/analyze', methods=GET)
 def func_analyze() -> str:

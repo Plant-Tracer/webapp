@@ -1,14 +1,16 @@
 import uuid
+from types import SimpleNamespace
 
 import pytest
 
+from app import odb
 from app import odb_movie_data
 from app.odb import MOVIE_ID
 from app.schema import AdminCourse
 
 import dbutil
 
-from .constants import ADMIN_EMAIL
+from .constants import ADMIN_EMAIL, USER_EMAIL
 
 
 HOSTNAME_ENV = "HOSTNAME"
@@ -190,6 +192,44 @@ def test_admin_list_prints_course_admin(new_course, capsys):
     assert new_course[dbutil.COURSE_ID] in output
 
 
+def test_user_list_prints_all_users(new_course, capsys):
+    dbutil.user_list()
+
+    output = capsys.readouterr().out
+    assert new_course[ADMIN_EMAIL] in output
+    assert new_course[USER_EMAIL] in output
+    assert new_course[dbutil.COURSE_ID] in output
+
+
+def test_super_admin_list_prints_test_created_super_admin(new_course, capsys):
+    change = dbutil.set_super_role_by_email(new_course[USER_EMAIL], odb.SUPER_ROLE_ADMIN)
+    assert change.old_super_role == odb.SUPER_ROLE_NONE
+    assert change.new_super_role == odb.SUPER_ROLE_ADMIN
+
+    dbutil.super_admin_list(SimpleNamespace(role="all"))
+
+    output = capsys.readouterr().out
+    assert new_course[USER_EMAIL] in output
+    assert odb.SUPER_ROLE_ADMIN in output
+
+
+def test_set_super_role_blocks_removing_last_super_admin(new_course):
+    dbutil.set_super_role_by_email(new_course[USER_EMAIL], odb.SUPER_ROLE_ADMIN)
+
+    with pytest.raises(ValueError, match="last super_admin"):
+        dbutil.set_super_role_by_email(new_course[USER_EMAIL], odb.SUPER_ROLE_NONE)
+
+
+def test_set_super_role_can_remove_super_admin_when_another_exists(new_course):
+    dbutil.set_super_role_by_email(new_course[USER_EMAIL], odb.SUPER_ROLE_ADMIN)
+    dbutil.set_super_role_by_email(new_course[ADMIN_EMAIL], odb.SUPER_ROLE_ADMIN)
+
+    change = dbutil.set_super_role_by_email(new_course[USER_EMAIL], odb.SUPER_ROLE_NONE)
+
+    assert change.old_super_role == odb.SUPER_ROLE_ADMIN
+    assert change.new_super_role == odb.SUPER_ROLE_NONE
+
+
 def test_demo_movie_seeding_is_idempotent(local_ddb, capsys):
     del local_ddb
 
@@ -216,6 +256,45 @@ def test_dbutil_has_admin_list_command():
     args = parse_args("admin-list")
 
     assert args.command == "admin-list"
+
+
+def test_dbutil_has_user_list_command():
+    args = parse_args("user-list")
+
+    assert args.command == "user-list"
+
+
+def test_dbutil_has_super_admin_list_command():
+    args = parse_args("super-admin-list", "--role", "super_admin")
+
+    assert args.command == "super-admin-list"
+    assert args.role == odb.SUPER_ROLE_ADMIN
+
+
+def test_dbutil_has_super_role_mutation_commands():
+    args = parse_args(
+        "set-super-role",
+        "--email",
+        "teacher@example.com",
+        "--role",
+        "super_auditor",
+    )
+    add_args = parse_args("add-super-admin", "--email", "teacher@example.com")
+    remove_args = parse_args("remove-super-admin", "--email", "teacher@example.com")
+
+    assert args.command == "set-super-role"
+    assert args.email == "teacher@example.com"
+    assert args.role == odb.SUPER_ROLE_AUDITOR
+    assert add_args.command == "add-super-admin"
+    assert remove_args.command == "remove-super-admin"
+
+
+def test_dbutil_course_admin_commands_accept_email_alias():
+    add_args = parse_args("add-admin", "--email", "teacher@example.com", "--course_id", "BIO101")
+    remove_args = parse_args("remove-admin", "--email", "teacher@example.com", "--course_id", "BIO101")
+
+    assert add_args.admin_email == "teacher@example.com"
+    assert remove_args.admin_email == "teacher@example.com"
 
 
 def test_dbutil_has_admin_create_command():

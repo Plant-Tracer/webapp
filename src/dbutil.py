@@ -9,6 +9,7 @@ import os
 import csv
 from email.message import EmailMessage
 
+from pydantic import BaseModel
 from tabulate import tabulate
 
 from app import clogging
@@ -19,8 +20,9 @@ from app import course_management
 from app import mailer
 from app.paths import TEST_DATA_DIR
 from app.odb import (
-    COURSE_ID, COURSE_KEY, COURSE_NAME, EMAIL, USER_ID, USER_NAME,
-    DDBO, InvalidCourse_Id, MOVIE_STATUS, MOVIE_STATE_READY, TITLE,
+    ADMIN_FOR_COURSES, COURSE_ID, COURSE_KEY, COURSE_NAME, COURSES, EMAIL,
+    ENABLED, PRIMARY_COURSE_ID, USER_ID, USER_NAME, DDBO, InvalidCourse_Id,
+    MOVIE_STATUS, MOVIE_STATE_READY, TITLE,
 )
 from app.odb_movie_data import set_movie_data
 from app.constants import C, env_value
@@ -40,6 +42,28 @@ CREATE_COURSE_REQUIRED_FLAGS = ["--course_id", "--course_name", "--admin_email",
 DESCRIPTION="""
 Plant Tracer DynamoDB Database Maintenance Program.
 """
+
+
+class UserListRow(BaseModel):
+    """Operator-facing user row."""
+
+    name: str
+    email: str
+    user_id: str
+    enabled: int
+    primary_course_id: str
+    courses: str
+    admin_courses: str
+    super_role: str
+
+
+class SuperRoleChange(BaseModel):
+    """Result of a super-role update."""
+
+    email: str
+    user_id: str
+    old_super_role: str
+    new_super_role: str
 
 def populate_demo_user():
     # Use env admin when set (e.g. on EC2 bootstrap) so the demo course reuses the existing admin.
@@ -110,15 +134,7 @@ def dump_movie(movie_id):
 
 
 def scan_all(table):
-    items = []
-    scan_kwargs = {}
-    while True:
-        response = table.scan(**scan_kwargs)
-        items.extend(response.get("Items", []))
-        last_evaluated_key = response.get("LastEvaluatedKey")
-        if not last_evaluated_key:
-            return items
-        scan_kwargs["ExclusiveStartKey"] = last_evaluated_key
+    return list(course_management.scan_table_items(table))
 
 
 def print_course_report(ddbo):
@@ -203,6 +219,146 @@ def admin_list():
         for admin in admins
     ]
     print(tabulate(rows, headers=["name", "email", "user ID", "admin courses"]))
+
+
+def sorted_user_items():
+    """Return all users in stable operator-readable order."""
+    return sorted(
+        scan_all(DDBO().users),
+        key=lambda user: (
+            str(user.get(EMAIL) or "").casefold(),
+            str(user.get(USER_NAME) or "").casefold(),
+            str(user.get(USER_ID) or ""),
+        ),
+    )
+
+
+def join_ids(values):
+    """Return a stable newline-separated id list for tabular output."""
+    if not values:
+        return ""
+    return "\n".join(sorted(str(value) for value in values))
+
+
+def user_list_row(user):
+    """Build a typed printable row from a DynamoDB user item."""
+    return UserListRow(
+        name=str(user.get(USER_NAME) or ""),
+        email=str(user.get(EMAIL) or ""),
+        user_id=str(user.get(USER_ID) or ""),
+        enabled=int(user.get(ENABLED, 0)),
+        primary_course_id=str(user.get(PRIMARY_COURSE_ID) or ""),
+        courses=join_ids(user.get(COURSES, [])),
+        admin_courses=join_ids(user.get(ADMIN_FOR_COURSES, [])),
+        super_role=odb.normalize_super_role(user),
+    )
+
+
+def print_user_rows(rows):
+    """Print operator-facing user rows as a table."""
+    print(tabulate(
+        [
+            [
+                row.name,
+                row.email,
+                row.user_id,
+                row.enabled,
+                row.primary_course_id,
+                row.courses,
+                row.admin_courses,
+                row.super_role,
+            ]
+            for row in rows
+        ],
+        headers=[
+            "name",
+            "email",
+            "user ID",
+            "enabled",
+            "primary course",
+            "courses",
+            "admin courses",
+            "super role",
+        ],
+    ))
+
+
+def user_list():
+    """Print all registered users."""
+    rows = [user_list_row(user) for user in sorted_user_items()]
+    if not rows:
+        print("No users found.")
+        return
+    print_user_rows(rows)
+
+
+def super_admin_list(args):
+    """Print users with a cross-course super role."""
+    role = args.role
+    rows = [
+        user_list_row(user)
+        for user in sorted_user_items()
+        if odb.normalize_super_role(user) != odb.SUPER_ROLE_NONE
+        and (role == "all" or odb.normalize_super_role(user) == role)
+    ]
+    if not rows:
+        print("No super-role users found.")
+        return
+    print_user_rows(rows)
+
+
+def super_admin_user_ids():
+    """Return user ids for current super_admin users."""
+    return {
+        user[USER_ID]
+        for user in sorted_user_items()
+        if odb.normalize_super_role(user) == odb.SUPER_ROLE_ADMIN
+    }
+
+
+def validate_super_role(role):
+    """Validate and return a canonical super role."""
+    if role not in odb.SUPER_ROLES:
+        raise ValueError("super role must be one of: " + ", ".join(sorted(odb.SUPER_ROLES)))
+    return role
+
+
+def set_super_role_by_email(email, role, *, expected_old_role=None):
+    """Set a user's canonical super role and enforce the last-super-admin rule."""
+    new_role = validate_super_role(role)
+    ddbo = DDBO()
+    user = ddbo.get_user_email(email)
+    old_role = odb.normalize_super_role(user)
+    if expected_old_role is not None and old_role != expected_old_role:
+        raise ValueError(f"user currently has {old_role}, not {expected_old_role}")
+    if old_role == odb.SUPER_ROLE_ADMIN and new_role != odb.SUPER_ROLE_ADMIN:
+        super_admin_ids = super_admin_user_ids()
+        if super_admin_ids == {user[USER_ID]}:
+            raise ValueError("cannot remove the last super_admin")
+    ddbo.update_table(ddbo.users, user[USER_ID], {odb.SUPER_ROLE: new_role})
+    return SuperRoleChange(
+        email=email,
+        user_id=user[USER_ID],
+        old_super_role=old_role,
+        new_super_role=new_role,
+    )
+
+
+def update_super_role_command(args, parser, role=None, *, expected_old_role=None):
+    """Handle super-role mutations from argparse commands."""
+    email = getattr(args, "email", None)
+    if not email:
+        parser.error(f"{args.command} requires --email")
+    try:
+        change = set_super_role_by_email(email, role or args.role, expected_old_role=expected_old_role)
+    except odb.InvalidUser_Email:
+        parser.error(f"User {email} does not exist")
+    except ValueError as exc:
+        parser.error(str(exc))
+    print(
+        f"{change.email} ({change.user_id}): "
+        f"{change.old_super_role} -> {change.new_super_role}"
+    )
 
 
 def course_sort_key(course):
@@ -603,6 +759,58 @@ def build_parser():
         aliases=["admin_list"],
         help="List course administrators and their administered courses",
     )
+    subparsers.add_parser(
+        "user-list",
+        aliases=["user_list"],
+        help="List all registered users",
+    )
+    super_admin_list_parser = subparsers.add_parser(
+        "super-admin-list",
+        aliases=["super_admin_list"],
+        help="List users with a super_auditor or super_admin role",
+    )
+    super_admin_list_parser.add_argument(
+        "--role",
+        choices=["all", odb.SUPER_ROLE_AUDITOR, odb.SUPER_ROLE_ADMIN],
+        default="all",
+        help="Restrict list to one super role",
+    )
+    set_super_role_parser = subparsers.add_parser(
+        "set-super-role",
+        aliases=["set_super_role"],
+        help="Set a user's super role by email",
+    )
+    set_super_role_parser.add_argument("--email", required=True, help="user email")
+    set_super_role_parser.add_argument(
+        "--role",
+        choices=sorted(odb.SUPER_ROLES),
+        required=True,
+        help="canonical super role",
+    )
+    add_super_admin_parser = subparsers.add_parser(
+        "add-super-admin",
+        aliases=["add_super_admin"],
+        help="Grant super_admin to a user by email",
+    )
+    add_super_admin_parser.add_argument("--email", required=True, help="user email")
+    remove_super_admin_parser = subparsers.add_parser(
+        "remove-super-admin",
+        aliases=["remove_super_admin"],
+        help="Remove super_admin from a user by email",
+    )
+    remove_super_admin_parser.add_argument("--email", required=True, help="user email")
+    add_super_auditor_parser = subparsers.add_parser(
+        "add-super-auditor",
+        aliases=["add_super_auditor"],
+        help="Grant super_auditor to a user by email",
+    )
+    add_super_auditor_parser.add_argument("--email", required=True, help="user email")
+    remove_super_auditor_parser = subparsers.add_parser(
+        "remove-super-auditor",
+        aliases=["remove_super_auditor"],
+        help="Remove super_auditor from a user by email",
+    )
+    remove_super_auditor_parser.add_argument("--email", required=True, help="user email")
     admin_create_parser = subparsers.add_parser(
         "admin-create",
         aliases=["admin_create"],
@@ -689,7 +897,12 @@ def build_parser():
         aliases=["add_admin"],
         help="Add an existing user as a course administrator",
     )
-    add_admin_parser.add_argument("--admin_email", help="course administrator email")
+    add_admin_parser.add_argument(
+        "--admin_email",
+        "--email",
+        dest="admin_email",
+        help="course administrator email",
+    )
     add_admin_parser.add_argument("--course_id", help="course id")
 
     remove_admin_parser = subparsers.add_parser(
@@ -697,7 +910,12 @@ def build_parser():
         aliases=["remove_admin"],
         help="Remove a course administrator",
     )
-    remove_admin_parser.add_argument("--admin_email", help="course administrator email")
+    remove_admin_parser.add_argument(
+        "--admin_email",
+        "--email",
+        dest="admin_email",
+        help="course administrator email",
+    )
     remove_admin_parser.add_argument("--course_id", help="course id")
 
     dump_movie_parser = subparsers.add_parser(
@@ -742,6 +960,37 @@ def main():  # pragma: no cover
         return 0
     if args.command in ("admin-list", "admin_list"):
         admin_list()
+        return 0
+    if args.command in ("user-list", "user_list"):
+        user_list()
+        return 0
+    if args.command in ("super-admin-list", "super_admin_list"):
+        super_admin_list(args)
+        return 0
+    if args.command in ("set-super-role", "set_super_role"):
+        update_super_role_command(args, parser)
+        return 0
+    if args.command in ("add-super-admin", "add_super_admin"):
+        update_super_role_command(args, parser, odb.SUPER_ROLE_ADMIN)
+        return 0
+    if args.command in ("remove-super-admin", "remove_super_admin"):
+        update_super_role_command(
+            args,
+            parser,
+            odb.SUPER_ROLE_NONE,
+            expected_old_role=odb.SUPER_ROLE_ADMIN,
+        )
+        return 0
+    if args.command in ("add-super-auditor", "add_super_auditor"):
+        update_super_role_command(args, parser, odb.SUPER_ROLE_AUDITOR)
+        return 0
+    if args.command in ("remove-super-auditor", "remove_super_auditor"):
+        update_super_role_command(
+            args,
+            parser,
+            odb.SUPER_ROLE_NONE,
+            expected_old_role=odb.SUPER_ROLE_AUDITOR,
+        )
         return 0
     if args.command in ("admin-create", "admin_create"):
         admin_create(args, parser)

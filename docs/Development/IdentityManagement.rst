@@ -99,6 +99,14 @@ The operator-facing administrator list is built by
 ``app.course_management.list_admins`` so future web administration pages can
 reuse the same read model.
 
+Operators can list all registered users with ``make user-list``. The target
+runs ``src/dbutil.py user-list`` and prints each user's display name, email
+address, ``user_id``, enabled flag, primary course, course memberships,
+administered courses, and ``super_role``. Operators can list only users with
+cross-course super roles with ``make super-admin-list``. The underlying
+``src/dbutil.py super-admin-list`` command accepts ``--role super_admin`` or
+``--role super_auditor`` to narrow the output.
+
 Operators can create or update course administrators with ``make admin-create``.
 The target runs ``src/dbutil.py admin-create``. In an interactive terminal it
 asks for administrator email/name, lists courses where that user is not already
@@ -110,6 +118,22 @@ through the configured mail path. Use ``--planttracer_endpoint`` or set
 ``HOSTNAME``/``DOMAIN`` so generated links point at the intended stack. Use
 ``--no-send-email`` for data-only dry runs, or ``MAILER_DRY_RUN=true`` to
 render mail without sending it.
+
+Operators can add or remove course-admin access for an existing user with
+``src/dbutil.py add-admin --email teacher@example.edu --course_id BIO101`` and
+``src/dbutil.py remove-admin --email teacher@example.edu --course_id BIO101``.
+The older ``--admin_email`` spelling is still accepted by both commands.
+
+Operators can grant or remove cross-course roles by email address with
+``src/dbutil.py add-super-admin --email ops@example.edu``,
+``src/dbutil.py remove-super-admin --email ops@example.edu``,
+``src/dbutil.py add-super-auditor --email auditor@example.edu``, and
+``src/dbutil.py remove-super-auditor --email auditor@example.edu``. The general
+``src/dbutil.py set-super-role --email ops@example.edu --role super_admin``
+command accepts ``none``, ``super_auditor``, or ``super_admin``. The CLI refuses
+to demote or remove the last remaining ``super_admin``. Users can be
+``super_admin`` or ``super_auditor``, but not both, because ``super_role`` is a
+single enum field.
 
 Operators can create courses with ``make course-create``. The target runs
 ``src/dbutil.py create-course --send-email``. In an interactive terminal it asks

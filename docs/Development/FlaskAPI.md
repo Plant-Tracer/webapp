@@ -1,7 +1,8 @@
 # Flask API Reference
 
-All REST endpoints served by the Plant Tracer Flask application are defined in
-`src/app/flask_api.py` and mounted at `/api/`. This document covers authentication,
+REST endpoints served by the Plant Tracer Flask application are mounted under
+`/api/`. Most are defined in `src/app/flask_api.py`; admin-specific endpoints
+are defined in `src/app/admin_api.py`. This document covers authentication,
 the standard response envelope, and every endpoint.
 
 For the Lambda (frame/video processing) endpoints, see [ClientLambdaAPI.md](ClientLambdaAPI.md).
@@ -44,6 +45,69 @@ plus `"message"` on failure. Exceptions:
 ---
 
 ## Endpoints
+
+### Admin
+
+#### `GET /api/admin/summary`
+
+Return the minimal read-only admin landing-page data. This endpoint backs `/admin`
+and is intentionally read-only.
+
+**Authorization**
+
+- `super_admin` and `super_auditor` users may read this endpoint.
+- Bootstrap fallback: when no users in the database have a super role yet, course
+  admins may read this endpoint so a local or migrated database can be inspected.
+- Regular users receive HTTP 403.
+
+**Query parameters**
+
+| Name | Required | Description |
+|------|----------|-------------|
+| `limit` | No | Page size for the preview course and user lists. Defaults to 25, maximum 100. |
+| `course_marker` | No | Opaque restart marker from the previous `courses.restart_marker`. |
+| `user_marker` | No | Opaque restart marker from the previous `users.restart_marker`. |
+
+**Response**
+
+```json
+{
+  "error": false,
+  "viewer": {
+    "user_id": "u...",
+    "user_name": "Course Admin",
+    "email": "teacher@example.edu",
+    "super_role": "super_auditor",
+    "bootstrap_course_admin": false
+  },
+  "counts": { "courses": 1, "users": 2, "movies": 3 },
+  "courses": {
+    "items": [
+      {
+        "course_id": "PlantTracer 101",
+        "course_name": "Intro Biology",
+        "max_enrollment": 100,
+        "admin_count": 1
+      }
+    ],
+    "restart_marker": null
+  },
+  "users": {
+    "items": [
+      {
+        "user_id": "u...",
+        "user_name": "Alice",
+        "email": "alice@example.edu",
+        "primary_course_id": "PlantTracer 101",
+        "super_role": "none",
+        "course_count": 1,
+        "admin_course_count": 0
+      }
+    ],
+    "restart_marker": null
+  }
+}
+```
 
 ### User & Registration
 

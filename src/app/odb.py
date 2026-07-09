@@ -21,7 +21,7 @@ from decimal import Decimal
 import boto3
 from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Key,Attr
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from .schema import (
     User,
@@ -60,6 +60,12 @@ USER_NAME = 'user_name'
 ENABLED   = 'enabled'
 USE_COUNT = 'use_count'
 ADMIN_FOR_COURSES = 'admin_for_courses' # user.admin_for_courses[]
+SUPER_ROLE = 'super_role'
+SUPER_ROLE_NONE = 'none'
+SUPER_ROLE_AUDITOR = 'super_auditor'
+SUPER_ROLE_ADMIN = 'super_admin'
+SUPER_ROLES = frozenset((SUPER_ROLE_NONE, SUPER_ROLE_AUDITOR, SUPER_ROLE_ADMIN))
+SUPER_READ_ROLES = frozenset((SUPER_ROLE_AUDITOR, SUPER_ROLE_ADMIN))
 
 # courses table
 ADMINS_FOR_COURSE = 'admins_for_course' # courses.admins_for_course[]
@@ -138,6 +144,14 @@ PRIMARY_COURSE_ID = 'primary_course_id'
 PRIMARY_COURSE_NAME = 'primary_course_name'
 
 CHECK_MX = False            # True doesn't work
+
+
+class AdminReadAccess(BaseModel):
+    """Resolved read access for the admin interface."""
+
+    allowed: bool
+    super_role: str = SUPER_ROLE_NONE
+    bootstrap_course_admin: bool = False
 
 ################################################################
 ## Errors
@@ -1181,6 +1195,63 @@ def get_user_email(email):
 def get_first_api_key_for_user(user_id):
     """Return one api_key for the user, or None if they have none."""
     return DDBO().get_first_api_key_for_user(user_id)
+
+
+def legacy_truthy(value):
+    """Return True for legacy integer/string boolean role flags."""
+    return value in (True, 1, '1', 'true', 'True', 'yes', 'YES')
+
+
+def normalize_super_role(user):
+    """Return the canonical super role for a user item."""
+    role = user.get(SUPER_ROLE, SUPER_ROLE_NONE)
+    if role in SUPER_ROLES:
+        return role
+    if legacy_truthy(user.get(SUPER_ROLE_ADMIN)):
+        return SUPER_ROLE_ADMIN
+    if legacy_truthy(user.get(SUPER_ROLE_AUDITOR)):
+        return SUPER_ROLE_AUDITOR
+    return SUPER_ROLE_NONE
+
+
+def user_has_super_read(user):
+    """Return True if a user can read the cross-course admin interface."""
+    return normalize_super_role(user) in SUPER_READ_ROLES
+
+
+def any_super_user_exists() -> bool:
+    """Return True if the users table has any canonical or legacy super user."""
+    ddbo = DDBO()
+    last_evaluated_key = None
+    while True:
+        scan_kwargs = {}
+        if last_evaluated_key:
+            scan_kwargs['ExclusiveStartKey'] = last_evaluated_key
+        response = ddbo.users.scan(**scan_kwargs)
+        for user in response.get('Items', []):
+            if user_has_super_read(user):
+                return True
+        last_evaluated_key = response.get('LastEvaluatedKey')
+        if not last_evaluated_key:
+            return False
+
+
+def admin_read_access(user) -> AdminReadAccess:
+    """Return whether user can read /admin.
+
+    Until the first super user is created, existing course admins may open the
+    read-only admin preview so local and migrated databases can bootstrap.
+    """
+    super_role = normalize_super_role(user)
+    if super_role in SUPER_READ_ROLES:
+        return AdminReadAccess(allowed=True, super_role=super_role)
+    if user.get(ADMIN_FOR_COURSES) and not any_super_user_exists():
+        return AdminReadAccess(
+            allowed=True,
+            super_role=SUPER_ROLE_NONE,
+            bootstrap_course_admin=True,
+        )
+    return AdminReadAccess(allowed=False, super_role=super_role)
 
 
 #########################

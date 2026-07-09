@@ -18,6 +18,11 @@ Required
 AWS And Local Service Selection
 -------------------------------
 
+The Makefile has two storage modes. With ``AWS_REGION`` unset or set to
+``local``, Makefile targets use DynamoDB Local and MinIO. With ``AWS_REGION``
+set to a real AWS region, remote debug targets use AWS DynamoDB and S3 and
+unset local endpoint overrides.
+
 ``AWS_REGION``
    AWS region. Use ``local`` for DynamoDB Local and MinIO.
 
@@ -28,10 +33,12 @@ AWS And Local Service Selection
    AWS credentials. Local MinIO uses ``minioadmin`` / ``minioadmin``.
 
 ``AWS_ENDPOINT_URL_DYNAMODB``
-   DynamoDB endpoint override. Local default: ``http://localhost:8000/``.
+   DynamoDB endpoint override. Local default: ``http://localhost:8000/``. Do
+   not set this for remote AWS mode.
 
 ``AWS_ENDPOINT_URL_S3``
-   S3 endpoint override. Local default: ``http://localhost:9000/``.
+   S3 endpoint override. Local default: ``http://localhost:9000/``. Do not set
+   this for remote AWS mode.
 
 ``AWS_ENDPOINT_URL_SQS``
    Optional SQS endpoint override for lambda-resize if testing against an SQS

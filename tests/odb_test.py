@@ -48,6 +48,7 @@ TEST_USER_DATA = {
     'courses': [],
     'primary_course_id': TEST_COURSE_ID,
     'primary_course_name': TEST_COURSE_NAME,
+    'super_role': odb.SUPER_ROLE_NONE,
 }
 
 TEST_ADMIN_DATA = {
@@ -60,6 +61,7 @@ TEST_ADMIN_DATA = {
     'courses': [TEST_COURSE_ID],
     'primary_course_id': TEST_COURSE_ID,
     'primary_course_name': TEST_COURSE_NAME,
+    'super_role': odb.SUPER_ROLE_NONE,
 }
 
 TEST_MOVIE_DATA = {

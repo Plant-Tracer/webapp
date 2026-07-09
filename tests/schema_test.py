@@ -50,10 +50,25 @@ def test_user_schema():
         primary_course_name="c",
         courses=["p"],
     )
+    assert u.super_role == "none"
 
     schema.validate_user_field("created", 0)
+    assert schema.validate_user_field("super_role", "super_auditor") == "super_auditor"
     with pytest.raises(AttributeError):
         schema.validate_user_field("unknown", 0)
+    with pytest.raises(ValidationError):
+        schema.User(
+            user_id="utest",
+            email="etest",
+            user_name="utest",
+            created=0,
+            enabled=0,
+            admin_for_courses=[],
+            primary_course_id="p",
+            primary_course_name="c",
+            courses=["p"],
+            super_role="auditor",
+        )
 
     with pytest.raises(ValidationError):
         m = schema.Movie(

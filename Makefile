@@ -32,6 +32,18 @@ LOCAL_LAMBDA_WAIT_SECONDS ?= 30
 export DEBIAN_FRONTEND=noninteractive
 export LOG_LEVEL ?= DEBUG
 
+# Storage/database mode is selected by AWS_REGION:
+# - Local mode: AWS_REGION is unset or local. The Makefile uses DynamoDB Local,
+#   MinIO, planttracer-local, and the demo- table prefix.
+# - Remote mode: AWS_REGION is a real AWS region. The Makefile does not set
+#   endpoint overrides; callers must supply PLANTTRACER_S3_BUCKET and
+#   DYNAMODB_TABLE_PREFIX explicitly so local code points at the intended AWS
+#   bucket and DynamoDB tables.
+AWS_REGION_INPUT := $(AWS_REGION)
+DYNAMODB_TABLE_PREFIX_INPUT := $(DYNAMODB_TABLE_PREFIX)
+PLANTTRACER_S3_BUCKET_INPUT := $(PLANTTRACER_S3_BUCKET)
+REMOTE_AWS_ENV=env -u AWS_ENDPOINT_URL_DYNAMODB -u AWS_ENDPOINT_URL_S3 -u AWS_ENDPOINT_URL_SQS
+
 SAM_CONFIG ?= samconfig.toml
 SAM_BUILD_DIR=.aws-sam/build
 STACK_NAME = $(shell grep "stack_name" $(SAM_CONFIG) 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
@@ -56,7 +68,10 @@ VEND_FILES := src/app/odb.py \
               src/app/odb_movie_data.py \
               src/app/s3_presigned.py
 
-# if AWS_REGION is set, we use the live system. Otherwise use minio and DynamoDBlocal
+# If AWS_REGION is unset or local, use local MinIO and DynamoDB Local.
+# If AWS_REGION is a real AWS region, use remote AWS S3 and DynamoDB through
+# the normal AWS SDK credential chain. Remote mode must not inherit local
+# AWS_ENDPOINT_URL_* overrides.
 ifeq ($(AWS_REGION),)
     $(warning AWS_REGION is not set. Defaulting to local MinIO/DynamoDB configuration.)
     export AWS_REGION                ?= local
@@ -97,7 +112,7 @@ distclean:
 
 ################################################################
 # Main targets used by CI/CD system and developers
-.PHONY: all check coverage tags admin-list admin-create course-create demo-course-create sam-course-create
+.PHONY: all check coverage tags show-storage-mode user-list admin-list admin-create super-admin-list course-create demo-course-create sam-course-create
 
 all:
 	@echo verify syntax and then restart
@@ -117,8 +132,26 @@ coverage:
 tags:
 	etags src/app/*.py tests/*.py tests/fixtures/*.py src/app/static/*.js lambda-web/src/lambda_web/*.py lambda-resize/src/resize_app/*.py
 
+show-storage-mode:
+	@echo "AWS_REGION=$(AWS_REGION)"
+	@echo "DYNAMODB_TABLE_PREFIX=$(DYNAMODB_TABLE_PREFIX)"
+	@echo "PLANTTRACER_S3_BUCKET=$(PLANTTRACER_S3_BUCKET)"
+	@echo "AWS_ENDPOINT_URL_DYNAMODB=$(AWS_ENDPOINT_URL_DYNAMODB)"
+	@echo "AWS_ENDPOINT_URL_S3=$(AWS_ENDPOINT_URL_S3)"
+	@if [ "$(AWS_REGION)" = "local" ]; then \
+		echo "mode=local: DynamoDB Local + MinIO"; \
+	else \
+		echo "mode=remote: AWS DynamoDB + S3"; \
+	fi
+
 admin-list:
 	poetry run python $(DBUTIL) admin-list
+
+user-list:
+	poetry run python $(DBUTIL) user-list
+
+super-admin-list:
+	poetry run python $(DBUTIL) super-admin-list
 
 ADMIN_CREATE_FLAGS ?=
 admin-create:
@@ -264,6 +297,30 @@ run-local-demo-debug:
 	$(MAKE) ensure-local-lambda-debug
 	$(LOCAL_DEMO_ENV) $(FLASK_DEBUG_RUN)
 
+check-remote-storage-env:
+	@if [ -z "$(AWS_REGION_INPUT)" ] || [ "$(AWS_REGION_INPUT)" = "local" ]; then \
+		echo "Remote storage mode requires AWS_REGION=<aws-region>, for example AWS_REGION=us-east-1."; \
+		exit 1; \
+	fi
+	@if [ -z "$(DYNAMODB_TABLE_PREFIX_INPUT)" ]; then \
+		echo "Remote storage mode requires an explicit DYNAMODB_TABLE_PREFIX."; \
+		exit 1; \
+	fi
+	@if [ -z "$(PLANTTRACER_S3_BUCKET_INPUT)" ]; then \
+		echo "Remote storage mode requires an explicit PLANTTRACER_S3_BUCKET."; \
+		exit 1; \
+	fi
+
+run-remote-lambda-debug: check-remote-storage-env
+	@echo running the local lambda debug server at $(LOCAL_LAMBDA_BASE) against remote AWS storage
+	$(MAKE) vend-lambda-resize
+	$(REMOTE_AWS_ENV) PYTHONPATH=lambda-resize/src:$$PYTHONPATH TRACING_QUEUE_MODE=local LOG_LEVEL=$(LOG_LEVEL) poetry run python -m app.local_lambda_debug --host 127.0.0.1 --port $(LOCAL_LAMBDA_PORT)
+
+run-remote-debug: check-remote-storage-env
+	@echo run Flask locally against remote AWS S3 and DynamoDB
+	@echo connect to http://localhost:$(LOCAL_HTTP_PORT)
+	$(REMOTE_AWS_ENV) PLANTTRACER_LAMBDA_API_BASE=$(LOCAL_LAMBDA_BASE) $(FLASK_DEBUG_RUN)
+
 debug-dev-api:
 	@echo Debug local JavaScript with remote server.
 	@echo run bottle locally in debug mode, storing new data in S3, with the dev.planttracer.com database and API calls
@@ -277,7 +334,7 @@ tracer-debug:
 	poetry run python lambda-resize/src/sqs_cli.py tracer --infile="tests/data/2019-07-12 circumnutation.mp4" --movie_traced=outfile.mp4
 	open outfile.mp4
 
-.PHONY: start-local-services stop-local-services wipe-local delete-local make-local-demo ensure-local-lambda-debug run-local-lambda-debug run-local-debug run-local-demo-debug debut-dev-api tracer-debug
+.PHONY: start-local-services stop-local-services wipe-local delete-local make-local-demo ensure-local-lambda-debug run-local-lambda-debug run-local-debug run-local-demo-debug check-remote-storage-env run-remote-lambda-debug run-remote-debug debug-dev-api tracer-debug
 
 ################################################################
 ### JavaScript
