@@ -25,7 +25,7 @@ from .admin_api import admin_api_bp
 from .flask_api import api_bp
 from .constants import (
     __version__, GET, GET_POST, C, log_level, logger,
-    stack_name, stack_parameter_overrides, STACK_NAME, STACK_PARAMETERS,
+    stack_name, STACK_NAME,
 )
 from .auth import AuthError
 from .apikey import cookie_name, page_dict
@@ -194,7 +194,7 @@ def _before_request_config_check():
     path = request.path
     if path == "/config-error" or path.startswith("/static/") or path.startswith("/api/"):
         return None
-    if path in ("/ping", "/ver", "/health", "/status"):
+    if path in ("/ver", "/health", "/status"):
         return None
     d_ok, _, c_ok, _, r_ok, _ = _run_config_checks()
     if not d_ok:
@@ -317,23 +317,10 @@ def func_logout():
     resp.set_cookie(cookie_name(), '', expires=0)
     return resp
 
-@app.route("/ping")
-def ping():
-    return jsonify({
-        C.KEY_STATUS: C.STATUS_OK,
-        C.API_KEY_MESSAGE: "pong",
-        "app_version": __version__,
-        "path": sys.path,
-        STACK_NAME: stack_name(),
-        STACK_PARAMETERS: stack_parameter_overrides(),
-        "time": time.time(),
-    })
-
-
 @app.route("/status")
 def status():
     """Lightweight health/status for Lambda; frontend uses this to verify Lambda is operational."""
-    return jsonify({C.KEY_STATUS: C.STATUS_OK})
+    return jsonify({C.KEY_STATUS: C.STATUS_OK, STACK_NAME: stack_name()})
 
 @app.route('/privacy', methods=GET)
 def func_privacy():
@@ -426,6 +413,7 @@ def func_ver():
     app.logger.info("/ver")
     response = make_response(render_template('version.txt',
                                              __version__=__version__,
-                                             sys_version= sys.version))
+                                             sys_version=sys.version,
+                                             stack_name=stack_name()))
     response.headers['Content-Type'] = 'text/plain'
     return response

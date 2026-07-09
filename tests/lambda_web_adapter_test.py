@@ -6,7 +6,7 @@ from urllib.parse import urlencode
 from lambda_web.main import lambda_handler
 
 from app import apikey
-from app.constants import __version__
+from app.constants import STACK_NAME, __version__, stack_name
 from app.odb import API_KEY
 from tests.lambda_web_event import DummyContext, make_http_event
 
@@ -20,7 +20,9 @@ def test_lambda_web_version_route():
 def test_lambda_web_api_version_route():
     response = lambda_handler(make_http_event("/api/ver"), DummyContext())
     assert response["statusCode"] == 200
-    assert json.loads(response["body"])["__version__"] == __version__
+    body = json.loads(response["body"])
+    assert body["__version__"] == __version__
+    assert body[STACK_NAME] == stack_name()
 
 
 def test_lambda_web_api_version_route_strips_http_api_stage_prefix():

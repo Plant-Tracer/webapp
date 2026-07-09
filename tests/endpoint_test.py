@@ -16,7 +16,7 @@ from app import odb_movie_data
 from app import s3_presigned
 from app.odb import is_api_key
 from app.paths import TEST_DIR, TEST_MOVIE_FILENAME
-from app.constants import __version__,logger
+from app.constants import STACK_NAME, __version__, logger, stack_name
 
 # Fixtures are imported in conftest.py
 from app.odb import API_KEY, COURSE_ID, USER_ID, USER_NAME
@@ -37,6 +37,13 @@ def test_ver2(client):
     val = r.json
     assert val['__version__'] == __version__
     assert val['sys_version'] == sys.version
+    assert val[STACK_NAME] == stack_name()
+
+
+def test_status_reports_stack_name(client):
+    r = client.get('/status')
+    assert r.status_code == 200
+    assert r.json[STACK_NAME] == stack_name()
 
 
 def test_api_key(client, new_course):

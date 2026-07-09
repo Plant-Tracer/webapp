@@ -81,16 +81,17 @@ Lambda Stack Diagnostics
 ``PLANTTRACER_BASE_DOMAIN``
    Base domain used to create the stack hostname, such as
    ``planttracer.com``. The SAM template passes this to both Lambda functions
-   for ``/ping`` diagnostics.
+   for deployed-stack diagnostics.
 
 ``PLANTTRACER_HOSTED_ZONE_ID``
    Route53 hosted zone id used by the stack domain mapping. The SAM template
-   passes this to both Lambda functions for ``/ping`` diagnostics.
+   passes this to both Lambda functions for deployed-stack diagnostics.
 
-The ``/ping`` endpoints report ``stack_name`` plus a ``stack_parameters``
-object with selected CloudFormation parameter values: ``HostedZoneId``,
-``BaseDomain``, ``ImageBucketName``, ``LogLevel``, ``MailerDryRun``, and
-``DynamoDBTablePrefix``. They intentionally do not report
+``/api/ver`` and ``/resize-api/v1/ping`` report ``stack_name``. The
+``/resize-api/v1/ping`` endpoint also reports a ``stack_parameters`` object
+with selected CloudFormation parameter values: ``HostedZoneId``, ``BaseDomain``,
+``ImageBucketName``, ``LogLevel``, ``MailerDryRun``, and
+``DynamoDBTablePrefix``. It intentionally does not report
 ``WildcardCertificateArn``.
 
 Demo Mode
