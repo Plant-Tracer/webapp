@@ -215,4 +215,9 @@ samconfig.toml-*
 *.jpeg
 dump.txt
 etc/planttracer-nginx-patch.*
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/
 *.ptb
