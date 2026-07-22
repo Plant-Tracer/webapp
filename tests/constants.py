@@ -9,6 +9,7 @@ from app.paths import TEST_DATA_DIR
 
 # Keys used in fixture return dicts (e.g. new_course, new_movie)
 ADMIN_EMAIL = 'admin_email'
+USER_EMAIL = 'user_email'
 MOVIE_TITLE = 'movie_title'
 
 # Test data file paths

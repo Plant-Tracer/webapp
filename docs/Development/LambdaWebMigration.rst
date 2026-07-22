@@ -163,7 +163,7 @@ Data Ownership
 DynamoDB tables are external to CloudFormation ownership. The stack receives
 the table prefix and grants prefix-scoped permissions, but table creation and
 schema maintenance remain handled by repository tooling such as
-``src/dbutil.py`` and ``etc/dynamodb_tables.json``.
+``poetry run dbutil`` and ``etc/dynamodb_tables.json``.
 
 The migration must not make stack deletion delete the long-lived S3 archive or
 the DynamoDB data model.
@@ -295,9 +295,11 @@ Validation Requirements
 Before PR #1113 is ready to merge, validate at least:
 
 * existing Flask local tests still pass through ``make pytest``;
-* ``lambda-web`` serves ``/ping`` or equivalent health, one static asset, and a
-  representative Flask route through API Gateway event handling, including
-  named-stage paths such as ``/prod/api/ver``;
+* ``lambda-web`` serves one static asset and a representative Flask route
+  through API Gateway event handling, including named-stage paths such as
+  ``/prod/api/ver``. Do not use root-level ``/ping`` or ``/sping`` for API
+  Gateway custom-domain checks because AWS reserves those paths for service
+  health checks;
 * ``lambda-resize`` still serves ``/resize-api/v1/ping`` and keeps SQS trace
   event handling;
 * SAM template validation/linting passes;
@@ -323,32 +325,54 @@ as:
   ``WildcardCertificateArn``, ``ImageBucketName``, ``LogLevel``,
   ``MailerDryRun``, and ``DynamoDBTablePrefix``.
 
+``ImageBucketName`` and ``DynamoDBTablePrefix`` intentionally have no template
+defaults. Every deployment must name its data resources explicitly so a new or
+test stack cannot silently attach to production storage.
+
 Because those values identify one concrete stack and its data resources, SAM
 config files are local deployment state. They must not be committed to the
-repository. The Makefile defaults to ``SAM_CONFIG=samconfig.toml`` for
-compatibility with the SAM CLI, but ``.gitignore`` ignores ``samconfig*.toml``,
-``.samconfig*.toml``, and ``samconfig.toml-*``. Deployment targets also refuse
-to use a SAM config file that is tracked by Git.
+repository. The normal Makefile workflow is to pass ``STACK=<name>``; the
+Makefile then selects ``samconfigs/<name>.toml``. The ``samconfigs/`` directory
+is ignored by Git, and deployment targets also refuse to use a relative SAM
+config path that is not ignored by Git.
 
-Use one ignored SAM config file per stack. For example:
-
-.. code-block:: console
-
-   AWS_REGION=us-east-1 SAM_CONFIG=.samconfig.dev-stack.toml make sam-deploy
-   AWS_REGION=us-east-1 SAM_CONFIG=.samconfig.alice-test.toml make sam-deploy
-   AWS_REGION=us-east-1 SAM_CONFIG=.samconfig.prod.toml make sam-deploy
-
-``sam deploy --guided`` can also create the selected file:
+Use one visible, ignored SAM config file per stack. For example:
 
 .. code-block:: console
 
-   AWS_REGION=us-east-1 SAM_CONFIG=.samconfig.alice-test.toml make sam-deploy-guided
+   STACK=dev-stack make sam-deploy
+   STACK=alice-test make sam-deploy
+   STACK=prod make sam-deploy
 
-SAM supports multiple profiles in a single config file, but this project should
-avoid that pattern. With multiple stacks in flight, separate files make the
-target stack visible in the command line and avoid accidentally using a stale
-default profile from a shared TOML file. Separate files also work better with
-SAM's habit of rewriting config during guided deploys.
+``STACK`` must be uppercase. GNU Make variables are case-sensitive, so
+``stack=prod`` is not the same variable and is rejected by the SAM config guard.
+
+``sam deploy --guided`` can also create the selected stack config:
+
+.. code-block:: console
+
+   STACK=alice-test make sam-deploy-guided
+
+If ``samconfigs/alice-test.toml`` does not exist yet, the Makefile creates a
+minimal ignored config file before invoking SAM because the SAM CLI requires the
+``--config-file`` path to be readable even in guided mode. When ``STACK`` is
+set, the bootstrap config includes ``stack_name`` so the normal deploy-version
+guard can still run before the guided deployment.
+
+For a stack named ``app``, the selected config is ``samconfigs/app.toml`` and
+the template creates ``https://app.planttracer.com/`` when ``BaseDomain`` is
+``planttracer.com``. The Makefile passes ``--stack-name app`` during guided
+deploys and refuses an existing ``samconfigs/app.toml`` whose ``stack_name`` is
+not ``app``.
+
+The Makefile still accepts ``SAM_CONFIG=<path>`` as an explicit escape hatch.
+For compatibility with older local setups, omitting ``STACK`` and ``SAM_CONFIG``
+uses ``samconfig.toml``. Any relative config path must be ignored by Git.
+
+SAM supports multiple profiles in a single config file, but this project avoids
+that pattern. With multiple stacks in flight, separate visible files selected by
+``STACK`` make the target stack obvious and work better with SAM's habit of
+rewriting config during guided deploys.
 
 Cutover Runbook
 ---------------
@@ -357,17 +381,17 @@ Validate each stack on its own hostname, for example
 ``https://{stack}.planttracer.com/``. This migration does not depend on moving
 a shared production DNS record to Lambda; new and test deployments come up as
 separate named stacks. SAM config files are stack-local deployment state and
-are not committed to the repository. Use ``SAM_CONFIG=<path>`` to select the
-ignored config for the stack being tested. The branch must be pushed before
-``make sam-build`` will build artifacts. This prevents deploying local-only
-commits that nobody else can inspect or rebuild.
+are not committed to the repository. Use ``STACK=<name>`` to select the ignored
+``samconfigs/<name>.toml`` config for the stack being tested. The branch must
+be pushed before ``make sam-build`` will build artifacts. This prevents
+deploying local-only commits that nobody else can inspect or rebuild.
 
 Preflight:
 
 * confirm ``git status`` is clean and the branch has no unpushed commits;
 * confirm ``pyproject.toml`` has the intended version;
-* confirm ``SAM_CONFIG`` points to an untracked local SAM config for the
-  intended non-production stack and table prefix;
+* confirm ``STACK`` names the intended stack and the selected
+  ``samconfigs/<stack>.toml`` has the intended table prefix;
 * confirm the S3 movie bucket and DynamoDB table prefix are the intended test
   resources;
 * if the stack operator cannot send SES mail as the configured ``SERVER_EMAIL``,
@@ -378,14 +402,14 @@ Preflight:
 
 Deploy:
 
-* run ``AWS_REGION=us-east-1 SAM_CONFIG=<path> make sam-deploy`` for an
+* run ``STACK=<name> make sam-deploy`` for an
   existing configured stack, or
-  ``AWS_REGION=us-east-1 SAM_CONFIG=<path> make sam-deploy-guided`` for a new
-  stack;
-* let ``make sam-status`` verify ``/ping``, ``/static/planttracer.js``, and
-  ``/resize-api/v1/ping``. The deploy targets stamp the built
-  ``lambda-resize`` artifact before ``sam deploy``, and resize ping should
-  report the application version and UTC deployment timestamp;
+  ``STACK=<name> make sam-deploy-guided`` for a new stack;
+* let ``make sam-status`` verify ``/api/ver``,
+  ``/static/planttracer.js``, and ``/resize-api/v1/ping``. The deploy targets
+  stamp the built ``lambda-resize`` artifact before ``sam deploy``. The web
+  version API response is printed in full, and resize ping should report the
+  application version and UTC deployment timestamp;
 * inspect recent logs with ``make sam-logs-web`` and ``make sam-logs-resize``
   if any smoke check reports a failure.
 
@@ -402,7 +426,7 @@ CloudFormation resource creation. After the stack is deployed and the intended
      make sam-course-create
 
 The target reads the table prefix, application URL, and ``MailerDryRun`` value
-from the selected stack, then delegates to ``src/dbutil.py create-course
+from the selected stack, then delegates to ``poetry run dbutil create-course
 --send-email``. Rerunning it is safe when the course already exists with the
 same name: it verifies the course administrator relationship and sends the
 course setup/login email again. If the existing course id has a different
@@ -414,7 +438,8 @@ Manual smoke checks on the non-production stack:
 
 * open ``https://{stack}.planttracer.com/`` and verify the home page and static
   assets load;
-* verify ``/ping`` returns ``{"status": "ok"}`` with ``stack_parameters``;
+* verify ``/api/ver`` returns ``__version__``, ``sys_version``, and
+  ``stack_name``;
 * verify ``/resize-api/v1/ping`` returns ``{"status": "ok"}``,
   ``app_version``, ``deployed_at``, and ``stack_parameters``;
 * register a test user and confirm the registration email path works;

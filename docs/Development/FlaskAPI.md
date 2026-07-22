@@ -1,7 +1,8 @@
 # Flask API Reference
 
-All REST endpoints served by the Plant Tracer Flask application are defined in
-`src/app/flask_api.py` and mounted at `/api/`. This document covers authentication,
+REST endpoints served by the Plant Tracer Flask application are mounted under
+`/api/`. Most are defined in `src/app/flask_api.py`; admin-specific endpoints
+are defined in `src/app/admin_api.py`. This document covers authentication,
 the standard response envelope, and every endpoint.
 
 For the Lambda (frame/video processing) endpoints, see [ClientLambdaAPI.md](ClientLambdaAPI.md).
@@ -33,7 +34,7 @@ multiple keys (e.g. after re-sending a login link). Keys are sent as a cookie af
 Most endpoints return JSON with `"error": false` on success or `"error": true`
 plus `"message"` on failure. Exceptions:
 
-- `/api/ver` returns `{"__version__": "...", "sys_version": "..."}`.
+- `/api/ver` returns `{"__version__": "...", "sys_version": "...", "stack_name": "...", "DYNAMODB_TABLE_PREFIX": "..."}`.
 - `/api/get-movie-trackpoints` returns CSV by default.
 
 ```text
@@ -44,6 +45,69 @@ plus `"message"` on failure. Exceptions:
 ---
 
 ## Endpoints
+
+### Admin
+
+#### `GET /api/admin/summary`
+
+Return the minimal read-only admin landing-page data. This endpoint backs `/admin`
+and is intentionally read-only.
+
+**Authorization**
+
+- `superadmin` and `superauditor` users may read this endpoint.
+- Course admins without an explicit super role and regular users receive HTTP
+  403. Operators bootstrap the first `superadmin` with `dbutil add-superadmin`.
+
+**Query parameters**
+
+| Name | Required | Description |
+|------|----------|-------------|
+| `limit` | No | Page size for the preview course and user lists. Defaults to 25, maximum 100. |
+| `course_marker` | No | Opaque, course-table-bound restart marker from the previous `courses.restart_marker`. |
+| `user_marker` | No | Opaque, user-table-bound restart marker from the previous `users.restart_marker`. |
+
+Malformed, non-object, or wrong-table restart markers receive HTTP 400.
+
+**Response**
+
+```json
+{
+  "error": false,
+  "viewer": {
+    "user_id": "u...",
+    "user_name": "Course Admin",
+    "email": "teacher@example.edu",
+    "super_role": "superauditor"
+  },
+  "counts": { "courses": 1, "users": 2, "movies": 3 },
+  "courses": {
+    "items": [
+      {
+        "course_id": "PlantTracer 101",
+        "course_name": "Intro Biology",
+        "max_enrollment": 100,
+        "admin_count": 1
+      }
+    ],
+    "restart_marker": null
+  },
+  "users": {
+    "items": [
+      {
+        "user_id": "u...",
+        "user_name": "Alice",
+        "email": "alice@example.edu",
+        "primary_course_id": "PlantTracer 101",
+        "super_role": "none",
+        "course_count": 1,
+        "admin_course_count": 0
+      }
+    ],
+    "restart_marker": null
+  }
+}
+```
 
 ### User & Registration
 
@@ -503,7 +567,7 @@ Return the application version. No authentication required.
 **Response**
 
 ```text
-{ "__version__": "0.9.7.6.2", "sys_version": "3.12.x ..." }
+{ "__version__": "0.9.7.6.2", "sys_version": "3.12.x ...", "stack_name": "prod", "DYNAMODB_TABLE_PREFIX": "prod-" }
 ```
 
 ---

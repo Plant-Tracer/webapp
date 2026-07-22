@@ -51,6 +51,60 @@ Seed local data:
 
    make make-local-demo
 
+Storage Modes
+-------------
+
+The local checkout can run against either local storage emulators or remote AWS
+storage. Pick one mode per shell.
+
+Local storage mode is the default. Leave ``AWS_REGION`` unset, or set it to
+``local``. The Makefile sets DynamoDB Local and MinIO endpoint overrides,
+``PLANTTRACER_S3_BUCKET=planttracer-local``, and
+``DYNAMODB_TABLE_PREFIX=demo-``:
+
+.. code-block:: bash
+
+   make show-storage-mode
+   eval "$(make show-local-vars)"
+   make start-local-services
+   make make-local-demo
+   make run-local-lambda-debug
+   make run-local-debug
+
+``show-local-vars`` prints shell commands for the complete non-demo local debug
+environment. Evaluating its output configures subsequent direct commands, such
+as ``poetry run dbutil report``, to use DynamoDB Local and MinIO. It also clears
+AWS profiles and demo-mode variables so they cannot override the local setup.
+
+Remote storage mode runs local Flask and, if needed, the local lambda debug
+bridge against real AWS S3 and DynamoDB. Use this only with a development
+bucket and table prefix unless you explicitly intend to modify shared data.
+The Makefile requires the remote storage settings to be explicit and unsets
+local endpoint overrides for the remote debug targets:
+
+.. code-block:: bash
+
+   AWS_PROFILE=plantadmin \
+   AWS_REGION=us-east-1 \
+   PLANTTRACER_S3_BUCKET=planttracer-dev \
+   DYNAMODB_TABLE_PREFIX=dev- \
+   make show-storage-mode
+
+   AWS_PROFILE=plantadmin \
+   AWS_REGION=us-east-1 \
+   PLANTTRACER_S3_BUCKET=planttracer-dev \
+   DYNAMODB_TABLE_PREFIX=dev- \
+   make run-remote-lambda-debug
+
+   AWS_PROFILE=plantadmin \
+   AWS_REGION=us-east-1 \
+   PLANTTRACER_S3_BUCKET=planttracer-dev \
+   DYNAMODB_TABLE_PREFIX=dev- \
+   make run-remote-debug
+
+Do not run ``make make-local-demo`` for remote storage mode. That target is
+intentionally tied to DynamoDB Local and MinIO.
+
 Run Locally
 -----------
 
@@ -91,7 +145,7 @@ Create A Course
 
 .. code-block:: bash
 
-   AWS_REGION=local poetry run python src/dbutil.py create-course \
+   AWS_REGION=local poetry run dbutil create-course \
      --course_name "Test Course" \
      --course_id "test" \
      --admin_email admin@example.com \

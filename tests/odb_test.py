@@ -48,6 +48,7 @@ TEST_USER_DATA = {
     'courses': [],
     'primary_course_id': TEST_COURSE_ID,
     'primary_course_name': TEST_COURSE_NAME,
+    'super_role': odb.SUPER_ROLE_NONE,
 }
 
 TEST_ADMIN_DATA = {
@@ -60,6 +61,7 @@ TEST_ADMIN_DATA = {
     'courses': [TEST_COURSE_ID],
     'primary_course_id': TEST_COURSE_ID,
     'primary_course_name': TEST_COURSE_NAME,
+    'super_role': odb.SUPER_ROLE_NONE,
 }
 
 TEST_MOVIE_DATA = {
@@ -178,6 +180,7 @@ def test_odb(local_ddb):
         print(json.dumps(expected_user, indent=2, default=str))
     assert actual_user == expected_user
     assert ddbo.get_user_email(TEST_USER_EMAIL) == expected_user
+    assert ddbo.get_user_email(TEST_USER_EMAIL.upper()) == expected_user
 
     # Create a movie
     ddbo.put_movie(TEST_MOVIE_DATA)

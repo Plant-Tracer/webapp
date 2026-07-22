@@ -42,6 +42,7 @@ separate subcommands:
    poetry run dbbackup restore --table-prefix PREFIX file.ptb [--all | --course-id C | --user-email E | --movie-id M] [--commit] [--threads N] [--regenerate-zips]
    poetry run dbbackup inspect file.ptb [--verbose]
    poetry run dbbackup list-prefixes
+   poetry run dbutil list-prefixes
    poetry run dbbackup send-restore-links --table-prefix PREFIX file.ptb [--all | --course-id C | --user-email E] [--send]
    poetry run dbbackup migrate-course --table-prefix PREFIX --from-course-id A --to-course-id B [--user-email E] [--commit]
 
@@ -57,18 +58,19 @@ anything unless ``--commit`` is present.
 ``send-restore-links`` require an explicit selector so operators choose the
 restore or email scope deliberately.
 
-``list-prefixes`` does not take ``--table-prefix``. It uses the current
-DynamoDB connection settings, lists all tables, reports only prefixes for which
-all application tables exist, and prints a fixed-width table with the course,
-user, and movie counts plus a single UTC ``from``/``to`` range for each
+``list-prefixes`` does not take ``--table-prefix``. It is available from both
+``dbbackup`` and ``dbutil`` and uses shared prefix-discovery code. It uses the
+current DynamoDB connection settings, lists all tables, reports only prefixes
+for which all application tables exist, and prints a fixed-width table with the
+course, user, and movie counts plus a single UTC ``from``/``to`` range for each
 complete prefix. The range is the
 minimum and maximum timestamp found in user ``created`` fields, movie
 ``created_at``/``date_uploaded`` fields, optional movie ``status_updated_at``
 fields, and optional course ``created``/``created_at`` fields when those
 attributes are present. Current course rows do not have a schema-defined
 creation timestamp, and frame/trackpoint rows store frame numbers rather than
-timestamps. If the current AWS SSO token is expired, ``list-prefixes`` asks
-whether it should run ``aws sso login`` and retry once.
+timestamps. In ``dbbackup``, if the current AWS SSO token is expired,
+``list-prefixes`` asks whether it should run ``aws sso login`` and retry once.
 
 Backup Scope
 ------------

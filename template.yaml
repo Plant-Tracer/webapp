@@ -37,7 +37,6 @@ Parameters:
   ImageBucketName:
     Type: String
     Description: "Existing S3 bucket for videos; must outlive the stack. Do not include s3://."
-    Default: planttracer2
 
   LogLevel:
     Type: String

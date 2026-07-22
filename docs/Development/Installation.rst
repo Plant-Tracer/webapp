@@ -45,7 +45,7 @@ Create a course with ``dbutil``:
 
 .. code-block:: bash
 
-   AWS_REGION=local poetry run python src/dbutil.py create-course \
+   AWS_REGION=local poetry run dbutil create-course \
      --course_name "My Course Name" \
      --course_id "Plant101" \
      --admin_email your_admin_email@example.com \

@@ -21,7 +21,7 @@ from decimal import Decimal
 import boto3
 from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Key,Attr
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from .schema import (
     User,
@@ -48,6 +48,11 @@ COURSE_USERS = 'course_users'
 LOGS = 'logs'
 ROOT_USER_ID = 'u0'                # the root user
 
+
+def normalize_email(email: str) -> str:
+    """Return the canonical email form used for DynamoDB lookup keys."""
+    return email.strip().lower()
+
 # attributes
 #SUPER_ADMIN = 'super_admin'             # user.super_admin==1 makes the user admin for everything
 
@@ -60,6 +65,14 @@ USER_NAME = 'user_name'
 ENABLED   = 'enabled'
 USE_COUNT = 'use_count'
 ADMIN_FOR_COURSES = 'admin_for_courses' # user.admin_for_courses[]
+SUPER_ROLE = 'super_role'
+SUPER_ROLE_NONE = 'none'
+SUPER_ROLE_SUPERAUDITOR = 'superauditor'
+SUPER_ROLE_SUPERADMIN = 'superadmin'
+LEGACY_SUPER_ROLE_AUDITOR = 'super_auditor'
+LEGACY_SUPER_ROLE_ADMIN = 'super_admin'
+SUPER_ROLES = frozenset((SUPER_ROLE_NONE, SUPER_ROLE_SUPERAUDITOR, SUPER_ROLE_SUPERADMIN))
+SUPER_READ_ROLES = frozenset((SUPER_ROLE_SUPERAUDITOR, SUPER_ROLE_SUPERADMIN))
 
 # courses table
 ADMINS_FOR_COURSE = 'admins_for_course' # courses.admins_for_course[]
@@ -138,6 +151,13 @@ PRIMARY_COURSE_ID = 'primary_course_id'
 PRIMARY_COURSE_NAME = 'primary_course_name'
 
 CHECK_MX = False            # True doesn't work
+
+
+class AdminReadAccess(BaseModel):
+    """Resolved read access for the admin interface."""
+
+    allowed: bool
+    super_role: str = SUPER_ROLE_NONE
 
 ################################################################
 ## Errors
@@ -444,6 +464,7 @@ class DDBO:
 
     def get_user_email(self, email):
         """gets the user dictionary given an email address. If email is provided, look up user by email."""
+        email = normalize_email(email)
         response = self.users.query(
             IndexName='email_idx',
             KeyConditionExpression=Key(EMAIL).eq(email),
@@ -463,7 +484,8 @@ class DDBO:
         except ValidationError:
             logger.error("user=%s",user)
             raise
-        email = user[ EMAIL ]
+        email = normalize_email(user[ EMAIL ])
+        user[EMAIL] = email
         assert email is not None
         user_id = user[ USER_ID ]
         assert is_user_id(user_id)
@@ -505,6 +527,7 @@ class DDBO:
     def rename_user(self, *, user_id, new_email):
         """Changes a user's email."""
         assert is_user_id(user_id)
+        new_email = normalize_email(new_email)
         userdict = self.get_user(user_id)
         if userdict[ EMAIL ] == new_email:
             return
@@ -1027,6 +1050,7 @@ def register_email(email, user_name, *, course_key=None, course_id=None, admin=F
     """
 
     assert isinstance(email,str)
+    email = normalize_email(email)
     if '@' not in email:
         raise InvalidUser_Email()
 
@@ -1046,26 +1070,32 @@ def register_email(email, user_name, *, course_key=None, course_id=None, admin=F
         except (IndexError,TypeError) as e:
             raise InvalidCourse_Key(course_key) from e
 
-    # We don't know if the user exists or not. So do a put assuming that they don't.
-    # If they do, we will then do an update.
     admin_for_courses = []
     if admin:
         admin_for_courses = [course_id]
     try:
-        user_id = new_user_id()
-        ddbo.put_user({USER_ID:user_id,
-                       EMAIL:email,
-                       USER_NAME:user_name,
-                       'created' : int(time.time()),
-                       ENABLED:1,
-                       ADMIN_FOR_COURSES:admin_for_courses,
-                       PRIMARY_COURSE_ID:course_id,
-                       PRIMARY_COURSE_NAME:course[COURSE_NAME],
-                       COURSES:[course_id]
-                       })
-    except UserExists:
-        # The user exists! Change the primary course and add them to this course.
         user = ddbo.get_user_email(email)
+    except InvalidUser_Email:
+        user = None
+
+    try:
+        if user is None:
+            user_id = new_user_id()
+            ddbo.put_user({USER_ID:user_id,
+                           EMAIL:email,
+                           USER_NAME:user_name,
+                           'created' : int(time.time()),
+                           ENABLED:1,
+                           ADMIN_FOR_COURSES:admin_for_courses,
+                           PRIMARY_COURSE_ID:course_id,
+                           PRIMARY_COURSE_NAME:course[COURSE_NAME],
+                           COURSES:[course_id]
+                           })
+    except UserExists:
+        user = ddbo.get_user_email(email)
+
+    if user is not None:
+        # The user exists! Change the primary course and add them to this course.
         admin_for_courses = user[ADMIN_FOR_COURSES]
         if admin:
             admin_for_courses = list(set(admin_for_courses).union([course_id]))
@@ -1181,6 +1211,36 @@ def get_user_email(email):
 def get_first_api_key_for_user(user_id):
     """Return one api_key for the user, or None if they have none."""
     return DDBO().get_first_api_key_for_user(user_id)
+
+
+def legacy_truthy(value):
+    """Return True for legacy integer/string boolean role flags."""
+    return value in (True, 1, '1', 'true', 'True', 'yes', 'YES')
+
+
+def normalize_super_role(user):
+    """Return the canonical super role for a user item."""
+    role = user.get(SUPER_ROLE, SUPER_ROLE_NONE)
+    if role in SUPER_ROLES:
+        return role
+    if role == LEGACY_SUPER_ROLE_ADMIN or legacy_truthy(user.get(LEGACY_SUPER_ROLE_ADMIN)):
+        return SUPER_ROLE_SUPERADMIN
+    if role == LEGACY_SUPER_ROLE_AUDITOR or legacy_truthy(user.get(LEGACY_SUPER_ROLE_AUDITOR)):
+        return SUPER_ROLE_SUPERAUDITOR
+    return SUPER_ROLE_NONE
+
+
+def user_has_super_read(user):
+    """Return True if a user can read the cross-course admin interface."""
+    return normalize_super_role(user) in SUPER_READ_ROLES
+
+
+def admin_read_access(user) -> AdminReadAccess:
+    """Return whether a user with an explicit super role can read /admin."""
+    super_role = normalize_super_role(user)
+    if super_role in SUPER_READ_ROLES:
+        return AdminReadAccess(allowed=True, super_role=super_role)
+    return AdminReadAccess(allowed=False, super_role=super_role)
 
 
 #########################
@@ -1550,7 +1610,7 @@ def can_access_movie(*, user_id, movie_id):
     User can access the movie if:
     - User is movie owner
     - User is in the movie's course (NOTE: it should check to see if movie is published or if the user is the course admin)
-    - (Note: should allow access if the user is a super admin)
+    - (Note: should allow access if the user is a superadmin)
 
     Raises UnauthorizedUser if user is not allowed to access the movie. This is caught by the flask framework, so we don't need special handling.
     """

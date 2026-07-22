@@ -209,6 +209,7 @@ bin/
 samconfig*.toml
 .samconfig*.toml
 samconfig.toml-*
+samconfigs/
 .envrc
 .env
 .op
@@ -221,3 +222,4 @@ etc/planttracer-nginx-patch.*
 .beads-credential-key
 .beads/proxieddb/
 *.ptb
+samconfigs/

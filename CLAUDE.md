@@ -94,7 +94,7 @@ Route handlers should be thin; put business logic in `odb.py`, `mailer.py`, `s3_
 
 ### Data Storage
 - **S3**: movies, frames, ZIP files. The bucket is always **pre-existing** and **outlives the CloudFormation stack** as the long-term archive. Because the bucket outlives DynamoDB, research/attribution metadata must also be written **into the MP4 file** (see `src/app/mp4_metadata_lib.py`, `docs/Development/MOVIE_METADATA.rst`).
-- **DynamoDB**: tables prefixed by `DYNAMODB_TABLE_PREFIX` (e.g. `demo-`). Schema in `src/app/schema.py`; creation in `src/app/odbmaint.py`. CLI: `src/dbutil.py` (`--createdb`, `--makelink`, etc.).
+- **DynamoDB**: tables prefixed by `DYNAMODB_TABLE_PREFIX` (e.g. `demo-`). Schema in `src/app/schema.py`; creation in `src/app/odbmaint.py`. CLI: `poetry run dbutil` (`createdb`, `makelink`, etc.).
 - Lambda is invoked via its HTTP API, **not** via S3 bucket notifications.
 
 ### Lambda (`lambda-resize/`)
@@ -110,7 +110,7 @@ The accepted migration goal for #450/#699 is a lambda-only distribution with no 
 - Remove VM resources and parameters from the SAM path, including EC2, VPC/subnet/route-table resources, security groups, EIP, instance profile, SSH/reload workflows, `GitRepoUrl`, and `GitBranch`.
 - Deploy current built artifacts from the current checkout/branch; do not rely on instance boot-time `git clone` or branch checkout.
 - Keep application static assets served by `lambda-web` for the initial migration, as Flask serves them now. Do not move static assets to S3/CloudFront until there is a versioned filename or asset-manifest plan.
-- Keep the movie S3 bucket pre-existing and long-lived. Keep DynamoDB tables external to CloudFormation and created through `src/dbutil.py` from `etc/dynamodb_tables.json`.
+- Keep the movie S3 bucket pre-existing and long-lived. Keep DynamoDB tables external to CloudFormation and created through `poetry run dbutil` from `etc/dynamodb_tables.json`.
 - Keep path routing explicit on that single front door: `/resize-api/*` goes to `lambda-resize`; HTML, Flask `/api/*`, and `/static/*` go to `lambda-web`. Movie-data is resize-owned and lives at `/resize-api/v1/movie-data`; do not reintroduce `/api/v1/movie-data` compatibility.
 - `lambda-web` uses SnapStart on the published `live` alias. `lambda-resize` does not use SnapStart unless measured and deliberately enabled later.
 - `make sam-deploy` and `make sam-deploy-guided` refuse redeploying the same app version to the same stack; bump `pyproject.toml` before deploying again.
