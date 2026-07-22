@@ -87,7 +87,8 @@ Lambda Stack Diagnostics
    Route53 hosted zone id used by the stack domain mapping. The SAM template
    passes this to both Lambda functions for deployed-stack diagnostics.
 
-``/api/ver`` and ``/resize-api/v1/ping`` report ``stack_name``. The
+``/ver`` and ``/api/ver`` report the configured ``DYNAMODB_TABLE_PREFIX``;
+``/api/ver`` and ``/resize-api/v1/ping`` also report ``stack_name``. The
 ``/resize-api/v1/ping`` endpoint also reports a ``stack_parameters`` object
 with selected CloudFormation parameter values: ``HostedZoneId``, ``BaseDomain``,
 ``ImageBucketName``, ``LogLevel``, ``MailerDryRun``, and

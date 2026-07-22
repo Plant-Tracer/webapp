@@ -37,7 +37,7 @@ the durable user profile:
   application and should be used for joins, ownership checks, and permissions.
 * ``email``: the user's login and contact address. It is also stored in the
   ``unique_emails`` table so that registration can enforce one user profile per
-  email address.
+  email address. Values are stored and looked up in lowercase.
 * ``user_name``: the user's display name. This is the name shown in page
   headers, movie lists, course user lists, and some movie metadata defaults.
 * ``enabled``: whether the user can authenticate.
@@ -219,7 +219,8 @@ key as the ``api_key`` browser global for API calls that still submit the key
 explicitly.
 
 The ``/resend`` flow does not create a new user. It looks up an existing user by
-email, creates a fresh API key for that user, and sends a new magic link.
+email (case-insensitively), creates a fresh API key for that user, and sends a
+new magic link.
 
 API keys are bearer credentials. Anyone who can read a magic link or cookie can
 act as that user until the key is disabled or expires by policy. Logs and

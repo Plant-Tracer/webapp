@@ -16,7 +16,7 @@ from app import odb_movie_data
 from app import s3_presigned
 from app.odb import is_api_key
 from app.paths import TEST_DIR, TEST_MOVIE_FILENAME
-from app.constants import STACK_NAME, __version__, logger, stack_name
+from app.constants import C, STACK_NAME, __version__, logger, stack_name
 
 # Fixtures are imported in conftest.py
 from app.odb import API_KEY, COURSE_ID, USER_ID, USER_NAME
@@ -38,6 +38,7 @@ def test_ver2(client):
     assert val['__version__'] == __version__
     assert val['sys_version'] == sys.version
     assert val[STACK_NAME] == stack_name()
+    assert val[C.DYNAMODB_TABLE_PREFIX] == os.environ[C.DYNAMODB_TABLE_PREFIX]
 
 
 def test_status_reports_stack_name(client):

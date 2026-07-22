@@ -152,7 +152,7 @@ See `docs/EnvironmentVariables.rst` for the full list.
 |---|---|
 | `AWS_REGION=local` | Use Minio/DynamoDB Local instead of real AWS |
 | `PLANTTRACER_S3_BUCKET` | S3 bucket name (required) |
-| `DYNAMODB_TABLE_PREFIX` | Table prefix, e.g. `demo-` (required) |
+| `DYNAMODB_TABLE_PREFIX` | Table prefix, e.g. `demo-` (required). `DDBO` normalizes `prefix` and `prefix-` to exactly one trailing hyphen before constructing table names. |
 | `AWS_ENDPOINT_URL_S3` | Override S3 endpoint (Minio in dev) |
 | `AWS_ENDPOINT_URL_DYNAMODB` | Override DynamoDB endpoint (local in dev) |
 | `DEMO_COURSE_ID` | Enable demo mode |

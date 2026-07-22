@@ -34,7 +34,7 @@ multiple keys (e.g. after re-sending a login link). Keys are sent as a cookie af
 Most endpoints return JSON with `"error": false` on success or `"error": true`
 plus `"message"` on failure. Exceptions:
 
-- `/api/ver` returns `{"__version__": "...", "sys_version": "...", "stack_name": "..."}`.
+- `/api/ver` returns `{"__version__": "...", "sys_version": "...", "stack_name": "...", "DYNAMODB_TABLE_PREFIX": "..."}`.
 - `/api/get-movie-trackpoints` returns CSV by default.
 
 ```text
@@ -567,7 +567,7 @@ Return the application version. No authentication required.
 **Response**
 
 ```text
-{ "__version__": "0.9.7.6.2", "sys_version": "3.12.x ...", "stack_name": "prod" }
+{ "__version__": "0.9.7.6.2", "sys_version": "3.12.x ...", "stack_name": "prod", "DYNAMODB_TABLE_PREFIX": "prod-" }
 ```
 
 ---

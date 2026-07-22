@@ -21,6 +21,7 @@ from app.constants import C, logger
 def test_version(client):  # Use the app fixture
     response = client.get('/ver')
     assert flask_app.__version__ in response.text
+    assert os.environ[C.DYNAMODB_TABLE_PREFIX] in response.text
 
 
 # These check type conversion

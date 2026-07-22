@@ -180,6 +180,7 @@ def test_odb(local_ddb):
         print(json.dumps(expected_user, indent=2, default=str))
     assert actual_user == expected_user
     assert ddbo.get_user_email(TEST_USER_EMAIL) == expected_user
+    assert ddbo.get_user_email(TEST_USER_EMAIL.upper()) == expected_user
 
     # Create a movie
     ddbo.put_movie(TEST_MOVIE_DATA)

@@ -414,6 +414,7 @@ def func_ver():
     response = make_response(render_template('version.txt',
                                              __version__=__version__,
                                              sys_version=sys.version,
-                                             stack_name=stack_name()))
+                                             stack_name=stack_name(),
+                                             dynamodb_table_prefix=os.environ.get(C.DYNAMODB_TABLE_PREFIX, "")))
     response.headers['Content-Type'] = 'text/plain'
     return response

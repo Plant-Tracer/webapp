@@ -48,6 +48,11 @@ COURSE_USERS = 'course_users'
 LOGS = 'logs'
 ROOT_USER_ID = 'u0'                # the root user
 
+
+def normalize_email(email: str) -> str:
+    """Return the canonical email form used for DynamoDB lookup keys."""
+    return email.strip().lower()
+
 # attributes
 #SUPER_ADMIN = 'super_admin'             # user.super_admin==1 makes the user admin for everything
 
@@ -460,6 +465,7 @@ class DDBO:
 
     def get_user_email(self, email):
         """gets the user dictionary given an email address. If email is provided, look up user by email."""
+        email = normalize_email(email)
         response = self.users.query(
             IndexName='email_idx',
             KeyConditionExpression=Key(EMAIL).eq(email),
@@ -479,7 +485,8 @@ class DDBO:
         except ValidationError:
             logger.error("user=%s",user)
             raise
-        email = user[ EMAIL ]
+        email = normalize_email(user[ EMAIL ])
+        user[EMAIL] = email
         assert email is not None
         user_id = user[ USER_ID ]
         assert is_user_id(user_id)
@@ -521,6 +528,7 @@ class DDBO:
     def rename_user(self, *, user_id, new_email):
         """Changes a user's email."""
         assert is_user_id(user_id)
+        new_email = normalize_email(new_email)
         userdict = self.get_user(user_id)
         if userdict[ EMAIL ] == new_email:
             return
@@ -1043,6 +1051,7 @@ def register_email(email, user_name, *, course_key=None, course_id=None, admin=F
     """
 
     assert isinstance(email,str)
+    email = normalize_email(email)
     if '@' not in email:
         raise InvalidUser_Email()
 
@@ -1062,26 +1071,32 @@ def register_email(email, user_name, *, course_key=None, course_id=None, admin=F
         except (IndexError,TypeError) as e:
             raise InvalidCourse_Key(course_key) from e
 
-    # We don't know if the user exists or not. So do a put assuming that they don't.
-    # If they do, we will then do an update.
     admin_for_courses = []
     if admin:
         admin_for_courses = [course_id]
     try:
-        user_id = new_user_id()
-        ddbo.put_user({USER_ID:user_id,
-                       EMAIL:email,
-                       USER_NAME:user_name,
-                       'created' : int(time.time()),
-                       ENABLED:1,
-                       ADMIN_FOR_COURSES:admin_for_courses,
-                       PRIMARY_COURSE_ID:course_id,
-                       PRIMARY_COURSE_NAME:course[COURSE_NAME],
-                       COURSES:[course_id]
-                       })
-    except UserExists:
-        # The user exists! Change the primary course and add them to this course.
         user = ddbo.get_user_email(email)
+    except InvalidUser_Email:
+        user = None
+
+    try:
+        if user is None:
+            user_id = new_user_id()
+            ddbo.put_user({USER_ID:user_id,
+                           EMAIL:email,
+                           USER_NAME:user_name,
+                           'created' : int(time.time()),
+                           ENABLED:1,
+                           ADMIN_FOR_COURSES:admin_for_courses,
+                           PRIMARY_COURSE_ID:course_id,
+                           PRIMARY_COURSE_NAME:course[COURSE_NAME],
+                           COURSES:[course_id]
+                           })
+    except UserExists:
+        user = ddbo.get_user_email(email)
+
+    if user is not None:
+        # The user exists! Change the primary course and add them to this course.
         admin_for_courses = user[ADMIN_FOR_COURSES]
         if admin:
             admin_for_courses = list(set(admin_for_courses).union([course_id]))
