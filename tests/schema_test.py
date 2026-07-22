@@ -53,7 +53,8 @@ def test_user_schema():
     assert u.super_role == "none"
 
     schema.validate_user_field("created", 0)
-    assert schema.validate_user_field("super_role", "super_auditor") == "super_auditor"
+    assert schema.validate_user_field("super_role", "superauditor") == "superauditor"
+    assert schema.validate_user_field("super_role", "super_auditor") == "superauditor"
     with pytest.raises(AttributeError):
         schema.validate_user_field("unknown", 0)
     with pytest.raises(ValidationError):

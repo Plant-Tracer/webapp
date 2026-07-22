@@ -27,7 +27,7 @@ class User(BaseModel):
     primary_course_id: str
     primary_course_name: str
     courses: List[str]
-    super_role: Literal["none", "super_auditor", "super_admin"] = "none"
+    super_role: Literal["none", "superauditor", "superadmin"] = "none"
 
     @field_validator("super_role", mode="before")
     @classmethod
@@ -35,6 +35,10 @@ class User(BaseModel):
         """Treat missing legacy role data as an ordinary non-super user."""
         if value in (None, "", 0, False):
             return "none"
+        if value == "super_auditor":
+            return "superauditor"
+        if value == "super_admin":
+            return "superadmin"
         return value
 
 

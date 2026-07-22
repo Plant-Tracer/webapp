@@ -118,7 +118,7 @@ distclean:
 
 ################################################################
 # Main targets used by CI/CD system and developers
-.PHONY: all check coverage tags show-local-vars show-storage-mode user-list admin-list admin-create super-admin-list course-create demo-course-create sam-course-create
+.PHONY: all check coverage tags show-local-vars show-storage-mode user-list admin-list admin-create superadmin-list course-create demo-course-create sam-course-create
 
 all:
 	@echo verify syntax and then restart
@@ -171,8 +171,8 @@ admin-list:
 user-list:
 	poetry run $(DBUTIL) user-list
 
-super-admin-list:
-	poetry run $(DBUTIL) super-admin-list
+superadmin-list:
+	poetry run $(DBUTIL) superadmin-list
 
 ADMIN_CREATE_FLAGS ?=
 admin-create:

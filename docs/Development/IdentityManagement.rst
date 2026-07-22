@@ -105,9 +105,9 @@ Operators can list all registered users with ``make user-list``. The target
 runs ``poetry run dbutil user-list`` and prints each user's display name, email
 address, ``user_id``, enabled flag, primary course, course memberships,
 administered courses, and ``super_role``. Operators can list only users with
-cross-course super roles with ``make super-admin-list``. The underlying
-``poetry run dbutil super-admin-list`` command accepts ``--role super_admin`` or
-``--role super_auditor`` to narrow the output.
+cross-course super roles with ``make superadmin-list``. The underlying
+``poetry run dbutil superadmin-list`` command accepts ``--role superadmin`` or
+``--role superauditor`` to narrow the output.
 
 Operators can create or update course administrators with ``make admin-create``.
 The target runs ``poetry run dbutil admin-create``. In an interactive terminal it
@@ -127,14 +127,14 @@ Operators can add or remove course-admin access for an existing user with
 The older ``--admin_email`` spelling is still accepted by both commands.
 
 Operators can grant or remove cross-course roles by email address with
-``poetry run dbutil add-super-admin --email ops@example.edu``,
-``poetry run dbutil remove-super-admin --email ops@example.edu``,
-``poetry run dbutil add-super-auditor --email auditor@example.edu``, and
-``poetry run dbutil remove-super-auditor --email auditor@example.edu``. The
-general ``poetry run dbutil set-super-role --email ops@example.edu --role super_admin``
-command accepts ``none``, ``super_auditor``, or ``super_admin``. The CLI refuses
-to demote or remove the last remaining ``super_admin``. Users can be
-``super_admin`` or ``super_auditor``, but not both, because ``super_role`` is a
+``poetry run dbutil add-superadmin --email ops@example.edu``,
+``poetry run dbutil remove-superadmin --email ops@example.edu``,
+``poetry run dbutil add-superauditor --email audit@example.edu``, and
+``poetry run dbutil remove-superauditor --email audit@example.edu``. The
+general ``poetry run dbutil set-super-role --email ops@example.edu --role superadmin``
+command accepts ``none``, ``superauditor``, or ``superadmin``. The CLI refuses
+to demote or remove the last remaining ``superadmin``. Users can be
+``superadmin`` or ``superauditor``, but not both, because ``super_role`` is a
 single enum field.
 
 Operators can create courses with ``make course-create``. The target runs

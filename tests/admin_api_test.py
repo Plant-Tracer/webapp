@@ -29,9 +29,9 @@ def test_admin_summary_allows_bootstrap_course_admin(client, new_course):
     assert len(payload["users"]["items"]) == 1
 
 
-def test_admin_summary_allows_super_auditor(client, new_course):
+def test_admin_summary_allows_superauditor(client, new_course):
     ddbo = new_course["ddbo"]
-    ddbo.update_table(ddbo.users, new_course[USER_ID], {odb.SUPER_ROLE: odb.SUPER_ROLE_AUDITOR})
+    ddbo.update_table(ddbo.users, new_course[USER_ID], {odb.SUPER_ROLE: odb.SUPER_ROLE_SUPERAUDITOR})
     client.set_cookie(apikey.cookie_name(), new_course[API_KEY])
 
     response = client.get("/api/admin/summary?limit=1")
@@ -39,12 +39,12 @@ def test_admin_summary_allows_super_auditor(client, new_course):
     assert response.status_code == 200
     payload = response.json
     assert payload["viewer"]["bootstrap_course_admin"] is False
-    assert payload["viewer"]["super_role"] == odb.SUPER_ROLE_AUDITOR
+    assert payload["viewer"]["super_role"] == odb.SUPER_ROLE_SUPERAUDITOR
 
 
-def test_admin_page_loads_for_super_auditor(client, new_course):
+def test_admin_page_loads_for_superauditor(client, new_course):
     ddbo = new_course["ddbo"]
-    ddbo.update_table(ddbo.users, new_course[USER_ID], {odb.SUPER_ROLE: odb.SUPER_ROLE_AUDITOR})
+    ddbo.update_table(ddbo.users, new_course[USER_ID], {odb.SUPER_ROLE: odb.SUPER_ROLE_SUPERAUDITOR})
     client.set_cookie(apikey.cookie_name(), new_course[API_KEY])
 
     response = client.get("/admin")

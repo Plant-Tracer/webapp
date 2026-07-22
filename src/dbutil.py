@@ -318,7 +318,7 @@ def user_list():
     print_user_rows(rows)
 
 
-def super_admin_list(args):
+def superadmin_list(args):
     """Print users with a cross-course super role."""
     role = args.role
     rows = [
@@ -333,12 +333,12 @@ def super_admin_list(args):
     print_user_rows(rows)
 
 
-def super_admin_user_ids():
-    """Return user ids for current super_admin users."""
+def superadmin_user_ids():
+    """Return user ids for current superadmin users."""
     return {
         user[USER_ID]
         for user in sorted_user_items()
-        if odb.normalize_super_role(user) == odb.SUPER_ROLE_ADMIN
+        if odb.normalize_super_role(user) == odb.SUPER_ROLE_SUPERADMIN
     }
 
 
@@ -350,17 +350,17 @@ def validate_super_role(role):
 
 
 def set_super_role_by_email(email, role, *, expected_old_role=None):
-    """Set a user's canonical super role and enforce the last-super-admin rule."""
+    """Set a user's canonical super role and enforce the last-superadmin rule."""
     new_role = validate_super_role(role)
     ddbo = DDBO()
     user = ddbo.get_user_email(email)
     old_role = odb.normalize_super_role(user)
     if expected_old_role is not None and old_role != expected_old_role:
         raise ValueError(f"user currently has {old_role}, not {expected_old_role}")
-    if old_role == odb.SUPER_ROLE_ADMIN and new_role != odb.SUPER_ROLE_ADMIN:
-        super_admin_ids = super_admin_user_ids()
-        if super_admin_ids == {user[USER_ID]}:
-            raise ValueError("cannot remove the last super_admin")
+    if old_role == odb.SUPER_ROLE_SUPERADMIN and new_role != odb.SUPER_ROLE_SUPERADMIN:
+        superadmin_ids = superadmin_user_ids()
+        if superadmin_ids == {user[USER_ID]}:
+            raise ValueError("cannot remove the last superadmin")
     ddbo.update_table(ddbo.users, user[USER_ID], {odb.SUPER_ROLE: new_role})
     return SuperRoleChange(
         email=email,
@@ -795,14 +795,14 @@ def build_parser():
         aliases=["user_list"],
         help="List all registered users",
     )
-    super_admin_list_parser = subparsers.add_parser(
-        "super-admin-list",
-        aliases=["super_admin_list"],
-        help="List users with a super_auditor or super_admin role",
+    superadmin_list_parser = subparsers.add_parser(
+        "superadmin-list",
+        aliases=["super-admin-list", "super_admin_list"],
+        help="List users with a superauditor or superadmin role",
     )
-    super_admin_list_parser.add_argument(
+    superadmin_list_parser.add_argument(
         "--role",
-        choices=["all", odb.SUPER_ROLE_AUDITOR, odb.SUPER_ROLE_ADMIN],
+        choices=["all", odb.SUPER_ROLE_SUPERAUDITOR, odb.SUPER_ROLE_SUPERADMIN],
         default="all",
         help="Restrict list to one super role",
     )
@@ -819,27 +819,27 @@ def build_parser():
         help="canonical super role",
     )
     add_super_admin_parser = subparsers.add_parser(
-        "add-super-admin",
-        aliases=["add_super_admin"],
-        help="Grant super_admin to a user by email",
+        "add-superadmin",
+        aliases=["add-super-admin", "add_super_admin"],
+        help="Grant superadmin to a user by email",
     )
     add_super_admin_parser.add_argument("--email", required=True, help="user email")
     remove_super_admin_parser = subparsers.add_parser(
-        "remove-super-admin",
-        aliases=["remove_super_admin"],
-        help="Remove super_admin from a user by email",
+        "remove-superadmin",
+        aliases=["remove-super-admin", "remove_super_admin"],
+        help="Remove superadmin from a user by email",
     )
     remove_super_admin_parser.add_argument("--email", required=True, help="user email")
     add_super_auditor_parser = subparsers.add_parser(
-        "add-super-auditor",
-        aliases=["add_super_auditor"],
-        help="Grant super_auditor to a user by email",
+        "add-superauditor",
+        aliases=["add-super-auditor", "add_super_auditor"],
+        help="Grant superauditor to a user by email",
     )
     add_super_auditor_parser.add_argument("--email", required=True, help="user email")
     remove_super_auditor_parser = subparsers.add_parser(
-        "remove-super-auditor",
-        aliases=["remove_super_auditor"],
-        help="Remove super_auditor from a user by email",
+        "remove-superauditor",
+        aliases=["remove-super-auditor", "remove_super_auditor"],
+        help="Remove superauditor from a user by email",
     )
     remove_super_auditor_parser.add_argument("--email", required=True, help="user email")
     admin_create_parser = subparsers.add_parser(
@@ -1000,32 +1000,32 @@ def main():  # pragma: no cover
     if args.command in ("user-list", "user_list"):
         user_list()
         return 0
-    if args.command in ("super-admin-list", "super_admin_list"):
-        super_admin_list(args)
+    if args.command in ("superadmin-list", "super-admin-list", "super_admin_list"):
+        superadmin_list(args)
         return 0
     if args.command in ("set-super-role", "set_super_role"):
         update_super_role_command(args, parser)
         return 0
-    if args.command in ("add-super-admin", "add_super_admin"):
-        update_super_role_command(args, parser, odb.SUPER_ROLE_ADMIN)
+    if args.command in ("add-superadmin", "add-super-admin", "add_super_admin"):
+        update_super_role_command(args, parser, odb.SUPER_ROLE_SUPERADMIN)
         return 0
-    if args.command in ("remove-super-admin", "remove_super_admin"):
+    if args.command in ("remove-superadmin", "remove-super-admin", "remove_super_admin"):
         update_super_role_command(
             args,
             parser,
             odb.SUPER_ROLE_NONE,
-            expected_old_role=odb.SUPER_ROLE_ADMIN,
+            expected_old_role=odb.SUPER_ROLE_SUPERADMIN,
         )
         return 0
-    if args.command in ("add-super-auditor", "add_super_auditor"):
-        update_super_role_command(args, parser, odb.SUPER_ROLE_AUDITOR)
+    if args.command in ("add-superauditor", "add-super-auditor", "add_super_auditor"):
+        update_super_role_command(args, parser, odb.SUPER_ROLE_SUPERAUDITOR)
         return 0
-    if args.command in ("remove-super-auditor", "remove_super_auditor"):
+    if args.command in ("remove-superauditor", "remove-super-auditor", "remove_super_auditor"):
         update_super_role_command(
             args,
             parser,
             odb.SUPER_ROLE_NONE,
-            expected_old_role=odb.SUPER_ROLE_AUDITOR,
+            expected_old_role=odb.SUPER_ROLE_SUPERAUDITOR,
         )
         return 0
     if args.command in ("admin-create", "admin_create"):

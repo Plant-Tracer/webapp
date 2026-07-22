@@ -62,10 +62,12 @@ USE_COUNT = 'use_count'
 ADMIN_FOR_COURSES = 'admin_for_courses' # user.admin_for_courses[]
 SUPER_ROLE = 'super_role'
 SUPER_ROLE_NONE = 'none'
-SUPER_ROLE_AUDITOR = 'super_auditor'
-SUPER_ROLE_ADMIN = 'super_admin'
-SUPER_ROLES = frozenset((SUPER_ROLE_NONE, SUPER_ROLE_AUDITOR, SUPER_ROLE_ADMIN))
-SUPER_READ_ROLES = frozenset((SUPER_ROLE_AUDITOR, SUPER_ROLE_ADMIN))
+SUPER_ROLE_SUPERAUDITOR = 'superauditor'
+SUPER_ROLE_SUPERADMIN = 'superadmin'
+LEGACY_SUPER_ROLE_AUDITOR = 'super_auditor'
+LEGACY_SUPER_ROLE_ADMIN = 'super_admin'
+SUPER_ROLES = frozenset((SUPER_ROLE_NONE, SUPER_ROLE_SUPERAUDITOR, SUPER_ROLE_SUPERADMIN))
+SUPER_READ_ROLES = frozenset((SUPER_ROLE_SUPERAUDITOR, SUPER_ROLE_SUPERADMIN))
 
 # courses table
 ADMINS_FOR_COURSE = 'admins_for_course' # courses.admins_for_course[]
@@ -1207,10 +1209,10 @@ def normalize_super_role(user):
     role = user.get(SUPER_ROLE, SUPER_ROLE_NONE)
     if role in SUPER_ROLES:
         return role
-    if legacy_truthy(user.get(SUPER_ROLE_ADMIN)):
-        return SUPER_ROLE_ADMIN
-    if legacy_truthy(user.get(SUPER_ROLE_AUDITOR)):
-        return SUPER_ROLE_AUDITOR
+    if role == LEGACY_SUPER_ROLE_ADMIN or legacy_truthy(user.get(LEGACY_SUPER_ROLE_ADMIN)):
+        return SUPER_ROLE_SUPERADMIN
+    if role == LEGACY_SUPER_ROLE_AUDITOR or legacy_truthy(user.get(LEGACY_SUPER_ROLE_AUDITOR)):
+        return SUPER_ROLE_SUPERAUDITOR
     return SUPER_ROLE_NONE
 
 
@@ -1621,7 +1623,7 @@ def can_access_movie(*, user_id, movie_id):
     User can access the movie if:
     - User is movie owner
     - User is in the movie's course (NOTE: it should check to see if movie is published or if the user is the course admin)
-    - (Note: should allow access if the user is a super admin)
+    - (Note: should allow access if the user is a superadmin)
 
     Raises UnauthorizedUser if user is not allowed to access the movie. This is caught by the flask framework, so we don't need special handling.
     """

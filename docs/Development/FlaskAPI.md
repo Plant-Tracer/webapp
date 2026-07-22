@@ -55,7 +55,7 @@ and is intentionally read-only.
 
 **Authorization**
 
-- `super_admin` and `super_auditor` users may read this endpoint.
+- `superadmin` and `superauditor` users may read this endpoint.
 - Bootstrap fallback: when no users in the database have a super role yet, course
   admins may read this endpoint so a local or migrated database can be inspected.
 - Regular users receive HTTP 403.
@@ -77,7 +77,7 @@ and is intentionally read-only.
     "user_id": "u...",
     "user_name": "Course Admin",
     "email": "teacher@example.edu",
-    "super_role": "super_auditor",
+    "super_role": "superauditor",
     "bootstrap_course_admin": false
   },
   "counts": { "courses": 1, "users": 2, "movies": 3 },
