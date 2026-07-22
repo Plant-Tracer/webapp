@@ -15,6 +15,17 @@ from pydantic import (
 from .constants import C
 
 
+def normalize_super_role_value(value):
+    """Return the canonical value for current and legacy super roles."""
+    if value in (None, "", 0, False):
+        return "none"
+    if value == "super_auditor":
+        return "superauditor"
+    if value == "super_admin":
+        return "superadmin"
+    return value
+
+
 class User(BaseModel):
     """DynamoDB users table"""
 
@@ -27,6 +38,13 @@ class User(BaseModel):
     primary_course_id: str
     primary_course_name: str
     courses: List[str]
+    super_role: Literal["none", "superauditor", "superadmin"] = "none"
+
+    @field_validator("super_role", mode="before")
+    @classmethod
+    def normalize_super_role(cls, value):
+        """Treat missing legacy role data as an ordinary non-super user."""
+        return normalize_super_role_value(value)
 
 
 # Function to validate a single prop and value using the User schema
@@ -45,6 +63,8 @@ def validate_user_field(prop: str, value: Any) -> Any:
     """
     if prop not in USER_ADAPTERS:
         raise AttributeError(f"{prop} is not a valid field of User")
+    if prop == "super_role":
+        value = normalize_super_role_value(value)
     return USER_ADAPTERS[prop].validate_python(value)
 
 

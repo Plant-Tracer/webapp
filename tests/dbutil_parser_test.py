@@ -1,14 +1,18 @@
+import sys
 import uuid
+from types import SimpleNamespace
 
 import pytest
 
+from app import odb
+from app.dynamodb_prefixes import PrefixSummary
 from app import odb_movie_data
 from app.odb import MOVIE_ID
 from app.schema import AdminCourse
 
 import dbutil
 
-from .constants import ADMIN_EMAIL
+from .constants import ADMIN_EMAIL, USER_EMAIL
 
 
 HOSTNAME_ENV = "HOSTNAME"
@@ -17,6 +21,10 @@ DOMAIN_ENV = "DOMAIN"
 
 def parse_args(*args):
     return dbutil.build_parser().parse_args(args)
+
+
+def fake_dynamodb_resource():
+    return object()
 
 
 def test_dbutil_commands_do_not_use_option_prefix():
@@ -190,6 +198,62 @@ def test_admin_list_prints_course_admin(new_course, capsys):
     assert new_course[dbutil.COURSE_ID] in output
 
 
+def test_user_list_prints_all_users(new_course, capsys):
+    dbutil.user_list()
+
+    output = capsys.readouterr().out
+    assert new_course[ADMIN_EMAIL] in output
+    assert new_course[USER_EMAIL] in output
+    assert new_course[dbutil.COURSE_ID] in output
+
+
+def test_superadmin_list_prints_test_created_superadmin(new_course, capsys):
+    change = dbutil.set_super_role_by_email(new_course[USER_EMAIL], odb.SUPER_ROLE_SUPERADMIN)
+    assert change.old_super_role == odb.SUPER_ROLE_NONE
+    assert change.new_super_role == odb.SUPER_ROLE_SUPERADMIN
+
+    dbutil.superadmin_list(SimpleNamespace(role="all"))
+
+    output = capsys.readouterr().out
+    assert new_course[USER_EMAIL] in output
+    assert odb.SUPER_ROLE_SUPERADMIN in output
+
+
+def test_set_super_role_blocks_removing_last_superadmin(new_course):
+    dbutil.set_super_role_by_email(new_course[USER_EMAIL], odb.SUPER_ROLE_SUPERADMIN)
+
+    with pytest.raises(ValueError, match="last superadmin"):
+        dbutil.set_super_role_by_email(new_course[USER_EMAIL], odb.SUPER_ROLE_NONE)
+
+
+def test_set_super_role_can_remove_superadmin_when_another_exists(new_course):
+    dbutil.set_super_role_by_email(new_course[USER_EMAIL], odb.SUPER_ROLE_SUPERADMIN)
+    dbutil.set_super_role_by_email(new_course[ADMIN_EMAIL], odb.SUPER_ROLE_SUPERADMIN)
+
+    change = dbutil.set_super_role_by_email(new_course[USER_EMAIL], odb.SUPER_ROLE_NONE)
+
+    assert change.old_super_role == odb.SUPER_ROLE_SUPERADMIN
+    assert change.new_super_role == odb.SUPER_ROLE_NONE
+
+
+def test_stale_super_role_transaction_cannot_remove_final_superadmin(new_course):
+    dbutil.set_super_role_by_email(new_course[USER_EMAIL], odb.SUPER_ROLE_SUPERADMIN)
+    dbutil.set_super_role_by_email(new_course[ADMIN_EMAIL], odb.SUPER_ROLE_SUPERADMIN)
+    ddbo = new_course["ddbo"]
+    stale_state = dbutil.reconcile_super_role_state(ddbo)
+    user = ddbo.get_user_email(new_course[USER_EMAIL])
+    admin = ddbo.get_user_email(new_course[ADMIN_EMAIL])
+
+    dbutil.transact_super_role_change(ddbo, user, stale_state, odb.SUPER_ROLE_NONE)
+    with pytest.raises(dbutil.ConcurrentSuperRoleChange, match="concurrently"):
+        dbutil.transact_super_role_change(ddbo, admin, stale_state, odb.SUPER_ROLE_NONE)
+    with pytest.raises(ValueError, match="last superadmin"):
+        dbutil.set_super_role_by_email(new_course[ADMIN_EMAIL], odb.SUPER_ROLE_NONE)
+
+    assert odb.normalize_super_role(ddbo.get_user(user[dbutil.USER_ID])) == odb.SUPER_ROLE_NONE
+    assert odb.normalize_super_role(ddbo.get_user(admin[dbutil.USER_ID])) == odb.SUPER_ROLE_SUPERADMIN
+
+
 def test_demo_movie_seeding_is_idempotent(local_ddb, capsys):
     del local_ddb
 
@@ -216,6 +280,115 @@ def test_dbutil_has_admin_list_command():
     args = parse_args("admin-list")
 
     assert args.command == "admin-list"
+
+
+def test_dbutil_has_user_list_command():
+    args = parse_args("user-list")
+
+    assert args.command == "user-list"
+
+
+def test_dbutil_has_list_prefixes_command():
+    args = parse_args("list-prefixes")
+
+    assert args.command == "list-prefixes"
+
+
+def test_dbutil_does_not_have_table_list_command():
+    with pytest.raises(SystemExit):
+        parse_args("table-list")
+
+
+def test_dbutil_missing_prefix_prints_available_prefixes(monkeypatch, capsys):
+    monkeypatch.delenv(dbutil.C.DYNAMODB_TABLE_PREFIX, raising=False)
+    monkeypatch.setenv(dbutil.C.AWS_REGION, "us-east-1")
+    monkeypatch.setattr(sys, "argv", ["dbutil", "report"])
+    monkeypatch.setattr(dbutil, "dynamodb_resource_for_prefix_listing", fake_dynamodb_resource)
+    monkeypatch.setattr(
+        dbutil,
+        "prefix_summaries",
+        lambda _dynamodb: [
+            PrefixSummary(
+                prefix="demo-",
+                courses=1,
+                users=2,
+                movies=3,
+                date_from=1_700_000_000,
+                date_to=1_700_000_060,
+            )
+        ],
+    )
+
+    assert dbutil.main() == 1
+
+    captured = capsys.readouterr()
+    assert captured.err.splitlines()[0] == "AWS_REGION=us-east-1"
+    assert "ERROR: Environment variable DYNAMODB_TABLE_PREFIX is not set" in captured.err
+    assert "Available DYNAMODB_TABLE_PREFIX values:" in captured.err
+    assert "demo-" in captured.err
+    assert "Set DYNAMODB_TABLE_PREFIX to one of the listed prefixes and retry." in captured.err
+
+
+def test_dbutil_list_prefixes_runs_without_selected_prefix(monkeypatch, capsys):
+    monkeypatch.delenv(dbutil.C.DYNAMODB_TABLE_PREFIX, raising=False)
+    monkeypatch.setattr(sys, "argv", ["dbutil", "list-prefixes"])
+    monkeypatch.setattr(dbutil, "dynamodb_resource_for_prefix_listing", fake_dynamodb_resource)
+    monkeypatch.setattr(
+        dbutil,
+        "prefix_summaries",
+        lambda _dynamodb: [
+            PrefixSummary(
+                prefix="demo-",
+                courses=1,
+                users=2,
+                movies=3,
+                date_from=1_700_000_000,
+                date_to=1_700_000_060,
+            )
+        ],
+    )
+
+    assert dbutil.main() == 0
+
+    captured = capsys.readouterr()
+    assert captured.out.splitlines() == [
+        "prefix  courses  users  movies  from                  to",
+        "demo-         1      2       3  2023-11-14T22:13:20Z  2023-11-14T22:14:20Z",
+    ]
+    assert captured.err == ""
+
+
+def test_dbutil_has_superadmin_list_command():
+    args = parse_args("superadmin-list", "--role", "superadmin")
+
+    assert args.command == "superadmin-list"
+    assert args.role == odb.SUPER_ROLE_SUPERADMIN
+
+
+def test_dbutil_has_super_role_mutation_commands():
+    args = parse_args(
+        "set-super-role",
+        "--email",
+        "teacher@example.com",
+        "--role",
+        "superauditor",
+    )
+    add_args = parse_args("add-superadmin", "--email", "teacher@example.com")
+    remove_args = parse_args("remove-superadmin", "--email", "teacher@example.com")
+
+    assert args.command == "set-super-role"
+    assert args.email == "teacher@example.com"
+    assert args.role == odb.SUPER_ROLE_SUPERAUDITOR
+    assert add_args.command == "add-superadmin"
+    assert remove_args.command == "remove-superadmin"
+
+
+def test_dbutil_course_admin_commands_accept_email_alias():
+    add_args = parse_args("add-admin", "--email", "teacher@example.com", "--course_id", "BIO101")
+    remove_args = parse_args("remove-admin", "--email", "teacher@example.com", "--course_id", "BIO101")
+
+    assert add_args.admin_email == "teacher@example.com"
+    assert remove_args.admin_email == "teacher@example.com"
 
 
 def test_dbutil_has_admin_create_command():

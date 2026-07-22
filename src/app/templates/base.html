@@ -135,6 +135,11 @@
           <li class="pure-menu-item">
             <a href="users" class="pure-menu-link">Users</a>
           </li>
+          {% if admin_read %}
+          <li class="pure-menu-item">
+            <a href="admin" class="pure-menu-link">Admin</a>
+          </li>
+          {% endif %}
           {% endif %}
           <li class="pure-menu-item">
             <a href="audit" class="pure-menu-link">Audit</a>

@@ -23,9 +23,15 @@ recommend using the version downloaded as a JAR file.
 The canonical table model is split between the application item schemas and the table creation
 contract. Item fields are defined in ``src/app/schema.py``, and attribute-name constants are
 defined at the top of ``src/app/odb.py``. DynamoDB table definitions are in
-``etc/dynamodb_tables.json``. ``src/dbutil.py createdb`` creates the tables from that JSON file
+``etc/dynamodb_tables.json``. ``poetry run dbutil createdb`` creates the tables from that JSON file
 and populates the demo course; ``odbmaint.drop_tables()`` drops the configured tables for local
 test and reset workflows.
+
+Use ``poetry run dbutil list-prefixes`` to list complete Plant Tracer table
+prefixes available through the current DynamoDB connection settings. Other
+``dbutil`` commands require ``DYNAMODB_TABLE_PREFIX``; when it is missing, they
+print the active ``AWS_REGION`` and the same available-prefix list before
+exiting.
 
 The SAM/CloudFormation stack does not own DynamoDB tables. For an existing stack that still owns
 tables from an older template, retain or otherwise detach those table resources before deploying a
@@ -111,6 +117,12 @@ One record per registered user.
    * - ``enabled``
      - Integer (0/1)
      - Whether the account is active
+   * - ``super_role``
+     - String enum
+     - Cross-course admin role: ``none``, ``superauditor`` for read-only admin access,
+       or ``superadmin`` for read/write admin access. Legacy ``super_auditor`` and
+       ``super_admin`` values are normalized at read time; rows without the field are
+       treated as ``none``.
    * - ``primary_course_id``
      - String
      - The course the user registered through; used as default context
@@ -123,6 +135,17 @@ One record per registered user.
    * - ``admin_for_courses``
      - List of strings
      - Courses for which the user has admin privileges
+
+
+unique_emails
+~~~~~~~~~~~~~
+
+The table normally contains one key-only record per canonical user email. It
+also contains the reserved ``planttracer-system:super-role-state`` singleton.
+That record stores a version and the sorted set of current superadmin user IDs;
+``dbutil`` updates it transactionally with user role changes so concurrent
+operator commands cannot remove the final superadmin. The CLI reconciles the
+record from a consistent users-table scan before each role mutation.
 
 
 api_keys

@@ -7,8 +7,11 @@ import sys
 import json
 import os
 import csv
+import uuid
 from email.message import EmailMessage
 
+from botocore.exceptions import ClientError
+from pydantic import BaseModel
 from tabulate import tabulate
 
 from app import clogging
@@ -19,11 +22,13 @@ from app import course_management
 from app import mailer
 from app.paths import TEST_DATA_DIR
 from app.odb import (
-    COURSE_ID, COURSE_KEY, COURSE_NAME, EMAIL, USER_ID, USER_NAME,
-    DDBO, InvalidCourse_Id, MOVIE_STATUS, MOVIE_STATE_READY, TITLE,
+    ADMIN_FOR_COURSES, COURSE_ID, COURSE_KEY, COURSE_NAME, COURSES, EMAIL,
+    ENABLED, PRIMARY_COURSE_ID, USER_ID, USER_NAME, DDBO, InvalidCourse_Id,
+    MOVIE_STATUS, MOVIE_STATE_READY, TITLE,
 )
 from app.odb_movie_data import set_movie_data
-from app.constants import C, env_value
+from app.constants import C, configure_local_environment, env_value
+from app.dynamodb_prefixes import format_list_prefixes, prefix_summaries
 
 DEMO_COURSE_ID='demo-course'
 DEMO_COURSE_NAME='Demo Course'
@@ -36,10 +41,49 @@ DEFAULT_ADMIN_NAME = 'Plant Tracer Demo Admin'
 
 NO_COURSES_MESSAGE = "No courses are available for this administrator."
 CREATE_COURSE_REQUIRED_FLAGS = ["--course_id", "--course_name", "--admin_email", "--admin_name"]
+PREFIXLESS_COMMANDS = {"list-prefixes", "list_prefixes"}
+SUPER_ROLE_STATE_EMAIL = "planttracer-system:super-role-state"
+SUPERADMIN_USER_IDS = "superadmin_user_ids"
+SUPER_ROLE_STATE_VERSION = "super_role_state_version"
+SUPER_ROLE_TRANSACTION_RETRIES = 5
 
 DESCRIPTION="""
 Plant Tracer DynamoDB Database Maintenance Program.
 """
+
+
+class UserListRow(BaseModel):
+    """Operator-facing user row."""
+
+    name: str
+    email: str
+    user_id: str
+    enabled: int
+    primary_course_id: str
+    courses: str
+    admin_courses: str
+    super_role: str
+
+
+class SuperRoleChange(BaseModel):
+    """Result of a super-role update."""
+
+    email: str
+    user_id: str
+    old_super_role: str
+    new_super_role: str
+
+
+class SuperRoleState(BaseModel):
+    """Versioned singleton used to serialize super-role mutations."""
+
+    version: int
+    superadmin_user_ids: list[str]
+
+
+class ConcurrentSuperRoleChange(RuntimeError):
+    """Raised when a super-role transaction loses a concurrency race."""
+
 
 def populate_demo_user():
     # Use env admin when set (e.g. on EC2 bootstrap) so the demo course reuses the existing admin.
@@ -109,16 +153,13 @@ def dump_movie(movie_id):
     print(json.dumps(trackpoints,indent=4,default=str))
 
 
-def scan_all(table):
-    items = []
-    scan_kwargs = {}
-    while True:
-        response = table.scan(**scan_kwargs)
-        items.extend(response.get("Items", []))
-        last_evaluated_key = response.get("LastEvaluatedKey")
-        if not last_evaluated_key:
-            return items
-        scan_kwargs["ExclusiveStartKey"] = last_evaluated_key
+def scan_all(table, *, consistent_read=False):
+    return list(
+        course_management.scan_table_items(
+            table,
+            consistent_read=consistent_read,
+        )
+    )
 
 
 def print_course_report(ddbo):
@@ -180,6 +221,30 @@ def print_report():
     print_course_report(ddbo)
 
 
+def dynamodb_resource_for_prefix_listing():
+    """Return a DynamoDB resource for prefix discovery."""
+    if C.AWS_REGION not in os.environ:
+        configure_local_environment()
+    return DDBO.resource()
+
+
+def list_prefixes():
+    for line in format_list_prefixes(prefix_summaries(dynamodb_resource_for_prefix_listing())):
+        print(line)
+
+
+def print_available_table_prefixes(stream):
+    print("Available DYNAMODB_TABLE_PREFIX values:", file=stream)
+    try:
+        lines = format_list_prefixes(prefix_summaries(dynamodb_resource_for_prefix_listing()))
+    except Exception as exc:  # pylint: disable=broad-exception-caught
+        print(f"  Could not list table prefixes: {exc}", file=stream)
+        return
+    for line in lines:
+        print(f"  {line}", file=stream)
+    print("Set DYNAMODB_TABLE_PREFIX to one of the listed prefixes and retry.", file=stream)
+
+
 def format_admin_course(course):
     """Return an operator-readable course label."""
     if course.course_name:
@@ -203,6 +268,274 @@ def admin_list():
         for admin in admins
     ]
     print(tabulate(rows, headers=["name", "email", "user ID", "admin courses"]))
+
+
+def sorted_user_items():
+    """Return all users in stable operator-readable order."""
+    return sorted(
+        scan_all(DDBO().users),
+        key=lambda user: (
+            str(user.get(EMAIL) or "").casefold(),
+            str(user.get(USER_NAME) or "").casefold(),
+            str(user.get(USER_ID) or ""),
+        ),
+    )
+
+
+def join_ids(values):
+    """Return a stable newline-separated id list for tabular output."""
+    if not values:
+        return ""
+    return "\n".join(sorted(str(value) for value in values))
+
+
+def user_list_row(user):
+    """Build a typed printable row from a DynamoDB user item."""
+    return UserListRow(
+        name=str(user.get(USER_NAME) or ""),
+        email=str(user.get(EMAIL) or ""),
+        user_id=str(user.get(USER_ID) or ""),
+        enabled=int(user.get(ENABLED, 0)),
+        primary_course_id=str(user.get(PRIMARY_COURSE_ID) or ""),
+        courses=join_ids(user.get(COURSES, [])),
+        admin_courses=join_ids(user.get(ADMIN_FOR_COURSES, [])),
+        super_role=odb.normalize_super_role(user),
+    )
+
+
+def print_user_rows(rows):
+    """Print operator-facing user rows as a table."""
+    print(tabulate(
+        [
+            [
+                row.name,
+                row.email,
+                row.user_id,
+                row.enabled,
+                row.primary_course_id,
+                row.courses,
+                row.admin_courses,
+                row.super_role,
+            ]
+            for row in rows
+        ],
+        headers=[
+            "name",
+            "email",
+            "user ID",
+            "enabled",
+            "primary course",
+            "courses",
+            "admin courses",
+            "super role",
+        ],
+    ))
+
+
+def user_list():
+    """Print all registered users."""
+    rows = [user_list_row(user) for user in sorted_user_items()]
+    if not rows:
+        print("No users found.")
+        return
+    print_user_rows(rows)
+
+
+def superadmin_list(args):
+    """Print users with a cross-course super role."""
+    role = args.role
+    rows = [
+        user_list_row(user)
+        for user in sorted_user_items()
+        if odb.normalize_super_role(user) != odb.SUPER_ROLE_NONE
+        and (role == "all" or odb.normalize_super_role(user) == role)
+    ]
+    if not rows:
+        print("No super-role users found.")
+        return
+    print_user_rows(rows)
+
+
+def superadmin_user_ids(ddbo=None):
+    """Return user ids for current superadmins using a consistent full scan."""
+    table = (ddbo or DDBO()).users
+    return {
+        user[USER_ID]
+        for user in scan_all(table, consistent_read=True)
+        if odb.normalize_super_role(user) == odb.SUPER_ROLE_SUPERADMIN
+    }
+
+
+def read_super_role_state(ddbo):
+    """Return the consistent super-role registry, if it has been initialized."""
+    item = ddbo.unique_emails.get_item(
+        Key={EMAIL: SUPER_ROLE_STATE_EMAIL},
+        ConsistentRead=True,
+    ).get("Item")
+    if item is None:
+        return None
+    return SuperRoleState(
+        version=int(item[SUPER_ROLE_STATE_VERSION]),
+        superadmin_user_ids=sorted(item.get(SUPERADMIN_USER_IDS, [])),
+    )
+
+
+def reconcile_super_role_state(ddbo):
+    """Synchronize the versioned registry with current user records."""
+    for _attempt in range(SUPER_ROLE_TRANSACTION_RETRIES):
+        state = read_super_role_state(ddbo)
+        actual_ids = sorted(superadmin_user_ids(ddbo))
+        if state is None:
+            try:
+                ddbo.unique_emails.put_item(
+                    Item={
+                        EMAIL: SUPER_ROLE_STATE_EMAIL,
+                        SUPERADMIN_USER_IDS: actual_ids,
+                        SUPER_ROLE_STATE_VERSION: 0,
+                    },
+                    ConditionExpression="attribute_not_exists(#email)",
+                    ExpressionAttributeNames={"#email": EMAIL},
+                )
+                return SuperRoleState(version=0, superadmin_user_ids=actual_ids)
+            except ClientError as exc:
+                if exc.response.get("Error", {}).get("Code") != "ConditionalCheckFailedException":
+                    raise
+                continue
+        if state.superadmin_user_ids == actual_ids:
+            return state
+        try:
+            ddbo.unique_emails.update_item(
+                Key={EMAIL: SUPER_ROLE_STATE_EMAIL},
+                UpdateExpression="SET #ids = :ids, #version = :next_version",
+                ConditionExpression="#ids = :old_ids AND #version = :version",
+                ExpressionAttributeNames={
+                    "#ids": SUPERADMIN_USER_IDS,
+                    "#version": SUPER_ROLE_STATE_VERSION,
+                },
+                ExpressionAttributeValues={
+                    ":ids": actual_ids,
+                    ":old_ids": state.superadmin_user_ids,
+                    ":version": state.version,
+                    ":next_version": state.version + 1,
+                },
+            )
+            return SuperRoleState(
+                version=state.version + 1,
+                superadmin_user_ids=actual_ids,
+            )
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") != "ConditionalCheckFailedException":
+                raise
+    raise ConcurrentSuperRoleChange("could not synchronize super-role state")
+
+
+def transact_super_role_change(ddbo, user, state, new_role):
+    """Atomically update one user role and the versioned superadmin registry."""
+    user_id = user[USER_ID]
+    old_role = odb.normalize_super_role(user)
+    new_superadmin_ids = set(state.superadmin_user_ids)
+    if old_role == odb.SUPER_ROLE_SUPERADMIN:
+        new_superadmin_ids.discard(user_id)
+    if new_role == odb.SUPER_ROLE_SUPERADMIN:
+        new_superadmin_ids.add(user_id)
+    if old_role == odb.SUPER_ROLE_SUPERADMIN and not new_superadmin_ids:
+        raise ValueError("cannot remove the last superadmin")
+
+    user_condition = "#role = :old_role"
+    user_values = {
+        ":new_role": new_role,
+        ":old_role": user.get(odb.SUPER_ROLE),
+    }
+    if odb.SUPER_ROLE not in user:
+        user_condition = "attribute_not_exists(#role)"
+        user_values.pop(":old_role")
+
+    try:
+        ddbo.dynamodb.meta.client.transact_write_items(
+            TransactItems=[
+                {
+                    "Update": {
+                        "TableName": ddbo.unique_emails.name,
+                        "Key": {EMAIL: SUPER_ROLE_STATE_EMAIL},
+                        "UpdateExpression": "SET #ids = :new_ids, #version = :next_version",
+                        "ConditionExpression": "#ids = :old_ids AND #version = :version",
+                        "ExpressionAttributeNames": {
+                            "#ids": SUPERADMIN_USER_IDS,
+                            "#version": SUPER_ROLE_STATE_VERSION,
+                        },
+                        "ExpressionAttributeValues": {
+                            ":new_ids": sorted(new_superadmin_ids),
+                            ":old_ids": state.superadmin_user_ids,
+                            ":version": state.version,
+                            ":next_version": state.version + 1,
+                        },
+                    }
+                },
+                {
+                    "Update": {
+                        "TableName": ddbo.users.name,
+                        "Key": {USER_ID: user_id},
+                        "UpdateExpression": "SET #role = :new_role",
+                        "ConditionExpression": user_condition,
+                        "ExpressionAttributeNames": {"#role": odb.SUPER_ROLE},
+                        "ExpressionAttributeValues": user_values,
+                    }
+                },
+            ],
+            ClientRequestToken=uuid.uuid4().hex,
+        )
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") == "TransactionCanceledException":
+            raise ConcurrentSuperRoleChange("super role changed concurrently") from exc
+        raise
+
+
+def validate_super_role(role):
+    """Validate and return a canonical super role."""
+    if role not in odb.SUPER_ROLES:
+        raise ValueError("super role must be one of: " + ", ".join(sorted(odb.SUPER_ROLES)))
+    return role
+
+
+def set_super_role_by_email(email, role, *, expected_old_role=None):
+    """Set a user's canonical super role and enforce the last-superadmin rule."""
+    new_role = validate_super_role(role)
+    ddbo = DDBO()
+    for _attempt in range(SUPER_ROLE_TRANSACTION_RETRIES):
+        state = reconcile_super_role_state(ddbo)
+        indexed_user = ddbo.get_user_email(email)
+        user = ddbo.get_user(indexed_user[USER_ID])
+        old_role = odb.normalize_super_role(user)
+        if expected_old_role is not None and old_role != expected_old_role:
+            raise ValueError(f"user currently has {old_role}, not {expected_old_role}")
+        try:
+            transact_super_role_change(ddbo, user, state, new_role)
+        except ConcurrentSuperRoleChange:
+            continue
+        return SuperRoleChange(
+            email=email,
+            user_id=user[USER_ID],
+            old_super_role=old_role,
+            new_super_role=new_role,
+        )
+    raise ConcurrentSuperRoleChange("super role kept changing; retry the command")
+
+
+def update_super_role_command(args, parser, role=None, *, expected_old_role=None):
+    """Handle super-role mutations from argparse commands."""
+    email = getattr(args, "email", None)
+    if not email:
+        parser.error(f"{args.command} requires --email")
+    try:
+        change = set_super_role_by_email(email, role or args.role, expected_old_role=expected_old_role)
+    except odb.InvalidUser_Email:
+        parser.error(f"User {email} does not exist")
+    except ValueError as exc:
+        parser.error(str(exc))
+    print(
+        f"{change.email} ({change.user_id}): "
+        f"{change.old_super_role} -> {change.new_super_role}"
+    )
 
 
 def course_sort_key(course):
@@ -599,10 +932,67 @@ def build_parser():
 
     subparsers.add_parser("report", help="Print database tables, courses, and students")
     subparsers.add_parser(
+        "list-prefixes",
+        aliases=["list_prefixes"],
+        help="List complete DynamoDB table prefixes with counts and date ranges",
+    )
+    subparsers.add_parser(
         "admin-list",
         aliases=["admin_list"],
         help="List course administrators and their administered courses",
     )
+    subparsers.add_parser(
+        "user-list",
+        aliases=["user_list"],
+        help="List all registered users",
+    )
+    superadmin_list_parser = subparsers.add_parser(
+        "superadmin-list",
+        aliases=["super-admin-list", "super_admin_list"],
+        help="List users with a superauditor or superadmin role",
+    )
+    superadmin_list_parser.add_argument(
+        "--role",
+        choices=["all", odb.SUPER_ROLE_SUPERAUDITOR, odb.SUPER_ROLE_SUPERADMIN],
+        default="all",
+        help="Restrict list to one super role",
+    )
+    set_super_role_parser = subparsers.add_parser(
+        "set-super-role",
+        aliases=["set_super_role"],
+        help="Set a user's super role by email",
+    )
+    set_super_role_parser.add_argument("--email", required=True, help="user email")
+    set_super_role_parser.add_argument(
+        "--role",
+        choices=sorted(odb.SUPER_ROLES),
+        required=True,
+        help="canonical super role",
+    )
+    add_super_admin_parser = subparsers.add_parser(
+        "add-superadmin",
+        aliases=["add-super-admin", "add_super_admin"],
+        help="Grant superadmin to a user by email",
+    )
+    add_super_admin_parser.add_argument("--email", required=True, help="user email")
+    remove_super_admin_parser = subparsers.add_parser(
+        "remove-superadmin",
+        aliases=["remove-super-admin", "remove_super_admin"],
+        help="Remove superadmin from a user by email",
+    )
+    remove_super_admin_parser.add_argument("--email", required=True, help="user email")
+    add_super_auditor_parser = subparsers.add_parser(
+        "add-superauditor",
+        aliases=["add-super-auditor", "add_super_auditor"],
+        help="Grant superauditor to a user by email",
+    )
+    add_super_auditor_parser.add_argument("--email", required=True, help="user email")
+    remove_super_auditor_parser = subparsers.add_parser(
+        "remove-superauditor",
+        aliases=["remove-super-auditor", "remove_super_auditor"],
+        help="Remove superauditor from a user by email",
+    )
+    remove_super_auditor_parser.add_argument("--email", required=True, help="user email")
     admin_create_parser = subparsers.add_parser(
         "admin-create",
         aliases=["admin_create"],
@@ -689,7 +1079,12 @@ def build_parser():
         aliases=["add_admin"],
         help="Add an existing user as a course administrator",
     )
-    add_admin_parser.add_argument("--admin_email", help="course administrator email")
+    add_admin_parser.add_argument(
+        "--admin_email",
+        "--email",
+        dest="admin_email",
+        help="course administrator email",
+    )
     add_admin_parser.add_argument("--course_id", help="course id")
 
     remove_admin_parser = subparsers.add_parser(
@@ -697,7 +1092,12 @@ def build_parser():
         aliases=["remove_admin"],
         help="Remove a course administrator",
     )
-    remove_admin_parser.add_argument("--admin_email", help="course administrator email")
+    remove_admin_parser.add_argument(
+        "--admin_email",
+        "--email",
+        dest="admin_email",
+        help="course administrator email",
+    )
     remove_admin_parser.add_argument("--course_id", help="course id")
 
     dump_movie_parser = subparsers.add_parser(
@@ -733,15 +1133,51 @@ def main():  # pragma: no cover
     args = parser.parse_args()
     clogging.setup(level=args.loglevel)
 
-    if C.DYNAMODB_TABLE_PREFIX not in os.environ:
+    if args.command not in PREFIXLESS_COMMANDS and C.DYNAMODB_TABLE_PREFIX not in os.environ:
+        print(f"{C.AWS_REGION}={os.environ.get(C.AWS_REGION, 'local')}", file=sys.stderr)
         print(f"ERROR: Environment variable {C.DYNAMODB_TABLE_PREFIX} is not set", file=sys.stderr)
+        print_available_table_prefixes(sys.stderr)
         return 1
 
+    if args.command in PREFIXLESS_COMMANDS:
+        list_prefixes()
+        return 0
     if args.command == "report":
         print_report()
         return 0
     if args.command in ("admin-list", "admin_list"):
         admin_list()
+        return 0
+    if args.command in ("user-list", "user_list"):
+        user_list()
+        return 0
+    if args.command in ("superadmin-list", "super-admin-list", "super_admin_list"):
+        superadmin_list(args)
+        return 0
+    if args.command in ("set-super-role", "set_super_role"):
+        update_super_role_command(args, parser)
+        return 0
+    if args.command in ("add-superadmin", "add-super-admin", "add_super_admin"):
+        update_super_role_command(args, parser, odb.SUPER_ROLE_SUPERADMIN)
+        return 0
+    if args.command in ("remove-superadmin", "remove-super-admin", "remove_super_admin"):
+        update_super_role_command(
+            args,
+            parser,
+            odb.SUPER_ROLE_NONE,
+            expected_old_role=odb.SUPER_ROLE_SUPERADMIN,
+        )
+        return 0
+    if args.command in ("add-superauditor", "add-super-auditor", "add_super_auditor"):
+        update_super_role_command(args, parser, odb.SUPER_ROLE_SUPERAUDITOR)
+        return 0
+    if args.command in ("remove-superauditor", "remove-super-auditor", "remove_super_auditor"):
+        update_super_role_command(
+            args,
+            parser,
+            odb.SUPER_ROLE_NONE,
+            expected_old_role=odb.SUPER_ROLE_SUPERAUDITOR,
+        )
         return 0
     if args.command in ("admin-create", "admin_create"):
         admin_create(args, parser)

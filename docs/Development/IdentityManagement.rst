@@ -37,7 +37,7 @@ the durable user profile:
   application and should be used for joins, ownership checks, and permissions.
 * ``email``: the user's login and contact address. It is also stored in the
   ``unique_emails`` table so that registration can enforce one user profile per
-  email address.
+  email address. Values are stored and looked up in lowercase.
 * ``user_name``: the user's display name. This is the name shown in page
   headers, movie lists, course user lists, and some movie metadata defaults.
 * ``enabled``: whether the user can authenticate.
@@ -90,17 +90,27 @@ parameters because courses and users live in DynamoDB, and DynamoDB data now
 outlives individual lambda-only stacks.
 
 Operators can list current course administrators with ``make admin-list``. The
-target runs ``src/dbutil.py admin-list`` against the selected AWS/DynamoDB
+target runs ``poetry run dbutil admin-list`` against the selected AWS/DynamoDB
 environment and prints each administrator's display name, email address,
 ``user_id``, and administered courses. Set ``AWS_REGION`` and
 ``DYNAMODB_TABLE_PREFIX`` for the target environment before running it; local
-development defaults still use DynamoDB Local and the ``demo-`` prefix.
+development defaults still use DynamoDB Local and the ``demo-`` prefix. If the
+prefix is missing, ``dbutil`` prints ``poetry run dbutil list-prefixes`` output
+so the operator can select an available ``DYNAMODB_TABLE_PREFIX``.
 The operator-facing administrator list is built by
 ``app.course_management.list_admins`` so future web administration pages can
 reuse the same read model.
 
+Operators can list all registered users with ``make user-list``. The target
+runs ``poetry run dbutil user-list`` and prints each user's display name, email
+address, ``user_id``, enabled flag, primary course, course memberships,
+administered courses, and ``super_role``. Operators can list only users with
+cross-course super roles with ``make superadmin-list``. The underlying
+``poetry run dbutil superadmin-list`` command accepts ``--role superadmin`` or
+``--role superauditor`` to narrow the output.
+
 Operators can create or update course administrators with ``make admin-create``.
-The target runs ``src/dbutil.py admin-create``. In an interactive terminal it
+The target runs ``poetry run dbutil admin-create``. In an interactive terminal it
 asks for administrator email/name, lists courses where that user is not already
 an administrator, and accepts one or more selected courses. Non-interactive
 automation can pass ``ADMIN_CREATE_FLAGS``, for example
@@ -111,8 +121,31 @@ through the configured mail path. Use ``--planttracer_endpoint`` or set
 ``--no-send-email`` for data-only dry runs, or ``MAILER_DRY_RUN=true`` to
 render mail without sending it.
 
+Operators can add or remove course-admin access for an existing user with
+``poetry run dbutil add-admin --email teacher@example.edu --course_id BIO101`` and
+``poetry run dbutil remove-admin --email teacher@example.edu --course_id BIO101``.
+The older ``--admin_email`` spelling is still accepted by both commands.
+
+Operators can grant or remove cross-course roles by email address with
+``poetry run dbutil add-superadmin --email ops@example.edu``,
+``poetry run dbutil remove-superadmin --email ops@example.edu``,
+``poetry run dbutil add-superauditor --email audit@example.edu``, and
+``poetry run dbutil remove-superauditor --email audit@example.edu``. The
+general ``poetry run dbutil set-super-role --email ops@example.edu --role superadmin``
+command accepts ``none``, ``superauditor``, or ``superadmin``. The CLI refuses
+to demote or remove the last remaining ``superadmin``. Role mutations update a
+versioned singleton in the ``unique_emails`` table in the same DynamoDB
+transaction as the user record. Concurrent operator commands therefore cannot
+both pass the last-superadmin check. The CLI reconciles that singleton from the
+users table before each mutation so older databases are initialized on first
+use. Users can be
+``superadmin`` or ``superauditor``, but not both, because ``super_role`` is a
+single enum field. Only users with an explicit super role can read ``/admin``;
+course-admin status alone does not grant cross-course access. Use
+``dbutil add-superadmin`` to bootstrap the first global administrator.
+
 Operators can create courses with ``make course-create``. The target runs
-``src/dbutil.py create-course --send-email``. In an interactive terminal it asks
+``poetry run dbutil create-course --send-email``. In an interactive terminal it asks
 for course id/number, course name, and course administrator. Existing course
 administrators are listed first so the operator can select one; pressing Enter
 creates a new administrator from the prompted email/name. Non-interactive
@@ -130,14 +163,14 @@ For a deployed Lambda-only stack, prefer ``make sam-course-create``. It reads
 ``stack_name`` from the selected ignored ``SAM_CONFIG`` file, resolves the
 stack's ``DynamoDBTablePrefix``, ``ApplicationUrl``, and ``MailerDryRun``
 settings from CloudFormation, and then delegates to
-``src/dbutil.py create-course --send-email``. Pass the same
+``poetry run dbutil create-course --send-email``. Pass the same
 ``COURSE_CREATE_FLAGS`` used by ``make course-create``. This keeps course
 initialization separate from stack deployment while reducing the chance of
 creating course data in the wrong table prefix or sending links for the wrong
 host.
 
 The demo course has its own narrower target: ``make demo-course-create``. That
-target runs ``src/dbutil.py create-demo-course`` and ensures only the durable
+target runs ``poetry run dbutil create-demo-course`` and ensures only the durable
 demo course data exists: ``demo-course``, the demo course administrator, the
 demo user, and the fixed demo-mode API key. It does not create tables, upload
 objects, or seed demo movies. Run it after deploying a demo stack, or any time
@@ -193,7 +226,8 @@ key as the ``api_key`` browser global for API calls that still submit the key
 explicitly.
 
 The ``/resend`` flow does not create a new user. It looks up an existing user by
-email, creates a fresh API key for that user, and sends a new magic link.
+email (case-insensitively), creates a fresh API key for that user, and sends a
+new magic link.
 
 API keys are bearer credentials. Anyone who can read a magic link or cookie can
 act as that user until the key is disabled or expires by policy. Logs and
