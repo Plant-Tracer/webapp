@@ -24,4 +24,6 @@ def api_admin_summary():
         return jsonify({"error": True, "message": "Invalid api_key"}), 403
     except admin_service.AdminReadDenied:
         return jsonify({"error": True, "message": "Admin read access required"}), 403
+    except admin_service.InvalidRestartMarker as exc:
+        return jsonify({"error": True, "message": str(exc)}), 400
     return jsonify(response.model_dump())

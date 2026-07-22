@@ -135,7 +135,9 @@ general ``poetry run dbutil set-super-role --email ops@example.edu --role supera
 command accepts ``none``, ``superauditor``, or ``superadmin``. The CLI refuses
 to demote or remove the last remaining ``superadmin``. Users can be
 ``superadmin`` or ``superauditor``, but not both, because ``super_role`` is a
-single enum field.
+single enum field. Only users with an explicit super role can read ``/admin``;
+course-admin status alone does not grant cross-course access. Use
+``dbutil add-superadmin`` to bootstrap the first global administrator.
 
 Operators can create courses with ``make course-create``. The target runs
 ``poetry run dbutil create-course --send-email``. In an interactive terminal it asks

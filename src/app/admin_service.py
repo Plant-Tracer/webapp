@@ -1,6 +1,7 @@
 """Read-only admin summary service."""
 
 import base64
+import binascii
 import json
 
 from pydantic import BaseModel
@@ -29,6 +30,10 @@ class AdminReadDenied(RuntimeError):
     """Raised when the current user cannot read the admin interface."""
 
 
+class InvalidRestartMarker(ValueError):
+    """Raised when a client supplies an invalid opaque restart marker."""
+
+
 class AdminViewer(BaseModel):
     """Current admin reader."""
 
@@ -36,7 +41,6 @@ class AdminViewer(BaseModel):
     user_name: str
     email: str
     super_role: str
-    bootstrap_course_admin: bool
 
 
 class AdminCounts(BaseModel):
@@ -113,8 +117,14 @@ def decode_restart_marker(marker):
     """Decode an opaque restart marker from the client."""
     if not marker:
         return None
-    marker_json = base64.urlsafe_b64decode(marker.encode("ascii")).decode("utf-8")
-    return json.loads(marker_json)
+    try:
+        marker_json = base64.urlsafe_b64decode(marker.encode("ascii")).decode("utf-8")
+        decoded = json.loads(marker_json)
+    except (UnicodeEncodeError, UnicodeDecodeError, binascii.Error, json.JSONDecodeError) as exc:
+        raise InvalidRestartMarker("Invalid restart marker") from exc
+    if not isinstance(decoded, dict) or not all(isinstance(key, str) for key in decoded):
+        raise InvalidRestartMarker("Invalid restart marker")
+    return decoded
 
 
 def scan_table_page(table, *, limit: int, restart_marker: str | None):
@@ -180,7 +190,6 @@ def admin_summary(*, viewer_user, course_marker=None, user_marker=None, limit=No
             user_name=viewer_user.get(USER_NAME, ""),
             email=viewer_user.get(EMAIL, ""),
             super_role=access.super_role,
-            bootstrap_course_admin=access.bootstrap_course_admin,
         ),
         counts=AdminCounts(
             courses=table_item_count(ddbo.courses),

@@ -85,7 +85,6 @@ async function loadAdminSummary({ appendCourses = false, appendUsers = false } =
 
   setMoreButton("admin-more-courses", state.courseMarker, () => loadAdminSummary({ appendCourses: true }));
   setMoreButton("admin-more-users", state.userMarker, () => loadAdminSummary({ appendUsers: true }));
-  document.getElementById("admin-bootstrap-note").hidden = !payload.viewer.bootstrap_course_admin;
   document.getElementById("admin-status").textContent = `Read-only access as ${payload.viewer.user_name}`;
 }
 

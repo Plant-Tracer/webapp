@@ -158,7 +158,6 @@ class AdminReadAccess(BaseModel):
 
     allowed: bool
     super_role: str = SUPER_ROLE_NONE
-    bootstrap_course_admin: bool = False
 
 ################################################################
 ## Errors
@@ -1236,38 +1235,11 @@ def user_has_super_read(user):
     return normalize_super_role(user) in SUPER_READ_ROLES
 
 
-def any_super_user_exists() -> bool:
-    """Return True if the users table has any canonical or legacy super user."""
-    ddbo = DDBO()
-    last_evaluated_key = None
-    while True:
-        scan_kwargs = {}
-        if last_evaluated_key:
-            scan_kwargs['ExclusiveStartKey'] = last_evaluated_key
-        response = ddbo.users.scan(**scan_kwargs)
-        for user in response.get('Items', []):
-            if user_has_super_read(user):
-                return True
-        last_evaluated_key = response.get('LastEvaluatedKey')
-        if not last_evaluated_key:
-            return False
-
-
 def admin_read_access(user) -> AdminReadAccess:
-    """Return whether user can read /admin.
-
-    Until the first super user is created, existing course admins may open the
-    read-only admin preview so local and migrated databases can bootstrap.
-    """
+    """Return whether a user with an explicit super role can read /admin."""
     super_role = normalize_super_role(user)
     if super_role in SUPER_READ_ROLES:
         return AdminReadAccess(allowed=True, super_role=super_role)
-    if user.get(ADMIN_FOR_COURSES) and not any_super_user_exists():
-        return AdminReadAccess(
-            allowed=True,
-            super_role=SUPER_ROLE_NONE,
-            bootstrap_course_admin=True,
-        )
     return AdminReadAccess(allowed=False, super_role=super_role)
 
 

@@ -198,7 +198,6 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False):
         admin_access = odb.admin_read_access(user_dict)
         admin_read = 1 if admin_access.allowed and not in_demo_mode() else 0
         super_role = admin_access.super_role
-        bootstrap_course_admin = 1 if admin_access.bootstrap_course_admin else 0
 
 
     else:
@@ -210,7 +209,6 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False):
         admin = 0
         admin_read = 0
         super_role = odb.SUPER_ROLE_NONE
-        bootstrap_course_admin = 0
         logged_in = 0
 
     try:
@@ -234,7 +232,6 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False):
         'admin':admin,
         'admin_read': admin_read,
         'super_role': super_role,
-        'bootstrap_course_admin': bootstrap_course_admin,
         'user_primary_course_id': user_primary_course_id,
         'primary_course_name': primary_course_name,
         'title':'Plant Tracer '+title,

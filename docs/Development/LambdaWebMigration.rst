@@ -325,6 +325,10 @@ as:
   ``WildcardCertificateArn``, ``ImageBucketName``, ``LogLevel``,
   ``MailerDryRun``, and ``DynamoDBTablePrefix``.
 
+``ImageBucketName`` and ``DynamoDBTablePrefix`` intentionally have no template
+defaults. Every deployment must name its data resources explicitly so a new or
+test stack cannot silently attach to production storage.
+
 Because those values identify one concrete stack and its data resources, SAM
 config files are local deployment state. They must not be committed to the
 repository. The normal Makefile workflow is to pass ``STACK=<name>``; the
