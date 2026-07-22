@@ -4,7 +4,7 @@ import base64
 import binascii
 import json
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from . import odb
 from .odb import (
@@ -32,6 +32,13 @@ class AdminReadDenied(RuntimeError):
 
 class InvalidRestartMarker(ValueError):
     """Raised when a client supplies an invalid opaque restart marker."""
+
+
+class RestartMarker(BaseModel):
+    """Table-bound DynamoDB restart key."""
+
+    key_name: str
+    key: dict[str, str]
 
 
 class AdminViewer(BaseModel):
@@ -105,36 +112,46 @@ def bounded_limit(value) -> int:
     return max(1, min(limit, MAX_PAGE_LIMIT))
 
 
-def encode_restart_marker(marker):
+def encode_restart_marker(marker, *, key_name: str):
     """Encode a DynamoDB LastEvaluatedKey as an opaque URL-safe marker."""
     if not marker:
         return None
-    marker_json = json.dumps(marker, separators=(",", ":"), default=str)
+    marker_payload = RestartMarker(key_name=key_name, key=marker)
+    marker_json = marker_payload.model_dump_json()
     return base64.urlsafe_b64encode(marker_json.encode("utf-8")).decode("ascii")
 
 
-def decode_restart_marker(marker):
+def decode_restart_marker(marker, *, key_name: str):
     """Decode an opaque restart marker from the client."""
     if not marker:
         return None
     try:
         marker_json = base64.urlsafe_b64decode(marker.encode("ascii")).decode("utf-8")
-        decoded = json.loads(marker_json)
-    except (UnicodeEncodeError, UnicodeDecodeError, binascii.Error, json.JSONDecodeError) as exc:
+        decoded = RestartMarker.model_validate(json.loads(marker_json))
+    except (
+        UnicodeEncodeError,
+        UnicodeDecodeError,
+        binascii.Error,
+        json.JSONDecodeError,
+        ValidationError,
+    ) as exc:
         raise InvalidRestartMarker("Invalid restart marker") from exc
-    if not isinstance(decoded, dict) or not all(isinstance(key, str) for key in decoded):
+    if decoded.key_name != key_name or set(decoded.key) != {key_name}:
         raise InvalidRestartMarker("Invalid restart marker")
-    return decoded
+    return decoded.key
 
 
-def scan_table_page(table, *, limit: int, restart_marker: str | None):
+def scan_table_page(table, *, key_name: str, limit: int, restart_marker: str | None):
     """Return one DynamoDB scan page and the next restart marker."""
     scan_kwargs = {"Limit": limit}
-    exclusive_start_key = decode_restart_marker(restart_marker)
+    exclusive_start_key = decode_restart_marker(restart_marker, key_name=key_name)
     if exclusive_start_key:
         scan_kwargs[EXCLUSIVE_START_KEY] = exclusive_start_key
     response = table.scan(**scan_kwargs)
-    return response.get(ITEMS, []), encode_restart_marker(response.get(LAST_EVALUATED_KEY))
+    return response.get(ITEMS, []), encode_restart_marker(
+        response.get(LAST_EVALUATED_KEY),
+        key_name=key_name,
+    )
 
 
 def table_item_count(table) -> int:
@@ -176,11 +193,13 @@ def admin_summary(*, viewer_user, course_marker=None, user_marker=None, limit=No
     page_limit = bounded_limit(limit)
     course_items, next_course_marker = scan_table_page(
         ddbo.courses,
+        key_name=COURSE_ID,
         limit=page_limit,
         restart_marker=course_marker,
     )
     user_items, next_user_marker = scan_table_page(
         ddbo.users,
+        key_name=USER_ID,
         limit=page_limit,
         restart_marker=user_marker,
     )

@@ -79,6 +79,7 @@ Unreleased Summary
 ******************
     * Developer: add the first read-only ``/admin`` page and ``GET /api/admin/summary`` endpoint for super-role admin work
     * Developer: add ``dbutil`` commands to list users and super-role users, and to grant or remove course-admin, ``superadmin``, and ``superauditor`` access by email
+    * Developer: bind admin restart markers to their DynamoDB table and serialize super-role mutations so concurrent commands cannot remove the final ``superadmin``
     * Developer: document local versus remote S3/DynamoDB modes and add Makefile targets for running local code against remote AWS storage
     * Developer: add ``src/dbbackup.py`` for default full and selective Plant Tracer ``.ptb`` backups, restores, archive inspection, dry-run restore-link sending, and course migration
     * Developer: add verbose backup inspection with per-record summaries and grouped frame-trackpoint ranges

@@ -7,8 +7,10 @@ import sys
 import json
 import os
 import csv
+import uuid
 from email.message import EmailMessage
 
+from botocore.exceptions import ClientError
 from pydantic import BaseModel
 from tabulate import tabulate
 
@@ -40,6 +42,10 @@ DEFAULT_ADMIN_NAME = 'Plant Tracer Demo Admin'
 NO_COURSES_MESSAGE = "No courses are available for this administrator."
 CREATE_COURSE_REQUIRED_FLAGS = ["--course_id", "--course_name", "--admin_email", "--admin_name"]
 PREFIXLESS_COMMANDS = {"list-prefixes", "list_prefixes"}
+SUPER_ROLE_STATE_EMAIL = "planttracer-system:super-role-state"
+SUPERADMIN_USER_IDS = "superadmin_user_ids"
+SUPER_ROLE_STATE_VERSION = "super_role_state_version"
+SUPER_ROLE_TRANSACTION_RETRIES = 5
 
 DESCRIPTION="""
 Plant Tracer DynamoDB Database Maintenance Program.
@@ -66,6 +72,18 @@ class SuperRoleChange(BaseModel):
     user_id: str
     old_super_role: str
     new_super_role: str
+
+
+class SuperRoleState(BaseModel):
+    """Versioned singleton used to serialize super-role mutations."""
+
+    version: int
+    superadmin_user_ids: list[str]
+
+
+class ConcurrentSuperRoleChange(RuntimeError):
+    """Raised when a super-role transaction loses a concurrency race."""
+
 
 def populate_demo_user():
     # Use env admin when set (e.g. on EC2 bootstrap) so the demo course reuses the existing admin.
@@ -135,8 +153,13 @@ def dump_movie(movie_id):
     print(json.dumps(trackpoints,indent=4,default=str))
 
 
-def scan_all(table):
-    return list(course_management.scan_table_items(table))
+def scan_all(table, *, consistent_read=False):
+    return list(
+        course_management.scan_table_items(
+            table,
+            consistent_read=consistent_read,
+        )
+    )
 
 
 def print_course_report(ddbo):
@@ -333,13 +356,138 @@ def superadmin_list(args):
     print_user_rows(rows)
 
 
-def superadmin_user_ids():
-    """Return user ids for current superadmin users."""
+def superadmin_user_ids(ddbo=None):
+    """Return user ids for current superadmins using a consistent full scan."""
+    table = (ddbo or DDBO()).users
     return {
         user[USER_ID]
-        for user in sorted_user_items()
+        for user in scan_all(table, consistent_read=True)
         if odb.normalize_super_role(user) == odb.SUPER_ROLE_SUPERADMIN
     }
+
+
+def read_super_role_state(ddbo):
+    """Return the consistent super-role registry, if it has been initialized."""
+    item = ddbo.unique_emails.get_item(
+        Key={EMAIL: SUPER_ROLE_STATE_EMAIL},
+        ConsistentRead=True,
+    ).get("Item")
+    if item is None:
+        return None
+    return SuperRoleState(
+        version=int(item[SUPER_ROLE_STATE_VERSION]),
+        superadmin_user_ids=sorted(item.get(SUPERADMIN_USER_IDS, [])),
+    )
+
+
+def reconcile_super_role_state(ddbo):
+    """Synchronize the versioned registry with current user records."""
+    for _attempt in range(SUPER_ROLE_TRANSACTION_RETRIES):
+        state = read_super_role_state(ddbo)
+        actual_ids = sorted(superadmin_user_ids(ddbo))
+        if state is None:
+            try:
+                ddbo.unique_emails.put_item(
+                    Item={
+                        EMAIL: SUPER_ROLE_STATE_EMAIL,
+                        SUPERADMIN_USER_IDS: actual_ids,
+                        SUPER_ROLE_STATE_VERSION: 0,
+                    },
+                    ConditionExpression="attribute_not_exists(#email)",
+                    ExpressionAttributeNames={"#email": EMAIL},
+                )
+                return SuperRoleState(version=0, superadmin_user_ids=actual_ids)
+            except ClientError as exc:
+                if exc.response.get("Error", {}).get("Code") != "ConditionalCheckFailedException":
+                    raise
+                continue
+        if state.superadmin_user_ids == actual_ids:
+            return state
+        try:
+            ddbo.unique_emails.update_item(
+                Key={EMAIL: SUPER_ROLE_STATE_EMAIL},
+                UpdateExpression="SET #ids = :ids, #version = :next_version",
+                ConditionExpression="#ids = :old_ids AND #version = :version",
+                ExpressionAttributeNames={
+                    "#ids": SUPERADMIN_USER_IDS,
+                    "#version": SUPER_ROLE_STATE_VERSION,
+                },
+                ExpressionAttributeValues={
+                    ":ids": actual_ids,
+                    ":old_ids": state.superadmin_user_ids,
+                    ":version": state.version,
+                    ":next_version": state.version + 1,
+                },
+            )
+            return SuperRoleState(
+                version=state.version + 1,
+                superadmin_user_ids=actual_ids,
+            )
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") != "ConditionalCheckFailedException":
+                raise
+    raise ConcurrentSuperRoleChange("could not synchronize super-role state")
+
+
+def transact_super_role_change(ddbo, user, state, new_role):
+    """Atomically update one user role and the versioned superadmin registry."""
+    user_id = user[USER_ID]
+    old_role = odb.normalize_super_role(user)
+    new_superadmin_ids = set(state.superadmin_user_ids)
+    if old_role == odb.SUPER_ROLE_SUPERADMIN:
+        new_superadmin_ids.discard(user_id)
+    if new_role == odb.SUPER_ROLE_SUPERADMIN:
+        new_superadmin_ids.add(user_id)
+    if old_role == odb.SUPER_ROLE_SUPERADMIN and not new_superadmin_ids:
+        raise ValueError("cannot remove the last superadmin")
+
+    user_condition = "#role = :old_role"
+    user_values = {
+        ":new_role": new_role,
+        ":old_role": user.get(odb.SUPER_ROLE),
+    }
+    if odb.SUPER_ROLE not in user:
+        user_condition = "attribute_not_exists(#role)"
+        user_values.pop(":old_role")
+
+    try:
+        ddbo.dynamodb.meta.client.transact_write_items(
+            TransactItems=[
+                {
+                    "Update": {
+                        "TableName": ddbo.unique_emails.name,
+                        "Key": {EMAIL: SUPER_ROLE_STATE_EMAIL},
+                        "UpdateExpression": "SET #ids = :new_ids, #version = :next_version",
+                        "ConditionExpression": "#ids = :old_ids AND #version = :version",
+                        "ExpressionAttributeNames": {
+                            "#ids": SUPERADMIN_USER_IDS,
+                            "#version": SUPER_ROLE_STATE_VERSION,
+                        },
+                        "ExpressionAttributeValues": {
+                            ":new_ids": sorted(new_superadmin_ids),
+                            ":old_ids": state.superadmin_user_ids,
+                            ":version": state.version,
+                            ":next_version": state.version + 1,
+                        },
+                    }
+                },
+                {
+                    "Update": {
+                        "TableName": ddbo.users.name,
+                        "Key": {USER_ID: user_id},
+                        "UpdateExpression": "SET #role = :new_role",
+                        "ConditionExpression": user_condition,
+                        "ExpressionAttributeNames": {"#role": odb.SUPER_ROLE},
+                        "ExpressionAttributeValues": user_values,
+                    }
+                },
+            ],
+            ClientRequestToken=uuid.uuid4().hex,
+        )
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") == "TransactionCanceledException":
+            raise ConcurrentSuperRoleChange("super role changed concurrently") from exc
+        raise
 
 
 def validate_super_role(role):
@@ -353,21 +501,24 @@ def set_super_role_by_email(email, role, *, expected_old_role=None):
     """Set a user's canonical super role and enforce the last-superadmin rule."""
     new_role = validate_super_role(role)
     ddbo = DDBO()
-    user = ddbo.get_user_email(email)
-    old_role = odb.normalize_super_role(user)
-    if expected_old_role is not None and old_role != expected_old_role:
-        raise ValueError(f"user currently has {old_role}, not {expected_old_role}")
-    if old_role == odb.SUPER_ROLE_SUPERADMIN and new_role != odb.SUPER_ROLE_SUPERADMIN:
-        superadmin_ids = superadmin_user_ids()
-        if superadmin_ids == {user[USER_ID]}:
-            raise ValueError("cannot remove the last superadmin")
-    ddbo.update_table(ddbo.users, user[USER_ID], {odb.SUPER_ROLE: new_role})
-    return SuperRoleChange(
-        email=email,
-        user_id=user[USER_ID],
-        old_super_role=old_role,
-        new_super_role=new_role,
-    )
+    for _attempt in range(SUPER_ROLE_TRANSACTION_RETRIES):
+        state = reconcile_super_role_state(ddbo)
+        indexed_user = ddbo.get_user_email(email)
+        user = ddbo.get_user(indexed_user[USER_ID])
+        old_role = odb.normalize_super_role(user)
+        if expected_old_role is not None and old_role != expected_old_role:
+            raise ValueError(f"user currently has {old_role}, not {expected_old_role}")
+        try:
+            transact_super_role_change(ddbo, user, state, new_role)
+        except ConcurrentSuperRoleChange:
+            continue
+        return SuperRoleChange(
+            email=email,
+            user_id=user[USER_ID],
+            old_super_role=old_role,
+            new_super_role=new_role,
+        )
+    raise ConcurrentSuperRoleChange("super role kept changing; retry the command")
 
 
 def update_super_role_command(args, parser, role=None, *, expected_old_role=None):

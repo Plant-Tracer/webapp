@@ -236,6 +236,24 @@ def test_set_super_role_can_remove_superadmin_when_another_exists(new_course):
     assert change.new_super_role == odb.SUPER_ROLE_NONE
 
 
+def test_stale_super_role_transaction_cannot_remove_final_superadmin(new_course):
+    dbutil.set_super_role_by_email(new_course[USER_EMAIL], odb.SUPER_ROLE_SUPERADMIN)
+    dbutil.set_super_role_by_email(new_course[ADMIN_EMAIL], odb.SUPER_ROLE_SUPERADMIN)
+    ddbo = new_course["ddbo"]
+    stale_state = dbutil.reconcile_super_role_state(ddbo)
+    user = ddbo.get_user_email(new_course[USER_EMAIL])
+    admin = ddbo.get_user_email(new_course[ADMIN_EMAIL])
+
+    dbutil.transact_super_role_change(ddbo, user, stale_state, odb.SUPER_ROLE_NONE)
+    with pytest.raises(dbutil.ConcurrentSuperRoleChange, match="concurrently"):
+        dbutil.transact_super_role_change(ddbo, admin, stale_state, odb.SUPER_ROLE_NONE)
+    with pytest.raises(ValueError, match="last superadmin"):
+        dbutil.set_super_role_by_email(new_course[ADMIN_EMAIL], odb.SUPER_ROLE_NONE)
+
+    assert odb.normalize_super_role(ddbo.get_user(user[dbutil.USER_ID])) == odb.SUPER_ROLE_NONE
+    assert odb.normalize_super_role(ddbo.get_user(admin[dbutil.USER_ID])) == odb.SUPER_ROLE_SUPERADMIN
+
+
 def test_demo_movie_seeding_is_idempotent(local_ddb, capsys):
     del local_ddb
 

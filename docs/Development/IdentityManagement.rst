@@ -133,7 +133,12 @@ Operators can grant or remove cross-course roles by email address with
 ``poetry run dbutil remove-superauditor --email audit@example.edu``. The
 general ``poetry run dbutil set-super-role --email ops@example.edu --role superadmin``
 command accepts ``none``, ``superauditor``, or ``superadmin``. The CLI refuses
-to demote or remove the last remaining ``superadmin``. Users can be
+to demote or remove the last remaining ``superadmin``. Role mutations update a
+versioned singleton in the ``unique_emails`` table in the same DynamoDB
+transaction as the user record. Concurrent operator commands therefore cannot
+both pass the last-superadmin check. The CLI reconciles that singleton from the
+users table before each mutation so older databases are initialized on first
+use. Users can be
 ``superadmin`` or ``superauditor``, but not both, because ``super_role`` is a
 single enum field. Only users with an explicit super role can read ``/admin``;
 course-admin status alone does not grant cross-course access. Use

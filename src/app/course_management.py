@@ -14,6 +14,7 @@ from .schema import AdminCourse, Course, CourseAdmin, User
 EXCLUSIVE_START_KEY = 'ExclusiveStartKey'
 ITEMS = 'Items'
 LAST_EVALUATED_KEY = 'LastEvaluatedKey'
+CONSISTENT_READ = 'ConsistentRead'
 
 
 class AdminCreateResult(BaseModel):
@@ -42,13 +43,16 @@ def generate_course_key():
     return uuid.uuid4().hex[:8]
 
 
-def scan_table_items(table):
+def scan_table_items(table, *, consistent_read=False):
     """Yield every item from a DynamoDB table resource scan."""
-    response = table.scan()
-    yield from response.get(ITEMS, [])
-    while response.get(LAST_EVALUATED_KEY):
-        response = table.scan(**{EXCLUSIVE_START_KEY: response[LAST_EVALUATED_KEY]})
+    scan_kwargs = {CONSISTENT_READ: True} if consistent_read else {}
+    while True:
+        response = table.scan(**scan_kwargs)
         yield from response.get(ITEMS, [])
+        last_key = response.get(LAST_EVALUATED_KEY)
+        if last_key is None:
+            return
+        scan_kwargs[EXCLUSIVE_START_KEY] = last_key
 
 
 def list_admins():

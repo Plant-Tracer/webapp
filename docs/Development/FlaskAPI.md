@@ -64,10 +64,10 @@ and is intentionally read-only.
 | Name | Required | Description |
 |------|----------|-------------|
 | `limit` | No | Page size for the preview course and user lists. Defaults to 25, maximum 100. |
-| `course_marker` | No | Opaque restart marker from the previous `courses.restart_marker`. |
-| `user_marker` | No | Opaque restart marker from the previous `users.restart_marker`. |
+| `course_marker` | No | Opaque, course-table-bound restart marker from the previous `courses.restart_marker`. |
+| `user_marker` | No | Opaque, user-table-bound restart marker from the previous `users.restart_marker`. |
 
-Malformed or non-object restart markers receive HTTP 400.
+Malformed, non-object, or wrong-table restart markers receive HTTP 400.
 
 **Response**
 

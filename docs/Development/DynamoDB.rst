@@ -137,6 +137,17 @@ One record per registered user.
      - Courses for which the user has admin privileges
 
 
+unique_emails
+~~~~~~~~~~~~~
+
+The table normally contains one key-only record per canonical user email. It
+also contains the reserved ``planttracer-system:super-role-state`` singleton.
+That record stores a version and the sorted set of current superadmin user IDs;
+``dbutil`` updates it transactionally with user role changes so concurrent
+operator commands cannot remove the final superadmin. The CLI reconciles the
+record from a consistent users-table scan before each role mutation.
+
+
 api_keys
 ~~~~~~~~
 
