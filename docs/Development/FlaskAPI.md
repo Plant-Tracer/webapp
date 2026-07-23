@@ -63,12 +63,14 @@ and is intentionally read-only.
 
 | Name | Required | Description |
 |------|----------|-------------|
-| `limit` | No | Page size for the preview course, user, and movie lists. Defaults to 25, maximum 100. |
+| `limit` | No | Page size for each requested course, user, or movie list. Defaults to 25, maximum 100. |
+| `section` | No | Return rows for `all` (default), `courses`, `users`, or `movies`. A table-specific value leaves the other two item lists empty so clients can page each table without redundant scans. |
 | `course_marker` | No | Opaque, course-table-bound restart marker from the previous `courses.restart_marker`. |
 | `user_marker` | No | Opaque, user-table-bound restart marker from the previous `users.restart_marker`. |
 | `movie_marker` | No | Opaque, movie-table-bound restart marker from the previous `movies.restart_marker`. |
 
-Malformed, non-object, or wrong-table restart markers receive HTTP 400.
+Unknown sections and malformed, non-object, or wrong-table restart markers
+receive HTTP 400.
 
 **Response**
 
@@ -134,8 +136,9 @@ The movie list includes published, unpublished, and deleted DynamoDB records.
 `state` reports that visibility/deletion state; `status` reports processing state.
 The summary deliberately omits object URNs, descriptions, API keys, and research
 metadata. Course enrollment counts are read consistently from the `course_users`
-table. DynamoDB scan order is not stable; clients must append pages in the order
-returned and treat restart markers as opaque.
+table. DynamoDB scan order is not stable. The admin page requests bounded pages
+until all three tables are loaded, then sorts complete result sets in the browser;
+clients must treat restart markers as opaque.
 
 ### User & Registration
 

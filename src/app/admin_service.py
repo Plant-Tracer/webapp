@@ -3,6 +3,7 @@
 import base64
 import binascii
 import json
+from enum import StrEnum
 
 from boto3.dynamodb.conditions import Key
 from pydantic import BaseModel, ValidationError
@@ -42,6 +43,19 @@ class AdminReadDenied(RuntimeError):
 
 class InvalidRestartMarker(ValueError):
     """Raised when a client supplies an invalid opaque restart marker."""
+
+
+class InvalidAdminSection(ValueError):
+    """Raised when a client requests an unknown admin table section."""
+
+
+class AdminSection(StrEnum):
+    """Admin table sections that can be paged independently."""
+
+    ALL = "all"
+    COURSES = "courses"
+    USERS = "users"
+    MOVIES = "movies"
 
 
 class RestartMarker(BaseModel):
@@ -148,6 +162,14 @@ def bounded_limit(value) -> int:
     except (TypeError, ValueError):
         return DEFAULT_PAGE_LIMIT
     return max(1, min(limit, MAX_PAGE_LIMIT))
+
+
+def admin_section(value) -> AdminSection:
+    """Return a validated admin table section."""
+    try:
+        return AdminSection(value or AdminSection.ALL)
+    except ValueError as exc:
+        raise InvalidAdminSection("Invalid admin section") from exc
 
 
 def encode_restart_marker(marker, *, key_name: str):
@@ -283,7 +305,7 @@ def movie_summary(movie, *, course_names: dict[str, str]) -> AdminMovieSummary:
 
 
 def admin_summary(*, viewer_user, course_marker=None, user_marker=None,
-                  movie_marker=None, limit=None) -> AdminSummaryResponse:
+                  movie_marker=None, limit=None, section=None) -> AdminSummaryResponse:
     """Return the minimal read-only admin summary payload."""
     access = odb.admin_read_access(viewer_user)
     if not access.allowed:
@@ -291,25 +313,28 @@ def admin_summary(*, viewer_user, course_marker=None, user_marker=None,
 
     ddbo = DDBO()
     page_limit = bounded_limit(limit)
-    course_items, next_course_marker = scan_table_page(
+    selected_section = admin_section(section)
+    course_items, next_course_marker = (scan_table_page(
         ddbo.courses,
         key_name=COURSE_ID,
         limit=page_limit,
         restart_marker=course_marker,
-    )
-    user_items, next_user_marker = scan_table_page(
+    ) if selected_section in (AdminSection.ALL, AdminSection.COURSES) else ([], None))
+    user_items, next_user_marker = (scan_table_page(
         ddbo.users,
         key_name=USER_ID,
         limit=page_limit,
         restart_marker=user_marker,
-    )
-    movie_items, next_movie_marker = scan_table_page(
+    ) if selected_section in (AdminSection.ALL, AdminSection.USERS) else ([], None))
+    movie_items, next_movie_marker = (scan_table_page(
         ddbo.movies,
         key_name=MOVIE_ID,
         limit=page_limit,
         restart_marker=movie_marker,
-    )
-    course_names = course_name_map(ddbo.courses)
+    ) if selected_section in (AdminSection.ALL, AdminSection.MOVIES) else ([], None))
+    course_names = (course_name_map(ddbo.courses)
+                    if selected_section in (AdminSection.ALL, AdminSection.USERS, AdminSection.MOVIES)
+                    else {})
     return AdminSummaryResponse(
         viewer=AdminViewer(
             user_id=viewer_user[USER_ID],

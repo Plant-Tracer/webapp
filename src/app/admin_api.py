@@ -20,11 +20,14 @@ def api_admin_summary():
             user_marker=request.args.get("user_marker"),
             movie_marker=request.args.get("movie_marker"),
             limit=request.args.get("limit"),
+            section=request.args.get("section"),
         )
     except InvalidAPI_Key:
         return jsonify({"error": True, "message": "Invalid api_key"}), 403
     except admin_service.AdminReadDenied:
         return jsonify({"error": True, "message": "Admin read access required"}), 403
     except admin_service.InvalidRestartMarker as exc:
+        return jsonify({"error": True, "message": str(exc)}), 400
+    except admin_service.InvalidAdminSection as exc:
         return jsonify({"error": True, "message": str(exc)}), 400
     return jsonify(response.model_dump())
