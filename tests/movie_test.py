@@ -284,21 +284,6 @@ def test_movie_update_metadata(client, new_movie):
     assert movie[MOVIE_ID] == movie_id
     assert movie['published'] == 1
 
-@pytest.mark.skip(reason='logging disabled on move to DynamoDB')
-def test_log_search_movie(new_movie):
-    cfg        = copy.copy(new_movie)
-    #api_key    = cfg[API_KEY]
-    user_id    = cfg[USER_ID]
-    #movie_id   = cfg[MOVIE_ID]
-    #movie_title= cfg[MOVIE_TITLE]
-
-    #dbreader = get_dbreader()
-    #res = dbfile.DBMySQL.csfr(dbreader, "select user_id from movies where id=%s", (movie_id,))
-    res = odb.get_logs( user_id=user_id)
-    logger.info("log entries for movie:")
-    for r in res:
-        logger.info("%s",r)
-
 # pytest: disable=too-many-locals
 def test_new_movie_api(client, new_course):
     """Create a new movie_id and return it.
