@@ -235,6 +235,10 @@ async function fetchAdminPage(section, marker = null) {
 }
 
 async function loadRemainingPages(table, marker) {
+  // Product sizing assumes no more than roughly 10 courses with 80 students
+  // each. Loading every page is deliberate: complete local datasets make the
+  // column sorts global. A larger deployment should move sorting and pagination
+  // to the server rather than silently stop after an arbitrary page count.
   let nextMarker = marker;
   while (nextMarker) {
     const payload = await fetchAdminPage(table, nextMarker);

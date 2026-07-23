@@ -34,8 +34,16 @@ COUNT = "Count"
 CONSISTENT_READ = "ConsistentRead"
 KEY_CONDITION_EXPRESSION = "KeyConditionExpression"
 SELECT = "Select"
+LIMIT = "Limit"
 DEFAULT_PAGE_LIMIT = 25
 MAX_PAGE_LIMIT = 100
+
+# Product sizing assumes at most roughly 10 courses with 80 students each.
+# At that scale the admin page intentionally loads complete datasets so it can
+# sort them globally in the browser. MAX_PAGE_LIMIT bounds one DynamoDB/API
+# request; it must not truncate the paginated result. If the installation grows
+# beyond practical browser/DOM sizes, replace this design with server-side
+# sorting and pagination instead of silently imposing a maximum page count.
 
 
 class AdminReadDenied(RuntimeError):
@@ -205,7 +213,7 @@ def decode_restart_marker(marker, *, key_name: str):
 
 def scan_table_page(table, *, key_name: str, limit: int, restart_marker: str | None):
     """Return one DynamoDB scan page and the next restart marker."""
-    scan_kwargs = {"Limit": limit}
+    scan_kwargs = {LIMIT: limit}
     exclusive_start_key = decode_restart_marker(restart_marker, key_name=key_name)
     if exclusive_start_key:
         scan_kwargs[EXCLUSIVE_START_KEY] = exclusive_start_key
@@ -223,9 +231,15 @@ def table_item_count(table) -> int:
 
 
 def course_name_map(table) -> dict[str, str]:
-    """Return current names for all courses."""
+    """Return current names for all courses using bounded DynamoDB pages."""
     names = {}
-    scan_kwargs = {CONSISTENT_READ: True}
+    # One API request uses this map for both user and movie enrichment. Separate
+    # browser page requests may reach separate Lambda invocations, so retaining
+    # this dictionary across requests would be an unsafe cache of mutable names.
+    scan_kwargs = {
+        CONSISTENT_READ: True,
+        LIMIT: MAX_PAGE_LIMIT,
+    }
     while True:
         response = table.scan(**scan_kwargs)
         for course in response.get(ITEMS, []):
@@ -244,6 +258,7 @@ def course_enrollment_count(table, course_id: str) -> int:
         KEY_CONDITION_EXPRESSION: Key(COURSE_ID).eq(course_id),
         SELECT: "COUNT",
         CONSISTENT_READ: True,
+        LIMIT: MAX_PAGE_LIMIT,
     }
     while True:
         response = table.query(**query_kwargs)
@@ -259,7 +274,7 @@ def course_summary(course, *, enrollment_count: int) -> AdminCourseSummary:
     return AdminCourseSummary(
         course_id=course[COURSE_ID],
         course_key=course.get(COURSE_KEY, ""),
-        course_name=course.get(COURSE_NAME, ""),
+        course_name=course.get(COURSE_NAME) or course[COURSE_ID],
         enrollment_count=enrollment_count,
         max_enrollment=course.get(MAX_ENROLLMENT, 0),
         admin_count=len(course.get(odb.ADMINS_FOR_COURSE, [])),

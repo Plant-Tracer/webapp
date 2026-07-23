@@ -82,6 +82,18 @@ def test_admin_summary_includes_enrollment_named_memberships_and_movies(client, 
     assert movie["state"] == "published"
 
 
+def test_course_summary_uses_id_when_name_is_empty():
+    summary = admin_service.course_summary(
+        {
+            odb.COURSE_ID: "course-without-name",
+            odb.COURSE_NAME: "",
+        },
+        enrollment_count=0,
+    )
+
+    assert summary.course_name == "course-without-name"
+
+
 def test_admin_summary_pages_only_requested_section(client, new_movie):
     ddbo = new_movie["ddbo"]
     ddbo.update_table(ddbo.users, new_movie[USER_ID], {odb.SUPER_ROLE: odb.SUPER_ROLE_SUPERAUDITOR})
