@@ -3,7 +3,7 @@ import pytest
 from app import admin_service, apikey, odb
 from app.odb import API_KEY, USER_ID
 
-from .constants import ADMIN_EMAIL
+from .constants import ADMIN_EMAIL, MOVIE_TITLE
 
 
 def test_admin_summary_denies_regular_user(client, new_course):
@@ -46,6 +46,77 @@ def test_admin_summary_allows_superadmin(client, new_course):
 
     assert response.status_code == 200
     assert response.json["viewer"]["super_role"] == odb.SUPER_ROLE_SUPERADMIN
+
+
+def test_admin_summary_includes_enrollment_memberships_and_movies(client, new_movie):
+    ddbo = new_movie["ddbo"]
+    ddbo.update_table(ddbo.users, new_movie[USER_ID], {odb.SUPER_ROLE: odb.SUPER_ROLE_SUPERAUDITOR})
+    client.set_cookie(apikey.cookie_name(), new_movie[API_KEY])
+
+    response = client.get("/api/admin/summary")
+
+    assert response.status_code == 200
+    payload = response.json
+    course = next(item for item in payload["courses"]["items"]
+                  if item["course_id"] == new_movie[odb.COURSE_ID])
+    assert course["course_key"] == new_movie[odb.COURSE_KEY]
+    assert course["enrollment_count"] == 2
+    assert course["max_enrollment"] >= course["enrollment_count"]
+
+    user = next(item for item in payload["users"]["items"]
+                if item["user_id"] == new_movie[USER_ID])
+    assert user["courses"] == [{
+        "course_id": new_movie[odb.COURSE_ID],
+        "is_admin": False,
+    }]
+    admin = next(item for item in payload["users"]["items"]
+                 if item["email"] == new_movie[ADMIN_EMAIL])
+    assert admin["courses"][0]["is_admin"] is True
+
+    movie = next(item for item in payload["movies"]["items"]
+                 if item["movie_id"] == new_movie[odb.MOVIE_ID])
+    assert movie["title"] == new_movie[MOVIE_TITLE]
+    assert movie["course_id"] == new_movie[odb.COURSE_ID]
+    assert movie["owner_name"] == "Course User"
+    assert movie["state"] == "published"
+
+
+def test_course_summary_uses_id_when_name_is_empty():
+    summary = admin_service.course_summary(
+        {
+            odb.COURSE_ID: "course-without-name",
+            odb.COURSE_NAME: "",
+        },
+        enrollment_count=0,
+    )
+
+    assert summary.course_name == "course-without-name"
+
+
+def test_admin_summary_pages_only_requested_section(client, new_movie):
+    ddbo = new_movie["ddbo"]
+    ddbo.update_table(ddbo.users, new_movie[USER_ID], {odb.SUPER_ROLE: odb.SUPER_ROLE_SUPERAUDITOR})
+    client.set_cookie(apikey.cookie_name(), new_movie[API_KEY])
+
+    response = client.get("/api/admin/summary?section=movies&limit=100")
+
+    assert response.status_code == 200
+    payload = response.json
+    assert payload["courses"] == {"items": [], "restart_marker": None}
+    assert payload["users"] == {"items": [], "restart_marker": None}
+    assert any(movie["movie_id"] == new_movie[odb.MOVIE_ID]
+               for movie in payload["movies"]["items"])
+
+
+def test_admin_summary_rejects_invalid_section(client, new_course):
+    ddbo = new_course["ddbo"]
+    ddbo.update_table(ddbo.users, new_course[USER_ID], {odb.SUPER_ROLE: odb.SUPER_ROLE_SUPERAUDITOR})
+    client.set_cookie(apikey.cookie_name(), new_course[API_KEY])
+
+    response = client.get("/api/admin/summary?section=secrets")
+
+    assert response.status_code == 400
+    assert response.json == {"error": True, "message": "Invalid admin section"}
 
 
 def test_admin_summary_rejects_invalid_restart_marker(client, new_course):

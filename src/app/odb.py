@@ -25,6 +25,7 @@ from pydantic import BaseModel, ValidationError
 
 from .schema import (
     User,
+    AdminCourse,
     Movie,
     Trackpoint,
     RenameMarkerRequest,
@@ -1252,6 +1253,22 @@ def lookup_course_by_id(*, course_id):
 
 def lookup_course_by_key(*, course_key):
     return DDBO().get_course_by_course_key(course_key)
+
+def course_choices_for_user(user) -> list[AdminCourse]:
+    """Return existing course choices for a user, sorted for display."""
+    ddbo = DDBO()
+    choices = []
+    for course_id in user.get(COURSES, []):
+        try:
+            course = ddbo.get_course(course_id)
+        except InvalidCourse_Id:
+            logger.warning("user %s references missing course %s", user.get(USER_ID), course_id)
+            continue
+        choices.append(AdminCourse(
+            course_id=course_id,
+            course_name=course.get(COURSE_NAME) or course_id,
+        ))
+    return sorted(choices, key=lambda course: (course.course_name.casefold(), course.course_id))
 
 def create_course(*, course_id, course_name, course_key, max_enrollment=C.DEFAULT_MAX_ENROLLMENT, ok_if_exists=False):
     """Create a new course
