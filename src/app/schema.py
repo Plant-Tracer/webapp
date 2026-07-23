@@ -105,6 +105,12 @@ class AdminCourse(BaseModel):
     course_name: str
 
 
+class CurrentCourseRequest(BaseModel):
+    """Request to change the signed-in user's current course."""
+
+    course_id: str
+
+
 class CourseAdmin(BaseModel):
     """Operator-facing course administrator summary."""
 

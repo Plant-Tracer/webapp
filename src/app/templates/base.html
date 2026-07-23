@@ -104,6 +104,19 @@
         display: inline-block;
         border-radius: 4px;
       }
+      #current-course-select {
+        border: 0;
+        border-bottom: 1px dotted currentColor;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        font-weight: 600;
+        padding: 0 1.25rem 0 0;
+      }
+      #current-course-status.course-error {
+        color: #8b0000;
+        margin-left: 0.5rem;
+      }
     </style>
 
     {% block head %}{% endblock %}
@@ -180,8 +193,20 @@
     {% if logged_in %}
     <div>
       {% if demo_mode %}<b>DEMO MODE:</b> {% endif %}
-      Logged in as <b>{{user_name}}</b>. Current course: <b>{{primary_course_name}}</b>.
+      Logged in as <b>{{user_name}}</b>. Current course:
+      <select id="current-course-select" data-current-course-id="{{user_primary_course_id}}"
+              aria-label="Current course">
+        {% for course in course_choices %}
+        {% if course.course_id == user_primary_course_id %}
+        <option value="{{course.course_id}}" selected>{{course.course_name}}</option>
+        {% else %}
+        <option value="{{course.course_id}}">{{course.course_name}}</option>
+        {% endif %}
+        {% endfor %}
+      </select>.
+      <span id="current-course-status" role="status" aria-live="polite"></span>
     </div>
+    <script type="module" src="{{ url_for('static', filename='current_course.js') }}"></script>
     {% endif %}
 
     <div id='message' class='alert'>{% if message and message != 'null' %}<b>{{message}}</b>{% endif %}</div>

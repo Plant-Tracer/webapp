@@ -78,6 +78,8 @@ Release Notes
 Unreleased Summary
 ******************
     * Developer: add the first read-only ``/admin`` page and ``GET /api/admin/summary`` endpoint for super-role admin work
+    * Admin: show current/max course enrollment, named user memberships with course-admin emphasis, and a paginated cross-course movie table
+    * Navigation: make the current course a membership-validated selector that reloads the page in the selected course context
     * Developer: add ``dbutil`` commands to list users and super-role users, and to grant or remove course-admin, ``superadmin``, and ``superauditor`` access by email
     * Developer: bind admin restart markers to their DynamoDB table and serialize super-role mutations so concurrent commands cannot remove the final ``superadmin``
     * Developer: document local versus remote S3/DynamoDB modes and add Makefile targets for running local code against remote AWS storage

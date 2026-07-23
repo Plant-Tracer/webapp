@@ -67,7 +67,7 @@
           <th>Number</th>
           <th>Name</th>
           <th>Admins</th>
-          <th>Max enrollment</th>
+          <th>Enrollment</th>
         </tr>
       </thead>
       <tbody id="admin-course-rows"></tbody>
@@ -90,6 +90,23 @@
       <tbody id="admin-user-rows"></tbody>
     </table>
     <button id="admin-more-users" class="pure-button" type="button" hidden>Load more users</button>
+  </section>
+
+  <section class="admin-section">
+    <h2>Movies</h2>
+    <table class="pure-table pure-table-striped">
+      <thead>
+        <tr>
+          <th>Title</th>
+          <th>Course</th>
+          <th>Owner</th>
+          <th>State</th>
+          <th>Processing</th>
+        </tr>
+      </thead>
+      <tbody id="admin-movie-rows"></tbody>
+    </table>
+    <button id="admin-more-movies" class="pure-button" type="button" hidden>Load more movies</button>
   </section>
 </main>
 <script type="module" src="{{ url_for('static', filename='admin.js') }}"></script>

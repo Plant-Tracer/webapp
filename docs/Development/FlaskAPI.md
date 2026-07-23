@@ -63,9 +63,10 @@ and is intentionally read-only.
 
 | Name | Required | Description |
 |------|----------|-------------|
-| `limit` | No | Page size for the preview course and user lists. Defaults to 25, maximum 100. |
+| `limit` | No | Page size for the preview course, user, and movie lists. Defaults to 25, maximum 100. |
 | `course_marker` | No | Opaque, course-table-bound restart marker from the previous `courses.restart_marker`. |
 | `user_marker` | No | Opaque, user-table-bound restart marker from the previous `users.restart_marker`. |
+| `movie_marker` | No | Opaque, movie-table-bound restart marker from the previous `movies.restart_marker`. |
 
 Malformed, non-object, or wrong-table restart markers receive HTTP 400.
 
@@ -86,6 +87,7 @@ Malformed, non-object, or wrong-table restart markers receive HTTP 400.
       {
         "course_id": "PlantTracer 101",
         "course_name": "Intro Biology",
+        "enrollment_count": 42,
         "max_enrollment": 100,
         "admin_count": 1
       }
@@ -100,8 +102,27 @@ Malformed, non-object, or wrong-table restart markers receive HTTP 400.
         "email": "alice@example.edu",
         "primary_course_id": "PlantTracer 101",
         "super_role": "none",
-        "course_count": 1,
-        "admin_course_count": 0
+        "courses": [
+          {
+            "course_id": "PlantTracer 101",
+            "course_name": "Intro Biology",
+            "is_admin": false
+          }
+        ]
+      }
+    ],
+    "restart_marker": null
+  },
+  "movies": {
+    "items": [
+      {
+        "movie_id": "m...",
+        "title": "Bean Growth",
+        "course_id": "PlantTracer 101",
+        "course_name": "Intro Biology",
+        "owner_name": "Alice",
+        "state": "published",
+        "status": "ready"
       }
     ],
     "restart_marker": null
@@ -109,7 +130,41 @@ Malformed, non-object, or wrong-table restart markers receive HTTP 400.
 }
 ```
 
+The movie list includes published, unpublished, and deleted DynamoDB records.
+`state` reports that visibility/deletion state; `status` reports processing state.
+The summary deliberately omits object URNs, descriptions, API keys, and research
+metadata. Course enrollment counts are read consistently from the `course_users`
+table. DynamoDB scan order is not stable; clients must append pages in the order
+returned and treat restart markers as opaque.
+
 ### User & Registration
+
+#### `PATCH /api/current-course`
+
+Change the signed-in user's current/primary course. The selected course must
+already be present in that user's course memberships. The endpoint uses the
+existing authentication cookie and does not grant course membership.
+
+**JSON request**
+
+```json
+{ "course_id": "PlantTracer 101" }
+```
+
+**Success response**
+
+```json
+{
+  "error": false,
+  "course": {
+    "course_id": "PlantTracer 101",
+    "course_name": "Intro Biology"
+  }
+}
+```
+
+An invalid or non-member course receives HTTP 400. Missing authentication
+receives HTTP 403.
 
 #### `POST /api/register`
 

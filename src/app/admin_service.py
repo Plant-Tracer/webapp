@@ -4,6 +4,7 @@ import base64
 import binascii
 import json
 
+from boto3.dynamodb.conditions import Key
 from pydantic import BaseModel, ValidationError
 
 from . import odb
@@ -11,9 +12,14 @@ from .odb import (
     ADMIN_FOR_COURSES,
     COURSE_ID,
     COURSE_NAME,
+    DELETED,
     EMAIL,
     MAX_ENROLLMENT,
+    MOVIE_ID,
+    MOVIE_STATUS,
     PRIMARY_COURSE_ID,
+    PUBLISHED,
+    TITLE,
     USER_ID,
     USER_NAME,
     DDBO,
@@ -22,6 +28,10 @@ from .odb import (
 EXCLUSIVE_START_KEY = "ExclusiveStartKey"
 ITEMS = "Items"
 LAST_EVALUATED_KEY = "LastEvaluatedKey"
+COUNT = "Count"
+CONSISTENT_READ = "ConsistentRead"
+KEY_CONDITION_EXPRESSION = "KeyConditionExpression"
+SELECT = "Select"
 DEFAULT_PAGE_LIMIT = 25
 MAX_PAGE_LIMIT = 100
 
@@ -63,8 +73,17 @@ class AdminCourseSummary(BaseModel):
 
     course_id: str
     course_name: str
+    enrollment_count: int
     max_enrollment: int
     admin_count: int
+
+
+class AdminUserCourseSummary(BaseModel):
+    """Named course membership shown in an admin user row."""
+
+    course_id: str
+    course_name: str
+    is_admin: bool
 
 
 class AdminUserSummary(BaseModel):
@@ -75,8 +94,19 @@ class AdminUserSummary(BaseModel):
     email: str
     primary_course_id: str
     super_role: str
-    course_count: int
-    admin_course_count: int
+    courses: list[AdminUserCourseSummary]
+
+
+class AdminMovieSummary(BaseModel):
+    """Privacy-aware movie row shown by the read-only admin interface."""
+
+    movie_id: str
+    title: str
+    course_id: str
+    course_name: str
+    owner_name: str
+    state: str
+    status: str
 
 
 class AdminCoursePage(BaseModel):
@@ -93,6 +123,13 @@ class AdminUserPage(BaseModel):
     restart_marker: str | None = None
 
 
+class AdminMoviePage(BaseModel):
+    """Page of movie rows."""
+
+    items: list[AdminMovieSummary]
+    restart_marker: str | None = None
+
+
 class AdminSummaryResponse(BaseModel):
     """Read-only admin landing-page payload."""
 
@@ -101,6 +138,7 @@ class AdminSummaryResponse(BaseModel):
     counts: AdminCounts
     courses: AdminCoursePage
     users: AdminUserPage
+    movies: AdminMoviePage
 
 
 def bounded_limit(value) -> int:
@@ -160,30 +198,92 @@ def table_item_count(table) -> int:
     return int(table.item_count or 0)
 
 
-def course_summary(course) -> AdminCourseSummary:
+def course_name_map(table) -> dict[str, str]:
+    """Return current names for all courses."""
+    names = {}
+    scan_kwargs = {CONSISTENT_READ: True}
+    while True:
+        response = table.scan(**scan_kwargs)
+        for course in response.get(ITEMS, []):
+            course_id = course[COURSE_ID]
+            names[course_id] = course.get(COURSE_NAME) or course_id
+        last_key = response.get(LAST_EVALUATED_KEY)
+        if last_key is None:
+            return names
+        scan_kwargs[EXCLUSIVE_START_KEY] = last_key
+
+
+def course_enrollment_count(table, course_id: str) -> int:
+    """Count every current enrollment for a course using bounded query pages."""
+    count = 0
+    query_kwargs = {
+        KEY_CONDITION_EXPRESSION: Key(COURSE_ID).eq(course_id),
+        SELECT: "COUNT",
+        CONSISTENT_READ: True,
+    }
+    while True:
+        response = table.query(**query_kwargs)
+        count += int(response.get(COUNT, 0))
+        last_key = response.get(LAST_EVALUATED_KEY)
+        if last_key is None:
+            return count
+        query_kwargs[EXCLUSIVE_START_KEY] = last_key
+
+
+def course_summary(course, *, enrollment_count: int) -> AdminCourseSummary:
     """Convert a DynamoDB course item into an admin summary row."""
     return AdminCourseSummary(
         course_id=course[COURSE_ID],
         course_name=course.get(COURSE_NAME, ""),
+        enrollment_count=enrollment_count,
         max_enrollment=course.get(MAX_ENROLLMENT, 0),
         admin_count=len(course.get(odb.ADMINS_FOR_COURSE, [])),
     )
 
 
-def user_summary(user) -> AdminUserSummary:
+def user_summary(user, *, course_names: dict[str, str]) -> AdminUserSummary:
     """Convert a DynamoDB user item into an admin summary row."""
+    admin_courses = set(user.get(ADMIN_FOR_COURSES, []))
+    courses = [
+        AdminUserCourseSummary(
+            course_id=course_id,
+            course_name=course_names.get(course_id, course_id),
+            is_admin=course_id in admin_courses,
+        )
+        for course_id in user.get(odb.COURSES, [])
+    ]
     return AdminUserSummary(
         user_id=user[USER_ID],
         user_name=user.get(USER_NAME, ""),
         email=user.get(EMAIL, ""),
         primary_course_id=user.get(PRIMARY_COURSE_ID, ""),
         super_role=odb.normalize_super_role(user),
-        course_count=len(user.get(odb.COURSES, [])),
-        admin_course_count=len(user.get(ADMIN_FOR_COURSES, [])),
+        courses=sorted(courses, key=lambda course: (course.course_name.casefold(), course.course_id)),
     )
 
 
-def admin_summary(*, viewer_user, course_marker=None, user_marker=None, limit=None) -> AdminSummaryResponse:
+def movie_summary(movie, *, course_names: dict[str, str]) -> AdminMovieSummary:
+    """Convert a DynamoDB movie item into a privacy-aware admin row."""
+    course_id = movie.get(COURSE_ID, "")
+    if movie.get(DELETED, 0):
+        state = "deleted"
+    elif movie.get(PUBLISHED, 0):
+        state = "published"
+    else:
+        state = "unpublished"
+    return AdminMovieSummary(
+        movie_id=movie[MOVIE_ID],
+        title=movie.get(TITLE, ""),
+        course_id=course_id,
+        course_name=course_names.get(course_id, course_id),
+        owner_name=movie.get(USER_NAME, ""),
+        state=state,
+        status=movie.get(MOVIE_STATUS) or "",
+    )
+
+
+def admin_summary(*, viewer_user, course_marker=None, user_marker=None,
+                  movie_marker=None, limit=None) -> AdminSummaryResponse:
     """Return the minimal read-only admin summary payload."""
     access = odb.admin_read_access(viewer_user)
     if not access.allowed:
@@ -203,6 +303,13 @@ def admin_summary(*, viewer_user, course_marker=None, user_marker=None, limit=No
         limit=page_limit,
         restart_marker=user_marker,
     )
+    movie_items, next_movie_marker = scan_table_page(
+        ddbo.movies,
+        key_name=MOVIE_ID,
+        limit=page_limit,
+        restart_marker=movie_marker,
+    )
+    course_names = course_name_map(ddbo.courses)
     return AdminSummaryResponse(
         viewer=AdminViewer(
             user_id=viewer_user[USER_ID],
@@ -216,11 +323,21 @@ def admin_summary(*, viewer_user, course_marker=None, user_marker=None, limit=No
             movies=table_item_count(ddbo.movies),
         ),
         courses=AdminCoursePage(
-            items=[course_summary(course) for course in course_items],
+            items=[
+                course_summary(
+                    course,
+                    enrollment_count=course_enrollment_count(ddbo.course_users, course[COURSE_ID]),
+                )
+                for course in course_items
+            ],
             restart_marker=next_course_marker,
         ),
         users=AdminUserPage(
-            items=[user_summary(user) for user in user_items],
+            items=[user_summary(user, course_names=course_names) for user in user_items],
             restart_marker=next_user_marker,
+        ),
+        movies=AdminMoviePage(
+            items=[movie_summary(movie, course_names=course_names) for movie in movie_items],
+            restart_marker=next_movie_marker,
         ),
     )

@@ -18,6 +18,7 @@ def api_admin_summary():
             viewer_user=viewer_user,
             course_marker=request.args.get("course_marker"),
             user_marker=request.args.get("user_marker"),
+            movie_marker=request.args.get("movie_marker"),
             limit=request.args.get("limit"),
         )
     except InvalidAPI_Key:
