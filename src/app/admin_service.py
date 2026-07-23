@@ -12,6 +12,7 @@ from . import odb
 from .odb import (
     ADMIN_FOR_COURSES,
     COURSE_ID,
+    COURSE_KEY,
     COURSE_NAME,
     DELETED,
     EMAIL,
@@ -86,6 +87,7 @@ class AdminCourseSummary(BaseModel):
     """Course row shown by the minimal admin interface."""
 
     course_id: str
+    course_key: str
     course_name: str
     enrollment_count: int
     max_enrollment: int
@@ -256,6 +258,7 @@ def course_summary(course, *, enrollment_count: int) -> AdminCourseSummary:
     """Convert a DynamoDB course item into an admin summary row."""
     return AdminCourseSummary(
         course_id=course[COURSE_ID],
+        course_key=course.get(COURSE_KEY, ""),
         course_name=course.get(COURSE_NAME, ""),
         enrollment_count=enrollment_count,
         max_enrollment=course.get(MAX_ENROLLMENT, 0),

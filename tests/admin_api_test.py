@@ -59,6 +59,7 @@ def test_admin_summary_includes_enrollment_named_memberships_and_movies(client, 
     payload = response.json
     course = next(item for item in payload["courses"]["items"]
                   if item["course_id"] == new_movie[odb.COURSE_ID])
+    assert course["course_key"] == new_movie[odb.COURSE_KEY]
     assert course["enrollment_count"] == 2
     assert course["max_enrollment"] >= course["enrollment_count"]
 

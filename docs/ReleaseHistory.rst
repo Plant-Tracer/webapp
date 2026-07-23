@@ -78,7 +78,7 @@ Release Notes
 Unreleased Summary
 ******************
     * Developer: add the first read-only ``/admin`` page and ``GET /api/admin/summary`` endpoint for super-role admin work
-    * Admin: show current/max course enrollment, named user memberships with course-admin emphasis, and cross-course movies; load bounded pages and sort complete tables in the browser
+    * Admin: show course registration keys behind per-row reveal controls and current/max enrollment, named user memberships with course-admin emphasis, and cross-course movies; load bounded pages and sort complete tables in the browser
     * Navigation: make the current course a membership-validated selector that reloads the page in the selected course context
     * Developer: add ``dbutil`` commands to list users and super-role users, and to grant or remove course-admin, ``superadmin``, and ``superauditor`` access by email
     * Developer: bind admin restart markers to their DynamoDB table and serialize super-role mutations so concurrent commands cannot remove the final ``superadmin``

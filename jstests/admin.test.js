@@ -44,7 +44,7 @@ function payload() {
     counts: { courses: 1, users: 1, movies: 1 },
     courses: {
       items: [{
-        course_id: 'BIO-1', course_name: 'Biology', admin_count: 1,
+        course_id: 'BIO-1', course_key: 'grow-beans', course_name: 'Biology', admin_count: 1,
         enrollment_count: 7, max_enrollment: 10,
       }],
       restart_marker: null,
@@ -88,6 +88,18 @@ describe('admin summary rendering', () => {
 
     await loadAdminSummary();
 
+    const key = document.querySelector('.admin-course-key');
+    const keyToggle = document.querySelector('.admin-key-toggle');
+    expect(key.textContent).toBe('••••••••');
+    expect(document.getElementById('admin-course-rows').textContent).not.toContain('grow-beans');
+    expect(keyToggle.querySelector('.admin-eye-slash')).not.toBeNull();
+    keyToggle.click();
+    expect(key.textContent).toBe('grow-beans');
+    expect(keyToggle.querySelector('.admin-eye-slash')).toBeNull();
+    expect(keyToggle.getAttribute('aria-label')).toBe('Hide course key for Biology');
+    keyToggle.click();
+    expect(key.textContent).toBe('••••••••');
+    expect(keyToggle.querySelector('.admin-eye-slash')).not.toBeNull();
     expect(document.getElementById('admin-course-rows').textContent).toContain('7 / 10');
     const userRow = document.getElementById('admin-user-rows');
     expect(userRow.textContent).toContain('Biology, Chemistry');

@@ -54,6 +54,34 @@
     display: inline-block;
     width: 1em;
   }
+  .admin-course-key {
+    display: inline-block;
+    min-width: 5.5rem;
+  }
+  .admin-key-toggle {
+    appearance: none;
+    background: none;
+    border: 0;
+    color: inherit;
+    cursor: pointer;
+    display: inline-flex;
+    margin-left: 0.35rem;
+    padding: 0.1rem;
+    vertical-align: middle;
+  }
+  .admin-key-toggle:hover,
+  .admin-key-toggle:focus {
+    color: #202020;
+  }
+  .admin-key-toggle svg {
+    fill: none;
+    height: 1.15rem;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+    width: 1.15rem;
+  }
 </style>
 {% endblock %}
 
@@ -83,6 +111,7 @@
       <thead>
         <tr>
           <th><button class="admin-sort" type="button" data-table="courses" data-key="course_id">Number <span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+          <th><button class="admin-sort" type="button" data-table="courses" data-key="course_key">Course key <span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
           <th><button class="admin-sort" type="button" data-table="courses" data-key="course_name">Name <span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
           <th><button class="admin-sort" type="button" data-table="courses" data-key="admin_count">Admins <span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
           <th><button class="admin-sort" type="button" data-table="courses" data-key="enrollment_count">Enrollment <span class="admin-sort-indicator" aria-hidden="true"></span></button></th>

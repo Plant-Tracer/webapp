@@ -88,6 +88,7 @@ receive HTTP 400.
     "items": [
       {
         "course_id": "PlantTracer 101",
+        "course_key": "spring-beans-2026",
         "course_name": "Intro Biology",
         "enrollment_count": 42,
         "max_enrollment": 100,
@@ -138,7 +139,10 @@ The summary deliberately omits object URNs, descriptions, API keys, and research
 metadata. Course enrollment counts are read consistently from the `course_users`
 table. DynamoDB scan order is not stable. The admin page requests bounded pages
 until all three tables are loaded, then sorts complete result sets in the browser;
-clients must treat restart markers as opaque.
+clients must treat restart markers as opaque. Course rows include the registration
+`course_key`; callers must treat it as a secret because anyone with the key can
+request enrollment in that course. The admin page masks each course key by default;
+its per-row eye control reveals or hides the value without changing it.
 
 ### User & Registration
 

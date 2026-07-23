@@ -33,12 +33,62 @@ function setText(id, value) {
   document.getElementById(id).textContent = String(value);
 }
 
+function eyeIcon(slashed) {
+  const namespace = "http://www.w3.org/2000/svg";
+  const icon = document.createElementNS(namespace, "svg");
+  icon.setAttribute("viewBox", "0 0 24 24");
+  icon.setAttribute("aria-hidden", "true");
+  const eye = document.createElementNS(namespace, "path");
+  eye.setAttribute("d", "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z");
+  const pupil = document.createElementNS(namespace, "circle");
+  pupil.setAttribute("cx", "12");
+  pupil.setAttribute("cy", "12");
+  pupil.setAttribute("r", "3");
+  icon.append(eye, pupil);
+  if (slashed) {
+    const slash = document.createElementNS(namespace, "line");
+    slash.setAttribute("class", "admin-eye-slash");
+    slash.setAttribute("x1", "3");
+    slash.setAttribute("y1", "3");
+    slash.setAttribute("x2", "21");
+    slash.setAttribute("y2", "21");
+    icon.append(slash);
+  }
+  return icon;
+}
+
+function courseKeyCell(course) {
+  const cell = document.createElement("td");
+  const key = document.createElement("code");
+  key.className = "admin-course-key";
+  const toggle = document.createElement("button");
+  toggle.className = "admin-key-toggle";
+  toggle.type = "button";
+  let hidden = true;
+  const render = () => {
+    key.textContent = hidden ? "••••••••" : course.course_key;
+    const action = hidden ? "Show" : "Hide";
+    toggle.replaceChildren(eyeIcon(hidden));
+    toggle.setAttribute("aria-label", `${action} course key for ${course.course_name}`);
+    toggle.setAttribute("aria-pressed", String(!hidden));
+    toggle.title = `${action} course key`;
+  };
+  toggle.addEventListener("click", () => {
+    hidden = !hidden;
+    render();
+  });
+  render();
+  cell.append(key, toggle);
+  return cell;
+}
+
 function appendCourseRows(courses) {
   const tbody = document.getElementById("admin-course-rows");
   for (const course of courses) {
     const row = document.createElement("tr");
     row.append(
       textCell(course.course_id),
+      courseKeyCell(course),
       textCell(course.course_name),
       textCell(course.admin_count),
       textCell(`${course.enrollment_count} / ${course.max_enrollment}`),
