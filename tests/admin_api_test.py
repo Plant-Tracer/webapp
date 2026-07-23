@@ -48,7 +48,7 @@ def test_admin_summary_allows_superadmin(client, new_course):
     assert response.json["viewer"]["super_role"] == odb.SUPER_ROLE_SUPERADMIN
 
 
-def test_admin_summary_includes_enrollment_named_memberships_and_movies(client, new_movie):
+def test_admin_summary_includes_enrollment_memberships_and_movies(client, new_movie):
     ddbo = new_movie["ddbo"]
     ddbo.update_table(ddbo.users, new_movie[USER_ID], {odb.SUPER_ROLE: odb.SUPER_ROLE_SUPERAUDITOR})
     client.set_cookie(apikey.cookie_name(), new_movie[API_KEY])
@@ -67,7 +67,6 @@ def test_admin_summary_includes_enrollment_named_memberships_and_movies(client, 
                 if item["user_id"] == new_movie[USER_ID])
     assert user["courses"] == [{
         "course_id": new_movie[odb.COURSE_ID],
-        "course_name": new_movie[odb.COURSE_NAME],
         "is_admin": False,
     }]
     admin = next(item for item in payload["users"]["items"]
@@ -77,7 +76,7 @@ def test_admin_summary_includes_enrollment_named_memberships_and_movies(client, 
     movie = next(item for item in payload["movies"]["items"]
                  if item["movie_id"] == new_movie[odb.MOVIE_ID])
     assert movie["title"] == new_movie[MOVIE_TITLE]
-    assert movie["course_name"] == new_movie[odb.COURSE_NAME]
+    assert movie["course_id"] == new_movie[odb.COURSE_ID]
     assert movie["owner_name"] == "Course User"
     assert movie["state"] == "published"
 

@@ -108,7 +108,6 @@ receive HTTP 400.
         "courses": [
           {
             "course_id": "PlantTracer 101",
-            "course_name": "Intro Biology",
             "is_admin": false
           }
         ]
@@ -122,7 +121,6 @@ receive HTTP 400.
         "movie_id": "m...",
         "title": "Bean Growth",
         "course_id": "PlantTracer 101",
-        "course_name": "Intro Biology",
         "owner_name": "Alice",
         "state": "published",
         "status": "ready"
@@ -137,8 +135,10 @@ The movie list includes published, unpublished, and deleted DynamoDB records.
 `state` reports that visibility/deletion state; `status` reports processing state.
 The summary deliberately omits object URNs, descriptions, API keys, and research
 metadata. Course enrollment counts are read consistently from the `course_users`
-table. DynamoDB scan order is not stable. The admin page requests bounded pages
-until all three tables are loaded, then sorts complete result sets in the browser;
+table. User memberships and movies carry `course_id`; the admin page joins those
+IDs to the separately downloaded course names after all bounded pages arrive.
+DynamoDB scan order is not stable. The admin page requests bounded pages until
+all three tables are loaded, then sorts complete result sets in the browser;
 clients must treat restart markers as opaque. Course rows include the registration
 `course_key`; callers must treat it as a secret because anyone with the key can
 request enrollment in that course. The admin page masks each course key by default;

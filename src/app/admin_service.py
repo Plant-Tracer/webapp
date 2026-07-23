@@ -103,10 +103,9 @@ class AdminCourseSummary(BaseModel):
 
 
 class AdminUserCourseSummary(BaseModel):
-    """Named course membership shown in an admin user row."""
+    """Course membership shown in an admin user row."""
 
     course_id: str
-    course_name: str
     is_admin: bool
 
 
@@ -127,7 +126,6 @@ class AdminMovieSummary(BaseModel):
     movie_id: str
     title: str
     course_id: str
-    course_name: str
     owner_name: str
     state: str
     status: str
@@ -230,27 +228,6 @@ def table_item_count(table) -> int:
     return int(table.item_count or 0)
 
 
-def course_name_map(table) -> dict[str, str]:
-    """Return current names for all courses using bounded DynamoDB pages."""
-    names = {}
-    # One API request uses this map for both user and movie enrichment. Separate
-    # browser page requests may reach separate Lambda invocations, so retaining
-    # this dictionary across requests would be an unsafe cache of mutable names.
-    scan_kwargs = {
-        CONSISTENT_READ: True,
-        LIMIT: MAX_PAGE_LIMIT,
-    }
-    while True:
-        response = table.scan(**scan_kwargs)
-        for course in response.get(ITEMS, []):
-            course_id = course[COURSE_ID]
-            names[course_id] = course.get(COURSE_NAME) or course_id
-        last_key = response.get(LAST_EVALUATED_KEY)
-        if last_key is None:
-            return names
-        scan_kwargs[EXCLUSIVE_START_KEY] = last_key
-
-
 def course_enrollment_count(table, course_id: str) -> int:
     """Count every current enrollment for a course using bounded query pages."""
     count = 0
@@ -281,13 +258,12 @@ def course_summary(course, *, enrollment_count: int) -> AdminCourseSummary:
     )
 
 
-def user_summary(user, *, course_names: dict[str, str]) -> AdminUserSummary:
+def user_summary(user) -> AdminUserSummary:
     """Convert a DynamoDB user item into an admin summary row."""
     admin_courses = set(user.get(ADMIN_FOR_COURSES, []))
     courses = [
         AdminUserCourseSummary(
             course_id=course_id,
-            course_name=course_names.get(course_id, course_id),
             is_admin=course_id in admin_courses,
         )
         for course_id in user.get(odb.COURSES, [])
@@ -298,11 +274,11 @@ def user_summary(user, *, course_names: dict[str, str]) -> AdminUserSummary:
         email=user.get(EMAIL, ""),
         primary_course_id=user.get(PRIMARY_COURSE_ID, ""),
         super_role=odb.normalize_super_role(user),
-        courses=sorted(courses, key=lambda course: (course.course_name.casefold(), course.course_id)),
+        courses=sorted(courses, key=lambda course: course.course_id),
     )
 
 
-def movie_summary(movie, *, course_names: dict[str, str]) -> AdminMovieSummary:
+def movie_summary(movie) -> AdminMovieSummary:
     """Convert a DynamoDB movie item into a privacy-aware admin row."""
     course_id = movie.get(COURSE_ID, "")
     if movie.get(DELETED, 0):
@@ -315,7 +291,6 @@ def movie_summary(movie, *, course_names: dict[str, str]) -> AdminMovieSummary:
         movie_id=movie[MOVIE_ID],
         title=movie.get(TITLE, ""),
         course_id=course_id,
-        course_name=course_names.get(course_id, course_id),
         owner_name=movie.get(USER_NAME, ""),
         state=state,
         status=movie.get(MOVIE_STATUS) or "",
@@ -350,9 +325,6 @@ def admin_summary(*, viewer_user, course_marker=None, user_marker=None,
         limit=page_limit,
         restart_marker=movie_marker,
     ) if selected_section in (AdminSection.ALL, AdminSection.MOVIES) else ([], None))
-    course_names = (course_name_map(ddbo.courses)
-                    if selected_section in (AdminSection.ALL, AdminSection.USERS, AdminSection.MOVIES)
-                    else {})
     return AdminSummaryResponse(
         viewer=AdminViewer(
             user_id=viewer_user[USER_ID],
@@ -376,11 +348,11 @@ def admin_summary(*, viewer_user, course_marker=None, user_marker=None,
             restart_marker=next_course_marker,
         ),
         users=AdminUserPage(
-            items=[user_summary(user, course_names=course_names) for user in user_items],
+            items=[user_summary(user) for user in user_items],
             restart_marker=next_user_marker,
         ),
         movies=AdminMoviePage(
-            items=[movie_summary(movie, course_names=course_names) for movie in movie_items],
+            items=[movie_summary(movie) for movie in movie_items],
             restart_marker=next_movie_marker,
         ),
     )

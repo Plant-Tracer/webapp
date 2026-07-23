@@ -219,6 +219,24 @@ function reportAdminError(error) {
   status.textContent = error.message;
 }
 
+function enrichCourseNames() {
+  // Courses, users, and movies are downloaded independently. Join them once in
+  // browser memory after every bounded page has arrived; this avoids rescanning
+  // the courses table during each paginated user or movie API request.
+  const names = new Map(state.courses.map((course) => [
+    course.course_id,
+    course.course_name || course.course_id,
+  ]));
+  state.users.forEach((user) => {
+    user.courses.forEach((course) => {
+      course.course_name = names.get(course.course_id) || course.course_id;
+    });
+  });
+  state.movies.forEach((movie) => {
+    movie.course_name = names.get(movie.course_id) || movie.course_id;
+  });
+}
+
 async function fetchAdminPage(section, marker = null) {
   const params = new URLSearchParams({ limit: "100", section });
   if (marker) {
@@ -262,6 +280,7 @@ async function loadAdminSummary() {
   await Promise.all(TABLE_NAMES.map(
     (table) => loadRemainingPages(table, payload[table].restart_marker),
   ));
+  enrichCourseNames();
   TABLE_NAMES.forEach(renderTable);
   status.textContent = `Read-only access as ${payload.viewer.user_name}. Loaded all records.`;
 }

@@ -1,7 +1,4 @@
 const {
-  appendCourseRows,
-  appendMovieRows,
-  appendUserRows,
   loadAdminSummary,
   state,
 } = require('admin');
@@ -41,12 +38,18 @@ function adminDocument() {
 function payload() {
   return {
     viewer: { user_name: 'Root Reader' },
-    counts: { courses: 1, users: 1, movies: 1 },
+    counts: { courses: 2, users: 1, movies: 1 },
     courses: {
-      items: [{
-        course_id: 'BIO-1', course_key: 'grow-beans', course_name: 'Biology', admin_count: 1,
-        enrollment_count: 7, max_enrollment: 10,
-      }],
+      items: [
+        {
+          course_id: 'BIO-1', course_key: 'grow-beans', course_name: 'Biology', admin_count: 1,
+          enrollment_count: 7, max_enrollment: 10,
+        },
+        {
+          course_id: 'CHEM-2', course_key: 'grow-salts', course_name: 'Chemistry', admin_count: 1,
+          enrollment_count: 4, max_enrollment: 10,
+        },
+      ],
       restart_marker: null,
     },
     users: {
@@ -54,15 +57,15 @@ function payload() {
         user_id: 'user-1', user_name: 'Ada', email: 'ada@example.test', primary_course_id: 'BIO-1',
         super_role: 'none',
         courses: [
-          { course_id: 'BIO-1', course_name: 'Biology', is_admin: true },
-          { course_id: 'CHEM-2', course_name: 'Chemistry', is_admin: false },
+          { course_id: 'BIO-1', is_admin: true },
+          { course_id: 'CHEM-2', is_admin: false },
         ],
       }],
       restart_marker: null,
     },
     movies: {
       items: [{
-        movie_id: 'movie-1', title: 'Bean Growth', course_name: 'Biology', owner_name: 'Ada',
+        movie_id: 'movie-1', title: 'Bean Growth', course_id: 'BIO-1', owner_name: 'Ada',
         state: 'published', status: 'ready',
       }],
       restart_marker: null,
@@ -164,10 +167,12 @@ describe('admin summary rendering', () => {
       .toBe('descending');
   });
 
-  test('row helpers render supplied data without HTML interpretation', () => {
-    appendCourseRows(payload().courses.items);
-    appendUserRows(payload().users.items);
-    appendMovieRows([{ ...payload().movies.items[0], title: '<script>bad()</script>' }]);
+  test('renders supplied data without HTML interpretation', async () => {
+    const untrusted = payload();
+    untrusted.movies.items[0].title = '<script>bad()</script>';
+    fetch.mockResponseOnce(JSON.stringify(untrusted));
+
+    await loadAdminSummary();
 
     expect(document.querySelector('#admin-movie-rows script')).toBeNull();
     expect(document.getElementById('admin-movie-rows').textContent).toContain('<script>bad()</script>');
