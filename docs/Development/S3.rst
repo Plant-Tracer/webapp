@@ -47,6 +47,13 @@ templates are:
 * movie object: ``{course_id}/{movie_id}{ext}``
 * persisted frame: ``{course_id}/{movie_id}/{frame_number:06d}{ext}``
 
+Application code must obtain object-key templates from
+``src/app/constants.py`` rather than reconstructing paths from this
+documentation. The constants file does not yet provide separately named
+templates for every derived artifact and upload-staging location; completing
+that refactor is tracked in `GitHub issue #1153
+<https://github.com/Plant-Tracer/webapp/issues/1153>`_.
+
 The resulting objects are:
 
 .. list-table::
@@ -195,7 +202,9 @@ Implementation Sources
 
 Use these files as the implementation sources when updating this page:
 
-* ``src/app/constants.py`` -- movie and frame key templates
+* ``src/app/constants.py`` -- canonical movie and frame key templates; `GitHub
+  issue #1153 <https://github.com/Plant-Tracer/webapp/issues/1153>`_ tracks
+  adding separately named templates for every S3 artifact and staging location
 * ``src/app/s3_presigned.py`` -- S3 URNs, metadata, presigned requests, and CORS
 * ``src/app/odb_movie_data.py`` -- object reads, writes, deletes, and frame URNs
 * ``src/app/flask_api.py`` -- original movie upload allocation
