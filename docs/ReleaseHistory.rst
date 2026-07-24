@@ -77,6 +77,9 @@ Release Notes
 
 Unreleased Summary
 ******************
+    * Operations: restore deployment-isolated S3 EventBridge upload completion,
+      post-upload processing, lifecycle logging, retry/DLQ handling, and an
+      automated deployed upload/trace workflow
     * Developer: centralize runtime S3 object-key templates and formatting helpers while preserving legacy movie URNs
     * Admin: add creation, upload, and last-movie-activity dates; FPM-based elapsed time, frame and byte sizes, resizable columns, course links, and a visible movie ``⋮`` action menu
     * Movies: distinguish created from successfully uploaded records with ``created_at`` and ``uploaded_at``, highlight pending uploads, verify exact-size direct uploads, and maintain ``last_activity_at`` through ``DDBO.update_movie()``

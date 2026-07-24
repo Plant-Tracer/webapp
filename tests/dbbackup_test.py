@@ -48,7 +48,7 @@ from app.odb import (
     DDBO,
 )
 from app import odb_movie_data
-from app.s3_presigned import s3_client
+from app.s3_presigned import replace_course_object_key, s3_client
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -947,8 +947,12 @@ def test_migrate_course_preflight_and_commit(prefix_tools, backup_scenario: Back
     assert backup_scenario.movie_course_id not in owner["courses"]
     assert backup_scenario.migration_course_id in owner["courses"]
     assert movie[COURSE_ID] == backup_scenario.migration_course_id
-    assert not movie[MOVIE_DATA_URN].startswith(f"s3://{backup_scenario.bucket}/{backup_scenario.movie_course_id}/")
-    assert movie[MOVIE_DATA_URN].startswith(f"s3://{backup_scenario.bucket}/{backup_scenario.migration_course_id}/")
+    migrated_key = replace_course_object_key(
+        object_key=backup_scenario.active_movie_key,
+        from_course_id=backup_scenario.movie_course_id,
+        to_course_id=backup_scenario.migration_course_id,
+    )
+    assert movie[MOVIE_DATA_URN] == f"s3://{backup_scenario.bucket}/{migrated_key}"
     assert {
         COURSE_ID: backup_scenario.migration_course_id,
         USER_ID: backup_scenario.owner_user_id,
@@ -957,7 +961,6 @@ def test_migrate_course_preflight_and_commit(prefix_tools, backup_scenario: Back
         COURSE_ID: backup_scenario.movie_course_id,
         USER_ID: backup_scenario.owner_user_id,
     } not in enrollments
-    migrated_key = f"{backup_scenario.migration_course_id}/{backup_scenario.active_movie_id}.mov"
     assert s3_object_bytes(backup_scenario.bucket, migrated_key) == backup_scenario.active_movie_bytes
 
 

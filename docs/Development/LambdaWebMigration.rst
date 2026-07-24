@@ -410,6 +410,11 @@ Deploy:
   stamp the built ``lambda-resize`` artifact before ``sam deploy``. The web
   version API response is printed in full, and resize ping should report the
   application version and UTC deployment timestamp;
+* let the deploy target run ``make sam-deployed-workflow-test``. It creates or
+  reuses a stack-specific test course/user, creates a movie, uploads a real
+  test video through ``uploads/{stack}/``, waits for EventBridge/post-upload
+  processing, writes a starting trackpoint, requests a short trace, verifies
+  completion, and removes its movie artifacts;
 * inspect recent logs with ``make sam-logs-web`` and ``make sam-logs-resize``
   if any smoke check reports a failure.
 
@@ -446,7 +451,8 @@ Manual smoke checks on the non-production stack:
 * resend a login link and confirm the user can log in;
 * for ``MailerDryRun=true`` stacks, confirm the login email appears in Lambda
   web logs and treat the logged link as test-only secret material;
-* upload a small movie and confirm it appears in the list page;
+* confirm the automated deployed workflow uploaded a small movie through the
+  stack's EventBridge rule and completed its short trace;
 * open the analysis page, load the first frame, save at least one marker
   change, and start tracing;
 * confirm the trace job reaches SQS/``lambda-resize`` and produces expected

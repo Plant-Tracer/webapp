@@ -76,7 +76,10 @@ Lambda Stack Diagnostics
 
 ``PLANTTRACER_STACK_NAME``
    CloudFormation stack name for a deployed Lambda-only stack. The SAM template
-   passes this to both Lambda functions for diagnostics.
+   passes this to both Lambda functions. It is also the storage deployment
+   identifier in ``uploads/{stack}/`` and ``movies/{stack}/`` keys and the
+   exact prefix matched by that stack's upload EventBridge rule. Local mode
+   defaults to ``local``.
 
 ``PLANTTRACER_BASE_DOMAIN``
    Base domain used to create the stack hostname, such as

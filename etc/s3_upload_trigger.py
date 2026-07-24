@@ -1,62 +1,75 @@
 #!/usr/bin/env python3
-"""
-DEPRECATED: S3 → Lambda trigger for uploads/ has been removed (Phase 1). Lambda is
-invoked via HTTP API only. This script is no longer run from bootstrap.sh.
-Idempotently add S3 bucket notification so that objects created under prefix
-uploads/ invoke the lambda-resize Lambda. If the trigger is already present,
-leave the bucket notification unchanged. Uses boto3 (no extra deps beyond the app).
-"""
+"""Inspect or safely enable S3 delivery to EventBridge on the shared bucket."""
+
+import argparse
+import json
 import os
-import sys
 
-# Add src so we can run from repo root or etc/
-_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_SRC = os.path.join(_ROOT, "src")
-if _SRC not in sys.path:
-    sys.path.insert(0, _SRC)
+import boto3
 
-import boto3  # pylint: disable=wrong-import-position
 
-# Unique id for our Lambda config so we can detect it when re-running
-TRIGGER_ID = "PlantTracerUploads"
-UPLOAD_PREFIX = "uploads/"
+TOPIC_CONFIGURATIONS = "TopicConfigurations"
+QUEUE_CONFIGURATIONS = "QueueConfigurations"
+LAMBDA_CONFIGURATIONS = "LambdaFunctionConfigurations"
+EVENTBRIDGE_CONFIGURATION = "EventBridgeConfiguration"
+ALLOWED_CONFIGURATION_KEYS = (
+    TOPIC_CONFIGURATIONS,
+    QUEUE_CONFIGURATIONS,
+    LAMBDA_CONFIGURATIONS,
+    EVENTBRIDGE_CONFIGURATION,
+)
+
+
+def configuration_with_eventbridge(configuration):
+    """Return the writable notification fields with EventBridge enabled."""
+    updated = {
+        key: value
+        for key, value in configuration.items()
+        if key in ALLOWED_CONFIGURATION_KEYS and key != EVENTBRIDGE_CONFIGURATION
+    }
+    updated[EVENTBRIDGE_CONFIGURATION] = {}
+    return updated
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--apply", action="store_true", help="write the merged configuration")
+    parser.add_argument(
+        "--confirm-bucket",
+        help="required with --apply; must exactly match PLANTTRACER_S3_BUCKET",
+    )
+    return parser.parse_args()
 
 
 def main() -> int:
+    args = parse_args()
     bucket = os.environ.get("PLANTTRACER_S3_BUCKET", "").strip()
-    lambda_arn = os.environ.get("LAMBDA_RESIZE_ARN", "").strip()
-    if not bucket or not lambda_arn:
-        print("s3_upload_trigger: PLANTTRACER_S3_BUCKET and LAMBDA_RESIZE_ARN must be set", file=sys.stderr)
-        return 0  # Idempotent: skip without failing bootstrap
-    try:
-        client = boto3.client("s3")
-        cfg = client.get_bucket_notification_configuration(Bucket=bucket)
-        lambdas = list(cfg.get("LambdaFunctionConfigurations") or [])
-        if any(c.get("Id") == TRIGGER_ID for c in lambdas):
-            print("s3_upload_trigger: trigger already present, skipping")
-            return 0
-        lambdas.append({
-            "Id": TRIGGER_ID,
-            "LambdaFunctionArn": lambda_arn,
-            "Events": ["s3:ObjectCreated:*"],
-            "Filter": {
-                "Key": {"FilterRules": [{"Name": "prefix", "Value": UPLOAD_PREFIX}]},
-            },
-        })
-        # Preserve existing config; only set LambdaFunctionConfigurations (merge with existing)
-        allowed = {"TopicConfigurations", "QueueConfigurations", "LambdaFunctionConfigurations", "EventBridgeConfiguration"}
-        payload = {k: v for k, v in cfg.items() if k in allowed and v}
-        payload["LambdaFunctionConfigurations"] = lambdas
-        client.put_bucket_notification_configuration(
-            Bucket=bucket,
-            NotificationConfiguration=payload,
-        )
-        print("s3_upload_trigger: added Lambda trigger for prefix uploads/")
-    except Exception as e:  # pylint: disable=broad-exception-caught
-        print(f"s3_upload_trigger: failed: {e}", file=sys.stderr)
-        return 1
+    if not bucket:
+        raise SystemExit("PLANTTRACER_S3_BUCKET must be set")
+    if args.apply and args.confirm_bucket != bucket:
+        raise SystemExit("--confirm-bucket must exactly match PLANTTRACER_S3_BUCKET")
+
+    client = boto3.client("s3")
+    current = client.get_bucket_notification_configuration(Bucket=bucket)
+    print(json.dumps(current, indent=2, default=str))
+    if EVENTBRIDGE_CONFIGURATION in current:
+        print(f"EventBridge delivery is already enabled for {bucket}.")
+        return 0
+    if not args.apply:
+        print(f"EventBridge delivery is disabled for {bucket}; no changes made.")
+        return 0
+
+    updated = configuration_with_eventbridge(current)
+    client.put_bucket_notification_configuration(
+        Bucket=bucket,
+        NotificationConfiguration=updated,
+    )
+    verified = client.get_bucket_notification_configuration(Bucket=bucket)
+    if EVENTBRIDGE_CONFIGURATION not in verified:
+        raise RuntimeError(f"EventBridge delivery was not enabled for {bucket}")
+    print(f"EventBridge delivery enabled and verified for {bucket}.")
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

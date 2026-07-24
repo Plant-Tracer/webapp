@@ -32,7 +32,9 @@ This document is the repository-wide coding standard for Plant Tracer.
 - S3 tests use MinIO.
 - Do not use mocks for DynamoDB or S3 when local real-service tests are practical.
 - The S3 bucket is pre-existing and outlives the CloudFormation stack.
-- Lambda is invoked through its HTTP API and SQS/local queue path, not S3 bucket notifications.
+- Lambda is invoked through HTTP, SQS/local queue, and deployment-filtered S3
+  Object Created EventBridge rules. Do not attach direct Lambda notifications
+  to the shared bucket.
 
 ## Testing
 

@@ -16,6 +16,7 @@ from botocore.exceptions import ClientError
 from pydantic import BaseModel
 
 from .src.app.schema import Trackpoint
+from .src.app.constants import C
 from .src.app.odb import (
     get_movie_metadata,
     get_movie_trackpoints,
@@ -31,12 +32,14 @@ from .src.app.odb import (
     DDBO,
     ENABLED,
     MOVIE_DATA_URN,
+    MOVIE_ID,
     MOVIE_ROTATION,
     MOVIE_TRACED_URN,
     MOVIE_ZIPFILE_URN,
     NEEDS_RETRACING,
     MOVIE_STATUS,
     MOVIE_STATE_READY,
+    MOVIE_STATE_PROCESSING,
     MOVIE_STATE_UPLOADING,
     MOVIE_STATE_TRACING,
     MOVIE_STATE_TRACING_COMPLETED,
@@ -44,6 +47,14 @@ from .src.app.odb import (
     TOTAL_FRAMES,
     UPLOADED_AT,
     UPLOAD_BYTES_EXPECTED,
+    UPLOAD_STAGING_URN,
+    UPLOAD_EVENT_ID,
+    RESIZE_QUEUED_AT,
+    RESIZE_STARTED_AT,
+    RESIZED_AT,
+    WIDTH,
+    HEIGHT,
+    FPS,
     USER_ID
 )
 
@@ -72,6 +83,15 @@ class UploadCompletion(BaseModel):
     movie_id: str
     uploaded_at: int
     total_bytes: int
+
+
+POST_UPLOAD_JOB = "post_upload"
+TRACE_JOB = "trace"
+QUEUE_JOB_TYPE = "job_type"
+S3_BUCKET = "Bucket"
+S3_KEY = "Key"
+S3_COPY_SOURCE = "CopySource"
+S3_CONTENT_LENGTH = "ContentLength"
 
 
 def sqs_client():
@@ -113,7 +133,12 @@ def validate_movie_access(*, api_key=None, movie_id=None, require_edit=False):
 
 def queue_tracing(api_key:str, movie_id:str, frame_start:int, frame_end:int|None=None):
     """Send a tracing request through SQS or the local debug queue."""
-    msg = {"api_key": api_key, "movie_id": movie_id, "frame_start": frame_start}
+    msg = {
+        QUEUE_JOB_TYPE: TRACE_JOB,
+        "api_key": api_key,
+        "movie_id": movie_id,
+        "frame_start": frame_start,
+    }
     safe_msg = {"movie_id": movie_id, "frame_start": frame_start}
     if frame_end is not None:
         msg["frame_end"] = int(frame_end)
@@ -132,6 +157,162 @@ def queue_tracing(api_key:str, movie_id:str, frame_start:int, frame_end:int|None
     LOGGER.info("Enqueuing follow-up SQS batch: %s", safe_msg)
     sqs_client().send_message(QueueUrl=queue_url, MessageBody=json.dumps(msg))
     return {"error":False, "message": safe_msg}
+
+
+def queue_post_upload(movie_id: str):
+    """Queue post-upload movie inspection/resizing work."""
+    message = {QUEUE_JOB_TYPE: POST_UPLOAD_JOB, "movie_id": movie_id}
+    queue_mode = (os.environ.get("TRACING_QUEUE_MODE")
+                  or os.environ.get("TRACKING_QUEUE_MODE", "")).strip().lower()
+    if queue_mode == "local":
+        local_queue.enqueue_message(message)
+        return
+    if not queue_mode and os.environ.get(C.AWS_REGION) == "local":
+        process_uploaded_movie(movie_id=movie_id)
+        return
+    queue_url = (os.environ.get("TRACING_QUEUE_URL")
+                 or os.environ.get("TRACKING_QUEUE_URL", "")).strip()
+    if not queue_url:
+        raise RuntimeError("TRACING_QUEUE_URL not configured for post-upload work")
+    sqs_client().send_message(QueueUrl=queue_url, MessageBody=json.dumps(message))
+
+
+def _head_object(*, bucket, key):
+    try:
+        return s3_presigned.s3_client().head_object(Bucket=bucket, Key=key)
+    except ClientError as exc:
+        raise ValueError("uploaded movie object is not available") from exc
+
+
+def _queue_post_upload_once(ddbo, movie):
+    if movie.get(RESIZED_AT) or movie.get(RESIZE_QUEUED_AT):
+        return
+    queue_post_upload(movie[MOVIE_ID])
+    ddbo.update_movie(
+        movie[MOVIE_ID],
+        {RESIZE_QUEUED_AT: int(time.time())},
+        touch_activity=False,
+    )
+
+
+def _lifecycle_log_id(movie_id, event_type):
+    return f"{movie_id}:{event_type}"
+
+
+def _log_upload_completion(*, ddbo, movie, source, event_id,
+                           staging_key, sequencer, total_bytes):
+    ddbo.put_movie_log(
+        log_id=_lifecycle_log_id(movie[MOVIE_ID], C.LOG_EVENT_MOVIE_UPLOAD_COMPLETED),
+        event_type=C.LOG_EVENT_MOVIE_UPLOAD_COMPLETED,
+        movie=movie,
+        ipaddr=source,
+        event_id=event_id,
+        object_key=staging_key,
+        sequencer=sequencer,
+        total_bytes=total_bytes,
+        if_absent=True,
+    )
+
+
+def complete_uploaded_object(*, movie_id: str, staging_urn: str, event_id: str,
+                             event_size: int | None, sequencer: str | None,
+                             source: str) -> UploadCompletion:
+    """Copy one verified ingress object to durable storage and queue processing."""
+    ddbo = DDBO()
+    movie = ddbo.get_movie(movie_id)
+    expected_staging_urn = (movie.get(UPLOAD_STAGING_URN) or "").strip()
+    if staging_urn != expected_staging_urn:
+        raise ValueError("uploaded movie object does not match the pending movie")
+    durable_urn = (movie.get(MOVIE_DATA_URN) or "").strip()
+    if not durable_urn:
+        raise ValueError("MOVIE_DATA_URN not set")
+    staging_bucket, staging_key = s3_presigned.parse_s3_urn(urn=staging_urn)
+    durable_bucket, durable_key = s3_presigned.parse_s3_urn(urn=durable_urn)
+    if staging_bucket != durable_bucket:
+        raise ValueError("staging and durable movie buckets must match")
+
+    already_uploaded_at = movie.get(UPLOADED_AT)
+    if already_uploaded_at:
+        durable_head = _head_object(bucket=durable_bucket, key=durable_key)
+        durable_bytes = int(durable_head.get(S3_CONTENT_LENGTH) or 0)
+        if durable_bytes != int(movie.get(TOTAL_BYTES) or 0):
+            raise ValueError("durable movie size does not match the movie record")
+        _log_upload_completion(
+            ddbo=ddbo,
+            movie=movie,
+            source=source,
+            event_id=movie.get(UPLOAD_EVENT_ID) or event_id,
+            staging_key=staging_key,
+            sequencer=sequencer,
+            total_bytes=durable_bytes,
+        )
+        s3_presigned.s3_client().delete_object(Bucket=staging_bucket, Key=staging_key)
+        _queue_post_upload_once(ddbo, movie)
+        return UploadCompletion(
+            movie_id=movie_id,
+            uploaded_at=int(already_uploaded_at),
+            total_bytes=durable_bytes,
+        )
+
+    staging_head = _head_object(bucket=staging_bucket, key=staging_key)
+    actual_bytes = int(staging_head.get(S3_CONTENT_LENGTH) or 0)
+    expected_bytes = movie.get(UPLOAD_BYTES_EXPECTED)
+    if event_size is not None and actual_bytes != int(event_size):
+        raise ValueError("EventBridge object size does not match S3")
+    if expected_bytes is not None and actual_bytes != int(expected_bytes):
+        raise ValueError(
+            f"uploaded movie size {actual_bytes} does not match expected size {expected_bytes}"
+        )
+
+    client = s3_presigned.s3_client()
+    client.copy_object(
+        Bucket=durable_bucket,
+        Key=durable_key,
+        CopySource={S3_BUCKET: staging_bucket, S3_KEY: staging_key},
+        MetadataDirective="COPY",
+    )
+    durable_head = _head_object(bucket=durable_bucket, key=durable_key)
+    if int(durable_head.get(S3_CONTENT_LENGTH) or 0) != actual_bytes:
+        raise ValueError("durable movie verification failed")
+
+    uploaded_at = int(time.time())
+    try:
+        ddbo.update_movie(
+            movie_id,
+            {
+                UPLOADED_AT: uploaded_at,
+                TOTAL_BYTES: actual_bytes,
+                MOVIE_STATUS: MOVIE_STATE_PROCESSING,
+                UPLOAD_EVENT_ID: event_id,
+            },
+            expected_status=MOVIE_STATE_UPLOADING,
+        )
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") != "ConditionalCheckFailedException":
+            raise
+        current = ddbo.get_movie(movie_id)
+        if not current.get(UPLOADED_AT):
+            raise
+        uploaded_at = int(current[UPLOADED_AT])
+        movie = current
+    else:
+        movie = ddbo.get_movie(movie_id)
+    _log_upload_completion(
+        ddbo=ddbo,
+        movie=movie,
+        source=source,
+        event_id=movie.get(UPLOAD_EVENT_ID) or event_id,
+        staging_key=staging_key,
+        sequencer=sequencer,
+        total_bytes=actual_bytes,
+    )
+    client.delete_object(Bucket=staging_bucket, Key=staging_key)
+    _queue_post_upload_once(ddbo, movie)
+    return UploadCompletion(
+        movie_id=movie_id,
+        uploaded_at=uploaded_at,
+        total_bytes=actual_bytes,
+    )
 
 
 def prepare_tracing_request(*, api_key: str, movie_id: str, frame_start: int, frame_end: int|None=None) -> dict:
@@ -184,9 +365,6 @@ def get_movie_url_and_rotation(*,api_key=None,movie_id=None) -> MovieInfo:
     if not urn or not urn.strip():
         raise ValueError("MOVIE_DATA_URN not set")
 
-    if movie.get(MOVIE_STATUS,'')==MOVIE_STATE_UPLOADING:
-        odb.set_movie_metadata(movie_id=movie_id, movie_metadata={MOVIE_STATUS:MOVIE_STATE_READY})
-
     return MovieInfo(
         signed_url=s3_presigned.make_signed_url(urn=urn, operation='get', expires=300),
         signed_zipfile_url=None,
@@ -208,39 +386,86 @@ def get_movie_download_urls(*, api_key=None, movie_id=None) -> MovieDownloadInfo
 
 
 def complete_movie_upload(*, api_key: str, movie_id: str) -> UploadCompletion:
-    """Verify a direct S3 upload and record its successful completion time."""
-    ddbo, _user_id, movie = validate_movie_access(
+    """Authenticated local-development adapter for upload completion."""
+    _ddbo, _user_id, movie = validate_movie_access(
         api_key=api_key,
         movie_id=movie_id,
         require_edit=True,
+    )
+    staging_urn = (movie.get(UPLOAD_STAGING_URN) or "").strip()
+    if not staging_urn:
+        raise ValueError("UPLOAD_STAGING_URN not set")
+    return complete_uploaded_object(
+        movie_id=movie_id,
+        staging_urn=staging_urn,
+        event_id=f"http-{time.time_ns()}",
+        event_size=None,
+        sequencer=None,
+        source="authenticated-http",
+    )
+
+
+def process_uploaded_movie(*, movie_id: str):
+    """Extract post-upload metadata and finish the asynchronous resize phase."""
+    ddbo = DDBO()
+    movie = ddbo.get_movie(movie_id)
+    if movie.get(RESIZED_AT):
+        ddbo.put_movie_log(
+            log_id=_lifecycle_log_id(movie_id, C.LOG_EVENT_MOVIE_RESIZE_COMPLETED),
+            event_type=C.LOG_EVENT_MOVIE_RESIZE_COMPLETED,
+            movie=movie,
+            ipaddr="lambda-resize",
+            total_bytes=movie.get(TOTAL_BYTES),
+            elapsed_seconds=max(
+                0,
+                int(movie[RESIZED_AT])
+                - int(movie.get(RESIZE_STARTED_AT) or movie[RESIZED_AT]),
+            ),
+            if_absent=True,
+        )
+        return
+    started_at = int(time.time())
+    ddbo.update_movie(
+        movie_id,
+        {RESIZE_STARTED_AT: started_at, MOVIE_STATUS: MOVIE_STATE_PROCESSING},
+        touch_activity=False,
+    )
+    ddbo.put_movie_log(
+        log_id=_lifecycle_log_id(movie_id, C.LOG_EVENT_MOVIE_RESIZE_STARTED),
+        event_type=C.LOG_EVENT_MOVIE_RESIZE_STARTED,
+        movie=movie,
+        ipaddr="lambda-resize",
+        total_bytes=movie.get(TOTAL_BYTES),
+        if_absent=True,
     )
     movie_urn = (movie.get(MOVIE_DATA_URN) or "").strip()
     if not movie_urn:
         raise ValueError("MOVIE_DATA_URN not set")
     bucket, key = s3_presigned.parse_s3_urn(urn=movie_urn)
-    try:
-        response = s3_presigned.s3_client().head_object(Bucket=bucket, Key=key)
-    except ClientError as exc:
-        raise ValueError("uploaded movie object is not available") from exc
-    actual_bytes = int(response.get("ContentLength") or 0)
-    expected_bytes = movie.get(UPLOAD_BYTES_EXPECTED)
-    if expected_bytes is not None and actual_bytes != int(expected_bytes):
-        raise ValueError(
-            f"uploaded movie size {actual_bytes} does not match expected size {expected_bytes}"
-        )
-    uploaded_at = int(time.time())
-    ddbo.update_movie(
-        movie_id,
-        {
-            UPLOADED_AT: uploaded_at,
-            TOTAL_BYTES: actual_bytes,
-            MOVIE_STATUS: MOVIE_STATE_READY,
-        },
-    )
-    return UploadCompletion(
-        movie_id=movie_id,
-        uploaded_at=uploaded_at,
-        total_bytes=actual_bytes,
+    t0 = time.time()
+    with tempfile.NamedTemporaryFile(suffix=".mov") as movie_file:
+        s3_presigned.s3_client().download_file(bucket, key, movie_file.name)
+        metadata = mpeg_jpeg_zip.extract_movie_metadata(movie_path=movie_file.name)
+    resized_at = int(time.time())
+    updates = {
+        WIDTH: metadata["width"],
+        HEIGHT: metadata["height"],
+        FPS: str(metadata["fps"]),
+        TOTAL_FRAMES: metadata["total_frames"],
+        TOTAL_BYTES: metadata["total_bytes"],
+        RESIZED_AT: resized_at,
+        MOVIE_STATUS: MOVIE_STATE_READY,
+    }
+    ddbo.update_movie(movie_id, updates)
+    completed_movie = ddbo.get_movie(movie_id)
+    ddbo.put_movie_log(
+        log_id=_lifecycle_log_id(movie_id, C.LOG_EVENT_MOVIE_RESIZE_COMPLETED),
+        event_type=C.LOG_EVENT_MOVIE_RESIZE_COMPLETED,
+        movie=completed_movie,
+        ipaddr="lambda-resize",
+        total_bytes=metadata["total_bytes"],
+        elapsed_seconds=time.time() - t0,
+        if_absent=True,
     )
 
 
