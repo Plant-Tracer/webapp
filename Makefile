@@ -595,8 +595,8 @@ lambda-resize-lint: install-lambda-deps
 	poetry run ruff check --fix lambda-resize/src
 	PYTHONPATH=lambda-resize/src poetry run pylint lambda-resize/src
 
-lambda-resize-check: lambda-resize-lint
-	PYTHONPATH=lambda-resize/src poetry run pytest lambda-resize/tests -q --cov=lambda-resize/src --cov-report=term -o junit_family=legacy --log-cli-level=DEBUG
+lambda-resize-check: lambda-resize-lint $(LOCAL_TEST_REQ)
+	$(LOCAL_AWS_ENV) PYTHONPATH=.:src:lambda-resize/src:$$PYTHONPATH poetry run pytest lambda-resize/tests -q --cov=lambda-resize/src --cov-report=term -o junit_family=legacy --log-cli-level=DEBUG
 
 ################################################################
 ## lambda-web
