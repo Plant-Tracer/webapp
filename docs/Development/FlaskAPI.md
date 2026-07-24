@@ -345,6 +345,9 @@ video file directly to its final S3 key. The row initially has `created_at` but
 not `uploaded_at`. After S3 accepts the exact-size upload, the browser calls
 lambda-resize `POST /resize-api/v1/process-upload`; that service verifies the
 object with `HeadObject` and records `uploaded_at` and `total_bytes`. The browser
+does not construct the key: the API uses the canonical current-layout template
+`{course_id}/{movie_id}.mov` and returns the presigned POST fields needed to
+upload to it.
 then requests the first frame and links the user to Analyze.
 
 **Parameters**

@@ -56,7 +56,7 @@ from .odb import (
     clear_movie_tracking,
 )
 from .s3_presigned import (
-    make_object_name,
+    movie_object_key,
     make_urn,
     make_signed_url,
     make_presigned_post,
@@ -811,9 +811,10 @@ def api_new_movie():
                                          fpm=fpm,
                                          upload_bytes_expected=movie_data_length)
 
-    oname = make_object_name(course_id=odb.course_id_for_movie_id(ret[MOVIE_ID]),
-                             movie_id=ret[MOVIE_ID],
-                             ext=C.MOVIE_EXTENSION)
+    oname = movie_object_key(
+        course_id=odb.course_id_for_movie_id(ret[MOVIE_ID]),
+        movie_id=ret[MOVIE_ID],
+    )
     movie_data_urn = make_urn(object_name=oname)
     odb.set_movie_data_urn(movie_id=ret[MOVIE_ID], movie_data_urn=movie_data_urn)
 

@@ -356,8 +356,7 @@ def run_tracing(*, movie_id, frame_start, frame_end=None):
 
         # Upload the zipfile and the traced movie
         total_frames = int(movie_record.get(TOTAL_FRAMES) or max((tp.frame_number for tp in trackpoints)) + 1)
-        (name,ext) = os.path.splitext(movie_urn)
-        movie_zipfile_urn = name+"_zipfile"+ext
+        movie_zipfile_urn = s3_presigned.analysis_zip_urn(movie_data_urn=movie_urn)
         write_object_from_path(urn=movie_zipfile_urn, path=movie_zipfile_path)
 
         # Best-effort snapshot of the capture interval into the traced MP4. DynamoDB remains
@@ -369,7 +368,7 @@ def run_tracing(*, movie_id, frame_start, frame_end=None):
             except Exception:  # pylint: disable=broad-exception-caught
                 LOGGER.exception("failed to write fpm metadata to traced movie movie_id=%s", movie_id)
 
-        movie_traced_urn = name+"_traced"+ext
+        movie_traced_urn = s3_presigned.traced_movie_urn(movie_data_urn=movie_urn)
         write_object_from_path(urn=movie_traced_urn, path=movie_traced_path)
 
         # Update the database
