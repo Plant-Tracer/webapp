@@ -965,7 +965,7 @@ def test_migrate_course_preflight_and_commit(prefix_tools, backup_scenario: Back
 
 
 def test_migrate_s3_urn_rejects_an_unrelated_course_prefix():
-    with pytest.raises(dbbackup.DbBackupError, match="does not start"):
+    with pytest.raises(dbbackup.DbBackupError, match="does not contain"):
         dbbackup.migrate_s3_urn(
             "s3://movies/course-10/movie.mov",
             from_course_id="course-1",

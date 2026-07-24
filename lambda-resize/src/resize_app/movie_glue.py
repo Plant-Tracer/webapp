@@ -165,7 +165,10 @@ def queue_post_upload(movie_id: str):
     queue_mode = (os.environ.get("TRACING_QUEUE_MODE")
                   or os.environ.get("TRACKING_QUEUE_MODE", "")).strip().lower()
     if queue_mode == "local":
-        local_queue.enqueue_message(message)
+        if local_queue.worker_running():
+            local_queue.enqueue_message(message)
+        else:
+            process_uploaded_movie(movie_id=movie_id)
         return
     if not queue_mode and os.environ.get(C.AWS_REGION) == "local":
         process_uploaded_movie(movie_id=movie_id)
