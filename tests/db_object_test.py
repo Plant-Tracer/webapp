@@ -5,6 +5,7 @@ import uuid
 import hashlib
 
 import boto3
+import pytest
 
 from app import s3_presigned
 from app import odb_movie_data
@@ -15,14 +16,73 @@ from app.constants import logger
 
 s3client = boto3.client('s3')
 
-def test_object_name():
-    assert s3_presigned.make_object_name(course_id=1, movie_id=2, ext='.mov').endswith(".mov")
-    assert s3_presigned.make_object_name(course_id=1, movie_id=2, frame_number=3, ext='.jpeg').endswith(".jpeg")
+def test_runtime_s3_object_keys_are_deterministic():
+    movie_key = s3_presigned.movie_object_key(course_id="c1", movie_id="m2")
+
+    assert movie_key == "c1/m2.mov"
+    assert s3_presigned.traced_movie_object_key(
+        source_movie_object_key=movie_key,
+    ) == "c1/m2_traced.mov"
+    assert s3_presigned.analysis_zip_object_key(
+        source_movie_object_key=movie_key,
+    ) == "c1/m2_zipfile.mov"
+    assert s3_presigned.frame_object_key(
+        course_id="c1",
+        movie_id="m2",
+        frame_number=3,
+    ) == "c1/m2/000003.jpg"
+    assert s3_presigned.movie_object_key(
+        course_id="legacy/course",
+        movie_id="m2",
+    ) == "legacy/course/m2.mov"
+
+
+def test_upload_staging_keys_are_isolated_by_deployment():
+    prod_key = s3_presigned.upload_staging_object_key(
+        deployment_id="prod",
+        course_id="c1",
+        movie_id="m2",
+    )
+    demo_key = s3_presigned.upload_staging_object_key(
+        deployment_id="demo",
+        course_id="c1",
+        movie_id="m2",
+    )
+
+    assert prod_key == "uploads/prod/c1/m2.mov"
+    assert demo_key == "uploads/demo/c1/m2.mov"
+    assert prod_key != demo_key
+
+
+def test_object_key_components_cannot_escape_their_prefix():
+    with pytest.raises(ValueError, match="deployment_id"):
+        s3_presigned.upload_staging_object_key(
+            deployment_id="prod/other",
+            course_id="c1",
+            movie_id="m2",
+        )
+    with pytest.raises(ValueError, match="non-negative"):
+        s3_presigned.frame_object_key(
+            course_id="c1",
+            movie_id="m2",
+            frame_number=-1,
+        )
+
+
+def test_derived_movie_urns_preserve_legacy_bucket_path_and_extension():
+    legacy_urn = "s3://legacy-bucket/archive/c1/m2.mp4"
+
+    assert s3_presigned.traced_movie_urn(
+        movie_data_urn=legacy_urn,
+    ) == "s3://legacy-bucket/archive/c1/m2_traced.mp4"
+    assert s3_presigned.analysis_zip_urn(
+        movie_data_urn=legacy_urn,
+    ) == "s3://legacy-bucket/archive/c1/m2_zipfile.mp4"
 
 def test_make_urn(local_s3):
-    name = s3_presigned.make_object_name(course_id=1, movie_id=2, ext='.txt')
+    name = s3_presigned.movie_object_key(course_id="c1", movie_id="m2")
     a = s3_presigned.make_urn(object_name=name)
-    assert a.endswith(".txt")
+    assert a.endswith("/c1/m2.mov")
 
 def test_write_read_delete_object(local_s3):
     DATA = str(uuid.uuid4()).encode('utf-8')
@@ -32,7 +92,7 @@ def test_write_read_delete_object(local_s3):
 
     course_id = 'bogus'
     movie_id = odb.new_movie_id()
-    name = s3_presigned.make_object_name(course_id=course_id, movie_id=movie_id, ext='.txt')
+    name = s3_presigned.movie_object_key(course_id=course_id, movie_id=movie_id)
     urn  = s3_presigned.make_urn(object_name=name)
     try:
         odb_movie_data.write_object(urn=urn, object_data=DATA)
@@ -45,3 +105,14 @@ def test_write_read_delete_object(local_s3):
 
     odb_movie_data.delete_object(urn=urn)
     assert odb_movie_data.read_object(urn=urn) is None
+
+
+def test_legacy_movie_urn_remains_readable(local_s3):
+    legacy_urn = s3_presigned.make_urn(object_name="legacy/c1/m2.mp4")
+    movie_data = b"legacy movie bytes"
+
+    odb_movie_data.write_object(urn=legacy_urn, object_data=movie_data)
+    try:
+        assert odb_movie_data.read_object(urn=legacy_urn) == movie_data
+    finally:
+        odb_movie_data.delete_object(urn=legacy_urn)

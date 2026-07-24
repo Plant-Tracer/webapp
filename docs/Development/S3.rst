@@ -49,9 +49,20 @@ templates are:
 
 Application code must obtain object-key templates from
 ``src/app/constants.py`` rather than reconstructing paths from this
-documentation. The constants file does not yet provide separately named
-templates for every derived artifact and upload-staging location; completing
-that refactor is tracked in `GitHub issue #1153
+documentation. The canonical templates are:
+
+* ``S3_COURSE_PREFIX_TEMPLATE``
+* ``S3_MOVIE_OBJECT_KEY_TEMPLATE``
+* ``S3_TRACED_MOVIE_OBJECT_KEY_TEMPLATE``
+* ``S3_ANALYSIS_ZIP_OBJECT_KEY_TEMPLATE``
+* ``S3_FRAME_OBJECT_KEY_TEMPLATE``
+* ``S3_UPLOAD_STAGING_OBJECT_KEY_TEMPLATE``
+
+``src/app/s3_presigned.py`` provides artifact-specific formatting helpers.
+Callers use those helpers instead of calling ``str.format`` or concatenating
+prefixes and suffixes themselves. Derived-artifact helpers preserve the bucket,
+path, and extension of the original movie URN so legacy DynamoDB records remain
+readable and retraceable. This contract was centralized in `GitHub issue #1153
 <https://github.com/Plant-Tracer/webapp/issues/1153>`_.
 
 The resulting objects are:
@@ -110,6 +121,12 @@ There is no live S3 bucket-notification or EventBridge pipeline. The deprecated
 S3-triggered processing is tracked separately in `GitHub issue #1152
 <https://github.com/Plant-Tracer/webapp/issues/1152>`_; it is not part of the
 admin activity work in PR #1151.
+
+``S3_UPLOAD_STAGING_OBJECT_KEY_TEMPLATE`` reserves the proposed
+``uploads/{deployment_id}/{course_id}/{movie_id}.mov`` contract for that work.
+It is tested for deployment isolation but is not used by the current browser
+upload flow. Issue #1152 will decide and implement any corresponding
+``movies/{deployment_id}/`` durable layout.
 
 Metadata Stored with Original Movies
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -202,10 +219,10 @@ Implementation Sources
 
 Use these files as the implementation sources when updating this page:
 
-* ``src/app/constants.py`` -- canonical movie and frame key templates; `GitHub
-  issue #1153 <https://github.com/Plant-Tracer/webapp/issues/1153>`_ tracks
-  adding separately named templates for every S3 artifact and staging location
-* ``src/app/s3_presigned.py`` -- S3 URNs, metadata, presigned requests, and CORS
+* ``src/app/constants.py`` -- canonical templates for every current runtime S3
+  artifact and the proposed deployment-scoped upload-staging key
+* ``src/app/s3_presigned.py`` -- artifact-specific key helpers, S3 URNs,
+  metadata, presigned requests, and CORS
 * ``src/app/odb_movie_data.py`` -- object reads, writes, deletes, and frame URNs
 * ``src/app/flask_api.py`` -- original movie upload allocation
 * ``lambda-resize/src/resize_app/movie_glue.py`` -- upload verification and
