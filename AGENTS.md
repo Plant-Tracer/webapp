@@ -95,7 +95,10 @@ Route handlers should be thin; put business logic in `odb.py`, `mailer.py`, `s3_
 ### Data Storage
 - **S3**: movies, frames, ZIP files. The bucket is always **pre-existing** and **outlives the CloudFormation stack** as the long-term archive. Because the bucket outlives DynamoDB, research/attribution metadata must also be written **into the MP4 file** (see `src/app/mp4_metadata_lib.py`, `docs/Development/MOVIE_METADATA.rst`).
 - **DynamoDB**: tables prefixed by `DYNAMODB_TABLE_PREFIX` (e.g. `demo-`). Schema in `src/app/schema.py`; creation in `src/app/odbmaint.py`. CLI: `poetry run dbutil` (`createdb`, `makelink`, etc.).
-- Lambda is invoked via its HTTP API, **not** via S3 bucket notifications.
+- Lambda is invoked through its HTTP API and SQS. S3 Object Created events also
+  reach lambda-resize through EventBridge rules filtered to each stack's
+  ``uploads/{stack}/`` prefix; do not attach direct Lambda notifications to the
+  shared bucket.
 
 ### Lambda (`lambda-resize/`)
 A separate Poetry project. App code from the main package is vendored into `resize_app/src/app/` via `make -C lambda-resize vend-app` before linting/testing. Imports in Lambda code use `from .src.app import odb` style — do not change these to import the top-level `app` package.

@@ -35,6 +35,7 @@ from aws_lambda_powertools.utilities.batch import (
 from . import movie_glue
 from . import mpeg_jpeg_zip
 from . import lambda_tracing_handler
+from . import upload_event
 from .src.app.constants import (
     __version__,
     stack_name,
@@ -247,7 +248,9 @@ def handle_post_actions():
 
 @LOGGER.inject_lambda_context(log_event=False)
 def lambda_handler(event: Dict[str, Any], context: LambdaContext) -> Dict[str, Any]:
-    """Unified Lambda entrypoint: dispatch between HTTP API and SQS events."""
+    """Unified Lambda entrypoint: dispatch EventBridge, SQS, or HTTP events."""
+    if isinstance(event, dict) and event.get("source") == "aws.s3":
+        return upload_event.process_upload_event(event).model_dump()
     if isinstance(event, dict) and "Records" in event:
         # Route to SQS handler for partial batch processing
         return process_partial_response( event=event, context=context,

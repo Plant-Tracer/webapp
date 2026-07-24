@@ -84,27 +84,35 @@ def _template_component(name, value):
     return component
 
 
-def course_object_prefix(*, course_id):
+def _deployment_value(value):
+    """Return one deployment identifier used in namespaced object keys."""
+    return _template_component("deployment_id", value)
+
+
+def course_object_prefix(*, deployment_id, course_id):
     """Return the current course prefix for runtime movie objects."""
     return C.S3_COURSE_PREFIX_TEMPLATE.format(
+        deployment_id=_deployment_value(deployment_id),
         course_id=_template_value("course_id", course_id),
     )
 
 
-def movie_object_key(*, course_id, movie_id):
+def movie_object_key(*, deployment_id, course_id, movie_id):
     """Return the durable original-movie object key."""
     return C.S3_MOVIE_OBJECT_KEY_TEMPLATE.format(
+        deployment_id=_deployment_value(deployment_id),
         course_id=_template_value("course_id", course_id),
         movie_id=_template_value("movie_id", movie_id),
     )
 
 
-def frame_object_key(*, course_id, movie_id, frame_number):
+def frame_object_key(*, deployment_id, course_id, movie_id, frame_number):
     """Return a persisted JPEG frame object key."""
     number = int(frame_number)
     if number < 0:
         raise ValueError("frame_number must be non-negative")
     return C.S3_FRAME_OBJECT_KEY_TEMPLATE.format(
+        deployment_id=_deployment_value(deployment_id),
         course_id=_template_value("course_id", course_id),
         movie_id=_template_value("movie_id", movie_id),
         frame_number=number,
@@ -114,7 +122,7 @@ def frame_object_key(*, course_id, movie_id, frame_number):
 def upload_staging_object_key(*, deployment_id, course_id, movie_id):
     """Return the deployment-scoped upload key reserved for issue #1152."""
     return C.S3_UPLOAD_STAGING_OBJECT_KEY_TEMPLATE.format(
-        deployment_id=_template_component("deployment_id", deployment_id),
+        deployment_id=_deployment_value(deployment_id),
         course_id=_template_component("course_id", course_id),
         movie_id=_template_component("movie_id", movie_id),
     )
@@ -187,11 +195,22 @@ def analysis_zip_urn(*, movie_data_urn):
 
 
 def replace_course_object_key(*, object_key, from_course_id, to_course_id):
-    """Move one current-layout key between course prefixes."""
-    source_prefix = course_object_prefix(course_id=from_course_id)
-    if not object_key.startswith(source_prefix):
-        raise ValueError(f"S3 key {object_key} does not start with {source_prefix}")
-    return course_object_prefix(course_id=to_course_id) + object_key[len(source_prefix):]
+    """Move a namespaced or legacy key between course prefixes."""
+    legacy_prefix = f"{_template_value('from_course_id', from_course_id)}/"
+    namespaced_suffix = f"/{legacy_prefix}"
+    if object_key.startswith(legacy_prefix):
+        source_prefix = legacy_prefix
+        target_prefix = f"{_template_value('to_course_id', to_course_id)}/"
+    else:
+        marker = object_key.find(namespaced_suffix)
+        if marker < 0:
+            raise ValueError(f"S3 key {object_key} does not contain course {from_course_id}")
+        source_prefix = object_key[:marker + 1] + legacy_prefix
+        target_prefix = (
+            object_key[:marker + 1]
+            + f"{_template_value('to_course_id', to_course_id)}/"
+        )
+    return target_prefix + object_key[len(source_prefix):]
 
 
 def make_signed_url(*, urn, operation=C.GET, expires=3600, download_name=None):

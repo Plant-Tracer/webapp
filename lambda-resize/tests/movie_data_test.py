@@ -6,7 +6,7 @@ import pytest
 
 from resize_app import movie_glue
 from resize_app.main import lambda_handler
-from resize_app.src.app.odb_movie_data import delete_object
+from resize_app.src.app import s3_presigned
 
 
 class DummyContext:
@@ -118,8 +118,28 @@ def test_process_upload_requires_authentication_and_movie_id():
 
 def test_process_upload_rejects_missing_s3_object(new_movie):
     movie_id = new_movie[movie_glue.odb.MOVIE_ID]
-    movie = new_movie["ddbo"].get_movie(movie_id)
-    delete_object(movie[movie_glue.MOVIE_DATA_URN])
+    ddbo = new_movie["ddbo"]
+    movie = ddbo.get_movie(movie_id)
+    bucket, _durable_key = s3_presigned.parse_s3_urn(
+        urn=movie[movie_glue.MOVIE_DATA_URN],
+    )
+    staging_urn = s3_presigned.make_urn(
+        bucket=bucket,
+        object_name=s3_presigned.upload_staging_object_key(
+            deployment_id="local",
+            course_id=movie[movie_glue.odb.COURSE_ID],
+            movie_id=movie_id,
+        ),
+    )
+    ddbo.update_movie(
+        movie_id,
+        {
+            movie_glue.UPLOAD_STAGING_URN: staging_urn,
+            movie_glue.UPLOADED_AT: None,
+            movie_glue.MOVIE_STATUS: movie_glue.MOVIE_STATE_UPLOADING,
+        },
+        touch_activity=False,
+    )
     event = make_post_event(
         "/resize-api/v1/process-upload",
         {"movie_id": movie_id},
@@ -136,9 +156,30 @@ def test_complete_movie_upload_rejects_wrong_byte_count(new_movie):
     ddbo = new_movie["ddbo"]
     movie_id = new_movie[movie_glue.odb.MOVIE_ID]
     movie = ddbo.get_movie(movie_id)
+    bucket, durable_key = s3_presigned.parse_s3_urn(
+        urn=movie[movie_glue.MOVIE_DATA_URN],
+    )
+    staging_key = s3_presigned.upload_staging_object_key(
+        deployment_id="local",
+        course_id=movie[movie_glue.odb.COURSE_ID],
+        movie_id=movie_id,
+    )
+    s3_presigned.s3_client().copy_object(
+        Bucket=bucket,
+        Key=staging_key,
+        CopySource={"Bucket": bucket, "Key": durable_key},
+    )
     ddbo.update_movie(
         movie_id,
-        {movie_glue.UPLOAD_BYTES_EXPECTED: int(movie[movie_glue.TOTAL_BYTES]) + 1},
+        {
+            movie_glue.UPLOAD_BYTES_EXPECTED: int(movie[movie_glue.TOTAL_BYTES]) + 1,
+            movie_glue.UPLOAD_STAGING_URN: s3_presigned.make_urn(
+                bucket=bucket,
+                object_name=staging_key,
+            ),
+            movie_glue.UPLOADED_AT: None,
+            movie_glue.MOVIE_STATUS: movie_glue.MOVIE_STATE_UPLOADING,
+        },
         touch_activity=False,
     )
 
