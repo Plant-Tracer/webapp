@@ -872,7 +872,7 @@ sam-deploy-version-check: sam-config-check sam-version-check
 			elif [ "$$DEPLOYED_VERSION" = "$(APP_VERSION)" ] && [ "$(SAM_DEPLOY_ALLOW_SAME_VERSION)" != "1" ]; then \
 				echo "Refusing to deploy $(STACK_NAME): deployed stack already reports version $(APP_VERSION) at $$VERSION_URL."; \
 				echo "Deployed endpoint stack_name: $${DEPLOYED_STACK:-unavailable}."; \
-				echo "Bump pyproject.toml before deploying again."; \
+				echo "Advance [project].version in pyproject.toml (for example, $(APP_VERSION) -> <next version>), commit it, then run: make sam-build sam-deploy"; \
 				echo "This matters for Lambda SnapStart: lambda-web snapshots published versions, so each normal deploy should publish a deliberately new application version."; \
 				echo "For an intentional same-version redeploy, set SAM_DEPLOY_ALLOW_SAME_VERSION=1."; \
 				exit 1; \
