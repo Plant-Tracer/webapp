@@ -2,7 +2,11 @@ import json
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import pytest
+
+from resize_app import movie_glue
 from resize_app.main import lambda_handler
+from resize_app.src.app.odb_movie_data import delete_object
 
 
 class DummyContext:
@@ -98,11 +102,51 @@ def test_process_upload_requires_authentication_and_movie_id():
     assert response["statusCode"] == 401
 
     response = lambda_handler(
+        make_post_event(path, None, {"x-api-key": "test-key"}),
+        DummyContext(),
+    )
+    assert response["statusCode"] == 400
+    assert "Request body" in response["body"]
+
+    response = lambda_handler(
         make_post_event(path, {"other": "value"}, {"x-api-key": "test-key"}),
         DummyContext(),
     )
     assert response["statusCode"] == 400
     assert "movie_id" in response["body"]
+
+
+def test_process_upload_rejects_missing_s3_object(new_movie):
+    movie_id = new_movie[movie_glue.odb.MOVIE_ID]
+    movie = new_movie["ddbo"].get_movie(movie_id)
+    delete_object(movie[movie_glue.MOVIE_DATA_URN])
+    event = make_post_event(
+        "/resize-api/v1/process-upload",
+        {"movie_id": movie_id},
+        {"x-api-key": new_movie[movie_glue.odb.API_KEY]},
+    )
+
+    response = lambda_handler(event, DummyContext())
+
+    assert response["statusCode"] == 403
+    assert "uploaded movie object is not available" in response["body"]
+
+
+def test_complete_movie_upload_rejects_wrong_byte_count(new_movie):
+    ddbo = new_movie["ddbo"]
+    movie_id = new_movie[movie_glue.odb.MOVIE_ID]
+    movie = ddbo.get_movie(movie_id)
+    ddbo.update_movie(
+        movie_id,
+        {movie_glue.UPLOAD_BYTES_EXPECTED: int(movie[movie_glue.TOTAL_BYTES]) + 1},
+        touch_activity=False,
+    )
+
+    with pytest.raises(ValueError, match="does not match expected size"):
+        movie_glue.complete_movie_upload(
+            api_key=new_movie[movie_glue.odb.API_KEY],
+            movie_id=movie_id,
+        )
 
 
 def test_trace_movie_requires_body_and_movie_id():

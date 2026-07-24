@@ -1,3 +1,5 @@
+import time
+import uuid
 from urllib.parse import parse_qs, urlparse
 
 import pytest
@@ -116,6 +118,58 @@ def test_admin_movie_media_returns_fresh_urls(client, new_movie):
         urlparse(traced_response.json["traced_download_url"]).query
     )["response-content-disposition"][0]
     assert disposition == f'attachment; filename="{new_movie[odb.MOVIE_ID]}-traced.mp4"'
+
+
+def test_admin_movie_media_requires_super_role(client, new_movie):
+    response = client.get(f"/api/admin/movies/{new_movie[odb.MOVIE_ID]}/media")
+    assert response.status_code == 403
+    assert response.json == {"error": True, "message": "Invalid api_key"}
+
+    client.set_cookie(apikey.cookie_name(), new_movie[API_KEY])
+    response = client.get(f"/api/admin/movies/{new_movie[odb.MOVIE_ID]}/media")
+    assert response.status_code == 403
+    assert response.json == {"error": True, "message": "Admin read access required"}
+
+
+def test_admin_movie_media_reports_missing_movie(client, new_course):
+    ddbo = new_course["ddbo"]
+    ddbo.update_table(
+        ddbo.users,
+        new_course[USER_ID],
+        {odb.SUPER_ROLE: odb.SUPER_ROLE_SUPERAUDITOR},
+    )
+    client.set_cookie(apikey.cookie_name(), new_course[API_KEY])
+
+    missing_movie_id = f"m{uuid.uuid4()}"
+    response = client.get(f"/api/admin/movies/{missing_movie_id}/media")
+
+    assert response.status_code == 404
+    assert response.json == {"error": True, "message": "Movie not found"}
+
+
+def test_admin_movie_media_distinguishes_pending_from_missing_data(client, new_course):
+    ddbo = new_course["ddbo"]
+    ddbo.update_table(
+        ddbo.users,
+        new_course[USER_ID],
+        {odb.SUPER_ROLE: odb.SUPER_ROLE_SUPERAUDITOR},
+    )
+    client.set_cookie(apikey.cookie_name(), new_course[API_KEY])
+    movie_id = odb.create_new_movie(
+        user_id=new_course[USER_ID],
+        course_id=new_course[odb.COURSE_ID],
+        title="Pending admin media test",
+        description="No S3 object has been uploaded",
+    )
+
+    pending_response = client.get(f"/api/admin/movies/{movie_id}/media")
+    assert pending_response.status_code == 409
+    assert pending_response.json == {"error": True, "message": "Movie has not been uploaded"}
+
+    ddbo.update_movie(movie_id, {odb.UPLOADED_AT: int(time.time())})
+    missing_data_response = client.get(f"/api/admin/movies/{movie_id}/media")
+    assert missing_data_response.status_code == 409
+    assert missing_data_response.json == {"error": True, "message": "Movie data is not available"}
 
 
 def test_course_summary_uses_id_when_name_is_empty():
