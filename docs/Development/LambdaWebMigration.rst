@@ -126,10 +126,10 @@ Current template classification:
      - Not initial candidates. They rely on injected user, course, admin, demo,
        max-upload, and API-key state.
    * - Demo/tracer pages and shared includes
-     - ``demo_tracer*.html``, ``tracer_app.html``, ``tracer_app.css``,
+     - ``demo_tracer*.html``, ``tracer_app.html``, ``planttracer.css``,
        ``register_resend.html``, ``base.html``
-     - Keep as Jinja/includes for now. A later migration should treat shared
-       includes as normal static assets only after an asset versioning plan.
+     - Keep the HTML as Jinja/includes for now. Browser pages, including the
+       demos, load the shared ``static/planttracer.css`` stylesheet.
    * - Operational and email templates
      - ``config_error.html``, ``debug.html``, ``version.txt``,
        ``email_login.html``, ``email_course_created.html``

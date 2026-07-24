@@ -6,11 +6,9 @@
     <script src="{{ url_for('static', filename='jquery-3.7.1.min.js') }}"></script>
     <script type="module" src="{{ url_for('static', filename='canvas_controller.mjs') }}"></script>
     <script type="module" src="{{ url_for('static', filename='canvas_movie_controller.js') }}"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='planttracer.css') }}">
   </head>
 
-  <style>
-   {% include 'tracer_app.css' %}
-  </style>
   <body>
     <p>This demo shows the TraceController <i>before</i> the image is traced.
       The user has the ability to drag and edit the initial track points.</p>

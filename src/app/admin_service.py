@@ -9,6 +9,7 @@ from boto3.dynamodb.conditions import Key
 from pydantic import BaseModel, ValidationError
 
 from . import odb, s3_presigned
+from .constants import C
 from .odb import (
     ADMIN_FOR_COURSES,
     COURSE_ID,
@@ -354,11 +355,14 @@ def admin_movie_media(*, viewer_user, movie_id: str) -> AdminMovieMediaResponse:
     traced_urn = (movie.get(MOVIE_TRACED_URN) or "").strip() or None
     return AdminMovieMediaResponse(
         movie_id=movie_id,
-        play_url=s3_presigned.make_signed_url(urn=movie_urn, expires=300),
+        play_url=s3_presigned.make_signed_url(
+            urn=movie_urn,
+            expires=C.ADMIN_MEDIA_URL_EXPIRES_SECONDS,
+        ),
         traced_download_url=(
             s3_presigned.make_signed_url(
                 urn=traced_urn,
-                expires=300,
+                expires=C.ADMIN_MEDIA_URL_EXPIRES_SECONDS,
                 download_name=f"{movie_id}-traced.mp4",
             )
             if traced_urn else None
