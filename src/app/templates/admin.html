@@ -36,6 +36,52 @@
     border-radius: 4px;
     padding: 0.75rem;
   }
+  .admin-sort {
+    appearance: none;
+    background: none;
+    border: 0;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    font-weight: inherit;
+    padding: 0;
+  }
+  .admin-sort:hover,
+  .admin-sort:focus {
+    text-decoration: underline;
+  }
+  .admin-sort-indicator {
+    display: inline-block;
+    width: 1em;
+  }
+  .admin-course-key {
+    display: inline-block;
+    min-width: 5.5rem;
+  }
+  .admin-key-toggle {
+    appearance: none;
+    background: none;
+    border: 0;
+    color: inherit;
+    cursor: pointer;
+    display: inline-flex;
+    margin-left: 0.35rem;
+    padding: 0.1rem;
+    vertical-align: middle;
+  }
+  .admin-key-toggle:hover,
+  .admin-key-toggle:focus {
+    color: #202020;
+  }
+  .admin-key-toggle svg {
+    fill: none;
+    height: 1.15rem;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+    width: 1.15rem;
+  }
 </style>
 {% endblock %}
 
@@ -64,15 +110,15 @@
     <table class="pure-table pure-table-striped">
       <thead>
         <tr>
-          <th>Number</th>
-          <th>Name</th>
-          <th>Admins</th>
-          <th>Max enrollment</th>
+          <th><button class="admin-sort" type="button" data-table="courses" data-key="course_id">Number <span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+          <th><button class="admin-sort" type="button" data-table="courses" data-key="course_key">Course key <span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+          <th><button class="admin-sort" type="button" data-table="courses" data-key="course_name">Name <span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+          <th><button class="admin-sort" type="button" data-table="courses" data-key="admin_count">Admins <span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+          <th><button class="admin-sort" type="button" data-table="courses" data-key="enrollment_count">Enrollment <span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
         </tr>
       </thead>
       <tbody id="admin-course-rows"></tbody>
     </table>
-    <button id="admin-more-courses" class="pure-button" type="button" hidden>Load more courses</button>
   </section>
 
   <section class="admin-section">
@@ -80,16 +126,31 @@
     <table class="pure-table pure-table-striped">
       <thead>
         <tr>
-          <th>Name</th>
-          <th>Email</th>
-          <th>Primary course</th>
-          <th>Super</th>
-          <th>Courses</th>
+          <th><button class="admin-sort" type="button" data-table="users" data-key="user_name">Name <span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+          <th><button class="admin-sort" type="button" data-table="users" data-key="email">Email <span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+          <th><button class="admin-sort" type="button" data-table="users" data-key="primary_course_id">Primary course <span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+          <th><button class="admin-sort" type="button" data-table="users" data-key="super_role">Super <span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+          <th><button class="admin-sort" type="button" data-table="users" data-key="courses">Courses <span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
         </tr>
       </thead>
       <tbody id="admin-user-rows"></tbody>
     </table>
-    <button id="admin-more-users" class="pure-button" type="button" hidden>Load more users</button>
+  </section>
+
+  <section class="admin-section">
+    <h2>Movies</h2>
+    <table class="pure-table pure-table-striped">
+      <thead>
+        <tr>
+          <th><button class="admin-sort" type="button" data-table="movies" data-key="title">Title <span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+          <th><button class="admin-sort" type="button" data-table="movies" data-key="course_name">Course <span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+          <th><button class="admin-sort" type="button" data-table="movies" data-key="owner_name">Owner <span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+          <th><button class="admin-sort" type="button" data-table="movies" data-key="state">State <span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+          <th><button class="admin-sort" type="button" data-table="movies" data-key="status">Processing <span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+        </tr>
+      </thead>
+      <tbody id="admin-movie-rows"></tbody>
+    </table>
   </section>
 </main>
 <script type="module" src="{{ url_for('static', filename='admin.js') }}"></script>
