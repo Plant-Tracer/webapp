@@ -32,6 +32,7 @@ describe('list_movies_data', () => {
     // Assign global variables from globalData
     global.user_id = parseInt(globalData.user_id, 10);
     global.admin = globalData.admin === 'true';
+    global.super_role = 'none';
     global.demo_mode = globalData.demo_mode === 'false';
     global.PLAY_LABEL = globalData.PLAY_LABEL;
     global.PLAY_TRACKED_LABEL = globalData.PLAY_TRACKED_LABEL;
@@ -41,6 +42,7 @@ describe('list_movies_data', () => {
     global.UNDELETE_BUTTON = globalData.UNDELETE_BUTTON;
     global.TABLE_HEAD = globalData.TABLE_HEAD;
     global.user_primary_course_id = parseInt(globalData.user_primary_course_id, 10);
+    global.course_view_id = null;
 
     // Mock DataTables so planttracer.js can call $.fn.DataTable() without a real browser
     const mockDtInstance = {

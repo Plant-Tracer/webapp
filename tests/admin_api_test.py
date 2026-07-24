@@ -1,3 +1,5 @@
+from urllib.parse import parse_qs, urlparse
+
 import pytest
 
 from app import admin_service, apikey, odb
@@ -62,6 +64,7 @@ def test_admin_summary_includes_enrollment_memberships_and_movies(client, new_mo
     assert course["course_key"] == new_movie[odb.COURSE_KEY]
     assert course["enrollment_count"] == 2
     assert course["max_enrollment"] >= course["enrollment_count"]
+    assert course["created_at"] is not None
 
     user = next(item for item in payload["users"]["items"]
                 if item["user_id"] == new_movie[USER_ID])
@@ -69,6 +72,7 @@ def test_admin_summary_includes_enrollment_memberships_and_movies(client, new_mo
         "course_id": new_movie[odb.COURSE_ID],
         "is_admin": False,
     }]
+    assert user["created_at"] is not None
     admin = next(item for item in payload["users"]["items"]
                  if item["email"] == new_movie[ADMIN_EMAIL])
     assert admin["courses"][0]["is_admin"] is True
@@ -79,6 +83,39 @@ def test_admin_summary_includes_enrollment_memberships_and_movies(client, new_mo
     assert movie["course_id"] == new_movie[odb.COURSE_ID]
     assert movie["owner_name"] == "Course User"
     assert movie["state"] == "published"
+    assert movie["user_id"] == new_movie[USER_ID]
+    assert movie["created_at"] is not None
+    assert movie["uploaded_at"] is not None
+    assert movie["last_activity_at"] >= movie["uploaded_at"]
+    assert movie["total_bytes"] > 0
+
+
+def test_admin_movie_media_returns_fresh_urls(client, new_movie):
+    ddbo = new_movie["ddbo"]
+    ddbo.update_table(
+        ddbo.users,
+        new_movie[USER_ID],
+        {odb.SUPER_ROLE: odb.SUPER_ROLE_SUPERAUDITOR},
+    )
+    client.set_cookie(apikey.cookie_name(), new_movie[API_KEY])
+
+    response = client.get(f"/api/admin/movies/{new_movie[odb.MOVIE_ID]}/media")
+
+    assert response.status_code == 200
+    assert response.json["movie_id"] == new_movie[odb.MOVIE_ID]
+    assert response.json["play_url"].startswith("http")
+    assert response.json["traced_download_url"] is None
+
+    movie = ddbo.get_movie(new_movie[odb.MOVIE_ID])
+    ddbo.update_movie(
+        new_movie[odb.MOVIE_ID],
+        {odb.MOVIE_TRACED_URN: movie[odb.MOVIE_DATA_URN]},
+    )
+    traced_response = client.get(f"/api/admin/movies/{new_movie[odb.MOVIE_ID]}/media")
+    disposition = parse_qs(
+        urlparse(traced_response.json["traced_download_url"]).query
+    )["response-content-disposition"][0]
+    assert disposition == f'attachment; filename="{new_movie[odb.MOVIE_ID]}-traced.mp4"'
 
 
 def test_course_summary_uses_id_when_name_is_empty():

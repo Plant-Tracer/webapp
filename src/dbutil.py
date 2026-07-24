@@ -133,7 +133,7 @@ def populate_demo_movies():
                                             title=title,
                                             description=DEMO_MOVIE_DESCRIPTION)
             set_movie_data(movie_id=movie_id, movie_data=f.read())
-            ddbo.update_table(ddbo.movies, movie_id, {MOVIE_STATUS: MOVIE_STATE_READY})
+            ddbo.update_movie(movie_id, {MOVIE_STATUS: MOVIE_STATE_READY})
             existing_titles.add(title)
             seeded += 1
         # If a trackpoints JSON exists next to the movie (e.g. foo.mov -> foo_trackpoints.json), apply it.

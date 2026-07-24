@@ -5,12 +5,15 @@ Routines for providing access to the movies for the lambda
 
 import os
 import json
+import time
 from typing import NamedTuple
 from pathlib import Path
 import tempfile
 
 import boto3
 from aws_lambda_powertools import Logger
+from botocore.exceptions import ClientError
+from pydantic import BaseModel
 
 from .src.app.schema import Trackpoint
 from .src.app.odb import (
@@ -37,7 +40,10 @@ from .src.app.odb import (
     MOVIE_STATE_UPLOADING,
     MOVIE_STATE_TRACING,
     MOVIE_STATE_TRACING_COMPLETED,
+    TOTAL_BYTES,
     TOTAL_FRAMES,
+    UPLOADED_AT,
+    UPLOAD_BYTES_EXPECTED,
     USER_ID
 )
 
@@ -60,6 +66,14 @@ class MovieDownloadInfo(NamedTuple):
     signed_zipfile_url: str | None
 
 
+class UploadCompletion(BaseModel):
+    """Verified direct-upload result returned to the browser."""
+
+    movie_id: str
+    uploaded_at: int
+    total_bytes: int
+
+
 def sqs_client():
     return boto3.client(
         "sqs",
@@ -68,7 +82,7 @@ def sqs_client():
     )
 
 
-def validate_movie_access(*, api_key=None, movie_id=None):
+def validate_movie_access(*, api_key=None, movie_id=None, require_edit=False):
     if not api_key:
         raise ValueError("api_key required")
     if not odb.is_movie_id(movie_id):
@@ -89,7 +103,8 @@ def validate_movie_access(*, api_key=None, movie_id=None):
     except odb.InvalidUser_Id as e:
         raise ValueError("user_id is invalid") from e
     try:
-        movie = odb.can_access_movie(user_id=user_id, movie_id=movie_id)
+        access_check = odb.can_edit_movie if require_edit else odb.can_access_movie
+        movie = access_check(user_id=user_id, movie_id=movie_id)
     except odb.UnauthorizedUser as e:
         raise ValueError(f"user {user_id} is not authorized to access movie {movie_id}") from e
     except odb.InvalidMovie_Id as e:
@@ -125,7 +140,11 @@ def prepare_tracing_request(*, api_key: str, movie_id: str, frame_start: int, fr
     This closes the UI race where the browser polls before the worker has had
     a chance to flip the movie state away from ``tracing completed``.
     """
-    ddbo, _user_id, _movie = validate_movie_access(api_key=api_key, movie_id=movie_id)
+    ddbo, _user_id, _movie = validate_movie_access(
+        api_key=api_key,
+        movie_id=movie_id,
+        require_edit=True,
+    )
     source_frame_number = int(frame_start)
     frame_end_number = None if frame_end is None else int(frame_end)
     cleared_frames = clear_movie_tracking_after_frame(
@@ -133,7 +152,7 @@ def prepare_tracing_request(*, api_key: str, movie_id: str, frame_start: int, fr
         frame_number=source_frame_number,
         frame_end=frame_end_number,
     )
-    ddbo.update_table(ddbo.movies, movie_id, {MOVIE_STATUS: MOVIE_STATE_TRACING})
+    ddbo.update_movie(movie_id, {MOVIE_STATUS: MOVIE_STATE_TRACING})
     LOGGER.info(
         "Prepared tracing request: movie_id=%s source_frame=%s frame_end=%s cleared_frames=%s",
         movie_id,
@@ -188,6 +207,43 @@ def get_movie_download_urls(*, api_key=None, movie_id=None) -> MovieDownloadInfo
     )
 
 
+def complete_movie_upload(*, api_key: str, movie_id: str) -> UploadCompletion:
+    """Verify a direct S3 upload and record its successful completion time."""
+    ddbo, _user_id, movie = validate_movie_access(
+        api_key=api_key,
+        movie_id=movie_id,
+        require_edit=True,
+    )
+    movie_urn = (movie.get(MOVIE_DATA_URN) or "").strip()
+    if not movie_urn:
+        raise ValueError("MOVIE_DATA_URN not set")
+    bucket, key = s3_presigned.parse_s3_urn(urn=movie_urn)
+    try:
+        response = s3_presigned.s3_client().head_object(Bucket=bucket, Key=key)
+    except ClientError as exc:
+        raise ValueError("uploaded movie object is not available") from exc
+    actual_bytes = int(response.get("ContentLength") or 0)
+    expected_bytes = movie.get(UPLOAD_BYTES_EXPECTED)
+    if expected_bytes is not None and actual_bytes != int(expected_bytes):
+        raise ValueError(
+            f"uploaded movie size {actual_bytes} does not match expected size {expected_bytes}"
+        )
+    uploaded_at = int(time.time())
+    ddbo.update_movie(
+        movie_id,
+        {
+            UPLOADED_AT: uploaded_at,
+            TOTAL_BYTES: actual_bytes,
+            MOVIE_STATUS: MOVIE_STATE_READY,
+        },
+    )
+    return UploadCompletion(
+        movie_id=movie_id,
+        uploaded_at=uploaded_at,
+        total_bytes=actual_bytes,
+    )
+
+
 def first_frame_to_track(*, source_frame_number:int) -> int:
     """Translate a user-selected source frame into the first frame to recompute."""
     if source_frame_number < 0:
@@ -221,7 +277,7 @@ def run_tracing(*, movie_id, frame_start, frame_end=None):
     )
     LOGGER.info("run_tracing movie_id=%s source_frame=%s tracing_frame_start=%s frame_end=%s cleared_frames=%s",
                 movie_id, source_frame_number, tracing_frame_start, frame_end_number, cleared_frames)
-    ddbo.update_table(ddbo.movies, movie_id, {MOVIE_STATUS: MOVIE_STATE_TRACING})
+    ddbo.update_movie(movie_id, {MOVIE_STATUS: MOVIE_STATE_TRACING})
 
     movie_record = get_movie_metadata(movie_id=movie_id)
     movie_urn = movie_record.get(MOVIE_DATA_URN)
@@ -276,7 +332,11 @@ def run_tracing(*, movie_id, frame_start, frame_end=None):
             )
             if obj.frame_trackpoints and (frame_end_number is None or obj.frame_number <= frame_end_number):
                 frame_trackpoints = odb.flip_trackpoints_y(obj.frame_trackpoints, frame_height)
-                ddbo.update_table(ddbo.movies, movie_id, {LAST_FRAME_TRACKED: obj.frame_number})
+                ddbo.update_movie(
+                    movie_id,
+                    {LAST_FRAME_TRACKED: obj.frame_number},
+                    touch_activity=False,
+                )
                 put_frame_trackpoints(movie_id=movie_id, frame_number=obj.frame_number, trackpoints=frame_trackpoints)
 
 
@@ -314,11 +374,11 @@ def run_tracing(*, movie_id, frame_start, frame_end=None):
 
         # Update the database
         # note: should we update width, height and fps?
-        ddbo.update_table(ddbo.movies, movie_id, {TOTAL_FRAMES:total_frames,
-                                                  MOVIE_STATUS: MOVIE_STATE_TRACING_COMPLETED,
-                                                  NEEDS_RETRACING: 0,
-                                                  MOVIE_TRACED_URN: movie_traced_urn,
-                                                  MOVIE_ZIPFILE_URN: movie_zipfile_urn})
+        ddbo.update_movie(movie_id, {TOTAL_FRAMES:total_frames,
+                                     MOVIE_STATUS: MOVIE_STATE_TRACING_COMPLETED,
+                                     NEEDS_RETRACING: 0,
+                                     MOVIE_TRACED_URN: movie_traced_urn,
+                                     MOVIE_ZIPFILE_URN: movie_zipfile_urn})
 
     finally:
         if movie_zipfile_path and movie_zipfile_path.exists():

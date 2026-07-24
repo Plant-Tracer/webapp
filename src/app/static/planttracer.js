@@ -183,13 +183,25 @@ async function checkLambdaStatus() {
 }
 
 /*
- * Tell Lambda to start processing the uploaded movie (POST start-processing).
- * If LAMBDA_API_BASE is not set, resolves without calling (local dev).
+ * Tell lambda-resize to verify the uploaded S3 object and record uploaded_at.
  */
 async function startLambdaProcessing(movie_id) {
-  // Processing currently handled on the VM; Lambda control-plane API is disabled for now.
-  console.log(`startLambdaProcessing(${movie_id});`);
-  return;
+  if (typeof LAMBDA_API_BASE === 'undefined' || !LAMBDA_API_BASE) {
+    throw new Error('Movie processing service is not configured.');
+  }
+  const response = await fetch(`${LAMBDA_API_BASE}resize-api/v1/process-upload`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': api_key,
+    },
+    body: JSON.stringify({ movie_id }),
+  });
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || `Upload processing failed (${response.status}).`);
+  }
+  return response.json();
 }
 
 /*
@@ -284,7 +296,7 @@ async function upload_movie_post(movie_title, description, movieFile, research_u
       $('#upload_message').html(`Error uploading movie status=${r.status} ${r.statusText}`);
       return;
     }
-    // Phase 2: tell Lambda to start processing (sets date_uploaded etc. so get-frame works)
+    // Phase 2: verify the object and set uploaded_at before it becomes visible.
     await startLambdaProcessing(movie_id);
     // Brief delay so DynamoDB is updated before we poll for first frame
     await new Promise(resolve => setTimeout(resolve, 250));
@@ -798,8 +810,10 @@ function list_movies_data( movies ) {
           .replace(/>/g, '&gt;');
       }
 
-      // Get the metadata for the movie (date_uploaded is seconds; 0/null = not set yet / processing)
-      const dateSec = m.date_uploaded && Number(m.date_uploaded);
+      // uploaded_at is set only after S3 upload verification. date_uploaded is
+      // a read-only fallback for legacy DynamoDB rows.
+      const uploadedValue = m.uploaded_at || m.date_uploaded;
+      const dateSec = uploadedValue && Number(uploadedValue);
       const movieDate = dateSec ? new Date(dateSec * 1000) : null;
       const up_down   = movieDate ? movieDate.toLocaleString().replace(' ','<br>').replace(',','') : '—';
       const play      = `<input class='play'    x-rowid='${rowid}' x-movie_id='${movie_id}' x-div-selector='${divSelector}' type='button' value='${PLAY_LABEL}' onclick='play_clicked(this)'>`;
@@ -809,7 +823,10 @@ function list_movies_data( movies ) {
         playt     = `<input class='play'    x-rowid='${rowid}' x-movie_id='${m.tracked_movie_id}' x-div-selector='${divSelector}' type='button' value='${PLAY_TRACKED_LABEL}' onclick='play_clicked(this)'>`;
         analyze_label = 're-analyze';
       }
-      const analyze   = m.orig_movie ? '' : `<input class='analyze' x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='${analyze_label}' onclick='analyze_clicked(this)'>`;
+      const viewerSuperRole = typeof super_role === 'undefined' ? 'none' : super_role;
+      const analyze   = (m.orig_movie || viewerSuperRole === 'superauditor')
+        ? ''
+        : `<input class='analyze' x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='${analyze_label}' onclick='analyze_clicked(this)'>`;
       const downloadTraced = m.movie_traced_url
         ? `<input class='play traced-movie-download' x-movie_traced_url="${html_attr(m.movie_traced_url)}" type='button' value='download traced' onclick='download_traced_clicked(this)'>`
         : '';
@@ -914,16 +931,22 @@ function list_movies_data( movies ) {
       }
     }
   }
-  // Sort newest-first by date_uploaded (movies with no date sort to the end)
-  const byNewest = (a, b) => (Number(b.date_uploaded) || 0) - (Number(a.date_uploaded) || 0);
+  // Sort newest-first by upload completion (legacy rows use date_uploaded).
+  const byNewest = (a, b) => (
+    Number(b.uploaded_at || b.date_uploaded) || 0
+  ) - (
+    Number(a.uploaded_at || a.date_uploaded) || 0
+  );
 
   // Create the four tables
   movies_fill_div( '#your-published-movies',
                    PUBLISHED, movies.filter( m => (m.user_id==user_id && m.published==1 && !m.orig_movie)).sort(byNewest));
   movies_fill_div( '#your-unpublished-movies',
                    UNPUBLISHED, movies.filter( m => (m.user_id==user_id && m.published==0 && m.deleted==0 && !m.orig_movie)).sort(byNewest));
+  const requestedCourseViewId = typeof course_view_id === 'undefined' ? null : course_view_id;
+  const displayedCourseId = requestedCourseViewId || user_primary_course_id;
   movies_fill_div( '#course-movies',
-                   COURSE, movies.filter( m => (m.course_id==user_primary_course_id && (demo_mode || (m.user_id!=user_id)) && !m.orig_movie && (m.published==1 || admin))).sort(byNewest));
+                   COURSE, movies.filter( m => (m.course_id==displayedCourseId && (demo_mode || (m.user_id!=user_id)) && !m.orig_movie && (m.published==1 || admin || requestedCourseViewId))).sort(byNewest));
   movies_fill_div( '#your-deleted-movies',
                    DELETED, movies.filter( m => (m.user_id==user_id && m.published==0 && m.deleted==1 && !m.orig_movie)).sort(byNewest));
 }
@@ -938,6 +961,10 @@ function list_ready_function() {
 
   let formData = new FormData();
   formData.append("api_key",  api_key); // on the upload form
+  const requestedCourseViewId = typeof course_view_id === 'undefined' ? null : course_view_id;
+  if (requestedCourseViewId) {
+    formData.append("course_id", requestedCourseViewId);
+  }
   fetch(`${API_BASE}api/list-movies`, { method:"POST", body:formData })
     .then((response) => response.json())
     .then((data) => {

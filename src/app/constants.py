@@ -178,7 +178,8 @@ class C:
     # Movie metadata prop names for type coercion (schema.fix_movie_prop_value); single source of truth
     MOVIE_PROPS_INT = (
         'published', 'deleted', 'version', 'last_frame_tracked', 'research_use', 'credit_by_name',
-        'date_uploaded', 'total_bytes', 'total_frames', 'width', 'height', 'rotation_steps',
+        'created_at', 'uploaded_at', 'last_activity_at', 'date_uploaded',
+        'upload_bytes_expected', 'total_bytes', 'total_frames', 'width', 'height', 'rotation_steps',
         'trim_start_frame', 'trim_end_frame', 'needs_retracing',
     )
     MOVIE_PROPS_STR = ('fps', 'fpm', 'trackpoint_origin')

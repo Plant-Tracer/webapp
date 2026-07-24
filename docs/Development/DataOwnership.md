@@ -101,8 +101,9 @@ processing code and older migrations. Current rows store or use:
 - display metadata: `title`, `description`
 - state and visibility: `status`, `published`, `deleted`, `needs_retracing`,
   `version`
-- timestamps and sizes: `created_at`, `date_uploaded`, `total_frames`,
-  `total_bytes`
+- lifecycle timestamps and sizes: `created_at`, `uploaded_at`,
+  `last_activity_at`, `upload_bytes_expected`, `total_frames`, `total_bytes`.
+  `date_uploaded` is a read-only compatibility field on legacy rows.
 - playback/analysis metadata: `fps`, `fpm`, `width`, `height`,
   `trackpoint_origin`, `rotation`, `trim_start_frame`, `trim_end_frame`
 - S3 references: `movie_data_urn`, `movie_zipfile_urn`, `first_frame_urn`, and
@@ -152,9 +153,23 @@ The current S3 artifacts are:
 | Traced movie | `movie_traced_urn`, derived from `movie_data_urn` with a `_traced` suffix before the extension | Derived artifact written by lambda-resize tracing |
 
 During upload, `/api/new-movie` first creates the DynamoDB movie row with
-`status="uploading"` and returns a presigned POST for the final S3 key. The
-browser uploads directly to S3/MinIO. There is no live S3 bucket notification
-pipeline and no live `uploads/` staging-prefix path.
+`status="uploading"` and `created_at`, but without `uploaded_at`. It records the
+expected byte count and returns a presigned POST whose content-length range has
+that exact lower and upper bound. The browser uploads directly to S3/MinIO and
+then calls lambda-resize `/resize-api/v1/process-upload`. That route verifies
+the final object with `HeadObject` before setting `uploaded_at`, `total_bytes`,
+and `status="ready"`. There is no live S3 bucket notification pipeline and no
+live `uploads/` staging-prefix path.
+
+An absent `uploaded_at` means the movie row was created but the upload never
+completed. The admin page highlights these rows red. The lifecycle fields also
+provide the inputs for a future garbage collector that can remove pending rows
+older than two hours; that collector is not part of the current upload flow.
+
+All business-level movie writes use `DDBO.update_movie()`, which maintains
+`last_activity_at`. Reads and signed downloads do not touch that timestamp.
+Restore and historical coordinate-migration paths may explicitly preserve the
+stored activity time.
 
 ## Operational Artifacts Bucket
 

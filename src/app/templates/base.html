@@ -45,6 +45,9 @@
       {% endif %}
       const user_primary_course_id = {{ user_primary_course_id | tojson }};
       const primary_course_name = {{ primary_course_name | tojson }};
+      const course_view_id = {{ course_view_id | tojson }};
+      const course_view_name = {{ course_view_name | tojson }};
+      const super_role = {{ super_role | tojson }};
       const MAX_FILE_UPLOAD = {{MAX_FILE_UPLOAD}};
       {% else %}
       const api_key = null;
@@ -52,6 +55,9 @@
       const demo_mode = false;
       const user_primary_course_id = null;
       const primary_course_name = null;
+      const course_view_id = null;
+      const course_view_name = null;
+      const super_role = "none";
       {% endif %}
       {% if admin %}
       const admin = true;

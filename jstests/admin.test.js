@@ -9,7 +9,7 @@ function adminDocument() {
     <span id="admin-course-count"></span>
     <span id="admin-user-count"></span>
     <span id="admin-movie-count"></span>
-    <table>
+    <table data-resizable-table>
       <thead><tr>
         <th><button class="admin-sort" data-table="courses" data-key="course_name">
           Name <span class="admin-sort-indicator"></span>
@@ -17,7 +17,7 @@ function adminDocument() {
       </tr></thead>
       <tbody id="admin-course-rows"></tbody>
     </table>
-    <table>
+    <table data-resizable-table>
       <thead><tr>
         <th><button class="admin-sort" data-table="users" data-key="user_name">
           Name <span class="admin-sort-indicator"></span>
@@ -25,7 +25,7 @@ function adminDocument() {
       </tr></thead>
       <tbody id="admin-user-rows"></tbody>
     </table>
-    <table>
+    <table data-resizable-table>
       <thead><tr>
         <th><button class="admin-sort" data-table="movies" data-key="title">
           Title <span class="admin-sort-indicator"></span>
@@ -37,17 +37,19 @@ function adminDocument() {
 
 function payload() {
   return {
-    viewer: { user_name: 'Root Reader' },
+    viewer: { user_name: 'Root Reader', super_role: 'superauditor' },
     counts: { courses: 2, users: 1, movies: 1 },
     courses: {
       items: [
         {
           course_id: 'BIO-1', course_key: 'grow-beans', course_name: 'Biology', admin_count: 1,
-          enrollment_count: 7, max_enrollment: 10,
+          enrollment_count: 7, max_enrollment: 10, created_at: 1700000000,
+          last_movie_activity_at: null,
         },
         {
           course_id: 'CHEM-2', course_key: 'grow-salts', course_name: 'Chemistry', admin_count: 1,
-          enrollment_count: 4, max_enrollment: 10,
+          enrollment_count: 4, max_enrollment: 10, created_at: null,
+          last_movie_activity_at: null,
         },
       ],
       restart_marker: null,
@@ -55,7 +57,7 @@ function payload() {
     users: {
       items: [{
         user_id: 'user-1', user_name: 'Ada', email: 'ada@example.test', primary_course_id: 'BIO-1',
-        super_role: 'none',
+        super_role: 'none', created_at: 1700000000, last_movie_activity_at: null,
         courses: [
           { course_id: 'BIO-1', is_admin: true },
           { course_id: 'CHEM-2', is_admin: false },
@@ -65,8 +67,10 @@ function payload() {
     },
     movies: {
       items: [{
-        movie_id: 'movie-1', title: 'Bean Growth', course_id: 'BIO-1', owner_name: 'Ada',
-        state: 'published', status: 'ready',
+        movie_id: 'movie-1', title: 'Bean Growth', course_id: 'BIO-1', user_id: 'user-1',
+        owner_name: 'Ada', state: 'published', status: 'ready', created_at: 1700000000,
+        uploaded_at: 1700000100, last_activity_at: 1700000200, total_frames: 121,
+        total_bytes: 2500000, fpm: '60', has_traced_movie: true,
       }],
       restart_marker: null,
     },
@@ -81,6 +85,7 @@ describe('admin summary rendering', () => {
     state.courses = [];
     state.users = [];
     state.movies = [];
+    state.viewerRole = 'none';
     state.sort.courses = { key: 'course_name', direction: 1 };
     state.sort.users = { key: 'user_name', direction: 1 };
     state.sort.movies = { key: 'title', direction: 1 };
@@ -107,8 +112,17 @@ describe('admin summary rendering', () => {
     const userRow = document.getElementById('admin-user-rows');
     expect(userRow.textContent).toContain('Biology, Chemistry');
     expect(userRow.querySelector('strong').textContent).toBe('Biology');
-    expect(document.getElementById('admin-movie-rows').textContent)
-      .toContain('Bean GrowthBiologyAdapublishedready');
+    const movieRow = document.querySelector('#admin-movie-rows tr');
+    expect(movieRow.textContent).toContain('Bean Growth');
+    expect(movieRow.textContent).toContain('121 frames · 2 min elapsed · 2.5 MB');
+    expect(movieRow.querySelector('.admin-actions-toggle').textContent).toBe('⋮');
+    expect(movieRow.querySelector('.admin-actions-menu').textContent).toContain('Play');
+    expect(movieRow.querySelector('.admin-actions-menu').textContent).toContain('Download traced');
+    expect(movieRow.querySelector('.admin-actions-menu').textContent).not.toContain('Analyze');
+    expect(document.querySelectorAll('.admin-resize-handle')).toHaveLength(3);
+    const courseLink = document.querySelector('#admin-course-rows a');
+    expect(courseLink.href).toContain('/list?course_id=BIO-1');
+    expect(courseLink.target).toBe('_blank');
   });
 
   test('loads every table page and globally sorts movies', async () => {
@@ -176,5 +190,33 @@ describe('admin summary rendering', () => {
 
     expect(document.querySelector('#admin-movie-rows script')).toBeNull();
     expect(document.getElementById('admin-movie-rows').textContent).toContain('<script>bad()</script>');
+  });
+
+  test('marks pending uploads red and suppresses unusable actions', async () => {
+    const adminPayload = payload();
+    adminPayload.viewer.super_role = 'superadmin';
+    adminPayload.movies.items[0].uploaded_at = null;
+    fetch.mockResponseOnce(JSON.stringify(adminPayload));
+
+    await loadAdminSummary();
+
+    const movieRow = document.querySelector('#admin-movie-rows tr');
+    expect(movieRow.classList.contains('admin-upload-pending')).toBe(true);
+    expect(movieRow.title).toContain('upload has not completed');
+    expect(movieRow.firstElementChild.querySelector('a')).toBeNull();
+    expect(movieRow.querySelector('.admin-actions-menu')).toBeNull();
+    expect(movieRow.lastElementChild.textContent).toBe('—');
+  });
+
+  test('links uploaded movies to Analyze for superadmins', async () => {
+    const adminPayload = payload();
+    adminPayload.viewer.super_role = 'superadmin';
+    fetch.mockResponseOnce(JSON.stringify(adminPayload));
+
+    await loadAdminSummary();
+
+    const movieRow = document.querySelector('#admin-movie-rows tr');
+    expect(movieRow.querySelector('td a').href).toContain('/analyze?movie_id=movie-1');
+    expect(movieRow.querySelector('.admin-actions-menu').textContent).toContain('Analyze');
   });
 });

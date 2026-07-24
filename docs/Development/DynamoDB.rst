@@ -226,13 +226,22 @@ contain stale enrollment records.
 movies
 ~~~~~~
 
-One record per uploaded movie. Key attributes:
+One record per created movie, including rows whose direct upload is still
+pending. Key attributes:
 
 ``movie_id``, ``title``, ``description``, ``user_id``, ``course_id``, ``published`` (0/1; defaults to 1 on creation),
 ``deleted`` (0/1), ``status``, ``total_frames``, ``fps``, ``width``, ``height``,
 ``movie_data_urn`` (S3 URN of the MP4), ``movie_zipfile_urn``, ``movie_traced_urn``, ``first_frame_urn``,
 ``last_frame_tracked``, ``research_use`` (0/1/None; None = not yet answered), ``credit_by_name`` (0/1/None; None = not yet answered), ``attribution_name``,
 ``rotation`` (0/90/180/270 degrees), ``needs_retracing`` (0/1; traced MP4 may be stale after marker edits).
+
+Lifecycle fields are ``created_at`` (row allocation), ``uploaded_at`` (set
+only after the final S3 object is verified), ``last_activity_at`` (latest
+movie write, excluding reads/downloads), and ``upload_bytes_expected`` (the
+exact byte count signed into the direct-upload policy). ``date_uploaded`` is
+accepted only when reading legacy rows. DynamoDB is schemaless, so deploying
+these fields requires no table rebuild or backfill; new writes populate them
+and readers retain the documented legacy fallbacks.
 
 See ``src/app/schema.py`` ``Movie`` class for the full schema and constraints.
 

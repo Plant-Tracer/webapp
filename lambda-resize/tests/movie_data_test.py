@@ -92,6 +92,19 @@ def test_trace_movie_requires_api_key_header():
     assert "x-api-key header" in response["body"]
 
 
+def test_process_upload_requires_authentication_and_movie_id():
+    path = "/resize-api/v1/process-upload"
+    response = lambda_handler(make_post_event(path, {"movie_id": "m123"}), DummyContext())
+    assert response["statusCode"] == 401
+
+    response = lambda_handler(
+        make_post_event(path, {"other": "value"}, {"x-api-key": "test-key"}),
+        DummyContext(),
+    )
+    assert response["statusCode"] == 400
+    assert "movie_id" in response["body"]
+
+
 def test_trace_movie_requires_body_and_movie_id():
     missing_body = make_post_event("/resize-api/v1/trace-movie", None, {"x-api-key": "test-key"})
     response = lambda_handler(missing_body, DummyContext())

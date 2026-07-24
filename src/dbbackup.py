@@ -50,7 +50,6 @@ from app.odb import (
     COURSES,
     CREATED,
     CREATED_AT,
-    DATE_UPLOADED,
     DELETED,
     EMAIL,
     FRAME_NUMBER,
@@ -58,7 +57,6 @@ from app.odb import (
     FRAMES,
     MOVIE_DATA_URN,
     MOVIE_ID,
-    MOVIE_STATE_UPDATED_AT,
     MOVIE_TRACED_URN,
     MOVIE_ZIPFILE_URN,
     MOVIES,
@@ -100,7 +98,6 @@ ROW_SORT_KEYS = {
 MOVIE_S3_URN_FIELDS = (MOVIE_DATA_URN, MOVIE_ZIPFILE_URN, MOVIE_TRACED_URN)
 USER_DATE_FIELDS = (CREATED,)
 COURSE_DATE_FIELDS = (CREATED, CREATED_AT)
-MOVIE_DATE_FIELDS = (CREATED_AT, DATE_UPLOADED, MOVIE_STATE_UPDATED_AT)
 TRACKPOINTS = "trackpoints"
 TRACKPOINT_LABEL = "label"
 
@@ -1655,7 +1652,7 @@ def migrate_movie_row(ddbo, movie: dict[str, Any], from_course_id: str, to_cours
                 to_course_id=to_course_id,
                 commit=True,
             )
-    ddbo.update_table(ddbo.movies, movie[MOVIE_ID], updates)
+    ddbo.update_movie(movie[MOVIE_ID], updates, touch_activity=False)
     migrate_movie_frames(
         ddbo,
         movie_id=movie[MOVIE_ID],
