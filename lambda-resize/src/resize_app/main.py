@@ -8,6 +8,7 @@ API's primary function:
 
 Methods:
 /resize-api/v1/ping
+/resize-api/v1/process-upload
 /resize-api/v1/first-frame
 /resize-api/v1/trace-movie
 
@@ -149,6 +150,27 @@ def _movie_data_response():
 @app.get("/resize-api/v1/movie-data")
 def api_resize_movie_data():
     return _movie_data_response()
+
+
+@app.post("/resize-api/v1/process-upload")
+def api_process_upload():
+    """Verify a completed direct-to-S3 upload and mark the movie ready."""
+    api_key = app.current_event.headers.get("x-api-key")
+    if not api_key:
+        return Response(status_code=401, body="x-api-key header must be provided")
+    body = app.current_event.json_body
+    if not body:
+        return Response(status_code=400, body="Request body must be provided")
+    movie_id = body.get("movie_id")
+    if not movie_id:
+        return Response(status_code=400, body="movie_id must be provided")
+    try:
+        result = movie_glue.complete_movie_upload(api_key=api_key, movie_id=movie_id)
+    except ValueError as exc:
+        LOGGER.exception("process-upload rejected: %s", exc)
+        return Response(status_code=403, body=str(exc))
+    return {"error": False, **result.model_dump()}
+
 
 @app.get("/resize-api/v1/first-frame")
 def handle_first_frame() -> Any:

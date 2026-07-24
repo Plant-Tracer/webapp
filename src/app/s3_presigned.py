@@ -105,16 +105,23 @@ def parse_s3_urn(*, urn):
     return parsed.netloc, parsed.path[1:]
 
 
-def make_signed_url(*,urn,operation=C.GET, expires=3600):
+def make_signed_url(*, urn, operation=C.GET, expires=3600, download_name=None):
     logger.debug("make_signed_url urn=%s",urn)
     bucket, key = parse_s3_urn(urn=urn)
     op = {C.PUT:'put_object', C.GET:'get_object'}[operation]
+    params = {'Bucket': bucket, 'Key': key}
+    if download_name is not None:
+        if operation != C.GET:
+            raise ValueError("download_name is valid only for signed GET URLs")
+        safe_name = str(download_name).replace('"', '').replace('\r', '').replace('\n', '')
+        params['ResponseContentDisposition'] = f'attachment; filename="{safe_name}"'
     return s3_client().generate_presigned_url(
         op,
-        Params={'Bucket': bucket, 'Key': key},
+        Params=params,
         ExpiresIn=expires)
 
-def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4', sha256=None, expires=3600,
+def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, exact_size=None,
+                        mime_type='video/mp4', sha256=None, expires=3600,
                         research_use='not-answered', credit_by_name='not-answered', attribution_name='',
                         fpm=''):
     """Returns a dictionary with 'url' and 'fields'.
@@ -123,8 +130,12 @@ def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4'
     Uses the bucket's region so the presigned URL is regional and S3 does not 307-redirect (avoids connection
     reset in the browser when POST body is not re-sent on redirect).
     """
-    logger.debug("make_presigned_post urn=%s maxsize=%s mime_type=%s sha256=%s expires=%s",
-                 urn, maxsize, mime_type, sha256, expires)
+    logger.debug("make_presigned_post urn=%s maxsize=%s exact_size=%s mime_type=%s sha256=%s expires=%s",
+                 urn, maxsize, exact_size, mime_type, sha256, expires)
+    if exact_size is not None:
+        exact_size = int(exact_size)
+        if exact_size < 1 or exact_size > maxsize:
+            raise ValueError(f"exact_size must be between 1 and {maxsize}")
     bucket, key = parse_s3_urn(urn=urn)
     region = _get_bucket_region(bucket)
     if region:
@@ -141,6 +152,7 @@ def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4'
     meta_credit = 'x-amz-meta-credit-by-name'
     meta_attribution = 'x-amz-meta-attribution-name'
     meta_fpm = 'x-amz-meta-fpm'
+    meta_sha256 = 'x-amz-meta-sha256'
     attribution_safe = (attribution_name or '')[:256]
     fpm_safe = (fpm or '')[:32]
     fields = {
@@ -149,14 +161,18 @@ def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4'
         meta_credit: credit_by_name,
         meta_attribution: attribution_safe,
         meta_fpm: fpm_safe,
+        meta_sha256: sha256 or '',
     }
+    minimum_size = exact_size if exact_size is not None else 1
+    maximum_size = exact_size if exact_size is not None else maxsize
     conditions = [
         {"Content-Type": mime_type},
-        ["content-length-range", 1, maxsize],
+        ["content-length-range", minimum_size, maximum_size],
         {meta_research: research_use},
         {meta_credit: credit_by_name},
         {meta_attribution: attribution_safe},
         {meta_fpm: fpm_safe},
+        {meta_sha256: sha256 or ''},
     ]
     return client.generate_presigned_post(
         Bucket=bucket,

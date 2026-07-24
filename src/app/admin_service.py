@@ -8,20 +8,31 @@ from enum import StrEnum
 from boto3.dynamodb.conditions import Key
 from pydantic import BaseModel, ValidationError
 
-from . import odb
+from . import odb, s3_presigned
+from .constants import C
 from .odb import (
     ADMIN_FOR_COURSES,
     COURSE_ID,
     COURSE_KEY,
     COURSE_NAME,
+    CREATED,
+    CREATED_AT,
+    DATE_UPLOADED,
     DELETED,
     EMAIL,
     MAX_ENROLLMENT,
     MOVIE_ID,
+    MOVIE_DATA_URN,
     MOVIE_STATUS,
+    MOVIE_TRACED_URN,
     PRIMARY_COURSE_ID,
     PUBLISHED,
     TITLE,
+    TOTAL_BYTES,
+    TOTAL_FRAMES,
+    FPM,
+    LAST_ACTIVITY_AT,
+    UPLOADED_AT,
     USER_ID,
     USER_NAME,
     DDBO,
@@ -100,6 +111,8 @@ class AdminCourseSummary(BaseModel):
     enrollment_count: int
     max_enrollment: int
     admin_count: int
+    created_at: int | None = None
+    last_movie_activity_at: int | None = None
 
 
 class AdminUserCourseSummary(BaseModel):
@@ -118,6 +131,8 @@ class AdminUserSummary(BaseModel):
     primary_course_id: str
     super_role: str
     courses: list[AdminUserCourseSummary]
+    created_at: int | None = None
+    last_movie_activity_at: int | None = None
 
 
 class AdminMovieSummary(BaseModel):
@@ -126,9 +141,26 @@ class AdminMovieSummary(BaseModel):
     movie_id: str
     title: str
     course_id: str
+    user_id: str
     owner_name: str
     state: str
     status: str
+    created_at: int | None = None
+    uploaded_at: int | None = None
+    last_activity_at: int | None = None
+    total_frames: int | None = None
+    total_bytes: int | None = None
+    fpm: str | None = None
+    has_traced_movie: bool = False
+
+
+class AdminMovieMediaResponse(BaseModel):
+    """Fresh signed URLs for one movie selected from the admin interface."""
+
+    error: bool = False
+    movie_id: str
+    play_url: str
+    traced_download_url: str | None = None
 
 
 class AdminCoursePage(BaseModel):
@@ -255,6 +287,7 @@ def course_summary(course, *, enrollment_count: int) -> AdminCourseSummary:
         enrollment_count=enrollment_count,
         max_enrollment=course.get(MAX_ENROLLMENT, 0),
         admin_count=len(course.get(odb.ADMINS_FOR_COURSE, [])),
+        created_at=course.get(CREATED_AT) or course.get(CREATED),
     )
 
 
@@ -275,6 +308,7 @@ def user_summary(user) -> AdminUserSummary:
         primary_course_id=user.get(PRIMARY_COURSE_ID, ""),
         super_role=odb.normalize_super_role(user),
         courses=sorted(courses, key=lambda course: course.course_id),
+        created_at=user.get(CREATED),
     )
 
 
@@ -287,13 +321,52 @@ def movie_summary(movie) -> AdminMovieSummary:
         state = "published"
     else:
         state = "unpublished"
+    uploaded_at = movie.get(UPLOADED_AT) or movie.get(DATE_UPLOADED)
+    created_at = movie.get(CREATED_AT)
     return AdminMovieSummary(
         movie_id=movie[MOVIE_ID],
         title=movie.get(TITLE, ""),
         course_id=course_id,
+        user_id=movie.get(USER_ID, ""),
         owner_name=movie.get(USER_NAME, ""),
         state=state,
         status=movie.get(MOVIE_STATUS) or "",
+        created_at=created_at,
+        uploaded_at=uploaded_at,
+        last_activity_at=movie.get(LAST_ACTIVITY_AT) or uploaded_at or created_at,
+        total_frames=movie.get(TOTAL_FRAMES),
+        total_bytes=movie.get(TOTAL_BYTES),
+        fpm=movie.get(FPM),
+        has_traced_movie=bool(movie.get(MOVIE_TRACED_URN)),
+    )
+
+
+def admin_movie_media(*, viewer_user, movie_id: str) -> AdminMovieMediaResponse:
+    """Return short-lived media URLs without exposing stored S3 URNs."""
+    access = odb.admin_read_access(viewer_user)
+    if not access.allowed:
+        raise AdminReadDenied(viewer_user.get(USER_ID, "unknown"))
+    movie = odb.can_access_movie(user_id=viewer_user[USER_ID], movie_id=movie_id)
+    if not (movie.get(UPLOADED_AT) or movie.get(DATE_UPLOADED)):
+        raise ValueError("Movie has not been uploaded")
+    movie_urn = (movie.get(MOVIE_DATA_URN) or "").strip()
+    if not movie_urn:
+        raise ValueError("Movie data is not available")
+    traced_urn = (movie.get(MOVIE_TRACED_URN) or "").strip() or None
+    return AdminMovieMediaResponse(
+        movie_id=movie_id,
+        play_url=s3_presigned.make_signed_url(
+            urn=movie_urn,
+            expires=C.ADMIN_MEDIA_URL_EXPIRES_SECONDS,
+        ),
+        traced_download_url=(
+            s3_presigned.make_signed_url(
+                urn=traced_urn,
+                expires=C.ADMIN_MEDIA_URL_EXPIRES_SECONDS,
+                download_name=f"{movie_id}-traced.mp4",
+            )
+            if traced_urn else None
+        ),
     )
 
 

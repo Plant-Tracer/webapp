@@ -198,7 +198,8 @@ def test_upload_movie_data(client, api_key):
                           'title': 'Test Title at '+time.asctime(),
                           'description': 'test-upload',
                           'movie_base64_data': movie_base64_data,
-                          'movie_data_sha256': movie_data_sha256 })
+                          'movie_data_sha256': movie_data_sha256,
+                          'movie_data_length': len(movie_data) })
     logger.debug("r.json=%s",r.json)
     res = r.json
     assert res['error'] is False

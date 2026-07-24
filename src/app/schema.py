@@ -89,6 +89,7 @@ class Course(BaseModel):
     course_key: str
     admins_for_course: List[str]
     max_enrollment: int
+    created_at: int | None = None
 
 
 class CourseUser(BaseModel):
@@ -134,6 +135,11 @@ class Movie(BaseModel):
 
     published: Annotated[int, Field(ge=0, le=1)]
     deleted: Annotated[int, Field(ge=0, le=1)]
+    uploaded_at: int | None = None
+    last_activity_at: int | None = None
+    upload_bytes_expected: Annotated[int | None, Field(ge=1)] = None
+    # Read compatibility for DynamoDB rows created before uploaded_at replaced
+    # date_uploaded. New writes must use uploaded_at.
     date_uploaded: int | None = None
     orig_movie: str | None = None
     fps: str | None = None  # encoded playback frame rate; string to avoid roundoff errors

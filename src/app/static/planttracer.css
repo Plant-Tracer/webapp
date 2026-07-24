@@ -1,0 +1,489 @@
+/* Shared Plant Tracer page styles. */
+
+html {
+  margin-left: 20px;
+  margin-right: 20px;
+}
+
+body {
+  background: white;
+  color: #606061;
+  font-family: "Outfit", sans-serif;
+}
+
+.pure-menu.pure-menu-horizontal {
+  background: linear-gradient(to right, rgb(53, 181, 147), rgb(161, 210, 68));
+  padding: 0 10px;
+}
+
+.pure-menu-heading.pure-menu-link {
+  color: white !important;
+  font-family: "Outfit", sans-serif;
+  font-size: 150%;
+  font-weight: 600;
+  letter-spacing: normal;
+  padding: 20px 1em;
+  text-transform: none;
+}
+
+.pure-menu-link {
+  color: white !important;
+  font-family: "Outfit", sans-serif;
+  padding: 20px 1em;
+}
+
+.pure-menu-link:hover,
+.pure-menu-link:focus {
+  background: transparent !important;
+  color: white !important;
+  text-shadow: 1px 1px 3px #9dff2e;
+}
+
+.pure-menu-item.pure-menu-selected > .pure-menu-link {
+  background: transparent !important;
+  text-shadow: 2px 2px 5px #9dff2e;
+}
+
+#message:not(:empty) {
+  background-color: rgb(242, 222, 161);
+  border-radius: 4px;
+  display: inline-block;
+  margin-top: 1em;
+  padding: 0.5em 1em 0.5em 1.5em;
+}
+
+#current-course-select {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px dotted currentColor;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  padding: 0 1.25rem 0 0;
+}
+
+#current-course-status.course-error {
+  color: #8b0000;
+  margin-left: 0.5rem;
+}
+
+/* Movie list. */
+
+.mtable tr.you td {
+  color: blue;
+}
+
+table.dataTable thead th.sorting,
+table.dataTable thead th.sorting_asc,
+table.dataTable thead th.sorting_desc {
+  cursor: pointer;
+  padding-right: 1.4em;
+  position: relative;
+}
+
+table.dataTable thead th.sorting::after,
+table.dataTable thead th.sorting_asc::after,
+table.dataTable thead th.sorting_desc::after {
+  position: absolute;
+  right: 0.3em;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+table.dataTable thead th.sorting::after {
+  content: "\21D5";
+  opacity: 0.4;
+}
+
+table.dataTable thead th.sorting_asc::after {
+  content: "\2191";
+}
+
+table.dataTable thead th.sorting_desc::after {
+  content: "\2193";
+}
+
+div.mtable td.check {
+  text-align: center;
+}
+
+.mtable input[type="checkbox"] {
+  height: 20px;
+  width: 20px;
+}
+
+/* Course users. */
+
+#your-users table {
+  border-collapse: collapse;
+}
+
+#your-users th,
+#your-users td {
+  border: 1px solid #ccc;
+  padding: 4px 8px;
+  text-align: left;
+}
+
+/* Upload page. */
+
+.upload-contributor-notice {
+  margin: 0.4em 0 0.2em 1em;
+}
+
+.upload-research-use {
+  margin: 0.2em 0 0.4em 1em;
+}
+
+.upload-choice-first {
+  margin-left: 0.75em;
+}
+
+.upload-choice {
+  margin-left: 0.5em;
+}
+
+#attribution-group {
+  display: none;
+  margin: 0.4em 0 0.4em 1em;
+}
+
+#attribution-name-group,
+#upload-preview {
+  display: none;
+}
+
+#rotate_movie_link.rotate-pending {
+  cursor: not-allowed;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.preview-container {
+  align-items: center;
+  background-color: #f4f4f4;
+  border-radius: 4px;
+  display: flex;
+  justify-content: center;
+  margin: 20px 0;
+  min-height: 640px;
+  width: 100%;
+}
+
+#image-preview {
+  display: block;
+  max-height: 640px;
+  max-width: 100%;
+  transition: transform 0.3s ease;
+}
+
+#image-preview-status {
+  display: none;
+  margin-top: 0.5em;
+}
+
+/* Audit page. */
+
+#audit-search-container {
+  margin-bottom: 10px;
+}
+
+#audit-search {
+  padding: 5px;
+  width: 300px;
+}
+
+#audit {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+/* Admin summary. */
+
+.admin-summary {
+  max-width: 1100px;
+}
+
+.admin-kpis {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  margin: 1.25rem 0;
+}
+
+.admin-kpi {
+  background: #fafafa;
+  border: 1px solid #d6d6d6;
+  border-radius: 6px;
+  padding: 1rem;
+}
+
+.admin-kpi-value {
+  color: #202020;
+  font-size: 2rem;
+  font-weight: 600;
+}
+
+.admin-section {
+  margin: 1.5rem 0;
+}
+
+.admin-section table {
+  min-width: 100%;
+  table-layout: fixed;
+}
+
+.admin-table-scroll {
+  overflow-x: auto;
+}
+
+.admin-section th {
+  position: relative;
+}
+
+.admin-resize-handle {
+  bottom: 0;
+  cursor: col-resize;
+  position: absolute;
+  right: -0.3rem;
+  top: 0;
+  width: 0.6rem;
+  z-index: 2;
+}
+
+.admin-resize-handle:focus {
+  background: rgba(0, 0, 0, 0.12);
+  outline: 2px solid #2c7a66;
+}
+
+.admin-upload-pending td {
+  background: #ffd6d6 !important;
+  color: #760000;
+}
+
+.admin-actions-cell {
+  overflow: visible;
+  position: relative;
+}
+
+.admin-actions-toggle {
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.admin-actions-menu {
+  background: white;
+  border: 1px solid #aaa;
+  box-shadow: 0 2px 7px rgba(0, 0, 0, 0.2);
+  min-width: 10rem;
+  padding: 0.25rem;
+  position: absolute;
+  right: 0.25rem;
+  z-index: 3;
+}
+
+.admin-actions-menu button {
+  background: white;
+  border: 0;
+  cursor: pointer;
+  display: block;
+  padding: 0.45rem 0.6rem;
+  text-align: left;
+  width: 100%;
+}
+
+.admin-actions-menu button:hover,
+.admin-actions-menu button:focus {
+  background: #eef7f4;
+}
+
+.admin-error {
+  background: #fff0f0;
+  border: 1px solid #d28b8b;
+  border-radius: 4px;
+  color: #8b0000;
+  padding: 0.75rem;
+}
+
+.admin-sort {
+  appearance: none;
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-weight: inherit;
+  padding: 0;
+}
+
+.admin-sort:hover,
+.admin-sort:focus {
+  text-decoration: underline;
+}
+
+.admin-sort-indicator {
+  display: inline-block;
+  width: 1em;
+}
+
+.admin-course-key {
+  display: inline-block;
+  min-width: 5.5rem;
+}
+
+.admin-key-toggle {
+  appearance: none;
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  margin-left: 0.35rem;
+  padding: 0.1rem;
+  vertical-align: middle;
+}
+
+.admin-key-toggle:hover,
+.admin-key-toggle:focus {
+  color: #202020;
+}
+
+.admin-key-toggle svg {
+  fill: none;
+  height: 1.15rem;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+  width: 1.15rem;
+}
+
+/* Movie analyzer and demos. */
+
+#tracer canvas {
+  border: 1px solid black;
+  touch-action: none;
+}
+
+.float-movie,
+.float-controls {
+  float: left;
+  padding: 2px;
+}
+
+.frame_number_field {
+  width: 4em;
+}
+
+.trim-control-row {
+  margin-top: 0.35rem;
+}
+
+.trim_controls,
+.trim_status {
+  margin-left: 0.4rem;
+}
+
+.open-button {
+  background: #06c;
+  border: 1px solid #0157ad;
+  border-radius: 3px;
+  color: #fff;
+  padding: 10px;
+  text-decoration: none;
+}
+
+.open-button:hover {
+  background: #01478e;
+}
+
+.popup {
+  background: rgba(0, 0, 0, 0.75);
+  display: none;
+  height: 100%;
+  left: 0;
+  position: fixed;
+  top: 0;
+  width: 100%;
+}
+
+.popup-content {
+  background: #fff;
+  border-radius: 3px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 1);
+  box-sizing: border-box;
+  margin: 100px auto 0;
+  padding: 40px;
+  position: relative;
+  width: 700px;
+}
+
+.close-button {
+  background: rgba(0, 0, 0, 0.8);
+  border-radius: 20px;
+  color: #fff;
+  font-size: 20px;
+  height: 25px;
+  position: absolute;
+  right: -10px;
+  text-align: center;
+  text-decoration: none;
+  top: -10px;
+  width: 25px;
+}
+
+.close-button:hover {
+  background: rgba(0, 0, 0, 1);
+}
+
+div#analysis-results {
+  display: none;
+  float: left;
+  padding: 2px;
+}
+
+div#analysis-results canvas {
+  display: block;
+}
+
+#tracer.tracing-dimmed {
+  opacity: 0.5;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.status-big-play-trigger {
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.status-big-play-trigger:hover {
+  opacity: 0.8;
+}
+
+.dot {
+  font-size: 32px;
+  line-height: 0;
+  position: relative;
+  text-align: center;
+}
+
+#explain {
+  float: left;
+}
+
+/* Debug page. */
+
+.debug-value {
+  max-width: 600px;
+  overflow-wrap: break-word;
+}
+
+@media screen and (max-width: 720px) {
+  .popup-content {
+    width: 90%;
+  }
+}

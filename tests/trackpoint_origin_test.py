@@ -203,7 +203,7 @@ def test_rename_marker_api_renames_stored_trackpoints(client, new_movie):
 def test_list_movies_returns_signed_traced_movie_url(client, new_movie):
     traced_urn = make_urn(object_name=f"{new_movie[MOVIE_ID]}_traced.mp4")
     ddbo = odb.DDBO()
-    ddbo.update_table(ddbo.movies, new_movie[MOVIE_ID], {MOVIE_TRACED_URN: traced_urn})
+    ddbo.update_movie(new_movie[MOVIE_ID], {MOVIE_TRACED_URN: traced_urn})
 
     resp = client.post("/api/list-movies", data={API_KEY: new_movie[API_KEY]})
 
@@ -221,6 +221,7 @@ def test_new_movie_api_stores_bottom_left_trackpoint_origin(client, new_course):
             "title": "Trackpoint origin API test",
             "description": "Verify /api/new-movie writes the coordinate contract.",
             "movie_data_sha256": "0" * 64,
+            "movie_data_length": 1,
         },
     )
 

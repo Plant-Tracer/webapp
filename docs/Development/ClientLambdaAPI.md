@@ -31,11 +31,31 @@ asset plan for external static hosting.
 | Operation | Method | Path | Auth | Purpose |
 |-----------|--------|------|------|---------|
 | Ping | GET | `/resize-api/v1/ping` | none | Health check; returns `{ "error": false, "status": "ok", ... }` with `app_version`, `deployed_at`, and selected stack parameters. |
+| Complete upload | POST | `/resize-api/v1/process-upload` | `x-api-key` header | Verifies the final S3 object and exact expected byte length, then records `uploaded_at` and `total_bytes`. |
 | First frame | GET | `/resize-api/v1/first-frame?api_key=...&movie_id=...` | query `api_key` | Returns JPEG frame 0 with saved rotation applied and scaled to the analysis size. |
 | Movie data | GET | `/resize-api/v1/movie-data?api_key=...&movie_id=...&format=json` | query `api_key` | Returns signed playback/download URLs as JSON. |
 | Movie data redirect | GET | `/resize-api/v1/movie-data?api_key=...&movie_id=...` | query `api_key` | 302 redirect to signed movie URL. |
 | Movie zip redirect | GET | `/resize-api/v1/movie-data?api_key=...&movie_id=...&format=zip` | query `api_key` | 302 redirect to signed frame ZIP URL if present. |
 | Trace movie | POST | `/resize-api/v1/trace-movie` | `x-api-key` header | Queues retracing from a user-edited source frame through an optional end frame. |
+
+## Complete Upload Request
+
+`POST /resize-api/v1/process-upload`
+
+```text
+x-api-key: <api_key>
+Content-Type: application/json
+```
+
+```json
+{ "movie_id": "m..." }
+```
+
+The caller must be allowed to edit the movie. Lambda-resize reads the final
+object with `HeadObject`, rejects a missing object or a byte count different
+from `upload_bytes_expected`, and sets `uploaded_at`, `total_bytes`, and
+`status="ready"`. Read-only superauditors cannot complete or otherwise mutate
+movies; superadmins can.
 
 ## Trace Movie Request
 

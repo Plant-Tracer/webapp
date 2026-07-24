@@ -7,17 +7,27 @@ workflow. Historical phase plans have been collapsed into the live behavior.
 Upload
 ------
 
-1. The browser computes a SHA-256 digest for the selected movie.
+1. The browser computes a SHA-256 digest and exact byte length for the selected
+   movie.
 2. The browser posts metadata to ``POST /api/new-movie``.
-3. Flask creates a DynamoDB movie row with status ``uploading`` and returns a
-   presigned S3 POST for the final object key.
+3. Flask creates a DynamoDB movie row with status ``uploading`` and
+   ``created_at`` but no ``uploaded_at``. It returns a presigned S3 POST for the
+   final object key whose policy accepts exactly the reported byte length.
 4. The browser uploads the movie directly to S3/MinIO with the returned form
    fields.
-5. The upload page requests the first frame from lambda-resize and links the
+5. The browser posts the movie ID to
+   ``POST /resize-api/v1/process-upload``. lambda-resize verifies the final
+   object's byte count with ``HeadObject`` and records ``uploaded_at``,
+   ``total_bytes``, and status ``ready``.
+6. The upload page requests the first frame from lambda-resize and links the
    user to Analyze.
 
 There is no S3 ``uploads/`` staging prefix and no S3 bucket notification path.
 Lambda is invoked by HTTP or SQS/local queue.
+
+Rows that never reach step 5 remain visibly pending in the admin movie table.
+Their ``created_at`` timestamp supports a future two-hour pending-upload
+garbage collector.
 
 First Frame
 -----------

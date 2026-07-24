@@ -27,6 +27,7 @@ if _ffmpeg:
     os.environ.setdefault(C.FFMPEG_PATH, _ffmpeg)
 
 from app import flask_app  # pylint: disable=wrong-import-position
+from app import local_lambda_debug  # pylint: disable=wrong-import-position
 from app import odb_movie_data  # pylint: disable=wrong-import-position
 from app.s3_presigned import s3_client  # pylint: disable=wrong-import-position
 
@@ -77,19 +78,22 @@ class ServerThread(threading.Thread):
 
 @pytest.fixture(scope="module")
 def live_server(local_ddb, local_s3) -> Generator[str, None, None]:
-    """Start a live Flask server for Selenium tests.
+    """Start the live Flask and lambda-resize bridge servers for Selenium tests.
 
     Depends on local_ddb and local_s3 fixtures to ensure AWS services are available.
     """
     app = flask_app.app
     app.config['TESTING'] = True
     previous_lambda_api_base = os.environ.get(C.PLANTTRACER_LAMBDA_API_BASE)
-    os.environ[C.PLANTTRACER_LAMBDA_API_BASE] = ""
+    lambda_port = 9812
+    os.environ[C.PLANTTRACER_LAMBDA_API_BASE] = f"http://127.0.0.1:{lambda_port}/"
 
     # Use a different port to avoid conflicts
     port = 8765
     server = ServerThread(app, port)
+    lambda_server = ServerThread(local_lambda_debug.bridge_app, lambda_port)
     server.start()
+    lambda_server.start()
 
     # Give server time to start
     time.sleep(2)
@@ -97,6 +101,7 @@ def live_server(local_ddb, local_s3) -> Generator[str, None, None]:
     yield f"http://127.0.0.1:{port}"
 
     server.shutdown()
+    lambda_server.shutdown()
     if previous_lambda_api_base is None:
         os.environ.pop(C.PLANTTRACER_LAMBDA_API_BASE, None)
     else:

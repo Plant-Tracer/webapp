@@ -1,27 +1,206 @@
 S3 and Plant Tracer
 ===================
 
-We **always deploy to an existing S3 bucket**; the bucket is not created by the stack. The bucket must **outlive the stack** because it is the long-term archive of all student-uploaded videos. Stacks and DynamoDB may be torn down or migrated; the bucket is the durable store. For this reason, all metadata that must survive (research-use, attribution) is stored **in the MP4 file** as well as in DynamoDB (see :doc:`MOVIE_METADATA`).
+Plant Tracer uses S3 for three different purposes. They have different owners
+and lifetimes and must not be confused:
 
-The Lambda that processes uploads is invoked via its HTTP API; we no longer rely on S3 → Lambda bucket notifications or a special ``uploads/`` prefix. The bucket name is provided to both the VM and the Lambda via environment variables, and both read/write objects under ``course_id/movie_id/...`` keys.
+.. list-table::
+   :header-rows: 1
+   :widths: 24 30 46
 
-Object Layout
--------------
+   * - Location
+     - Configuration
+     - Purpose and lifetime
+   * - Runtime movie archive
+     - ``PLANTTRACER_S3_BUCKET`` / SAM ``ImageBucketName``
+     - Original movies and derived movie artifacts. The bucket is pre-existing,
+       is not owned by an application stack, and must outlive every stack that
+       uses it.
+   * - Operational artifacts
+     - ``s3://planttracer-artifacts/artifacts/``
+     - Temporary diagnostics such as CloudWatch Synthetics output. Objects
+       under ``artifacts/`` expire; this is not a movie archive.
+   * - SAM deployment artifacts
+     - SAM CLI managed bucket; ``resolve_s3=true`` and ``s3_prefix`` in
+       ``samconfig.toml``
+     - Packaged Lambda deployment files used by CloudFormation. These are not
+       runtime application data and are not addressed by application code.
 
-Objects use predictable course/movie keys:
+Runtime Movie Archive
+---------------------
 
-* original movie: ``course_id/movie_id.mov``
-* per-frame JPEGs: ``course_id/movie_id/frame_number.jpg`` when written
-* traced movie and ZIP artifacts: derived from the movie URN during
-  lambda-resize tracking
+The runtime bucket is always supplied to the stack. ``template.yaml`` does not
+create or delete it. This is deliberate: S3 is the long-term byte archive while
+application stacks and DynamoDB tables may be replaced or migrated.
 
-The browser uploads original movies directly to the final key through a
-presigned POST returned by ``/api/new-movie``.
+S3 URNs have the form
+``s3://{PLANTTRACER_S3_BUCKET}/{object_key}``. DynamoDB stores the complete URN,
+not just the key, so reads continue to work when records refer to an older
+bucket or layout.
+
+Current Object Layout
+~~~~~~~~~~~~~~~~~~~~~
+
+The current production layout is not namespaced by stack. The live key
+templates are:
+
+* movie object: ``{course_id}/{movie_id}{ext}``
+* persisted frame: ``{course_id}/{movie_id}/{frame_number:06d}{ext}``
+
+The resulting objects are:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 22 35 20 23
+
+   * - Artifact
+     - Current key
+     - DynamoDB URN field
+     - Writer and lifetime
+   * - Original movie
+     - ``{course_id}/{movie_id}.mov``
+     - ``movie_data_urn``
+     - Browser presigned POST; durable archive
+   * - Traced movie
+     - ``{course_id}/{movie_id}_traced.mov``
+     - ``movie_traced_urn``
+     - lambda-resize; derived and regenerable
+   * - Analysis-frame ZIP
+     - ``{course_id}/{movie_id}_zipfile.mov``
+     - ``movie_zipfile_urn``
+     - lambda-resize; derived and regenerable
+   * - Persisted JPEG frame
+     - ``{course_id}/{movie_id}/{frame_number:06d}.jpg``
+     - ``frame_urn`` on a ``movie_frames`` row
+     - Application or resize processing; optional and regenerable
+
+The current ZIP implementation derives its URN from ``movie_data_urn`` by
+inserting ``_zipfile`` before the original extension. The stored object contains
+ZIP bytes even though the resulting key currently ends in ``.mov``. This table
+documents the implemented path; it does not prescribe that extension for a
+future layout.
+
+The original, traced movie, and ZIP are distinguished by filename suffix.
+Persisted frames are segregated beneath the movie-ID directory. There is
+currently no live ``uploads/`` staging prefix and no ``movies/{stack}/``
+namespace.
+
+Current Upload Processing
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``POST /api/new-movie`` creates a DynamoDB row with ``status="uploading"``,
+``created_at``, and ``upload_bytes_expected`` but no ``uploaded_at``. It stores
+the final ``movie_data_urn`` and returns a presigned POST for that key. The
+signed policy requires the browser to send exactly the declared byte count.
+
+After S3 accepts the object, the browser calls
+``POST /resize-api/v1/process-upload``. lambda-resize verifies the final object
+with ``HeadObject`` and records ``uploaded_at``, ``total_bytes``, and
+``status="ready"``.
+
+There is no live S3 bucket-notification or EventBridge pipeline. The deprecated
+``etc/s3_upload_trigger.py`` helper is not run. Future restoration of
+S3-triggered processing is tracked separately in `GitHub issue #1152
+<https://github.com/Plant-Tracer/webapp/issues/1152>`_; it is not part of the
+admin activity work in PR #1151.
+
+Metadata Stored with Original Movies
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The presigned POST fixes ``Content-Type`` to ``video/mp4`` and signs these S3
+object metadata fields:
+
+* ``sha256``
+* ``research-use``
+* ``credit-by-name``
+* ``attribution-name``
+* ``fpm``
+
+Research-use, attribution, and capture-interval metadata are also stored in
+DynamoDB and, where supported, in MP4 metadata. See :doc:`MOVIE_METADATA`.
+DynamoDB remains authoritative for current queryable state; S3 and embedded MP4
+metadata provide a survival copy because the archive outlives the database.
+
+Access and CORS
+~~~~~~~~~~~~~~~
+
+Browser uploads and downloads use time-limited presigned S3 requests. The
+bucket's CORS configuration must allow the application origin to issue the
+required S3 methods and headers. ``src/app/s3_presigned.py`` contains the
+current CORS policy and the operator command that applies it.
+
+lambda-web and lambda-resize receive the runtime bucket name through
+``PLANTTRACER_S3_BUCKET``. Their roles can read the archive, and the functions
+that create, replace, or delete artifacts have the corresponding write
+permissions.
+
+Course Migration and Backup/Restore
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Because the current key starts with ``course_id``, moving a movie to another
+course must move every known object and rewrite every stored movie/frame URN.
+``src/dbbackup.py`` performs that work for course migration.
+
+``dbbackup`` reads movie objects from the buckets recorded in their URNs.
+Restore writes to ``PLANTTRACER_S3_BUCKET`` when it is configured; otherwise it
+can use the bucket recorded in the archive after explicit confirmation. The
+``.ptb`` backup archive itself is a local file produced by ``dbbackup`` and is
+not automatically stored in an S3 application prefix. See
+:doc:`BackupRestore`.
 
 Local Development and GitHub Actions
 ------------------------------------
 
-For local development and GitHub Actions, the local S3 simulator MinIO is used.
-The Makefile starts it on ``http://localhost:9000/`` and creates the
-``planttracer-local`` bucket with ``make make-local-bucket``. MinIO provides
-local persistence for integration tests without using real AWS S3.
+Local development and integration tests use MinIO rather than AWS S3.
+``AWS_ENDPOINT_URL_S3`` selects the MinIO endpoint and
+``PLANTTRACER_S3_BUCKET`` normally names ``planttracer-local``. The same object
+layout and URN code are used locally.
+
+Use Makefile targets to start MinIO, create the local bucket, and run tests.
+Tests that exercise S3 behavior must use MinIO rather than mocking the S3
+client.
+
+Operational Artifacts Bucket
+----------------------------
+
+``s3://planttracer-artifacts`` is manually managed, project-wide
+infrastructure for temporary operational output. It is separate from
+``PLANTTRACER_S3_BUCKET`` and from the SAM CLI deployment bucket.
+
+Its intended layout and lifecycle are:
+
+* ``artifacts/synthetics/{stack-name}/`` and similar tool/stack prefixes for
+  temporary diagnostics;
+* current objects below ``artifacts/`` expire after seven days;
+* incomplete multipart uploads below ``artifacts/`` are aborted after one day;
+* the root ``README.md`` documents the bucket and is retained outside the
+  expiring prefix.
+
+Do not put uploaded movies, derived movie artifacts, ``.ptb`` backups, release
+artifacts, or other durable data in this bucket.
+
+SAM Deployment Artifacts
+------------------------
+
+``samconfig.toml`` uses ``resolve_s3=true``. SAM CLI therefore selects or
+creates its managed deployment bucket and uploads packaged Lambda artifacts
+under the configured ``s3_prefix`` (currently ``prod`` in the checked-in
+configuration). CloudFormation consumes those objects during deployment.
+
+The application does not read or write these keys at runtime. Their retention
+and cleanup are deployment concerns, not movie-data lifecycle concerns.
+
+Implementation Sources
+----------------------
+
+Use these files as the implementation sources when updating this page:
+
+* ``src/app/constants.py`` -- movie and frame key templates
+* ``src/app/s3_presigned.py`` -- S3 URNs, metadata, presigned requests, and CORS
+* ``src/app/odb_movie_data.py`` -- object reads, writes, deletes, and frame URNs
+* ``src/app/flask_api.py`` -- original movie upload allocation
+* ``lambda-resize/src/resize_app/movie_glue.py`` -- upload verification and
+  derived ZIP/traced movie writes
+* ``src/dbbackup.py`` -- backup/restore bucket selection and course migration
+* ``template.yaml`` -- runtime bucket parameter and Lambda permissions
+* ``samconfig.toml`` -- production parameter values and SAM artifact prefix

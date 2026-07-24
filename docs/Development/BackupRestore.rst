@@ -65,10 +65,11 @@ for which all application tables exist, and prints a fixed-width table with the
 course, user, and movie counts plus a single UTC ``from``/``to`` range for each
 complete prefix. The range is the
 minimum and maximum timestamp found in user ``created`` fields, movie
-``created_at``/``date_uploaded`` fields, optional movie ``status_updated_at``
-fields, and optional course ``created``/``created_at`` fields when those
-attributes are present. Current course rows do not have a schema-defined
-creation timestamp, and frame/trackpoint rows store frame numbers rather than
+``created_at``/``uploaded_at``/``last_activity_at`` fields, legacy movie
+``date_uploaded``, optional movie ``status_updated_at`` fields, and optional
+course ``created``/``created_at`` fields when those attributes are present.
+Legacy course rows may have no schema-defined creation timestamp, and
+frame/trackpoint rows store frame numbers rather than
 timestamps. In ``dbbackup``, if the current AWS SSO token is expired,
 ``list-prefixes`` asks whether it should run ``aws sso login`` and retry once.
 

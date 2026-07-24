@@ -7,7 +7,17 @@ from decimal import Decimal
 import pytest
 
 from app import odb
-from app.odb import UserExists,InvalidUser_Id,LAST_FRAME_TRACKED,MOVIE_ID,COURSE_ID,USER_ID,EMAIL,API_KEY
+from app.odb import (
+    API_KEY,
+    COURSE_ID,
+    EMAIL,
+    InvalidUser_Id,
+    LAST_FRAME_TRACKED,
+    MOVIE_ID,
+    UnauthorizedUser,
+    USER_ID,
+    UserExists,
+)
 from app.constants import logger
 from app.schema import Trackpoint
 
@@ -15,6 +25,87 @@ from app.schema import Trackpoint
 
 def rand8():
     return str(uuid.uuid4())[0:8]
+
+
+def test_update_movie_maintains_last_activity(new_movie):
+    ddbo = new_movie["ddbo"]
+    movie_id = new_movie[MOVIE_ID]
+    ddbo.update_movie(
+        movie_id,
+        {odb.LAST_ACTIVITY_AT: 100},
+        touch_activity=False,
+    )
+
+    ddbo.update_movie(movie_id, {odb.TITLE: "Activity timestamp test"})
+
+    movie = ddbo.get_movie(movie_id)
+    assert movie[odb.TITLE] == "Activity timestamp test"
+    assert movie[odb.LAST_ACTIVITY_AT] > 100
+
+
+def test_super_roles_have_cross_course_read_but_only_superadmin_can_edit(new_movie):
+    ddbo = new_movie["ddbo"]
+    admin_id = new_movie["admin_id"]
+    admin = ddbo.get_user(admin_id)
+    original_courses = list(admin[odb.COURSES])
+    original_admin_courses = list(admin[odb.ADMIN_FOR_COURSES])
+    try:
+        ddbo.update_table(
+            ddbo.users,
+            admin_id,
+            {
+                odb.COURSES: [],
+                odb.ADMIN_FOR_COURSES: [],
+                odb.SUPER_ROLE: odb.SUPER_ROLE_SUPERAUDITOR,
+            },
+        )
+        assert odb.can_access_movie(
+            user_id=admin_id,
+            movie_id=new_movie[MOVIE_ID],
+        )[MOVIE_ID] == new_movie[MOVIE_ID]
+        with pytest.raises(UnauthorizedUser):
+            odb.can_edit_movie(user_id=admin_id, movie_id=new_movie[MOVIE_ID])
+        with pytest.raises(UnauthorizedUser):
+            odb.set_metadata(
+                user_id=admin_id,
+                set_movie_id=new_movie[MOVIE_ID],
+                prop=odb.TITLE,
+                value="Auditor must not write",
+            )
+
+        ddbo.update_table(
+            ddbo.users,
+            admin_id,
+            {odb.SUPER_ROLE: odb.SUPER_ROLE_SUPERADMIN},
+        )
+        assert odb.can_edit_movie(
+            user_id=admin_id,
+            movie_id=new_movie[MOVIE_ID],
+        )[MOVIE_ID] == new_movie[MOVIE_ID]
+        odb.set_metadata(
+            user_id=admin_id,
+            set_movie_id=new_movie[MOVIE_ID],
+            prop=odb.TITLE,
+            value="Superadmin movie edit",
+        )
+        assert ddbo.get_movie(new_movie[MOVIE_ID])[odb.TITLE] == "Superadmin movie edit"
+        with pytest.raises(UnauthorizedUser):
+            odb.set_metadata(
+                user_id=admin_id,
+                set_movie_id=new_movie[MOVIE_ID],
+                prop=odb.RESEARCH_USE,
+                value=1,
+            )
+    finally:
+        ddbo.update_table(
+            ddbo.users,
+            admin_id,
+            {
+                odb.COURSES: original_courses,
+                odb.ADMIN_FOR_COURSES: original_admin_courses,
+                odb.SUPER_ROLE: odb.SUPER_ROLE_NONE,
+            },
+        )
 
 MYDIR = os.path.dirname(__file__)
 
@@ -77,7 +168,8 @@ TEST_MOVIE_DATA = {
     'movie_data_urn':'s3://bogus/movie-data.mp4',
     LAST_FRAME_TRACKED:0,
     'created_at':int(time.time()),
-    'date_uploaded':int(time.time()),
+    'uploaded_at':int(time.time()),
+    'last_activity_at':int(time.time()),
     'fps':"29.92",
     'total_frames':10,
     'total_bytes':100,
@@ -129,7 +221,7 @@ def create_trim_test_movie(local_ddb, *, total_frames=5, trim_start_frame=None, 
         'movie_data_urn': 's3://bogus/trim.mov',
         LAST_FRAME_TRACKED: 0,
         'created_at': int(time.time()),
-        'date_uploaded': int(time.time()),
+        'uploaded_at': int(time.time()),
         'fps': "29.92",
         'total_frames': total_frames,
         'total_bytes': 100,
@@ -393,7 +485,7 @@ def test_clear_movie_tracking_after_frame(local_ddb):
         'movie_data_urn': 's3://bogus/retrace.mov',
         LAST_FRAME_TRACKED: 2,
         'created_at': int(time.time()),
-        'date_uploaded': int(time.time()),
+        'uploaded_at': int(time.time()),
         'fps': "29.92",
         'total_frames': 10,
         'total_bytes': 100,
@@ -574,7 +666,7 @@ def test_delete_user_removes_course_enrollment(local_ddb):
         'movie_data_urn': 's3://bogus/delete.mov',
         LAST_FRAME_TRACKED: 0,
         'created_at': int(time.time()),
-        'date_uploaded': int(time.time()),
+        'uploaded_at': int(time.time()),
         'fps': "29.92",
         'total_frames': 1,
         'total_bytes': 100,

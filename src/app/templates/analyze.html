@@ -1,33 +1,18 @@
 <!-- -*- mode: html -*- -->
 {% extends 'base.html' %}
 
-{% block head %}
-{% endblock %}
-
-
 {% block body %}
 
 <h1>Plant Movie Analyzer</h1>
 
 <p><i>Please see the <b>Plant Motion Analysis</b> instructions at the bottom of this page. Scrolling might be necessary.</i></p>
 
-<style>
-  {% include 'tracer_app.css' %}
-
-  .dot {
-  text-align:center;
-  font-size:32px;
-  position:relative;
-  line-height:0px;
-  }
-</style>
-
 <h2 id='status-big'>Movie Loading...</h2>
 
 {% include 'tracer_app.html' %}
 
 <br>
-<div style="float:left" id="explain">
+<div id="explain">
   <h3>Plant Motion Analysis</h3>
 
   <p class='demo'>

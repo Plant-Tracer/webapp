@@ -17,6 +17,7 @@ const state = {
   courses: [],
   users: [],
   movies: [],
+  viewerRole: "none",
   sort: Object.fromEntries(TABLE_NAMES.map((table) => [
     table,
     { key: TABLE_CONFIG[table].defaultKey, direction: 1 },
@@ -27,6 +28,35 @@ function textCell(value) {
   const cell = document.createElement("td");
   cell.textContent = value === null || value === undefined ? "" : String(value);
   return cell;
+}
+
+function epochSeconds(value) {
+  const epoch = Number(value);
+  return Number.isFinite(epoch) && epoch > 0 ? epoch : null;
+}
+
+function formatDate(value) {
+  const epoch = epochSeconds(value);
+  return epoch === null ? "—" : new Date(epoch * 1000).toLocaleString();
+}
+
+function dateCell(value, title = "") {
+  const cell = textCell(formatDate(value));
+  cell.dataset.sortValue = epochSeconds(value) || 0;
+  if (title) {
+    cell.title = title;
+  }
+  return cell;
+}
+
+function courseLink(courseId, courseName = courseId) {
+  const link = document.createElement("a");
+  link.href = `/list?course_id=${encodeURIComponent(courseId)}`;
+  link.target = "_blank";
+  link.rel = "noopener";
+  link.textContent = courseName || courseId;
+  link.title = `Open movies for ${courseName || courseId} in a new tab`;
+  return link;
 }
 
 function setText(id, value) {
@@ -82,6 +112,12 @@ function courseKeyCell(course) {
   return cell;
 }
 
+function courseNameCell(course) {
+  const cell = document.createElement("td");
+  cell.append(courseLink(course.course_id, course.course_name));
+  return cell;
+}
+
 function appendCourseRows(courses) {
   const tbody = document.getElementById("admin-course-rows");
   for (const course of courses) {
@@ -89,9 +125,14 @@ function appendCourseRows(courses) {
     row.append(
       textCell(course.course_id),
       courseKeyCell(course),
-      textCell(course.course_name),
+      courseNameCell(course),
       textCell(course.admin_count),
       textCell(`${course.enrollment_count} / ${course.max_enrollment}`),
+      dateCell(
+        course.display_created_at,
+        course.created_at ? "Course creation time" : "First movie upload; course creation time unavailable",
+      ),
+      dateCell(course.last_movie_activity_at),
     );
     tbody.append(row);
   }
@@ -104,8 +145,7 @@ function coursesCell(courses) {
       cell.append(document.createTextNode(", "));
     }
     const name = course.is_admin ? document.createElement("strong") : document.createElement("span");
-    name.textContent = course.course_name;
-    name.title = course.course_id;
+    name.append(courseLink(course.course_id, course.course_name));
     cell.append(name);
   });
   return cell;
@@ -121,21 +161,144 @@ function appendUserRows(users) {
       textCell(user.primary_course_id),
       textCell(user.super_role === "none" ? "no" : user.super_role),
       coursesCell(user.courses),
+      dateCell(user.created_at),
+      dateCell(user.last_movie_activity_at),
     );
     tbody.append(row);
   }
+}
+
+function movieTitleCell(movie) {
+  const cell = document.createElement("td");
+  if (state.viewerRole === "superadmin" && epochSeconds(movie.uploaded_at)) {
+    const link = document.createElement("a");
+    link.href = `/analyze?movie_id=${encodeURIComponent(movie.movie_id)}`;
+    link.textContent = movie.title;
+    cell.append(link);
+  } else {
+    cell.textContent = movie.title;
+  }
+  return cell;
+}
+
+function movieSizeText(movie) {
+  const details = [];
+  const frames = Number(movie.total_frames);
+  if (Number.isFinite(frames) && frames >= 0) {
+    details.push(`${frames.toLocaleString()} frames`);
+  }
+  const fpm = Number(movie.fpm);
+  if (Number.isFinite(frames) && frames > 0 && Number.isFinite(fpm) && fpm > 0) {
+    const minutes = Math.max(0, frames - 1) / fpm;
+    details.push(`${minutes.toLocaleString(undefined, { maximumFractionDigits: 2 })} min elapsed`);
+  }
+  const bytes = Number(movie.total_bytes);
+  if (Number.isFinite(bytes) && bytes > 0) {
+    details.push(`${(bytes / 1000000).toLocaleString(undefined, { maximumFractionDigits: 1 })} MB`);
+  }
+  return details.length ? details.join(" · ") : "—";
+}
+
+async function fetchMovieMedia(movieId) {
+  const response = await fetch(
+    `${API_BASE}api/admin/movies/${encodeURIComponent(movieId)}/media`,
+    { credentials: "same-origin" },
+  );
+  const payload = await response.json();
+  if (!response.ok || payload.error) {
+    throw new Error(payload.message || `Movie media request failed with HTTP ${response.status}`);
+  }
+  return payload;
+}
+
+function downloadUrl(url) {
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "";
+  document.body.append(link);
+  link.click();
+  link.remove();
+}
+
+function movieActionsCell(movie) {
+  const cell = document.createElement("td");
+  cell.className = "admin-actions-cell";
+  if (!epochSeconds(movie.uploaded_at)) {
+    cell.textContent = "—";
+    return cell;
+  }
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "admin-actions-toggle";
+  button.textContent = "⋮";
+  button.setAttribute("aria-label", `Actions for ${movie.title}`);
+  button.setAttribute("aria-expanded", "false");
+  const menu = document.createElement("div");
+  menu.className = "admin-actions-menu";
+  menu.hidden = true;
+  const actions = [
+    ["Play", async () => {
+      const media = await fetchMovieMedia(movie.movie_id);
+      window.open(media.play_url, "_blank", "noopener");
+    }],
+  ];
+  if (movie.has_traced_movie) {
+    actions.push(["Download traced", async () => {
+      const media = await fetchMovieMedia(movie.movie_id);
+      if (!media.traced_download_url) {
+        throw new Error("Traced movie is not available");
+      }
+      downloadUrl(media.traced_download_url);
+    }]);
+  }
+  if (state.viewerRole === "superadmin") {
+    actions.push(["Analyze", async () => {
+      window.location.assign(`/analyze?movie_id=${encodeURIComponent(movie.movie_id)}`);
+    }]);
+  }
+  for (const [label, action] of actions) {
+    const actionButton = document.createElement("button");
+    actionButton.type = "button";
+    actionButton.textContent = label;
+    actionButton.addEventListener("click", async () => {
+      menu.hidden = true;
+      button.setAttribute("aria-expanded", "false");
+      try {
+        await action();
+      } catch (error) {
+        reportAdminError(error);
+      }
+    });
+    menu.append(actionButton);
+  }
+  button.addEventListener("click", () => {
+    menu.hidden = !menu.hidden;
+    button.setAttribute("aria-expanded", String(!menu.hidden));
+  });
+  cell.append(button, menu);
+  return cell;
 }
 
 function appendMovieRows(movies) {
   const tbody = document.getElementById("admin-movie-rows");
   for (const movie of movies) {
     const row = document.createElement("tr");
+    if (!epochSeconds(movie.uploaded_at)) {
+      row.classList.add("admin-upload-pending");
+      row.title = "Movie record was created but the upload has not completed";
+    }
+    const courseCell = document.createElement("td");
+    courseCell.append(courseLink(movie.course_id, movie.course_name));
     row.append(
-      textCell(movie.title),
-      textCell(movie.course_name),
+      movieTitleCell(movie),
+      courseCell,
       textCell(movie.owner_name),
+      dateCell(movie.uploaded_at),
+      dateCell(movie.last_activity_at),
+      textCell(movieSizeText(movie)),
       textCell(movie.state),
       textCell(movie.status),
+      movieActionsCell(movie),
     );
     tbody.append(row);
   }
@@ -213,6 +376,79 @@ function bindSortButtons() {
   });
 }
 
+function initializeColumnWidths(table) {
+  const headers = table.querySelectorAll("thead th");
+  let columns = table.querySelectorAll("col");
+  if (columns.length !== headers.length) {
+    const group = document.createElement("colgroup");
+    headers.forEach(() => group.append(document.createElement("col")));
+    table.prepend(group);
+    columns = group.querySelectorAll("col");
+  }
+  let totalWidth = 0;
+  headers.forEach((header, index) => {
+    const width = Math.max(80, Math.round(header.getBoundingClientRect().width));
+    columns[index].style.width = `${width}px`;
+    totalWidth += width;
+  });
+  table.style.width = `${totalWidth}px`;
+}
+
+function resizeColumn(table, index, width) {
+  const columns = table.querySelectorAll("col");
+  const currentWidths = [...columns].map((column) => (
+    Number.parseFloat(column.style.width) || 80
+  ));
+  currentWidths[index] = Math.max(80, Math.round(width));
+  columns[index].style.width = `${currentWidths[index]}px`;
+  table.style.width = `${currentWidths.reduce((total, value) => total + value, 0)}px`;
+}
+
+function bindResizableTables() {
+  document.querySelectorAll("[data-resizable-table]").forEach((table) => {
+    if (table.dataset.resizeBound) {
+      return;
+    }
+    table.dataset.resizeBound = "true";
+    initializeColumnWidths(table);
+    table.querySelectorAll("thead th").forEach((header, index) => {
+      const handle = document.createElement("span");
+      handle.className = "admin-resize-handle";
+      handle.tabIndex = 0;
+      handle.setAttribute("role", "separator");
+      handle.setAttribute("aria-orientation", "vertical");
+      handle.setAttribute("aria-label", `Resize ${header.textContent.trim()} column`);
+      handle.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const startX = event.clientX;
+        const startWidth = header.getBoundingClientRect().width;
+        handle.setPointerCapture(event.pointerId);
+        const move = (moveEvent) => {
+          resizeColumn(table, index, startWidth + moveEvent.clientX - startX);
+        };
+        const finish = () => {
+          handle.removeEventListener("pointermove", move);
+          handle.removeEventListener("pointerup", finish);
+          handle.removeEventListener("pointercancel", finish);
+        };
+        handle.addEventListener("pointermove", move);
+        handle.addEventListener("pointerup", finish);
+        handle.addEventListener("pointercancel", finish);
+      });
+      handle.addEventListener("keydown", (event) => {
+        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
+          return;
+        }
+        event.preventDefault();
+        const direction = event.key === "ArrowLeft" ? -10 : 10;
+        resizeColumn(table, index, header.getBoundingClientRect().width + direction);
+      });
+      header.append(handle);
+    });
+  });
+}
+
 function reportAdminError(error) {
   const status = document.getElementById("admin-status");
   status.className = "admin-error";
@@ -234,6 +470,42 @@ function enrichCourseNames() {
   });
   state.movies.forEach((movie) => {
     movie.course_name = names.get(movie.course_id) || movie.course_id;
+  });
+
+  const firstUploadByCourse = new Map();
+  const lastActivityByCourse = new Map();
+  const lastActivityByUser = new Map();
+  state.movies.forEach((movie) => {
+    const uploadedAt = epochSeconds(movie.uploaded_at);
+    const lastActivityAt = epochSeconds(movie.last_activity_at)
+      || uploadedAt
+      || epochSeconds(movie.created_at);
+    if (uploadedAt !== null) {
+      const current = firstUploadByCourse.get(movie.course_id);
+      firstUploadByCourse.set(
+        movie.course_id,
+        current === undefined ? uploadedAt : Math.min(current, uploadedAt),
+      );
+    }
+    if (lastActivityAt !== null) {
+      lastActivityByCourse.set(
+        movie.course_id,
+        Math.max(lastActivityByCourse.get(movie.course_id) || 0, lastActivityAt),
+      );
+      lastActivityByUser.set(
+        movie.user_id,
+        Math.max(lastActivityByUser.get(movie.user_id) || 0, lastActivityAt),
+      );
+    }
+  });
+  state.courses.forEach((course) => {
+    course.display_created_at = epochSeconds(course.created_at)
+      || firstUploadByCourse.get(course.course_id)
+      || null;
+    course.last_movie_activity_at = lastActivityByCourse.get(course.course_id) || null;
+  });
+  state.users.forEach((user) => {
+    user.last_movie_activity_at = lastActivityByUser.get(user.user_id) || null;
   });
 }
 
@@ -267,10 +539,12 @@ async function loadRemainingPages(table, marker) {
 
 async function loadAdminSummary() {
   bindSortButtons();
+  bindResizableTables();
   const status = document.getElementById("admin-status");
   status.className = "";
   status.textContent = "Loading all admin records...";
   const payload = await fetchAdminPage("all");
+  state.viewerRole = payload.viewer.super_role;
   setText("admin-course-count", payload.counts.courses);
   setText("admin-user-count", payload.counts.users);
   setText("admin-movie-count", payload.counts.movies);
@@ -282,7 +556,8 @@ async function loadAdminSummary() {
   ));
   enrichCourseNames();
   TABLE_NAMES.forEach(renderTable);
-  status.textContent = `Read-only access as ${payload.viewer.user_name}. Loaded all records.`;
+  const accessLabel = state.viewerRole === "superauditor" ? "Read-only" : "Administrative";
+  status.textContent = `${accessLabel} access as ${payload.viewer.user_name}. Loaded all records.`;
 }
 
 export {
