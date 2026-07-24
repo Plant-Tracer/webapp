@@ -1,9 +1,12 @@
 # Makefile for Planttracer web application.
 # - Local development
 # - Creates CI/CD environment in GitHub
-# - Manages deployment to AWS Lambda/SAM
+# - Manages deployemnt to AWS Linux
 # - Updated to handle virtual environment
 # - Simple CRUD management of local database instance for developers
+#
+# Environment variables:
+# PLANTTRACER_CREDENTIALS - the config.ini file that includes [smtp] and [imap] configuration the your production system
 #
 # Example deploy:
 # aws sso login && DYNAMODB_TABLE_PREFIX=prod STACK=demo make sam-build sam-deploy-guided
@@ -18,7 +21,7 @@ LOCAL_LAMBDA_PORT=9811
 LOCAL_LAMBDA_BASE=http://127.0.0.1:$(LOCAL_LAMBDA_PORT)/
 DYNAMODB_LOCAL_ENDPOINT=http://localhost:8000/
 MINIO_ENDPOINT=http://localhost:9000/
-DBUTIL=dbutil
+DBUTIL=src/dbutil.py
 MAILPIT_SMTP_CONFIG={"SMTP_HOST":"127.0.0.1","SMTP_PORT":"1025","SMTP_NO_TLS":"1","SMTP_USERNAME":"","SMTP_PASSWORD":""}
 LOCAL_AWS_ENV=env -u AWS_PROFILE -u AWS_DEFAULT_PROFILE AWS_REGION=local AWS_DEFAULT_REGION=local AWS_EC2_METADATA_DISABLED=true AWS_ACCESS_KEY_ID=minioadmin AWS_SECRET_ACCESS_KEY=minioadmin AWS_ENDPOINT_URL_DYNAMODB=$(DYNAMODB_LOCAL_ENDPOINT) AWS_ENDPOINT_URL_S3=$(MINIO_ENDPOINT) PLANTTRACER_S3_BUCKET=$(LOCAL_BUCKET) DYNAMODB_TABLE_PREFIX=demo- SMTPCONFIG_JSON='$(MAILPIT_SMTP_CONFIG)'
 LOCAL_FLASK_ENV=$(LOCAL_AWS_ENV) PLANTTRACER_LAMBDA_API_BASE=$(LOCAL_LAMBDA_BASE)
@@ -28,21 +31,6 @@ LOCAL_ADMIN_EMAIL=plantadmin@planttracer.com
 FLASK_DEBUG_RUN=poetry run flask --debug --app src.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
 LOCAL_LAMBDA_PROBE=python3 -c 'import socket, sys; s=socket.socket(); s.settimeout(0.2); sys.exit(0 if s.connect_ex(("127.0.0.1", $(LOCAL_LAMBDA_PORT))) == 0 else 1)'
 LOCAL_LAMBDA_WAIT_SECONDS ?= 30
-export DEBIAN_FRONTEND=noninteractive
-export LOG_LEVEL ?= DEBUG
-
-# Storage/database mode is selected by AWS_REGION:
-# - Local mode: AWS_REGION is unset or local. The Makefile uses DynamoDB Local,
-#   MinIO, planttracer-local, and the demo- table prefix.
-# - Remote mode: AWS_REGION is a real AWS region. The Makefile does not set
-#   endpoint overrides; callers must supply PLANTTRACER_S3_BUCKET and
-#   DYNAMODB_TABLE_PREFIX explicitly so local code points at the intended AWS
-#   bucket and DynamoDB tables.
-AWS_REGION_INPUT := $(AWS_REGION)
-DYNAMODB_TABLE_PREFIX_INPUT := $(DYNAMODB_TABLE_PREFIX)
-PLANTTRACER_S3_BUCKET_INPUT := $(PLANTTRACER_S3_BUCKET)
-SHOW_LOCAL_VARS := $(filter show-local-vars,$(MAKECMDGOALS))
-REMOTE_AWS_ENV=env -u AWS_ENDPOINT_URL_DYNAMODB -u AWS_ENDPOINT_URL_S3 -u AWS_ENDPOINT_URL_SQS
 
 STACK ?=
 SAM_CONFIG_DIR ?= samconfigs
@@ -55,7 +43,7 @@ APP_VERSION := $(shell python3 -c 'import tomllib; print(tomllib.load(open("pypr
 SAM_LOGS_LIMIT ?= 1000
 SAM_LOGS_MINUTES ?= 15
 
-# all of the tests below require a virtual python environment, DynamoDB Local, and the MinIO S3 emulator
+# all of the tests below require a virtual python environment, LambdaDBLocal and the minio s3 emulator
 # See below for the rules
 
 REQ := .venv/pyvenv.cfg
@@ -70,14 +58,12 @@ VEND_FILES := src/app/odb.py \
               src/app/odb_movie_data.py \
               src/app/s3_presigned.py
 
-# If AWS_REGION is unset or local, use local MinIO and DynamoDB Local.
-# If AWS_REGION is a real AWS region, use remote AWS S3 and DynamoDB through
-# the normal AWS SDK credential chain. Remote mode must not inherit local
-# AWS_ENDPOINT_URL_* overrides.
+export DEBIAN_FRONTEND=noninteractive
+export LOG_LEVEL ?= DEBUG
+
+# if AWS_REGION is set, we use the live system. Otherwise use minio and DynamoDBlocal
 ifeq ($(AWS_REGION),)
-ifeq ($(SHOW_LOCAL_VARS),)
     $(warning AWS_REGION is not set. Defaulting to local MinIO/DynamoDB configuration.)
-endif
     export AWS_REGION                ?= local
 endif
 ifeq ($(AWS_REGION),local)
@@ -92,9 +78,7 @@ endif
 export PYLINTHOME ?= $(CURDIR)/.pylint.d
 
 ifeq ($(DYNAMODB_TABLE_PREFIX),)
-ifeq ($(SHOW_LOCAL_VARS),)
     $(info DYNAMODB_TABLE_PREFIX not set. Defaulting to demo-)
-endif
     export DYNAMODB_TABLE_PREFIX=demo-
 endif
 
@@ -106,7 +90,7 @@ endif
 	poetry install
 
 dist: pyproject.toml
-	@echo building the deploy wheel
+	@echo building the deloy wheel
 	poetry build --format=wheel
 	ls -l dist/
 
@@ -118,12 +102,12 @@ distclean:
 
 ################################################################
 # Main targets used by CI/CD system and developers
-.PHONY: all check coverage tags show-local-vars show-storage-mode user-list admin-list admin-create superadmin-list course-create demo-course-create sam-course-create
+.PHONY: all check coverage tags admin-list admin-create course-create demo-course-create sam-course-create
 
 all:
 	@echo verify syntax and then restart
-	$(MAKE) lint
-	$(MAKE) run-local-debug
+	make lint
+	make run-local
 
 check:
 	$(MAKE) lint
@@ -138,59 +122,26 @@ coverage:
 tags:
 	etags src/app/*.py tests/*.py tests/fixtures/*.py src/app/static/*.js lambda-web/src/lambda_web/*.py lambda-resize/src/resize_app/*.py
 
-show-local-vars:
-	@printf '%s\n' \
-		'unset AWS_PROFILE AWS_DEFAULT_PROFILE AWS_ENDPOINT_URL_SQS DEMO_MODE DEMO_COURSE_ID;' \
-		"export AWS_REGION='local';" \
-		"export AWS_DEFAULT_REGION='local';" \
-		"export AWS_EC2_METADATA_DISABLED='true';" \
-		"export AWS_ACCESS_KEY_ID='minioadmin';" \
-		"export AWS_SECRET_ACCESS_KEY='minioadmin';" \
-		"export AWS_ENDPOINT_URL_DYNAMODB='$(DYNAMODB_LOCAL_ENDPOINT)';" \
-		"export AWS_ENDPOINT_URL_S3='$(MINIO_ENDPOINT)';" \
-		"export PLANTTRACER_S3_BUCKET='$(LOCAL_BUCKET)';" \
-		"export DYNAMODB_TABLE_PREFIX='demo-';" \
-		'export SMTPCONFIG_JSON='"'"'$(MAILPIT_SMTP_CONFIG)'"'"';' \
-		"export PLANTTRACER_LAMBDA_API_BASE='$(LOCAL_LAMBDA_BASE)';"
-
-show-storage-mode:
-	@echo "AWS_REGION=$(AWS_REGION)"
-	@echo "DYNAMODB_TABLE_PREFIX=$(DYNAMODB_TABLE_PREFIX)"
-	@echo "PLANTTRACER_S3_BUCKET=$(PLANTTRACER_S3_BUCKET)"
-	@echo "AWS_ENDPOINT_URL_DYNAMODB=$(AWS_ENDPOINT_URL_DYNAMODB)"
-	@echo "AWS_ENDPOINT_URL_S3=$(AWS_ENDPOINT_URL_S3)"
-	@if [ "$(AWS_REGION)" = "local" ]; then \
-		echo "mode=local: DynamoDB Local + MinIO"; \
-	else \
-		echo "mode=remote: AWS DynamoDB + S3"; \
-	fi
-
 admin-list:
-	poetry run $(DBUTIL) admin-list
-
-user-list:
-	poetry run $(DBUTIL) user-list
-
-superadmin-list:
-	poetry run $(DBUTIL) superadmin-list
+	poetry run python $(DBUTIL) admin-list
 
 ADMIN_CREATE_FLAGS ?=
 admin-create:
-	poetry run $(DBUTIL) admin-create $(ADMIN_CREATE_FLAGS)
+	poetry run python $(DBUTIL) admin-create $(ADMIN_CREATE_FLAGS)
 
 COURSE_CREATE_FLAGS ?=
 course-create:
-	poetry run $(DBUTIL) create-course --send-email $(COURSE_CREATE_FLAGS)
+	poetry run python $(DBUTIL) create-course --send-email $(COURSE_CREATE_FLAGS)
 
 DEMO_COURSE_CREATE_FLAGS ?=
 demo-course-create:
-	poetry run $(DBUTIL) create-demo-course $(DEMO_COURSE_CREATE_FLAGS)
+	poetry run python $(DBUTIL) create-demo-course $(DEMO_COURSE_CREATE_FLAGS)
 
 ################################################################
 ## Program development: static analysis tools
 ##
 
-## Use this target for static analysis of the python files used for deployment
+## Use this targt for static analysis of the python files used for deployment
 PYLINT_OPTS:=--output-format=parseable --fail-under=$(PYLINT_THRESHOLD) --verbose
 lint: $(REQ)
 	$(MAKE) pylint
@@ -274,9 +225,9 @@ make-local-demo:
 	@echo creating local demo tables, course, and movies with the prefix demo-
 	$(MAKE) start-local-services
 	$(MAKE) make-local-bucket
-	$(LOCAL_AWS_ENV) poetry run $(DBUTIL) createdb
-	$(LOCAL_AWS_ENV) poetry run $(DBUTIL) create-demo-course
-	$(LOCAL_AWS_ENV) poetry run $(DBUTIL) seed-demo-movies
+	$(LOCAL_AWS_ENV) poetry run python $(DBUTIL) createdb
+	$(LOCAL_AWS_ENV) poetry run python $(DBUTIL) create-demo-course
+	$(LOCAL_AWS_ENV) poetry run python $(DBUTIL) seed-demo-movies
 	$(LOCAL_AWS_ENV) aws s3 ls --recursive s3://$(LOCAL_BUCKET)
 
 ensure-local-lambda-debug:
@@ -292,7 +243,7 @@ ensure-local-lambda-debug:
 		for attempt in $$(seq 1 $(LOCAL_LAMBDA_WAIT_SECONDS)); do \
 			if $(LOCAL_LAMBDA_PROBE); then \
 				exit 0; \
-		fi; \
+			fi; \
 			sleep 1; \
 		done; \
 		echo "Local lambda debug server did not start on $(LOCAL_LAMBDA_BASE)."; \
@@ -307,9 +258,8 @@ run-local-lambda-debug:
 
 run-local-debug:
 	@echo run Flask locally against the local demo dataset, but not in demo mode
-	$(MAKE) make-local-demo
 	$(MAKE) ensure-local-lambda-debug
-	$(LOCAL_NONDEMO_ENV) poetry run $(DBUTIL) makelink $(LOCAL_ADMIN_EMAIL) --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
+	$(LOCAL_NONDEMO_ENV) poetry run python $(DBUTIL) makelink $(LOCAL_ADMIN_EMAIL) --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
 	$(LOCAL_NONDEMO_ENV) $(FLASK_DEBUG_RUN)
 
 run-local-demo-debug:
@@ -318,30 +268,6 @@ run-local-demo-debug:
 	$(MAKE) make-local-demo
 	$(MAKE) ensure-local-lambda-debug
 	$(LOCAL_DEMO_ENV) $(FLASK_DEBUG_RUN)
-
-check-remote-storage-env:
-	@if [ -z "$(AWS_REGION_INPUT)" ] || [ "$(AWS_REGION_INPUT)" = "local" ]; then \
-		echo "Remote storage mode requires AWS_REGION=<aws-region>, for example AWS_REGION=us-east-1."; \
-		exit 1; \
-	fi
-	@if [ -z "$(DYNAMODB_TABLE_PREFIX_INPUT)" ]; then \
-		echo "Remote storage mode requires an explicit DYNAMODB_TABLE_PREFIX."; \
-		exit 1; \
-	fi
-	@if [ -z "$(PLANTTRACER_S3_BUCKET_INPUT)" ]; then \
-		echo "Remote storage mode requires an explicit PLANTTRACER_S3_BUCKET."; \
-		exit 1; \
-	fi
-
-run-remote-lambda-debug: check-remote-storage-env
-	@echo running the local lambda debug server at $(LOCAL_LAMBDA_BASE) against remote AWS storage
-	$(MAKE) vend-lambda-resize
-	$(REMOTE_AWS_ENV) PYTHONPATH=lambda-resize/src:$$PYTHONPATH TRACING_QUEUE_MODE=local LOG_LEVEL=$(LOG_LEVEL) poetry run python -m app.local_lambda_debug --host 127.0.0.1 --port $(LOCAL_LAMBDA_PORT)
-
-run-remote-debug: check-remote-storage-env
-	@echo run Flask locally against remote AWS S3 and DynamoDB
-	@echo connect to http://localhost:$(LOCAL_HTTP_PORT)
-	$(REMOTE_AWS_ENV) PLANTTRACER_LAMBDA_API_BASE=$(LOCAL_LAMBDA_BASE) $(FLASK_DEBUG_RUN)
 
 debug-dev-api:
 	@echo Debug local JavaScript with remote server.
@@ -356,7 +282,7 @@ tracer-debug:
 	poetry run python lambda-resize/src/sqs_cli.py tracer --infile="tests/data/2019-07-12 circumnutation.mp4" --movie_traced=outfile.mp4
 	open outfile.mp4
 
-.PHONY: start-local-services stop-local-services wipe-local delete-local make-local-demo ensure-local-lambda-debug run-local-lambda-debug run-local-debug run-local-demo-debug check-remote-storage-env run-remote-lambda-debug run-remote-debug debug-dev-api tracer-debug
+.PHONY: start-local-services stop-local-services wipe-local delete-local make-local-demo ensure-local-lambda-debug run-local-lambda-debug run-local-debug run-local-demo-debug debut-dev-api tracer-debug
 
 ################################################################
 ### JavaScript
@@ -820,7 +746,7 @@ sam-build: $(REQ)
 			if [ "$$size_mb" -ge 250 ]; then \
 				echo "ERROR: $$dir exceeds the AWS Lambda 250MB unzipped limit!"; \
 				exit 1; \
-		fi; \
+			fi; \
 		fi; \
 	done
 	@echo "Size check passed! All functions are under 250MB."
@@ -937,85 +863,17 @@ endif
 	echo "Creating or verifying course for stack $(STACK_NAME) using DYNAMODB_TABLE_PREFIX=$$DDB_PREFIX and endpoint $$APP_URL"; \
 	env -u AWS_ENDPOINT_URL_DYNAMODB -u AWS_ENDPOINT_URL_S3 \
 		DYNAMODB_TABLE_PREFIX="$$DDB_PREFIX" MAILER_DRY_RUN="$$MAILER_DRY_RUN_STACK" \
-		poetry run $(DBUTIL) create-course --send-email --planttracer_endpoint "$$APP_URL" $(COURSE_CREATE_FLAGS)
-
+		poetry run python $(DBUTIL) create-course --send-email --planttracer_endpoint "$$APP_URL" $(COURSE_CREATE_FLAGS)
 
 # After deploy: verify Lambda URLs. Use curl -s (no -f) so we capture and show body on 4xx/5xx.
+# Simplified by Simson
 sam-status: sam-config-check
-	@echo "Checking Lambda status..."
-	@sleep 5; \
-	VERIFY_FAILED=0; \
-	APP_URL=$$(aws cloudformation describe-stacks --stack-name "$(STACK_NAME)" --query 'Stacks[0].Outputs[?OutputKey==`ApplicationUrl`].OutputValue | [0]' --output text 2>/dev/null || true); \
-	if [ -z "$$APP_URL" ] || [ "$$APP_URL" = "None" ]; then \
-		DNS=$$(aws cloudformation describe-stacks --stack-name "$(STACK_NAME)" --query 'Stacks[0].Outputs[?OutputKey==`LambdaDnsName`].OutputValue | [0]' --output text 2>/dev/null || true); \
-		if [ -n "$$DNS" ] && [ "$$DNS" != "None" ]; then \
-			APP_URL="https://$$DNS/"; \
-		fi; \
-	fi; \
-	if [ -z "$$APP_URL" ] || [ "$$APP_URL" = "None" ]; then \
-		echo "Lambda application URL: FAIL (stack $(STACK_NAME) did not report ApplicationUrl or LambdaDnsName)"; \
-		VERIFY_FAILED=1; \
-	else \
-		BASE_URL="$${APP_URL%/}"; \
-		VERSION_URL="$$BASE_URL/api/ver"; \
-		VERSION_RESP=$$(curl -s -w "\n%{http_code}" --max-time 10 "$$VERSION_URL" 2>/dev/null); \
-		VERSION_CODE=$$(echo "$$VERSION_RESP" | tail -1); \
-		VERSION_BODY=$$(echo "$$VERSION_RESP" | sed '$$d'); \
-		VERSION_OK=$$(python3 -c 'import json,sys; data=json.load(sys.stdin); print("1" if data.get("__version__") and data.get("sys_version") else "")' 2>/dev/null <<< "$$VERSION_BODY" || true); \
-		DEPLOYED_VERSION=$$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("__version__", ""))' 2>/dev/null <<< "$$VERSION_BODY" || true); \
-		VERSION_STACK=$$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("stack_name", ""))' 2>/dev/null <<< "$$VERSION_BODY" || true); \
-		if [ "$$VERSION_CODE" = "200" ] && [ -n "$$VERSION_OK" ]; then \
-			echo "Lambda version API: operational ($$VERSION_URL)"; \
-			echo "  response: $$VERSION_BODY"; \
-			echo "  deployed version: $$DEPLOYED_VERSION"; \
-			echo "  stack name: $${VERSION_STACK:-unavailable}"; \
-		else \
-			echo "Lambda version API: FAIL (HTTP $$VERSION_CODE) ($$VERSION_URL)"; \
-			echo "  response: $$VERSION_BODY"; \
-			echo "  stack name: $${VERSION_STACK:-unavailable}"; \
-			VERIFY_FAILED=1; \
-		fi; \
-		STATIC_URL="$$BASE_URL/static/planttracer.js"; \
-		STATIC_RESP=$$(curl -s -w "\n%{http_code}" --max-time 10 "$$STATIC_URL" 2>/dev/null); \
-		STATIC_CODE=$$(echo "$$STATIC_RESP" | tail -1); \
-		STATIC_BODY=$$(echo "$$STATIC_RESP" | sed '$$d'); \
-		if [ "$$STATIC_CODE" = "200" ] && echo "$$STATIC_BODY" | grep -q "register_func"; then \
-			echo "Lambda static status: operational ($$STATIC_URL)"; \
-		else \
-			echo "Lambda static status: FAIL (HTTP $$STATIC_CODE) ($$STATIC_URL)"; \
-			VERIFY_FAILED=1; \
-		fi; \
-		RESIZE_URL="$$BASE_URL/resize-api/v1/ping"; \
-		RESIZE_RESP=$$(curl -s -w "\n%{http_code}" --max-time 10 "$$RESIZE_URL" 2>/dev/null); \
-		RESIZE_CODE=$$(echo "$$RESIZE_RESP" | tail -1); \
-		RESIZE_BODY=$$(echo "$$RESIZE_RESP" | sed '$$d'); \
-		RESIZE_APP_VERSION=$$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("app_version", ""))' 2>/dev/null <<< "$$RESIZE_BODY" || true); \
-		RESIZE_DEPLOYED_AT=$$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("deployed_at", ""))' 2>/dev/null <<< "$$RESIZE_BODY" || true); \
-		RESIZE_STACK=$$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("stack_name", ""))' 2>/dev/null <<< "$$RESIZE_BODY" || true); \
-		if echo "$$RESIZE_BODY" | grep -q '"status"[[:space:]]*:[[:space:]]*"ok"'; then \
-			echo "Lambda resize status: operational ($$RESIZE_URL)"; \
-			if [ -n "$$RESIZE_APP_VERSION" ] || [ -n "$$RESIZE_DEPLOYED_AT" ]; then \
-				echo "  app version: $${RESIZE_APP_VERSION:-unavailable}; deployed at: $${RESIZE_DEPLOYED_AT:-unavailable}"; \
-			fi; \
-			echo "  stack name: $${RESIZE_STACK:-unavailable}"; \
-		else \
-			echo "Lambda resize status: FAIL (HTTP $$RESIZE_CODE) ($$RESIZE_URL)"; \
-			echo "  response: $$RESIZE_BODY"; \
-			echo "  stack name: $${RESIZE_STACK:-unavailable}"; \
-			VERIFY_FAILED=1; \
-		fi; \
-	fi; \
-	echo ""; \
-	echo "Recent Lambda web log events (newest first) for troubleshooting:"; \
-	$(MAKE) sam-logs-web SAM_LOGS_LIMIT=40 || true; \
-	echo ""; \
-	echo "Recent Lambda resize log events (newest first) for troubleshooting:"; \
-	$(MAKE) sam-logs-resize SAM_LOGS_LIMIT=40 || true; \
-	if [ "$$VERIFY_FAILED" != "0" ]; then \
-		echo "Post-deploy Lambda status verification failed."; \
-		exit "$$VERIFY_FAILED"; \
-	fi
-
+	@echo "Checking Lambda status...";\
+	APP_URL="https://$(STACK_NAME).planttracer.com/"; \
+	echo APP_URL=$$APP_URL; \
+	BASE_URL="$${APP_URL%/}"; \
+	VERSION_URL="$$BASE_URL/api/ver"; \
+	curl -f -s -w "\n%{http_code}\n" --max-time 10 "$$VERSION_URL"
 
 # Shared resolution of Lambda function name (FUNC) and start time (START) for log targets.
 # Used by sam-logs, sam-logs-simple, sam-logs-simple-tail.

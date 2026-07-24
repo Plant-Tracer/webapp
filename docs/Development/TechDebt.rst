@@ -31,6 +31,25 @@ Easy / Fast
 Medium
 ------
 
+* Replace plaintext API keys with hashed, user-addressable credentials (#1124).
+  Impact: high; the current ``api_keys`` table uses the bearer token itself as
+  its partition key, so a database read reveals a usable credential, and
+  long-lived tokens are accepted in query strings. Move credentials into typed
+  user child records, retaining only a salted verifier/hash plus lifecycle and
+  per-key first/last-use fields. A credential must include a user ID and public
+  credential ID so validation is one ``GetItem`` followed by verifier checking;
+  do not scan a user's keys. Browser/API authentication must use a secure
+  cookie or request header, while emailed magic links become short-lived,
+  one-time handoffs. Files: 12-20.
+
+* Retain sent email and provide a superadmin user-message drilldown (#1147).
+  Impact: high; archive every exact outbound MIME message in private, encrypted
+  S3 before delivery and create an immutable, typed email index item for the
+  recipient. Record delivery attempts, including failures and dry runs. The
+  admin UI must list a user's messages and authorize each full-message read;
+  messages containing magic links are sensitive and must never expose a raw S3
+  URL or be visible to ordinary users/course admins. Files: 10-18.
+
 * Split ``src/app/odb.py`` by responsibility.
   Impact: medium; lowers risk in user/course/movie/log changes. Current hotspot:
   ``odb.py`` is about 1,767 lines. Files: 10-15.
@@ -80,6 +99,15 @@ Medium
 Long Term
 ---------
 
+* Migrate ``users`` to a composite-key collection (#1148).
+  Impact: high; the current table has only ``user_id`` as its key, so it cannot
+  represent a profile plus independently queryable credentials and email audit
+  records. Use ``PK=user_id`` with typed ``SK`` values such as ``PROFILE``,
+  ``APIKEY#<credential-id>``, and ``EMAIL#<time>#<message-id>``. DynamoDB cannot
+  add a sort key in place: create a replacement table and provide a tested
+  dump, transform, backfill, count/checksum validation, canary, rollback, and
+  cutover procedure for the small ``prod-`` and ``m1-`` datasets. Files: 15-25.
+
 * Replace vendored Lambda app copies with a shared package.
   Impact: high; removes ``vend-lambda-resize`` drift and makes Flask/Lambda share
   versioned code through packaging. Files: 20-30.
@@ -88,17 +116,19 @@ Long Term
   Impact: high; moves from dict validation-on-write to typed read/write contracts
   for users, courses, movies, frames, and logs. Files: 25-40.
 
-* Migrate movie-related DynamoDB records to a composite key schema.
+* Migrate movie-related DynamoDB records to a composite key schema (#758).
   Impact: high; the current ``movies`` table has only ``movie_id`` as its
   primary key, while ``movie_frames`` has the child-record shape we really need.
   The marker map currently uses the ``movie_frames`` metadata sentinel
   ``frame_number=-100``; this is clearer than overloading the ``movies``
-  partition key but still mixes frame rows with movie metadata. DynamoDB cannot
-  add a sort key to an existing table; fixing this requires a new table or
-  replacement table with a partition key such as ``movie_id`` and a sort key
-  such as ``record_type``/``sk``, plus a backfill. This would let one movie own
-  records like metadata, markers, and eventually consolidated frame data without
-  relying on sentinel frame numbers. Files: 10-20.
+  partition key but still mixes frame rows with movie metadata. Do not embed all
+  frames in one movie item: high-frame movies can exceed DynamoDB's 400 KB item
+  limit, create hot writes, and lose independently paged frame reads. Instead,
+  use one logical movie collection with ``PK=movie_id`` and explicit typed sort
+  keys such as ``METADATA``, ``MARKERS``, and ``FRAME#<number>`` (whether in one
+  replacement table or two physical tables). DynamoDB cannot add a sort key to
+  an existing table, so this requires a replacement/backfill with validation and
+  rollback. Files: 10-20.
 
 * Implement DynamoDB backup and selective restore.
   Impact: high; the S3 bucket is the long-term archive for movie objects, but
