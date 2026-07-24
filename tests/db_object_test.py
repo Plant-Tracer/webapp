@@ -116,6 +116,13 @@ def test_make_urn_rejects_missing_or_malformed_bucket(monkeypatch):
         )
 
 
+def test_parse_s3_urn_rejects_non_s3_and_incomplete_urns():
+    with pytest.raises(RuntimeError, match="Unknown scheme"):
+        s3_presigned.parse_s3_urn(urn="https://movies/course/movie.mov")
+    with pytest.raises(ValueError, match="Invalid S3 URN"):
+        s3_presigned.parse_s3_urn(urn="s3://movies")
+
+
 def test_derived_movie_urns_preserve_legacy_bucket_path_and_extension():
     legacy_urn = "s3://legacy-bucket/archive/c1/m2.mp4"
 
@@ -163,3 +170,18 @@ def test_legacy_movie_urn_remains_readable(local_s3):
         assert odb_movie_data.read_object(urn=legacy_urn) == movie_data
     finally:
         odb_movie_data.delete_object(urn=legacy_urn)
+
+
+def test_create_movie_frame_persists_namespaced_bytes(new_movie):
+    movie_id = new_movie[odb.MOVIE_ID]
+    frame_data = b"jpeg frame bytes"
+
+    frame_urn = odb_movie_data.create_new_movie_frame(
+        movie_id=movie_id,
+        frame_number=7,
+        frame_data=frame_data,
+    )
+
+    assert frame_urn.endswith(f"/{new_movie[odb.COURSE_ID]}/{movie_id}/000007.jpg")
+    assert odb_movie_data.read_object(urn=frame_urn) == frame_data
+    assert odb.DDBO().get_movie_frame(movie_id, 7)[odb.FRAME_URN] == frame_urn

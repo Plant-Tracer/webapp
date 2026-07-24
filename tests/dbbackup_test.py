@@ -959,3 +959,13 @@ def test_migrate_course_preflight_and_commit(prefix_tools, backup_scenario: Back
     } not in enrollments
     migrated_key = f"{backup_scenario.migration_course_id}/{backup_scenario.active_movie_id}.mov"
     assert s3_object_bytes(backup_scenario.bucket, migrated_key) == backup_scenario.active_movie_bytes
+
+
+def test_migrate_s3_urn_rejects_an_unrelated_course_prefix():
+    with pytest.raises(dbbackup.DbBackupError, match="does not start"):
+        dbbackup.migrate_s3_urn(
+            "s3://movies/course-10/movie.mov",
+            from_course_id="course-1",
+            to_course_id="course-2",
+            commit=False,
+        )
