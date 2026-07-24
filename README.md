@@ -17,7 +17,7 @@ Production app: <https://prod.planttracer.com/>
 - Flask backend: `src/app/`
 - Browser JavaScript and static assets: `src/app/static/`
 - Jinja templates: `src/app/templates/`
-- DynamoDB/S3 maintenance CLI: `src/dbutil.py`
+- DynamoDB/S3 maintenance CLI: `poetry run dbutil`
 - Lambda video/frame/tracking service: `lambda-resize/`
 - Python tests: `tests/` and `lambda-resize/tests/`
 - JavaScript tests: `jstests/`

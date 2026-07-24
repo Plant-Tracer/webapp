@@ -1,7 +1,8 @@
 # Flask API Reference
 
-All REST endpoints served by the Plant Tracer Flask application are defined in
-`src/app/flask_api.py` and mounted at `/api/`. This document covers authentication,
+REST endpoints served by the Plant Tracer Flask application are mounted under
+`/api/`. Most are defined in `src/app/flask_api.py`; admin-specific endpoints
+are defined in `src/app/admin_api.py`. This document covers authentication,
 the standard response envelope, and every endpoint.
 
 For the Lambda (frame/video processing) endpoints, see [ClientLambdaAPI.md](ClientLambdaAPI.md).
@@ -33,7 +34,7 @@ multiple keys (e.g. after re-sending a login link). Keys are sent as a cookie af
 Most endpoints return JSON with `"error": false` on success or `"error": true`
 plus `"message"` on failure. Exceptions:
 
-- `/api/ver` returns `{"__version__": "...", "sys_version": "...", "stack_name": "..."}`.
+- `/api/ver` returns `{"__version__": "...", "sys_version": "...", "stack_name": "...", "DYNAMODB_TABLE_PREFIX": "..."}`.
 - `/api/get-movie-trackpoints` returns CSV by default.
 
 ```text
@@ -45,7 +46,132 @@ plus `"message"` on failure. Exceptions:
 
 ## Endpoints
 
+### Admin
+
+#### `GET /api/admin/summary`
+
+Return the minimal read-only admin landing-page data. This endpoint backs `/admin`
+and is intentionally read-only.
+
+**Authorization**
+
+- `superadmin` and `superauditor` users may read this endpoint.
+- Course admins without an explicit super role and regular users receive HTTP
+  403. Operators bootstrap the first `superadmin` with `dbutil add-superadmin`.
+
+**Query parameters**
+
+| Name | Required | Description |
+|------|----------|-------------|
+| `limit` | No | Page size for each requested course, user, or movie list. Defaults to 25, maximum 100. |
+| `section` | No | Return rows for `all` (default), `courses`, `users`, or `movies`. A table-specific value leaves the other two item lists empty so clients can page each table without redundant scans. |
+| `course_marker` | No | Opaque, course-table-bound restart marker from the previous `courses.restart_marker`. |
+| `user_marker` | No | Opaque, user-table-bound restart marker from the previous `users.restart_marker`. |
+| `movie_marker` | No | Opaque, movie-table-bound restart marker from the previous `movies.restart_marker`. |
+
+Unknown sections and malformed, non-object, or wrong-table restart markers
+receive HTTP 400.
+
+**Response**
+
+```json
+{
+  "error": false,
+  "viewer": {
+    "user_id": "u...",
+    "user_name": "Course Admin",
+    "email": "teacher@example.edu",
+    "super_role": "superauditor"
+  },
+  "counts": { "courses": 1, "users": 2, "movies": 3 },
+  "courses": {
+    "items": [
+      {
+        "course_id": "PlantTracer 101",
+        "course_key": "spring-beans-2026",
+        "course_name": "Intro Biology",
+        "enrollment_count": 42,
+        "max_enrollment": 100,
+        "admin_count": 1
+      }
+    ],
+    "restart_marker": null
+  },
+  "users": {
+    "items": [
+      {
+        "user_id": "u...",
+        "user_name": "Alice",
+        "email": "alice@example.edu",
+        "primary_course_id": "PlantTracer 101",
+        "super_role": "none",
+        "courses": [
+          {
+            "course_id": "PlantTracer 101",
+            "is_admin": false
+          }
+        ]
+      }
+    ],
+    "restart_marker": null
+  },
+  "movies": {
+    "items": [
+      {
+        "movie_id": "m...",
+        "title": "Bean Growth",
+        "course_id": "PlantTracer 101",
+        "owner_name": "Alice",
+        "state": "published",
+        "status": "ready"
+      }
+    ],
+    "restart_marker": null
+  }
+}
+```
+
+The movie list includes published, unpublished, and deleted DynamoDB records.
+`state` reports that visibility/deletion state; `status` reports processing state.
+The summary deliberately omits object URNs, descriptions, API keys, and research
+metadata. Course enrollment counts are read consistently from the `course_users`
+table. User memberships and movies carry `course_id`; the admin page joins those
+IDs to the separately downloaded course names after all bounded pages arrive.
+DynamoDB scan order is not stable. The admin page requests bounded pages until
+all three tables are loaded, then sorts complete result sets in the browser;
+clients must treat restart markers as opaque. Course rows include the registration
+`course_key`; callers must treat it as a secret because anyone with the key can
+request enrollment in that course. The admin page masks each course key by default;
+its per-row eye control reveals or hides the value without changing it.
+
 ### User & Registration
+
+#### `PATCH /api/current-course`
+
+Change the signed-in user's current/primary course. The selected course must
+already be present in that user's course memberships. The endpoint uses the
+existing authentication cookie and does not grant course membership.
+
+**JSON request**
+
+```json
+{ "course_id": "PlantTracer 101" }
+```
+
+**Success response**
+
+```json
+{
+  "error": false,
+  "course": {
+    "course_id": "PlantTracer 101",
+    "course_name": "Intro Biology"
+  }
+}
+```
+
+An invalid or non-member course receives HTTP 400. Missing authentication
+receives HTTP 403.
 
 #### `POST /api/register`
 
@@ -503,7 +629,7 @@ Return the application version. No authentication required.
 **Response**
 
 ```text
-{ "__version__": "0.9.7.6.2", "sys_version": "3.12.x ...", "stack_name": "prod" }
+{ "__version__": "0.9.7.6.2", "sys_version": "3.12.x ...", "stack_name": "prod", "DYNAMODB_TABLE_PREFIX": "prod-" }
 ```
 
 ---

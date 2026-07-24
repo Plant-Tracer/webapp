@@ -1,0 +1,157 @@
+<!-- -*- mode: html -*- -->
+{% extends 'base.html' %}
+
+{% block head %}
+<style>
+  .admin-summary {
+    max-width: 1100px;
+  }
+  .admin-kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+    gap: 1rem;
+    margin: 1.25rem 0;
+  }
+  .admin-kpi {
+    border: 1px solid #d6d6d6;
+    border-radius: 6px;
+    padding: 1rem;
+    background: #fafafa;
+  }
+  .admin-kpi-value {
+    color: #202020;
+    font-size: 2rem;
+    font-weight: 600;
+  }
+  .admin-section {
+    margin: 1.5rem 0;
+  }
+  .admin-section table {
+    width: 100%;
+  }
+  .admin-error {
+    color: #8b0000;
+    background: #fff0f0;
+    border: 1px solid #d28b8b;
+    border-radius: 4px;
+    padding: 0.75rem;
+  }
+  .admin-sort {
+    appearance: none;
+    background: none;
+    border: 0;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    font-weight: inherit;
+    padding: 0;
+  }
+  .admin-sort:hover,
+  .admin-sort:focus {
+    text-decoration: underline;
+  }
+  .admin-sort-indicator {
+    display: inline-block;
+    width: 1em;
+  }
+  .admin-course-key {
+    display: inline-block;
+    min-width: 5.5rem;
+  }
+  .admin-key-toggle {
+    appearance: none;
+    background: none;
+    border: 0;
+    color: inherit;
+    cursor: pointer;
+    display: inline-flex;
+    margin-left: 0.35rem;
+    padding: 0.1rem;
+    vertical-align: middle;
+  }
+  .admin-key-toggle:hover,
+  .admin-key-toggle:focus {
+    color: #202020;
+  }
+  .admin-key-toggle svg {
+    fill: none;
+    height: 1.15rem;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 2;
+    width: 1.15rem;
+  }
+</style>
+{% endblock %}
+
+{% block body %}
+<main class="admin-summary">
+  <h1>Admin</h1>
+  <p id="admin-status">Loading admin summary...</p>
+
+  <section class="admin-kpis" aria-label="Admin summary counts">
+    <div class="admin-kpi">
+      <div>Courses</div>
+      <div class="admin-kpi-value" id="admin-course-count">-</div>
+    </div>
+    <div class="admin-kpi">
+      <div>Users</div>
+      <div class="admin-kpi-value" id="admin-user-count">-</div>
+    </div>
+    <div class="admin-kpi">
+      <div>Movies</div>
+      <div class="admin-kpi-value" id="admin-movie-count">-</div>
+    </div>
+  </section>
+
+  <section class="admin-section">
+    <h2>Courses</h2>
+    <table class="pure-table pure-table-striped">
+      <thead>
+        <tr>
+          <th><button class="admin-sort" type="button" data-table="courses" data-key="course_id">Number <span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+          <th><button class="admin-sort" type="button" data-table="courses" data-key="course_key">Course key <span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+          <th><button class="admin-sort" type="button" data-table="courses" data-key="course_name">Name <span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+          <th><button class="admin-sort" type="button" data-table="courses" data-key="admin_count">Admins <span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+          <th><button class="admin-sort" type="button" data-table="courses" data-key="enrollment_count">Enrollment <span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+        </tr>
+      </thead>
+      <tbody id="admin-course-rows"></tbody>
+    </table>
+  </section>
+
+  <section class="admin-section">
+    <h2>Users</h2>
+    <table class="pure-table pure-table-striped">
+      <thead>
+        <tr>
+          <th><button class="admin-sort" type="button" data-table="users" data-key="user_name">Name <span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+          <th><button class="admin-sort" type="button" data-table="users" data-key="email">Email <span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+          <th><button class="admin-sort" type="button" data-table="users" data-key="primary_course_id">Primary course <span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+          <th><button class="admin-sort" type="button" data-table="users" data-key="super_role">Super <span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+          <th><button class="admin-sort" type="button" data-table="users" data-key="courses">Courses <span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+        </tr>
+      </thead>
+      <tbody id="admin-user-rows"></tbody>
+    </table>
+  </section>
+
+  <section class="admin-section">
+    <h2>Movies</h2>
+    <table class="pure-table pure-table-striped">
+      <thead>
+        <tr>
+          <th><button class="admin-sort" type="button" data-table="movies" data-key="title">Title <span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+          <th><button class="admin-sort" type="button" data-table="movies" data-key="course_name">Course <span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+          <th><button class="admin-sort" type="button" data-table="movies" data-key="owner_name">Owner <span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+          <th><button class="admin-sort" type="button" data-table="movies" data-key="state">State <span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+          <th><button class="admin-sort" type="button" data-table="movies" data-key="status">Processing <span class="admin-sort-indicator" aria-hidden="true"></span></button></th>
+        </tr>
+      </thead>
+      <tbody id="admin-movie-rows"></tbody>
+    </table>
+  </section>
+</main>
+<script type="module" src="{{ url_for('static', filename='admin.js') }}"></script>
+{% endblock %}

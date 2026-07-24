@@ -37,7 +37,6 @@ Parameters:
   ImageBucketName:
     Type: String
     Description: "Existing S3 bucket for videos; must outlive the stack. Do not include s3://."
-    Default: planttracer-prod
 
   LogLevel:
     Type: String
@@ -53,7 +52,6 @@ Parameters:
 
   DynamoDBTablePrefix:
     Type: String
-    Default: prod-
     Description: "Prefix for DynamoDB table names and DYNAMODB_TABLE_PREFIX. Include any separator, e.g. prod-."
     MinLength: 1
     MaxLength: 220

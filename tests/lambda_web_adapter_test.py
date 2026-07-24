@@ -6,7 +6,7 @@ from urllib.parse import urlencode
 from lambda_web.main import lambda_handler
 
 from app import apikey
-from app.constants import STACK_NAME, __version__, stack_name
+from app.constants import C, STACK_NAME, __version__, stack_name
 from app.odb import API_KEY
 from tests.lambda_web_event import DummyContext, make_http_event
 
@@ -23,6 +23,7 @@ def test_lambda_web_api_version_route():
     body = json.loads(response["body"])
     assert body["__version__"] == __version__
     assert body[STACK_NAME] == stack_name()
+    assert body[C.DYNAMODB_TABLE_PREFIX]
 
 
 def test_lambda_web_api_version_route_strips_http_api_stage_prefix():

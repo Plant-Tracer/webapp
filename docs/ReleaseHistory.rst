@@ -77,9 +77,16 @@ Release Notes
 
 Unreleased Summary
 ******************
+    * Developer: add the first read-only ``/admin`` page and ``GET /api/admin/summary`` endpoint for super-role admin work
+    * Admin: show course registration keys behind per-row reveal controls and current/max enrollment, named user memberships with course-admin emphasis, and cross-course movies; load bounded pages and sort complete tables in the browser
+    * Navigation: make the current course a membership-validated selector that reloads the page in the selected course context
+    * Developer: add ``dbutil`` commands to list users and super-role users, and to grant or remove course-admin, ``superadmin``, and ``superauditor`` access by email
+    * Developer: bind admin restart markers to their DynamoDB table and serialize super-role mutations so concurrent commands cannot remove the final ``superadmin``
+    * Developer: document local versus remote S3/DynamoDB modes and add Makefile targets for running local code against remote AWS storage
     * Developer: add ``src/dbbackup.py`` for default full and selective Plant Tracer ``.ptb`` backups, restores, archive inspection, dry-run restore-link sending, and course migration
     * Developer: add verbose backup inspection with per-record summaries and grouped frame-trackpoint ranges
     * Developer: add ``dbbackup list-prefixes`` to discover complete DynamoDB table prefixes and report course/user/movie counts with an aligned UTC ``from``/``to`` date range
+    * Developer: add ``dbutil list-prefixes``, show available prefixes when ``DYNAMODB_TABLE_PREFIX`` is missing, and add ``make show-local-vars`` for direct local-debug commands
     * Developer: make ``dbbackup list-prefixes`` offer ``aws sso login`` and retry when AWS SSO token retrieval fails
     * Developer: make ``dbbackup backup`` report progress to stderr and skip missing movie MP4 objects with manifest warnings instead of failing after writing a partial archive
     * Developer: make ``dbbackup backup`` refuse to overwrite an archive from a different DynamoDB table prefix and reuse already archived movie MP4 objects when refreshing a same-prefix backup

@@ -1,3 +1,4 @@
 App version: {{__version__}}
 Python version: {{sys_version}}
 Stack name: {{stack_name}}
+DynamoDB table prefix: {{dynamodb_table_prefix}}

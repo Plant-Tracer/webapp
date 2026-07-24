@@ -193,8 +193,12 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False):
         user_id    = user_dict['user_id']
         user_primary_course_id = user_dict['primary_course_id']
         primary_course_name    = user_dict['primary_course_name']
+        course_choices = odb.course_choices_for_user(user_dict)
         logged_in = 1
         admin = 1 if odb.check_course_admin(user_id=user_id, course_id=user_primary_course_id) and not in_demo_mode() else 0
+        admin_access = odb.admin_read_access(user_dict)
+        admin_read = 1 if admin_access.allowed and not in_demo_mode() else 0
+        super_role = admin_access.super_role
 
 
     else:
@@ -203,7 +207,10 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False):
         user_id    = None
         user_primary_course_id = None
         primary_course_name = None
+        course_choices = []
         admin = 0
+        admin_read = 0
+        super_role = odb.SUPER_ROLE_NONE
         logged_in = 0
 
     try:
@@ -225,8 +232,11 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False):
         'logged_in': logged_in,
         'demo_mode':in_demo_mode(),
         'admin':admin,
+        'admin_read': admin_read,
+        'super_role': super_role,
         'user_primary_course_id': user_primary_course_id,
         'primary_course_name': primary_course_name,
+        'course_choices': course_choices,
         'title':'Plant Tracer '+title,
         'hostname':request.host,
         'movie_id':movie_id,

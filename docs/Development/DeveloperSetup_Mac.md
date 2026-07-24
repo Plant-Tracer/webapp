@@ -88,7 +88,7 @@ make check
 ```bash
 make list-local-buckets
 make dump-demo-tables
-AWS_REGION=local poetry run python src/dbutil.py report
+AWS_REGION=local poetry run dbutil report
 ```
 
 ## Cleanup

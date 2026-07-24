@@ -18,6 +18,11 @@ Required
 AWS And Local Service Selection
 -------------------------------
 
+The Makefile has two storage modes. With ``AWS_REGION`` unset or set to
+``local``, Makefile targets use DynamoDB Local and MinIO. With ``AWS_REGION``
+set to a real AWS region, remote debug targets use AWS DynamoDB and S3 and
+unset local endpoint overrides.
+
 ``AWS_REGION``
    AWS region. Use ``local`` for DynamoDB Local and MinIO.
 
@@ -28,10 +33,12 @@ AWS And Local Service Selection
    AWS credentials. Local MinIO uses ``minioadmin`` / ``minioadmin``.
 
 ``AWS_ENDPOINT_URL_DYNAMODB``
-   DynamoDB endpoint override. Local default: ``http://localhost:8000/``.
+   DynamoDB endpoint override. Local default: ``http://localhost:8000/``. Do
+   not set this for remote AWS mode.
 
 ``AWS_ENDPOINT_URL_S3``
-   S3 endpoint override. Local default: ``http://localhost:9000/``.
+   S3 endpoint override. Local default: ``http://localhost:9000/``. Do not set
+   this for remote AWS mode.
 
 ``AWS_ENDPOINT_URL_SQS``
    Optional SQS endpoint override for lambda-resize if testing against an SQS
@@ -80,7 +87,8 @@ Lambda Stack Diagnostics
    Route53 hosted zone id used by the stack domain mapping. The SAM template
    passes this to both Lambda functions for deployed-stack diagnostics.
 
-``/api/ver`` and ``/resize-api/v1/ping`` report ``stack_name``. The
+``/ver`` and ``/api/ver`` report the configured ``DYNAMODB_TABLE_PREFIX``;
+``/api/ver`` and ``/resize-api/v1/ping`` also report ``stack_name``. The
 ``/resize-api/v1/ping`` endpoint also reports a ``stack_parameters`` object
 with selected CloudFormation parameter values: ``HostedZoneId``, ``BaseDomain``,
 ``ImageBucketName``, ``LogLevel``, ``MailerDryRun``, and
@@ -176,3 +184,14 @@ commands:
    make run-local-debug
    make run-local-demo-debug
    make run-local-lambda-debug
+
+To configure the current shell for direct local-debug commands, evaluate the
+shell assignments emitted by ``show-local-vars``:
+
+.. code-block:: bash
+
+   eval "$(make show-local-vars)"
+
+This selects DynamoDB Local, MinIO, Mailpit, the ``demo-`` table prefix, and the
+local resize-lambda debug endpoint. It unsets AWS profile and demo-mode
+variables.

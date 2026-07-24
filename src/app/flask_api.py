@@ -6,6 +6,7 @@ TODO - all get_user_id() should be replaced with get_user_dict() and then the us
 
 """
 import json
+import os
 import sys
 import smtplib
 import io
@@ -18,8 +19,10 @@ from collections import defaultdict
 import xlsxwriter
 from flask import Blueprint, request, make_response, current_app, jsonify
 from PIL import Image, UnidentifiedImageError
+from pydantic import ValidationError
 from validate_email_address import validate_email
 
+from . import course_management
 from . import config_check
 from . import odb
 from . import mailer
@@ -62,9 +65,29 @@ from .odb_movie_data import (
     delete_movie,
     read_object,
 )
+from .schema import CurrentCourseRequest
 
 
 api_bp = Blueprint('api', __name__)
+
+
+@api_bp.patch('/current-course')
+def api_current_course():
+    """Change the signed-in user's current course to an existing membership."""
+    try:
+        user = get_user_dict()
+        change = CurrentCourseRequest.model_validate(request.get_json(silent=True) or {})
+        course = course_management.set_current_course(
+            user_id=user[USER_ID],
+            course_id=change.course_id,
+        )
+    except InvalidAPI_Key:
+        return jsonify({'error': True, 'message': 'Invalid api_key'}), 403
+    except ValidationError as exc:
+        return jsonify({'error': True, 'message': str(exc)}), 400
+    except (course_management.CourseMembershipRequired, odb.InvalidCourse_Id):
+        return jsonify({'error': True, 'message': 'Course membership required'}), 400
+    return jsonify({'error': False, 'course': course.model_dump()})
 
 
 def _jpeg_height(jpeg_bytes):
@@ -1022,7 +1045,12 @@ def api_ver():
     Run the dictionary below through the VERSION_TEAMPLTE with jinja2.
     """
     current_app.logger.error("api_ver")
-    return {'__version__': __version__, 'sys_version': sys.version, STACK_NAME: stack_name()}
+    return {
+        '__version__': __version__,
+        'sys_version': sys.version,
+        STACK_NAME: stack_name(),
+        C.DYNAMODB_TABLE_PREFIX: os.environ.get(C.DYNAMODB_TABLE_PREFIX, ''),
+    }
 
 @api_bp.route('/config-check', methods=GET_POST)
 def api_config_check():

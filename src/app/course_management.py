@@ -8,12 +8,24 @@ from pydantic import BaseModel
 from . import mailer
 from . import odb
 from .constants import C, logger
-from .odb import ADMINS_FOR_COURSE, COURSE_ID, COURSE_NAME, EMAIL, USER_ID, USER_NAME, DDBO
+from .odb import (
+    ADMINS_FOR_COURSE,
+    COURSE_ID,
+    COURSE_NAME,
+    COURSES,
+    EMAIL,
+    PRIMARY_COURSE_ID,
+    PRIMARY_COURSE_NAME,
+    USER_ID,
+    USER_NAME,
+    DDBO,
+)
 from .schema import AdminCourse, Course, CourseAdmin, User
 
 EXCLUSIVE_START_KEY = 'ExclusiveStartKey'
 ITEMS = 'Items'
 LAST_EVALUATED_KEY = 'LastEvaluatedKey'
+CONSISTENT_READ = 'ConsistentRead'
 
 
 class AdminCreateResult(BaseModel):
@@ -37,18 +49,46 @@ class DemoCourseResult(BaseModel):
     created: bool
 
 
+class CourseMembershipRequired(ValueError):
+    """Raised when a user selects a course they are not enrolled in."""
+
+
 def generate_course_key():
     """Return a short registration key for a newly created course."""
     return uuid.uuid4().hex[:8]
 
 
-def scan_table_items(table):
+def scan_table_items(table, *, consistent_read=False):
     """Yield every item from a DynamoDB table resource scan."""
-    response = table.scan()
-    yield from response.get(ITEMS, [])
-    while response.get(LAST_EVALUATED_KEY):
-        response = table.scan(**{EXCLUSIVE_START_KEY: response[LAST_EVALUATED_KEY]})
+    scan_kwargs = {CONSISTENT_READ: True} if consistent_read else {}
+    while True:
+        response = table.scan(**scan_kwargs)
         yield from response.get(ITEMS, [])
+        last_key = response.get(LAST_EVALUATED_KEY)
+        if last_key is None:
+            return
+        scan_kwargs[EXCLUSIVE_START_KEY] = last_key
+
+
+def set_current_course(*, user_id: str, course_id: str) -> AdminCourse:
+    """Set a user's current course to one of their existing memberships."""
+    ddbo = DDBO()
+    user = ddbo.get_user(user_id)
+    if course_id not in user.get(COURSES, []):
+        raise CourseMembershipRequired(course_id)
+    course = ddbo.get_course(course_id)
+    ddbo.update_table(
+        ddbo.users,
+        user_id,
+        {
+            PRIMARY_COURSE_ID: course_id,
+            PRIMARY_COURSE_NAME: course.get(COURSE_NAME) or course_id,
+        },
+    )
+    return AdminCourse(
+        course_id=course_id,
+        course_name=course.get(COURSE_NAME) or course_id,
+    )
 
 
 def list_admins():
