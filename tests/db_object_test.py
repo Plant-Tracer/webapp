@@ -55,6 +55,21 @@ def test_upload_staging_keys_are_isolated_by_deployment():
 
 
 def test_object_key_components_cannot_escape_their_prefix():
+    for name, build_key in (
+        ("course_id", lambda: s3_presigned.movie_object_key(course_id="", movie_id="m2")),
+        ("movie_id", lambda: s3_presigned.movie_object_key(course_id="c1", movie_id=None)),
+        (
+            "deployment_id",
+            lambda: s3_presigned.upload_staging_object_key(
+                deployment_id="",
+                course_id="c1",
+                movie_id="m2",
+            ),
+        ),
+    ):
+        with pytest.raises(ValueError, match=name):
+            build_key()
+
     with pytest.raises(ValueError, match="deployment_id"):
         s3_presigned.upload_staging_object_key(
             deployment_id="prod/other",
@@ -66,6 +81,38 @@ def test_object_key_components_cannot_escape_their_prefix():
             course_id="c1",
             movie_id="m2",
             frame_number=-1,
+        )
+
+
+def test_course_object_keys_can_be_reassigned_without_changing_the_suffix():
+    assert s3_presigned.replace_course_object_key(
+        object_key="course-1/movie-2/000003.jpg",
+        from_course_id="course-1",
+        to_course_id="course-3",
+    ) == "course-3/movie-2/000003.jpg"
+
+    with pytest.raises(ValueError, match="does not start"):
+        s3_presigned.replace_course_object_key(
+            object_key="course-10/movie-2.mov",
+            from_course_id="course-1",
+            to_course_id="course-3",
+        )
+
+
+def test_make_urn_rejects_missing_or_malformed_bucket(monkeypatch):
+    monkeypatch.delenv("PLANTTRACER_S3_BUCKET", raising=False)
+    with pytest.raises(RuntimeError, match="is not set"):
+        s3_presigned.make_urn(object_name="course-1/movie-2.mov")
+    with pytest.raises(RuntimeError, match="should not start"):
+        s3_presigned.make_urn(
+            object_name="course-1/movie-2.mov",
+            bucket="s3://movies",
+        )
+    with pytest.raises(ValueError, match="Invalid scheme"):
+        s3_presigned.make_urn(
+            object_name="course-1/movie-2.mov",
+            bucket="movies",
+            scheme="https",
         )
 
 
