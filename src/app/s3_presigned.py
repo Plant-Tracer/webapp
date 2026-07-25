@@ -12,15 +12,13 @@ import os
 import logging
 import urllib.parse
 import hashlib
+import posixpath
 
 import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
 
 from .constants import C
-
-# Prefix under which uploads land so lambda-resize is triggered; lambda moves to final key.
-UPLOAD_STAGING_PREFIX = "uploads/"
 
 logger = logging.getLogger(__name__)
 
@@ -71,23 +69,91 @@ def sha256_hash(data):
     h.update(data)
     return h.hexdigest()
 
-def make_object_name(*,course_id,movie_id,frame_number=None, ext):
-    """object_name is a URN that is generated according to a scheme
-    that uses course_id, movie_id, and frame_number. URNs are deterministic.
-    """
-    if frame_number is None:
-        return C.MOVIE_TEMPLATE.format(course_id=course_id, movie_id=movie_id, ext=ext)
-    return C.FRAME_TEMPLATE.format(course_id=course_id, movie_id=movie_id, frame_number=frame_number, ext=ext)
+def _template_value(name, value):
+    """Return one required S3 template value without changing legacy IDs."""
+    if value is None or str(value) == "":
+        raise ValueError(f"{name} is required")
+    return str(value)
 
 
-def make_urn(*, object_name, scheme = C.SCHEME_S3 ):
-    """
-    If environment variable is not set, default to the database schema
-    We grab this every time through so that the bucket can be changed during unit tests
-    """
+def _deployment_value(value):
+    deployment = _template_value("deployment_id", value)
+    if "/" in deployment:
+        raise ValueError("deployment_id must be one S3 key component")
+    return deployment
+
+
+def course_object_prefix(*, deployment_id, course_id):
+    """Return the current course prefix for runtime movie objects."""
+    return C.S3_COURSE_PREFIX_TEMPLATE.format(
+        deployment_id=_deployment_value(deployment_id),
+        course_id=_template_value("course_id", course_id),
+    )
+
+
+def movie_object_key(*, deployment_id, course_id, movie_id):
+    """Return the durable original-movie object key."""
+    return C.S3_MOVIE_OBJECT_KEY_TEMPLATE.format(
+        deployment_id=_deployment_value(deployment_id),
+        course_id=_template_value("course_id", course_id),
+        movie_id=_template_value("movie_id", movie_id),
+    )
+
+
+def frame_object_key(*, deployment_id, course_id, movie_id, frame_number):
+    """Return a persisted JPEG frame object key."""
+    number = int(frame_number)
+    if number < 0:
+        raise ValueError("frame_number must be non-negative")
+    return C.S3_FRAME_OBJECT_KEY_TEMPLATE.format(
+        deployment_id=_deployment_value(deployment_id),
+        course_id=_template_value("course_id", course_id),
+        movie_id=_template_value("movie_id", movie_id),
+        frame_number=number,
+    )
+
+
+def upload_staging_object_key(*, deployment_id, course_id, movie_id):
+    """Return the deployment-scoped upload key reserved for issue #1152."""
+    deployment = _deployment_value(deployment_id)
+    return C.S3_UPLOAD_STAGING_OBJECT_KEY_TEMPLATE.format(
+        deployment_id=deployment,
+        course_id=_template_value("course_id", course_id),
+        movie_id=_template_value("movie_id", movie_id),
+    )
+
+
+def _derived_movie_object_key(*, source_movie_object_key, template):
+    source_stem, source_extension = posixpath.splitext(source_movie_object_key)
+    return template.format(
+        source_movie_stem=source_stem,
+        source_movie_extension=source_extension,
+    )
+
+
+def traced_movie_object_key(*, source_movie_object_key):
+    """Return the traced-movie key derived from an original movie key."""
+    return _derived_movie_object_key(
+        source_movie_object_key=source_movie_object_key,
+        template=C.S3_TRACED_MOVIE_OBJECT_KEY_TEMPLATE,
+    )
+
+
+def analysis_zip_object_key(*, source_movie_object_key):
+    """Return the analysis-frame ZIP key derived from an original movie key."""
+    return _derived_movie_object_key(
+        source_movie_object_key=source_movie_object_key,
+        template=C.S3_ANALYSIS_ZIP_OBJECT_KEY_TEMPLATE,
+    )
+
+
+def make_urn(*, object_name, scheme=C.SCHEME_S3, bucket=None):
+    """Build an S3 URN, using an explicit legacy bucket or the configured bucket."""
     if scheme not in SUPPORTED_SCHEMES:
         raise ValueError(f"Invalid scheme {scheme}")
-    netloc = os.getenv(C.PLANTTRACER_S3_BUCKET)
+    netloc = bucket or os.getenv(C.PLANTTRACER_S3_BUCKET)
+    if not netloc:
+        raise RuntimeError(f"{C.PLANTTRACER_S3_BUCKET} is not set")
     if netloc.startswith("s3:"):
         raise RuntimeError(f"{C.PLANTTRACER_S3_BUCKET} {netloc} should not start with s3://")
     ret = f"{scheme}://{netloc}/{object_name}"
@@ -103,6 +169,43 @@ def parse_s3_urn(*, urn):
     if not parsed.netloc or not parsed.path or parsed.path == "/":
         raise ValueError(f"Invalid S3 URN: {urn}")
     return parsed.netloc, parsed.path[1:]
+
+
+def traced_movie_urn(*, movie_data_urn):
+    """Return a traced-movie URN while preserving the source bucket and extension."""
+    bucket, source_key = parse_s3_urn(urn=movie_data_urn)
+    return make_urn(
+        object_name=traced_movie_object_key(source_movie_object_key=source_key),
+        bucket=bucket,
+    )
+
+
+def analysis_zip_urn(*, movie_data_urn):
+    """Return an analysis-frame ZIP URN while preserving the source bucket and extension."""
+    bucket, source_key = parse_s3_urn(urn=movie_data_urn)
+    return make_urn(
+        object_name=analysis_zip_object_key(source_movie_object_key=source_key),
+        bucket=bucket,
+    )
+
+
+def replace_course_object_key(*, object_key, from_course_id, to_course_id):
+    """Move a namespaced or legacy key between course prefixes."""
+    legacy_prefix = f"{_template_value('from_course_id', from_course_id)}/"
+    namespaced_suffix = f"/{legacy_prefix}"
+    if object_key.startswith(legacy_prefix):
+        source_prefix = legacy_prefix
+        target_prefix = f"{_template_value('to_course_id', to_course_id)}/"
+    else:
+        marker = object_key.find(namespaced_suffix)
+        if marker < 0:
+            raise ValueError(f"S3 key {object_key} does not contain course {from_course_id}")
+        source_prefix = object_key[:marker + 1] + legacy_prefix
+        target_prefix = (
+            object_key[:marker + 1]
+            + f"{_template_value('to_course_id', to_course_id)}/"
+        )
+    return target_prefix + object_key[len(source_prefix):]
 
 
 def make_signed_url(*, urn, operation=C.GET, expires=3600, download_name=None):

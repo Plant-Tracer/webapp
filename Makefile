@@ -102,7 +102,7 @@ distclean:
 
 ################################################################
 # Main targets used by CI/CD system and developers
-.PHONY: all check coverage tags admin-list admin-create course-create demo-course-create sam-course-create
+.PHONY: all check coverage tags admin-list admin-create course-create demo-course-create sam-course-create s3-eventbridge-status s3-eventbridge-enable
 
 all:
 	@echo verify syntax and then restart
@@ -816,6 +816,7 @@ endif
 	aws sts get-caller-identity --no-cli-pager
 	sam deploy --config-file "$(SAM_CONFIG)" --no-confirm-changeset --capabilities CAPABILITY_IAM
 	$(MAKE) sam-status
+	$(MAKE) sam-deployed-workflow-test
 
 sam-deploy-guided: $(REQ)
 ifeq ($(AWS_REGION),local)
@@ -833,6 +834,7 @@ endif
 	aws s3 ls
 	sam deploy --config-file "$(SAM_CONFIG)" --guided $(if $(STACK),--stack-name "$(STACK)",) --capabilities CAPABILITY_IAM
 	$(MAKE) sam-status
+	$(MAKE) sam-deployed-workflow-test
 
 sam-course-create: sam-config-check
 ifeq ($(AWS_REGION),local)
@@ -865,6 +867,24 @@ endif
 		DYNAMODB_TABLE_PREFIX="$$DDB_PREFIX" MAILER_DRY_RUN="$$MAILER_DRY_RUN_STACK" \
 		poetry run python $(DBUTIL) create-course --send-email --planttracer_endpoint "$$APP_URL" $(COURSE_CREATE_FLAGS)
 
+s3-eventbridge-status:
+	@if [ -z "$(PLANTTRACER_S3_BUCKET)" ]; then \
+		echo "PLANTTRACER_S3_BUCKET must be set."; \
+		exit 1; \
+	fi
+	poetry run python etc/s3_upload_trigger.py
+
+s3-eventbridge-enable:
+	@if [ -z "$(PLANTTRACER_S3_BUCKET)" ]; then \
+		echo "PLANTTRACER_S3_BUCKET must be set."; \
+		exit 1; \
+	fi
+	@if [ "$(CONFIRM_BUCKET)" != "$(PLANTTRACER_S3_BUCKET)" ]; then \
+		echo "Refusing to modify bucket notifications. Set CONFIRM_BUCKET=$(PLANTTRACER_S3_BUCKET)."; \
+		exit 1; \
+	fi
+	poetry run python etc/s3_upload_trigger.py --apply --confirm-bucket "$(CONFIRM_BUCKET)"
+
 # After deploy: verify Lambda URLs. Use curl -s (no -f) so we capture and show body on 4xx/5xx.
 # Simplified by Simson
 sam-status: sam-config-check
@@ -874,6 +894,21 @@ sam-status: sam-config-check
 	BASE_URL="$${APP_URL%/}"; \
 	VERSION_URL="$$BASE_URL/api/ver"; \
 	curl -f -s -w "\n%{http_code}\n" --max-time 10 "$$VERSION_URL"
+
+sam-deployed-workflow-test: sam-config-check
+	@DDB_PREFIX=$$(aws cloudformation describe-stacks --stack-name "$(STACK_NAME)" --query 'Stacks[0].Parameters[?ParameterKey==`DynamoDBTablePrefix`].ParameterValue | [0]' --output text); \
+	BUCKET=$$(aws cloudformation describe-stacks --stack-name "$(STACK_NAME)" --query 'Stacks[0].Parameters[?ParameterKey==`ImageBucketName`].ParameterValue | [0]' --output text); \
+	if [ -z "$$DDB_PREFIX" ] || [ "$$DDB_PREFIX" = "None" ] || [ -z "$$BUCKET" ] || [ "$$BUCKET" = "None" ]; then \
+		echo "Refusing workflow test: stack parameters are incomplete."; \
+		exit 1; \
+	fi; \
+	env -u AWS_ENDPOINT_URL_DYNAMODB -u AWS_ENDPOINT_URL_S3 \
+		DYNAMODB_TABLE_PREFIX="$$DDB_PREFIX" PLANTTRACER_S3_BUCKET="$$BUCKET" \
+		PLANTTRACER_STACK_NAME="$(STACK_NAME)" \
+		poetry run python bin/deployed_workflow_test.py \
+			--endpoint "https://$(STACK_NAME).planttracer.com/" \
+			--stack-name "$(STACK_NAME)" \
+			--movie "tests/data/2019-07-31 plantmovie.mov"
 
 # Shared resolution of Lambda function name (FUNC) and start time (START) for log targets.
 # Used by sam-logs, sam-logs-simple, sam-logs-simple-tail.

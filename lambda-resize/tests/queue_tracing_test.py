@@ -13,7 +13,13 @@ def test_queue_tracing_uses_local_queue_when_configured(monkeypatch):
         result = movie_glue.queue_tracing("test-key", "m123", 7, 20)
 
     enqueue_message.assert_called_once_with(
-        {"api_key": "test-key", "movie_id": "m123", "frame_start": 7, "frame_end": 20}
+        {
+            "job_type": "trace",
+            "api_key": "test-key",
+            "movie_id": "m123",
+            "frame_start": 7,
+            "frame_end": 20,
+        }
     )
     assert result["error"] is False
 
