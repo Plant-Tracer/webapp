@@ -227,6 +227,7 @@ class TracerController extends MovieController {
         this.tracing_was_reset = false;
         this.pending_trace_start_frame = null;
         this.tracking_start_deadline_ms = null;
+        this.trace_inputs_changed = Number(movie_metadata[NEEDS_RETRACING] || 0) === 1;
         this.marker_colors_by_label = new Map();
         this.loaded_analysis_frame_height = null;
 
@@ -569,7 +570,7 @@ class TracerController extends MovieController {
             this.add_marker_button.prop(DISABLED, true);
             this.track_button.prop(DISABLED, true);
         } else if (this.hasTraceableFrameData()) {
-            this.track_button.prop(DISABLED, false);
+            this.refreshTrackButtonState();
         }
     }
 
@@ -660,7 +661,11 @@ class TracerController extends MovieController {
             this.track_button.prop(DISABLED, true);
             return;
         }
-        this.track_button.prop(DISABLED, false);
+        if (this.isFullyTraced()) {
+            this.refreshTrackButtonState();
+        } else {
+            this.track_button.prop(DISABLED, false);
+        }
         this.tracking_status.text('');
     }
 
@@ -676,7 +681,9 @@ class TracerController extends MovieController {
     }
 
     markFutureFramesDirty() {
+        this.trace_inputs_changed = true;
         if (!this.hasFutureTrackedFrames()) {
+            this.refreshTrackButtonState();
             return;
         }
         this.pending_retrace_to_end = true;
@@ -732,6 +739,8 @@ class TracerController extends MovieController {
 
     markTracedMovieNeedsRetracing() {
         this.movie_metadata[NEEDS_RETRACING] = 1;
+        this.trace_inputs_changed = true;
+        this.refreshTrackButtonState();
         this.refreshRetraceRequiredMessage();
     }
 
@@ -767,12 +776,14 @@ class TracerController extends MovieController {
     refreshTrackButtonState() {
         if (this.pending_retrace_to_end) {
             this.track_button.val(this.traceToEndLabel());
+            this.track_button.prop(DISABLED, false);
             this.download_button.hide();
             this.refreshRetraceRequiredMessage();
             return;
         }
         if (this.isFullyTraced()) {
             this.track_button.val(RETRACE_MOVIE);
+            this.track_button.prop(DISABLED, !this.trace_inputs_changed);
             this.download_button.prop('disabled', false);
             this.download_button.show();
             // Re-enable the hidden form inputs so they are included in the POST body.
@@ -1708,7 +1719,9 @@ class TracerController extends MovieController {
                 $(div).removeClass('tracing-dimmed');
                 trace_movie_frames(div, metadata, zipUrl, frames, self.api_key, true, { initialFrame: focusFrame });
                 $(self.div_selector + ' input.track_button').val(RETRACE_MOVIE);
-                self.track_button.prop(DISABLED, false);
+                self.movie_metadata[NEEDS_RETRACING] = 0;
+                self.trace_inputs_changed = false;
+                self.track_button.prop(DISABLED, true);
                 self.download_button.show();
                 const endFrame = (metadata.last_frame_tracked != null && metadata.last_frame_tracked !== undefined)
                     ? metadata.last_frame_tracked
@@ -1823,9 +1836,17 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile_
         }
     };
     cc.set_movie_control_buttons();
+    const initialFrame = options.initialFrame != null
+        ? Number(options.initialFrame)
+        : cc.trim_start_frame;
+    if (initialFrame > 0) {
+        // Prevent MovieController.load_movie() from displaying frame 0 before
+        // the requested first included frame is selected.
+        cc.frame_number = initialFrame;
+    }
     cc.load_movie(movie_frames);
-    if (options.initialFrame != null) {
-        cc.goto_frame(options.initialFrame);
+    if (initialFrame > 0) {
+        cc.goto_frame(initialFrame);
     }
     cc.enableTrackButtonIfAllowed(); // enable Track when Lambda (if configured) is reachable
     // Track button label and download visibility are set in constructor from last_tracked_frame / total_frames.

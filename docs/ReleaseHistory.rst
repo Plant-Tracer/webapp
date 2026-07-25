@@ -77,6 +77,8 @@ Release Notes
 
 Unreleased Summary
 ******************
+    * Analyze: open trimmed movies on their first included frame and keep
+      Retrace disabled until marker data changes
     * Tracing: keep markers when optical flow temporarily loses them and use
       the loaded analysis-frame height for bottom-left coordinate conversion
     * Admin: add creation, upload, and last-movie-activity dates; FPM-based elapsed time, frame and byte sizes, resizable columns, course links, and a visible movie ``⋮`` action menu

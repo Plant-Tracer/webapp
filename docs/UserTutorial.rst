@@ -53,7 +53,7 @@ Tracking the Uploaded Movie
    :alt: Post-upload confirmation page showing the movie's first frame and a Next Steps section with Analyze and Track the uploaded movie links
 
 - On the Analyze page, position the markers (described below), then click **Trace movie** to begin tracking.
-- You can optionally trim the movie to a specific frame range before tracing. Use the **Trim start** and **Trim end** controls to set the first and last frame Plant Tracer will analyze. Trimming lets you exclude frames before the plant starts moving or after tracking becomes unreliable without re-uploading the movie.
+- You can optionally trim the movie to a specific frame range before tracing. Use the **Trim start** and **Trim end** controls to set the first and last frame Plant Tracer will analyze. Trimming lets you exclude frames before the plant starts moving or after tracking becomes unreliable without re-uploading the movie. When you reopen a trimmed movie, Plant Tracer starts on the first included frame.
 - Plant Tracer places three markers on newly uploaded movies automatically. They initially appear on the left side of the movie frame. These also appear in the Marker Table to the right (or beneath) the video frame.
 - Plant Tracer will attempt to track the motion of whatever part of the image a marker is placed over, frame by frame.
 - It is the user's job to position the markers appropriately. To move a marker, click on it, and drag it to the desired location.
@@ -131,7 +131,7 @@ Further Adjustments to Tracking
    :alt: Plant Tracer Analyze page showing the Apex marker drifted away from the plant tip at a later frame, indicating lost tracking
 
 - Use the arrow buttons just below the original movie to navigate to the frame where tracking was lost.
-- Then move the apex marker to the correct position. Now press the button "re-track movie".
+- **Retrace movie** remains disabled until you move a marker or add a new marker. Move the apex marker to the correct position, then press **Retrace movie**.
 
 .. image:: tutorial_images/retrack_movie.png
    :alt: Plant Tracer Analyze page with the Apex marker manually repositioned on the plant tip and a Retrace movie button to restart tracking from this frame
