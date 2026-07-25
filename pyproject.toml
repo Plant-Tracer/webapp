@@ -1,6 +1,6 @@
 [project]
 name = "webapp"
-version = "0.9.9.1"
+version = "0.9.9.2"
 description = "PlantTracer webapp"
 readme = "README.md"
 license = "GPL-3.0-or-later"
@@ -89,6 +89,7 @@ xlsxwriter = "^3.2.9"
 
 [tool.poetry.group.dev.dependencies]
 setuptools = ">=30,<82"  # pkg_resources removed in 82; required by localmail
+tomlkit = "^0.15.0"
 mutagen = "*"  # MP4 metadata for etc/mp4_metadata.py and tests
 aws-lambda-powertools = {extras = ["utilities", "pydantic"], version = "*"}
 boto3-stubs = {extras = ["essential"], version = "*"}

@@ -106,7 +106,8 @@ run; an S3 bucket sends its events to EventBridge in that same region.
       PLANTTRACER_S3_BUCKET="${PT_BUCKET}" make s3-eventbridge-status
 
 7. Supply the bucket name, without an ``s3://`` prefix, as ``ImageBucketName``
-   when running ``STACK=<name> make sam-deploy-guided``. The SAM template then
+   when running ``STACK=<name> make sam-deploy-guided`` (or using the
+   equivalent ``STACK_NAME=<name>`` alias). The SAM template then
    grants that stack's Lambda execution roles access to the named bucket and
    creates an EventBridge rule restricted to
    ``uploads/<stack-name>/``. No bucket policy is required for this

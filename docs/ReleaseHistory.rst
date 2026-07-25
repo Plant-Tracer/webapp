@@ -77,6 +77,9 @@ Release Notes
 
 Unreleased Summary
 ******************
+    * Deployment: honor ``STACK_NAME`` as a per-stack config selector, pass the
+      target to SAM explicitly, reject stack and DynamoDB-prefix conflicts, and
+      use a TOML-aware Python writer for guided config bootstrapping
     * Operations: restore deployment-isolated S3 EventBridge upload completion,
       post-upload processing, lifecycle logging, retry/DLQ handling, and an
       automated deployed upload/trace workflow
