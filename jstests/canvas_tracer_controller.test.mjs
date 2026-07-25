@@ -708,6 +708,62 @@ describe('TracerController constructor', () => {
         expect(tc.dl_movie_id.prop).toHaveBeenCalledWith('disabled', false);
     });
 
+    test('fully traced movie keeps Retrace disabled until marker data changes', () => {
+        const tc = new TracerController(
+            'div#tc',
+            makeMovieMetadata({ total_frames: 5, last_frame_tracked: 4 }),
+            'k'
+        );
+
+        expect(tc.track_button.prop).toHaveBeenCalledWith('disabled', true);
+    });
+
+    test('fully traced movie with saved marker changes enables Retrace', () => {
+        const tc = new TracerController(
+            'div#tc',
+            makeMovieMetadata({ total_frames: 5, last_frame_tracked: 4, needs_retracing: 1 }),
+            'k'
+        );
+
+        expect(tc.track_button.prop).toHaveBeenCalledWith('disabled', false);
+    });
+
+    test('moving a marker enables Retrace on a fully traced movie', () => {
+        const tc = new TracerController(
+            'div#tc',
+            makeMovieMetadata({ total_frames: 3, last_frame_tracked: 2 }),
+            'k'
+        );
+        tc.frames = Array.from({ length: 3 }, (_, frameNumber) => ({
+            frame_number: frameNumber,
+            markers: [],
+        }));
+        tc.frame_number = 1;
+        tc.track_button.prop.mockClear();
+
+        tc.object_did_move(new MockMarkerClass(10, 20, 5, 'orange', 'orange', 'Apex'));
+
+        expect(tc.track_button.prop).toHaveBeenCalledWith('disabled', false);
+    });
+
+    test('adding a marker enables Retrace on a fully traced movie', () => {
+        const tc = new TracerController(
+            'div#tc',
+            makeMovieMetadata({ total_frames: 3, last_frame_tracked: 2 }),
+            'k'
+        );
+        tc.frames = Array.from({ length: 3 }, (_, frameNumber) => ({
+            frame_number: frameNumber,
+            markers: [],
+        }));
+        tc.frame_number = 1;
+        tc.track_button.prop.mockClear();
+
+        tc.add_marker(10, 20, 'New Marker');
+
+        expect(tc.track_button.prop).toHaveBeenCalledWith('disabled', false);
+    });
+
     test('pending trace-to-end says trace when no traced movie exists', () => {
         const tc = new TracerController('div#tc', makeMovieMetadata(), 'k');
         tc.pending_retrace_to_end = true;
@@ -1239,6 +1295,21 @@ describe('TracerController.get_markers', () => {
         expect(tc.get_markers()).toEqual([{ x: 184, y: 128, label: 'Apex', color: 'orange', frame_number: 0 }]);
     });
 
+    test('bottom-left movie uses loaded analysis height instead of native movie height', () => {
+        const tc = new TracerController(
+            'div#tc',
+            makeMovieMetadata({ width: 480, height: 360, trackpoint_origin: 'bottom-left' }),
+            'k'
+        );
+        tc.set_analysis_dimensions_from_image({ img: { naturalWidth: 640, naturalHeight: 480 } });
+        tc.objects.push(new MockMarkerClass(370, 298, 5, 'orange', 'orange', 'Apex'));
+
+        expect(tc.movie_metadata.height).toBe(360);
+        expect(tc.get_markers()).toEqual([
+            { x: 370, y: 182, label: 'Apex', color: 'orange', frame_number: 0 },
+        ]);
+    });
+
     test('carries marker metadata when saving moved trackpoints', () => {
         const tc = new TracerController('div#tc', makeMovieMetadata(), 'k');
         tc.frame_number = 4;
@@ -1583,8 +1654,40 @@ describe('trace_movie_one_frame', () => {
         gotoSpy.mockRestore();
     });
 
+    test('rebuilds server markers with loaded analysis height when native height differs', () => {
+        const tc = callTmof(
+            { 0: { markers: [{ x: 370, y: 182, label: 'Apex' }] } },
+            { width: 480, height: 360, trackpoint_origin: 'bottom-left' }
+        );
+        const gotoSpy = jest.spyOn(tc, 'goto_frame');
+
+        expect(tc.trackpoint_to_canvas(tc.frames[0].markers[0])).toMatchObject({ x: 370, y: 178 });
+        tc.did_onload_callback({ img: { naturalWidth: 640, naturalHeight: 480 } });
+
+        expect(tc.movie_metadata.height).toBe(360);
+        expect(tc.trackpoint_to_canvas(tc.frames[0].markers[0])).toMatchObject({ x: 370, y: 298 });
+        expect(gotoSpy).toHaveBeenCalledWith(0);
+        gotoSpy.mockRestore();
+    });
+
     test('delays bottom-left default marker conversion until loaded image height is known', () => {
         const tc = callTmof(null, { width: null, height: null, trackpoint_origin: 'bottom-left' });
+        expect(tc.frames[0].markers).toEqual([]);
+
+        tc.did_onload_callback({ img: { naturalWidth: 640, naturalHeight: 480 } });
+
+        expect(tc.frames[0].markers).toEqual([
+            { x: 50, y: 430, label: 'Apex', color: 'orange', frame_number: 0 },
+            { x: 50, y: 380, label: 'Ruler 0mm', color: 'red', frame_number: 0, undeletable: true },
+            { x: 50, y: 330, label: 'Ruler 10mm', color: 'red', frame_number: 0, undeletable: true },
+        ]);
+    });
+
+    test('delays bottom-left defaults when native and analysis dimensions may differ', () => {
+        const tc = callTmof(
+            null,
+            { width: 480, height: 360, trackpoint_origin: 'bottom-left' }
+        );
         expect(tc.frames[0].markers).toEqual([]);
 
         tc.did_onload_callback({ img: { naturalWidth: 640, naturalHeight: 480 } });
@@ -1624,6 +1727,7 @@ describe('trace_movie_one_frame', () => {
 // ── trace_movie_frames ────────────────────────────────────────────────────────
 describe('trace_movie_frames', () => {
     let capturedTc;
+    let frameNumberAtLoad;
     let loadMovieSpy;
     let setMovieControlButtonsSpy;
     let enableTrackButtonSpy;
@@ -1646,10 +1750,12 @@ describe('trace_movie_frames', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         capturedTc = null;
+        frameNumberAtLoad = null;
 
         loadMovieSpy = jest.spyOn(MockMovieControllerClass.prototype, 'load_movie')
             .mockImplementation(function (frames) {
                 capturedTc = this;
+                frameNumberAtLoad = this.frame_number;
                 this.frames = frames;
             });
         setMovieControlButtonsSpy = jest.spyOn(MockMovieControllerClass.prototype, 'set_movie_control_buttons');
@@ -1751,6 +1857,17 @@ describe('trace_movie_frames', () => {
     test('load_movie is called with the correct number of frames', async () => {
         const tc = await callTmf(makeEntries('frame_0000.jpg', 'frame_0001.jpg', 'frame_0002.jpg'));
         expect(tc.frames).toHaveLength(3);
+    });
+
+    test('trimmed movie selects the first included frame before loading', async () => {
+        const tc = await callTmf(
+            makeEntries('frame_0000.jpg', 'frame_0001.jpg', 'frame_0002.jpg'),
+            null,
+            { total_frames: 3, last_frame_tracked: 2, trim_start_frame: 1, trim_end_frame: 2 }
+        );
+
+        expect(frameNumberAtLoad).toBe(1);
+        expect(tc.frame_number).toBe(1);
     });
 
     test('set_movie_control_buttons is called once', async () => {
@@ -3242,11 +3359,11 @@ describe('TracerController.movie_tracked', () => {
             .toHaveBeenCalledWith(expect.stringContaining(PRESS_PLAY_STATUS_TEXT));
     });
 
-    test('with zip URL: enables track button', async () => {
+    test('with zip URL: keeps Retrace disabled after tracing completes', async () => {
         mockUnzip.mockResolvedValueOnce({ entries: {} });
         tc.movie_tracked(makeTrackedData('http://example.com/m.zip'));
         await jest.runAllTimersAsync();
-        expect(tc.track_button.prop).toHaveBeenCalledWith('disabled', false);
+        expect(tc.track_button.prop).toHaveBeenCalledWith('disabled', true);
     });
 
     test('no zip URL and timeout: alerts and removes tracing-dimmed', async () => {

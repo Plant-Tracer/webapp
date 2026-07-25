@@ -89,21 +89,18 @@ def trackpoint_with_updates(trackpoint: Trackpoint, **updates):
     return Trackpoint(**{**trackpoint.model_dump(), **updates})
 
 
-def is_undeletable_trackpoint(trackpoint: Trackpoint):
-    return trackpoint.undeletable is True
-
-
-def preserve_missing_undeletable_trackpoints(*,
-                                             previous_trackpoints:List[Trackpoint],
-                                             output_trackpoints:List[Trackpoint],
-                                             frame_number:int):
+def preserve_missing_trackpoints(*,
+                                 previous_trackpoints:List[Trackpoint],
+                                 output_trackpoints:List[Trackpoint],
+                                 frame_number:int):
+    """Carry unresolved markers forward instead of deleting them from later frames."""
     output_labels = {trackpoint.label for trackpoint in output_trackpoints}
-    missing_undeletable = [
+    missing_trackpoints = [
         trackpoint_with_updates(trackpoint, frame_number=frame_number)
         for trackpoint in previous_trackpoints
-        if is_undeletable_trackpoint(trackpoint) and trackpoint.label not in output_labels
+        if trackpoint.label not in output_labels
     ]
-    return output_trackpoints + missing_undeletable
+    return output_trackpoints + missing_trackpoints
 
 
 def graphable_trackpoint_label(label:str):
@@ -204,9 +201,9 @@ def cv2_trace_frame(*, gray_frame_prev:np.ndarray, gray_frame:np.ndarray, trackp
                                                                x=point_array_out[i][0],
                                                                y=point_array_out[i][1],
                                                                frame_number=frame_number))
-        trackpoints_out = preserve_missing_undeletable_trackpoints(previous_trackpoints=trackpoints,
-                                                                   output_trackpoints=trackpoints_out,
-                                                                   frame_number=frame_number)
+        trackpoints_out = preserve_missing_trackpoints(previous_trackpoints=trackpoints,
+                                                       output_trackpoints=trackpoints_out,
+                                                       frame_number=frame_number)
     except cv2.error as e:  # pylint: disable=catching-non-exception
         logger.error("Optical flow failed: %s",e)
         # Don't return empty! Return the previous trackpoints but update their frame_number

@@ -77,9 +77,15 @@ Release Notes
 
 Unreleased Summary
 ******************
+    * Analyze: open trimmed movies on their first included frame and keep
+      Retrace disabled until marker data changes
+    * Tracing: keep markers when optical flow temporarily loses them and use
+      the loaded analysis-frame height for bottom-left coordinate conversion
     * Admin: add creation, upload, and last-movie-activity dates; FPM-based elapsed time, frame and byte sizes, resizable columns, course links, and a visible movie ``⋮`` action menu
     * Movies: distinguish created from successfully uploaded records with ``created_at`` and ``uploaded_at``, highlight pending uploads, verify exact-size direct uploads, and maintain ``last_activity_at`` through ``DDBO.update_movie()``
-    * Authorization: give ``superadmin`` and ``superauditor`` cross-course movie read access while keeping movie writes and Analyze unavailable to ``superauditor``
+    * Authorization: give ``superadmin`` and ``superauditor`` cross-course movie
+      read access while keeping cross-course movie writes and Analyze unavailable
+      to ``superauditor``; owners retain Analyze for their own movies
     * Developer: add the first read-only ``/admin`` page and ``GET /api/admin/summary`` endpoint for super-role admin work
     * Admin: show course registration keys behind per-row reveal controls and current/max enrollment, named user memberships with course-admin emphasis, and cross-course movies; load bounded pages and sort complete tables in the browser
     * Navigation: make the current course a membership-validated selector that reloads the page in the selected course context
