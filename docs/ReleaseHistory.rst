@@ -77,6 +77,8 @@ Release Notes
 
 Unreleased Summary
 ******************
+    * Tracing: keep markers when optical flow temporarily loses them and use
+      the loaded analysis-frame height for bottom-left coordinate conversion
     * Admin: add creation, upload, and last-movie-activity dates; FPM-based elapsed time, frame and byte sizes, resizable columns, course links, and a visible movie ``⋮`` action menu
     * Movies: distinguish created from successfully uploaded records with ``created_at`` and ``uploaded_at``, highlight pending uploads, verify exact-size direct uploads, and maintain ``last_activity_at`` through ``DDBO.update_movie()``
     * Authorization: give ``superadmin`` and ``superauditor`` cross-course movie read access while keeping movie writes and Analyze unavailable to ``superauditor``

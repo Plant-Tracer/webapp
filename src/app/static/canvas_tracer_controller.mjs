@@ -228,6 +228,7 @@ class TracerController extends MovieController {
         this.pending_trace_start_frame = null;
         this.tracking_start_deadline_ms = null;
         this.marker_colors_by_label = new Map();
+        this.loaded_analysis_frame_height = null;
 
         // set up the download form & button
         this.download_form = $("#download_form");
@@ -873,7 +874,8 @@ class TracerController extends MovieController {
     }
 
     analysis_frame_height() {
-        const height = this.movie_metadata ? this.movie_metadata.height : null;
+        const height = this.loaded_analysis_frame_height
+            ?? (this.movie_metadata ? this.movie_metadata.height : null);
         const fallbackHeight = this.naturalHeight || (this.c ? this.c.height : null);
         const value = Number((height != null) ? height : fallbackHeight);
         return Number.isFinite(value) && value > 0 ? value : null;
@@ -888,13 +890,17 @@ class TracerController extends MovieController {
         return Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0;
     }
 
-    set_missing_dimensions_from_image(imgStack) {
-        if (!imgStack || !imgStack.img || this.movie_metadata_has_dimensions()) {
+    set_analysis_dimensions_from_image(imgStack) {
+        if (!imgStack || !imgStack.img) {
             return false;
         }
         const width = Number(imgStack.img.naturalWidth);
         const height = Number(imgStack.img.naturalHeight);
         if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+            return false;
+        }
+        this.loaded_analysis_frame_height = height;
+        if (this.movie_metadata_has_dimensions()) {
             return false;
         }
         this.movie_metadata.width = width;
@@ -1736,14 +1742,16 @@ function trace_movie_one_frame(_movie_id, div_controller, movie_metadata, frame0
     cc = new TracerController(div_controller, movie_metadata, api_key);
     let pendingDefaultFrame0Markers = false;
     cc.did_onload_callback = (imgStack) => {
-        const dimensionsWereMissing = cc.set_missing_dimensions_from_image(imgStack);
+        const dimensionsWereMissing = cc.set_analysis_dimensions_from_image(imgStack);
         if (dimensionsWereMissing) {
             $(cc.div_selector + ' #canvas-id').attr('width', cc.movie_metadata.width).attr('height', cc.movie_metadata.height);
             $(cc.div_selector + ' video').attr('width', cc.movie_metadata.width).attr('height', cc.movie_metadata.height);
-            if (pendingDefaultFrame0Markers) {
-                cc.frames[0].markers = create_default_markers().map(marker => cc.canvas_marker_to_trackpoint({ ...marker, name: marker.label }));
-                pendingDefaultFrame0Markers = false;
-            }
+        }
+        if (pendingDefaultFrame0Markers && cc.loaded_analysis_frame_height != null) {
+            cc.frames[0].markers = create_default_markers().map(marker => cc.canvas_marker_to_trackpoint({ ...marker, name: marker.label }));
+            pendingDefaultFrame0Markers = false;
+        }
+        if (cc.loaded_analysis_frame_height != null) {
             cc.goto_frame(cc.frame_number || 0);
         }
         if (demo_mode) {
@@ -1759,7 +1767,7 @@ function trace_movie_one_frame(_movie_id, div_controller, movie_metadata, frame0
     const frame0HasServerMarkers = metadata_frames && metadata_frames[0] && metadata_frames[0].markers && metadata_frames[0].markers.length;
     const frame0Markers = frame0HasServerMarkers
         ? metadata_frames[0].markers
-        : (cc.movie_metadata_has_dimensions()
+        : (!cc.uses_bottom_left_trackpoints() && cc.movie_metadata_has_dimensions()
             ? create_default_markers().map(marker => cc.canvas_marker_to_trackpoint({ ...marker, name: marker.label }))
             : []);
     pendingDefaultFrame0Markers = !frame0HasServerMarkers && frame0Markers.length === 0;
@@ -1803,12 +1811,14 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile_
 
     cc = new TracerController(div_controller, movie_metadata, api_key);
     cc.did_onload_callback = (imgStack) => {
-        const dimensionsWereMissing = cc.set_missing_dimensions_from_image(imgStack);
+        const dimensionsWereMissing = cc.set_analysis_dimensions_from_image(imgStack);
         if (dimensionsWereMissing) {
             // Do NOT set canvas attr('width'/'height') directly — that bypasses zoom and
             // resets the canvas to natural (100%) size. resize() in WebImage.onload
             // already ran before this callback and correctly applied cc.zoom.
             $(cc.div_selector + ' video').attr('width', cc.movie_metadata.width).attr('height', cc.movie_metadata.height);
+        }
+        if (cc.loaded_analysis_frame_height != null) {
             cc.goto_frame(cc.frame_number || 0);
         }
     };

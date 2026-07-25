@@ -1239,6 +1239,21 @@ describe('TracerController.get_markers', () => {
         expect(tc.get_markers()).toEqual([{ x: 184, y: 128, label: 'Apex', color: 'orange', frame_number: 0 }]);
     });
 
+    test('bottom-left movie uses loaded analysis height instead of native movie height', () => {
+        const tc = new TracerController(
+            'div#tc',
+            makeMovieMetadata({ width: 480, height: 360, trackpoint_origin: 'bottom-left' }),
+            'k'
+        );
+        tc.set_analysis_dimensions_from_image({ img: { naturalWidth: 640, naturalHeight: 480 } });
+        tc.objects.push(new MockMarkerClass(370, 298, 5, 'orange', 'orange', 'Apex'));
+
+        expect(tc.movie_metadata.height).toBe(360);
+        expect(tc.get_markers()).toEqual([
+            { x: 370, y: 182, label: 'Apex', color: 'orange', frame_number: 0 },
+        ]);
+    });
+
     test('carries marker metadata when saving moved trackpoints', () => {
         const tc = new TracerController('div#tc', makeMovieMetadata(), 'k');
         tc.frame_number = 4;
@@ -1583,8 +1598,40 @@ describe('trace_movie_one_frame', () => {
         gotoSpy.mockRestore();
     });
 
+    test('rebuilds server markers with loaded analysis height when native height differs', () => {
+        const tc = callTmof(
+            { 0: { markers: [{ x: 370, y: 182, label: 'Apex' }] } },
+            { width: 480, height: 360, trackpoint_origin: 'bottom-left' }
+        );
+        const gotoSpy = jest.spyOn(tc, 'goto_frame');
+
+        expect(tc.trackpoint_to_canvas(tc.frames[0].markers[0])).toMatchObject({ x: 370, y: 178 });
+        tc.did_onload_callback({ img: { naturalWidth: 640, naturalHeight: 480 } });
+
+        expect(tc.movie_metadata.height).toBe(360);
+        expect(tc.trackpoint_to_canvas(tc.frames[0].markers[0])).toMatchObject({ x: 370, y: 298 });
+        expect(gotoSpy).toHaveBeenCalledWith(0);
+        gotoSpy.mockRestore();
+    });
+
     test('delays bottom-left default marker conversion until loaded image height is known', () => {
         const tc = callTmof(null, { width: null, height: null, trackpoint_origin: 'bottom-left' });
+        expect(tc.frames[0].markers).toEqual([]);
+
+        tc.did_onload_callback({ img: { naturalWidth: 640, naturalHeight: 480 } });
+
+        expect(tc.frames[0].markers).toEqual([
+            { x: 50, y: 430, label: 'Apex', color: 'orange', frame_number: 0 },
+            { x: 50, y: 380, label: 'Ruler 0mm', color: 'red', frame_number: 0, undeletable: true },
+            { x: 50, y: 330, label: 'Ruler 10mm', color: 'red', frame_number: 0, undeletable: true },
+        ]);
+    });
+
+    test('delays bottom-left defaults when native and analysis dimensions may differ', () => {
+        const tc = callTmof(
+            null,
+            { width: 480, height: 360, trackpoint_origin: 'bottom-left' }
+        );
         expect(tc.frames[0].markers).toEqual([]);
 
         tc.did_onload_callback({ img: { naturalWidth: 640, naturalHeight: 480 } });
