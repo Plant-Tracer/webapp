@@ -93,6 +93,46 @@ describe('list_movies_data', () => {
     expect(publishedHtml).toContain("Movie Title");
   });
 
+  test('should let a superauditor analyze their own movie', () => {
+    global.super_role = 'superauditor';
+    const movies = [
+      {
+        movie_id: 1,
+        user_id: global.user_id,
+        published: 1,
+        title: 'Owned Movie',
+        deleted: 0,
+        orig_movie: false,
+      }
+    ];
+
+    list_movies_data(movies);
+
+    const publishedHtml = mockElements['#your-published-movies'].innerHTML;
+    expect(publishedHtml).toContain("class='analyze'");
+  });
+
+  test('should keep Analyze hidden for a superauditor viewing another user movie', () => {
+    global.super_role = 'superauditor';
+    const movies = [
+      {
+        movie_id: 2,
+        user_id: 2,
+        course_id: global.user_primary_course_id,
+        published: 1,
+        title: 'Read-only Movie',
+        deleted: 0,
+        orig_movie: false,
+      }
+    ];
+
+    list_movies_data(movies);
+
+    const courseHtml = mockElements['#course-movies'].innerHTML;
+    expect(courseHtml).toContain('Read-only Movie');
+    expect(courseHtml).not.toContain("class='analyze'");
+  });
+
   test('should show traced movie download and retrace warning when present', () => {
     const movies = [
       {
