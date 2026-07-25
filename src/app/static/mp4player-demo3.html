@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>MP4 Player Demo 3</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Arial, Helvetica, sans-serif;
+      }
+
+      body {
+        margin: 0;
+        background: #f6f7f8;
+        color: #1f2933;
+      }
+
+      main {
+        box-sizing: border-box;
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 32px 20px;
+      }
+
+      h1 {
+        margin: 0 0 18px;
+        font-size: 1.5rem;
+        font-weight: 700;
+      }
+
+      canvas {
+        display: block;
+        width: 100%;
+        max-height: 70vh;
+        background: #000;
+      }
+
+      .controls {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 14px;
+      }
+
+      .control-group,
+      .playback-speed,
+      .source {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+        margin-top: 14px;
+      }
+
+      .control-group {
+        margin-top: 0;
+        justify-content: center;
+      }
+
+      .readout {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 10px;
+      }
+
+      button,
+      input::file-selector-button {
+        min-width: 72px;
+        border: 1px solid #9aa5b1;
+        border-radius: 4px;
+        padding: 8px 12px;
+        background: #fff;
+        color: #1f2933;
+        font: inherit;
+        cursor: pointer;
+      }
+
+      button:disabled {
+        color: #7b8794;
+        cursor: not-allowed;
+      }
+
+      input[type="file"] {
+        font: inherit;
+      }
+
+      input[type="range"] {
+        width: min(360px, 100%);
+      }
+
+      label {
+        font-weight: 700;
+      }
+
+      output {
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+
+      #status-output {
+        display: block;
+        min-height: 1.4em;
+        margin-top: 12px;
+        color: #52606d;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>WebCodecs MP4 Frame Demo</h1>
+      <canvas id="movie-canvas" width="640" height="480"></canvas>
+      <div class="controls">
+        <button id="first-frame-button" type="button" disabled>First</button>
+        <div class="control-group">
+          <button id="previous-frame-button" type="button" disabled>-1</button>
+          <button id="reverse-play-button" type="button" disabled>Play Back</button>
+          <button id="play-button" type="button" disabled>Play</button>
+          <button id="next-frame-button" type="button" disabled>+1</button>
+        </div>
+        <button id="last-frame-button" type="button" disabled>Last</button>
+      </div>
+      <div class="readout">
+        <output id="time-output">0.000 s</output>
+      </div>
+      <div class="playback-speed">
+        <label for="playback-fps-slider">FPS</label>
+        <input id="playback-fps-slider" type="range" min="0" max="60" step="1" value="15">
+        <output id="playback-fps-output">15 FPS</output>
+      </div>
+      <div class="source">
+        <button id="load-url-button" type="button">Load URL</button>
+        <input id="file-input" type="file" accept="video/mp4">
+      </div>
+      <output id="status-output">Loading...</output>
+    </main>
+
+    <script type="module">
+      import { createFile } from 'https://cdn.jsdelivr.net/npm/mp4box@2.3.0/dist/mp4box.all.js';
+
+      const DEFAULT_MOVIE_URL = 'https://simson.net/plantmovie.mp4';
+      const LOGICAL_FPS = 1;
+      const MICROSECONDS_PER_SECOND = 1000000;
+
+      const canvas = document.getElementById('movie-canvas');
+      const ctx = canvas.getContext('2d');
+      const firstFrameButton = document.getElementById('first-frame-button');
+      const playButton = document.getElementById('play-button');
+      const reversePlayButton = document.getElementById('reverse-play-button');
+      const nextFrameButton = document.getElementById('next-frame-button');
+      const previousFrameButton = document.getElementById('previous-frame-button');
+      const lastFrameButton = document.getElementById('last-frame-button');
+      const playbackFpsSlider = document.getElementById('playback-fps-slider');
+      const playbackFpsOutput = document.getElementById('playback-fps-output');
+      const loadUrlButton = document.getElementById('load-url-button');
+      const fileInput = document.getElementById('file-input');
+      const timeOutput = document.getElementById('time-output');
+      const statusOutput = document.getElementById('status-output');
+
+      let frames = [];
+      let currentFrameIndex = 0;
+      let playTimer = 0;
+      let playDirection = 0;
+      let loading = false;
+      let sourceFps = 0;
+
+      function movieUrl() {
+        return new URLSearchParams(window.location.search).get('src') || DEFAULT_MOVIE_URL;
+      }
+
+      function setStatus(message) {
+        statusOutput.value = message;
+      }
+
+      function logicalTime() {
+        return currentFrameIndex / LOGICAL_FPS;
+      }
+
+      function updateTime() {
+        timeOutput.value = `${logicalTime().toFixed(3)} s`;
+      }
+
+      function playbackFps() {
+        return Number(playbackFpsSlider.value);
+      }
+
+      function updatePlaybackFps() {
+        playbackFpsOutput.value = `${playbackFps()} FPS`;
+      }
+
+      function updateButtons() {
+        const ready = frames.length > 0 && !loading;
+        const playing = playTimer !== 0;
+        firstFrameButton.disabled = !ready || playing || currentFrameIndex <= 0;
+        lastFrameButton.disabled = !ready || playing || currentFrameIndex >= frames.length - 1;
+        playButton.disabled = !ready || playbackFps() <= 0 || playDirection === -1 ||
+          (playDirection === 0 && currentFrameIndex >= frames.length - 1);
+        reversePlayButton.disabled = !ready || playbackFps() <= 0 || playDirection === 1 ||
+          (playDirection === 0 && currentFrameIndex <= 0);
+        nextFrameButton.disabled = !ready || playing || currentFrameIndex >= frames.length - 1;
+        previousFrameButton.disabled = !ready || playing || currentFrameIndex <= 0;
+        loadUrlButton.disabled = loading;
+        fileInput.disabled = loading;
+        playButton.textContent = playDirection === 1 ? 'Pause' : 'Play';
+        reversePlayButton.textContent = playDirection === -1 ? 'Pause' : 'Play Back';
+      }
+
+      function pausePlayback() {
+        if (playTimer) {
+          window.clearInterval(playTimer);
+          playTimer = 0;
+        }
+        playDirection = 0;
+        updateButtons();
+      }
+
+      function closeFrames() {
+        pausePlayback();
+        for (const frame of frames) {
+          frame.close();
+        }
+        frames = [];
+        currentFrameIndex = 0;
+        sourceFps = 0;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        updateTime();
+        updateButtons();
+      }
+
+      function renderFrame(index) {
+        if (!frames[index]) {
+          return;
+        }
+        currentFrameIndex = index;
+        const frame = frames[currentFrameIndex];
+        const width = frame.displayWidth || frame.codedWidth;
+        const height = frame.displayHeight || frame.codedHeight;
+        if (canvas.width !== width || canvas.height !== height) {
+          canvas.width = width;
+          canvas.height = height;
+        }
+        ctx.drawImage(frame, 0, 0, canvas.width, canvas.height);
+        updateTime();
+        updateButtons();
+      }
+
+      function stepFrame(delta) {
+        const nextIndex = Math.min(Math.max(currentFrameIndex + delta, 0), frames.length - 1);
+        renderFrame(nextIndex);
+      }
+
+      function startPlayback(direction) {
+        if (playDirection === direction) {
+          pausePlayback();
+          return;
+        }
+        if (!frames.length || playbackFps() <= 0) {
+          updateButtons();
+          return;
+        }
+        if ((direction > 0 && currentFrameIndex >= frames.length - 1) ||
+            (direction < 0 && currentFrameIndex <= 0)) {
+          updateButtons();
+          return;
+        }
+        if (playTimer) {
+          pausePlayback();
+        }
+        playDirection = direction;
+        playTimer = window.setInterval(() => {
+          const nextIndex = currentFrameIndex + direction;
+          if (nextIndex < 0 || nextIndex >= frames.length) {
+            pausePlayback();
+            return;
+          }
+          renderFrame(nextIndex);
+        }, 1000 / playbackFps());
+        updateButtons();
+      }
+
+      function updatePlaybackSpeed() {
+        updatePlaybackFps();
+        if (playTimer) {
+          const direction = playDirection;
+          pausePlayback();
+          startPlayback(direction);
+        } else {
+          updateButtons();
+        }
+      }
+
+      function avcDecoderDescription(avcC) {
+        const spsLength = avcC.SPS.reduce((total, sps) => total + 2 + sps.length, 0);
+        const ppsLength = avcC.PPS.reduce((total, pps) => total + 2 + pps.length, 0);
+        const extLength = avcC.ext ? avcC.ext.length : 0;
+        const bytes = new Uint8Array(7 + spsLength + ppsLength + extLength);
+        const view = new DataView(bytes.buffer);
+        let offset = 0;
+        bytes[offset] = avcC.configurationVersion;
+        offset += 1;
+        bytes[offset] = avcC.AVCProfileIndication;
+        offset += 1;
+        bytes[offset] = avcC.profile_compatibility;
+        offset += 1;
+        bytes[offset] = avcC.AVCLevelIndication;
+        offset += 1;
+        bytes[offset] = 0xfc | avcC.lengthSizeMinusOne;
+        offset += 1;
+        bytes[offset] = 0xe0 | avcC.SPS.length;
+        offset += 1;
+        for (const sps of avcC.SPS) {
+          view.setUint16(offset, sps.length);
+          offset += 2;
+          bytes.set(sps.data, offset);
+          offset += sps.length;
+        }
+        bytes[offset] = avcC.PPS.length;
+        offset += 1;
+        for (const pps of avcC.PPS) {
+          view.setUint16(offset, pps.length);
+          offset += 2;
+          bytes.set(pps.data, offset);
+          offset += pps.length;
+        }
+        if (avcC.ext) {
+          bytes.set(avcC.ext, offset);
+        }
+        return bytes;
+      }
+
+      function extractMp4Samples(arrayBuffer) {
+        return new Promise((resolve, reject) => {
+          const mp4boxfile = createFile();
+          const samples = [];
+          let videoTrack = null;
+
+          mp4boxfile.onError = (error) => {
+            reject(new Error(String(error)));
+          };
+
+          mp4boxfile.onReady = (info) => {
+            videoTrack = info.tracks.find((track) => track.video);
+            if (!videoTrack) {
+              reject(new Error('No video track found.'));
+              return;
+            }
+            mp4boxfile.onSamples = (_id, _user, newSamples) => {
+              samples.push(...newSamples);
+            };
+            mp4boxfile.setExtractionOptions(videoTrack.id, null, {
+              nbSamples: 1000,
+              rapAlignement: false,
+            });
+            mp4boxfile.start();
+          };
+
+          arrayBuffer.fileStart = 0;
+          mp4boxfile.appendBuffer(arrayBuffer);
+          mp4boxfile.flush();
+
+          if (videoTrack) {
+            resolve({ samples, videoTrack });
+          } else {
+            reject(new Error('No video track metadata found.'));
+          }
+        });
+      }
+
+      function videoFrameType(sample) {
+        return sample.is_sync || sample.is_rap ? 'key' : 'delta';
+      }
+
+      async function decodeSamples(samples, videoTrack) {
+        if (!window.VideoDecoder || !window.EncodedVideoChunk) {
+          throw new Error('WebCodecs VideoDecoder is not available in this browser.');
+        }
+        if (!samples.length) {
+          throw new Error('No samples extracted.');
+        }
+
+        const description = samples[0].description;
+        if (!description.avcC) {
+          throw new Error(`Unsupported sample description: ${description.type}`);
+        }
+
+        const config = {
+          codec: videoTrack.codec,
+          codedWidth: videoTrack.video.width,
+          codedHeight: videoTrack.video.height,
+          description: avcDecoderDescription(description.avcC),
+        };
+        const support = await VideoDecoder.isConfigSupported(config);
+        if (!support.supported) {
+          throw new Error(`Unsupported decoder config: ${videoTrack.codec}`);
+        }
+
+        const decodedFrames = [];
+        let decoderError = null;
+        const decoder = new VideoDecoder({
+          output(frame) {
+            decodedFrames.push(frame);
+          },
+          error(error) {
+            decoderError = error;
+          },
+        });
+        decoder.configure(support.config);
+
+        for (const sample of samples) {
+          if (decoderError) {
+            throw decoderError;
+          }
+          decoder.decode(new EncodedVideoChunk({
+            type: videoFrameType(sample),
+            timestamp: Math.round(sample.cts * MICROSECONDS_PER_SECOND / sample.timescale),
+            duration: Math.round(sample.duration * MICROSECONDS_PER_SECOND / sample.timescale),
+            data: sample.data,
+          }));
+        }
+
+        await decoder.flush();
+        decoder.close();
+        if (decoderError) {
+          throw decoderError;
+        }
+
+        decodedFrames.sort((left, right) => left.timestamp - right.timestamp);
+        return decodedFrames;
+      }
+
+      async function loadArrayBuffer(label, arrayBuffer) {
+        try {
+          loading = true;
+          closeFrames();
+          updateButtons();
+          setStatus(`Decoding ${label}...`);
+          const { samples, videoTrack } = await extractMp4Samples(arrayBuffer);
+          sourceFps = videoTrack.nb_samples / (videoTrack.duration / videoTrack.timescale);
+          frames = await decodeSamples(samples, videoTrack);
+          renderFrame(0);
+          setStatus(`Decoded ${frames.length} frames, ${videoTrack.codec}, ${sourceFps.toFixed(3)} FPS source.`);
+        } catch (error) {
+          closeFrames();
+          setStatus(error.message);
+        } finally {
+          loading = false;
+          updateButtons();
+        }
+      }
+
+      async function loadUrl() {
+        const url = movieUrl();
+        try {
+          loading = true;
+          closeFrames();
+          updateButtons();
+          setStatus(`Fetching ${url}...`);
+          const response = await fetch(url, { mode: 'cors' });
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status} while fetching movie.`);
+          }
+          await loadArrayBuffer(url, await response.arrayBuffer());
+        } catch (error) {
+          closeFrames();
+          setStatus(`${error.message}. Use a same-origin URL, enable CORS, or choose a local MP4 file.`);
+        } finally {
+          loading = false;
+          updateButtons();
+        }
+      }
+
+      firstFrameButton.addEventListener('click', () => {
+        renderFrame(0);
+      });
+      reversePlayButton.addEventListener('click', () => {
+        startPlayback(-1);
+      });
+      playButton.addEventListener('click', () => {
+        startPlayback(1);
+      });
+      nextFrameButton.addEventListener('click', () => {
+        stepFrame(1);
+      });
+      previousFrameButton.addEventListener('click', () => {
+        stepFrame(-1);
+      });
+      lastFrameButton.addEventListener('click', () => {
+        renderFrame(frames.length - 1);
+      });
+      playbackFpsSlider.addEventListener('input', updatePlaybackSpeed);
+      loadUrlButton.addEventListener('click', loadUrl);
+      fileInput.addEventListener('change', async () => {
+        const file = fileInput.files[0];
+        if (file) {
+          await loadArrayBuffer(file.name, await file.arrayBuffer());
+        }
+      });
+
+      updateButtons();
+      updateTime();
+      updatePlaybackFps();
+      void loadUrl();
+    </script>
+  </body>
+</html>

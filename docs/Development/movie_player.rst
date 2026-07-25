@@ -36,6 +36,36 @@ Frame And Playback APIs
 ``POST /api/put-frame-trackpoints``
    Stores marker positions for a single frame before retracing.
 
+Static Frame-Stepping Demos
+---------------------------
+
+``/static/mp4player-demo1.html``
+   Uses the native ``HTMLVideoElement`` and maps each source frame to one
+   logical second. The demo movie is encoded at 15 FPS, so the controls seek by
+   ``1 / 15`` seconds and display logical 1 FPS time.
+
+``/static/mp4player-demo2.html``
+   Uses Video.js with ``@douglassllc/videojs-framebyframe`` configured for
+   the source movie's 15 FPS stream timing. The visible controls below the
+   movie use Video.js playback and seek APIs so they match the native demo's
+   logical 1 FPS behavior.
+
+``/static/mp4player-demo3.html``
+   Uses mp4box.js to extract MP4 samples, WebCodecs ``VideoDecoder`` to decode
+   all source frames, and a canvas to render by frame index. This avoids native
+   video seek rounding, but URL loading requires the MP4 server to allow CORS;
+   the page also accepts a local MP4 file. Playback defaults to 15 FPS and can
+   be adjusted from 0 to 60 FPS. The controls include first frame, previous
+   frame, reverse playback, forward playback, next frame, and last frame.
+
+Run ``make -C src/app/static serve`` from the repository root to serve the
+standalone demos locally.
+
+These demos are useful for comparing player behavior, but MP4 frame stepping is
+still timestamp seeking. Browser decoders may seek from nearby keyframes,
+especially when stepping backward. For frame-perfect random access, decode
+frames outside the native player and render them to a canvas.
+
 Client Classes
 --------------
 
