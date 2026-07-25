@@ -839,7 +839,10 @@ function list_movies_data( movies ) {
         analyze_label = 're-analyze';
       }
       const viewerSuperRole = typeof super_role === 'undefined' ? 'none' : super_role;
-      const analyze   = (m.orig_movie || viewerSuperRole === 'superauditor')
+      const readOnlySuperauditorMovie = (
+        viewerSuperRole === 'superauditor' && m.user_id != user_id
+      );
+      const analyze   = (m.orig_movie || readOnlySuperauditorMovie)
         ? ''
         : `<input class='analyze' x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='${analyze_label}' onclick='analyze_clicked(this)'>`;
       const downloadTraced = m.movie_traced_url

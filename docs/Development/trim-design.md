@@ -97,6 +97,7 @@ they are not part of the active analysis:
 
 When trim bounds are set, playback buttons use the trimmed range as the primary
 navigation target while still allowing explicit inspection outside the trim.
+The Analyze page initially displays `trim_start_frame`.
 
 | Control | Behavior |
 | --- | --- |

@@ -63,6 +63,10 @@ Tracing writes:
 - a traced MP4 to S3/MinIO,
 - movie status and artifact URNs back to DynamoDB.
 
+Optical flow may fail to resolve an individual marker in a low-texture frame.
+The tracer carries that marker's last known position into the next frame so a
+temporary miss does not delete it from the remainder of the trace.
+
 Research-use and attribution metadata is embedded in traced MP4 output through
 `mp4_metadata_lib`.
 

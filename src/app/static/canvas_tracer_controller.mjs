@@ -227,7 +227,9 @@ class TracerController extends MovieController {
         this.tracing_was_reset = false;
         this.pending_trace_start_frame = null;
         this.tracking_start_deadline_ms = null;
+        this.trace_inputs_changed = Number(movie_metadata[NEEDS_RETRACING] || 0) === 1;
         this.marker_colors_by_label = new Map();
+        this.loaded_analysis_frame_height = null;
 
         // set up the download form & button
         this.download_form = $("#download_form");
@@ -568,7 +570,7 @@ class TracerController extends MovieController {
             this.add_marker_button.prop(DISABLED, true);
             this.track_button.prop(DISABLED, true);
         } else if (this.hasTraceableFrameData()) {
-            this.track_button.prop(DISABLED, false);
+            this.refreshTrackButtonState();
         }
     }
 
@@ -659,7 +661,11 @@ class TracerController extends MovieController {
             this.track_button.prop(DISABLED, true);
             return;
         }
-        this.track_button.prop(DISABLED, false);
+        if (this.isFullyTraced()) {
+            this.refreshTrackButtonState();
+        } else {
+            this.track_button.prop(DISABLED, false);
+        }
         this.tracking_status.text('');
     }
 
@@ -675,7 +681,9 @@ class TracerController extends MovieController {
     }
 
     markFutureFramesDirty() {
+        this.trace_inputs_changed = true;
         if (!this.hasFutureTrackedFrames()) {
+            this.refreshTrackButtonState();
             return;
         }
         this.pending_retrace_to_end = true;
@@ -731,6 +739,8 @@ class TracerController extends MovieController {
 
     markTracedMovieNeedsRetracing() {
         this.movie_metadata[NEEDS_RETRACING] = 1;
+        this.trace_inputs_changed = true;
+        this.refreshTrackButtonState();
         this.refreshRetraceRequiredMessage();
     }
 
@@ -766,12 +776,14 @@ class TracerController extends MovieController {
     refreshTrackButtonState() {
         if (this.pending_retrace_to_end) {
             this.track_button.val(this.traceToEndLabel());
+            this.track_button.prop(DISABLED, false);
             this.download_button.hide();
             this.refreshRetraceRequiredMessage();
             return;
         }
         if (this.isFullyTraced()) {
             this.track_button.val(RETRACE_MOVIE);
+            this.track_button.prop(DISABLED, !this.trace_inputs_changed);
             this.download_button.prop('disabled', false);
             this.download_button.show();
             // Re-enable the hidden form inputs so they are included in the POST body.
@@ -873,7 +885,8 @@ class TracerController extends MovieController {
     }
 
     analysis_frame_height() {
-        const height = this.movie_metadata ? this.movie_metadata.height : null;
+        const height = this.loaded_analysis_frame_height
+            ?? (this.movie_metadata ? this.movie_metadata.height : null);
         const fallbackHeight = this.naturalHeight || (this.c ? this.c.height : null);
         const value = Number((height != null) ? height : fallbackHeight);
         return Number.isFinite(value) && value > 0 ? value : null;
@@ -888,13 +901,17 @@ class TracerController extends MovieController {
         return Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0;
     }
 
-    set_missing_dimensions_from_image(imgStack) {
-        if (!imgStack || !imgStack.img || this.movie_metadata_has_dimensions()) {
+    set_analysis_dimensions_from_image(imgStack) {
+        if (!imgStack || !imgStack.img) {
             return false;
         }
         const width = Number(imgStack.img.naturalWidth);
         const height = Number(imgStack.img.naturalHeight);
         if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+            return false;
+        }
+        this.loaded_analysis_frame_height = height;
+        if (this.movie_metadata_has_dimensions()) {
             return false;
         }
         this.movie_metadata.width = width;
@@ -1702,7 +1719,9 @@ class TracerController extends MovieController {
                 $(div).removeClass('tracing-dimmed');
                 trace_movie_frames(div, metadata, zipUrl, frames, self.api_key, true, { initialFrame: focusFrame });
                 $(self.div_selector + ' input.track_button').val(RETRACE_MOVIE);
-                self.track_button.prop(DISABLED, false);
+                self.movie_metadata[NEEDS_RETRACING] = 0;
+                self.trace_inputs_changed = false;
+                self.track_button.prop(DISABLED, true);
                 self.download_button.show();
                 const endFrame = (metadata.last_frame_tracked != null && metadata.last_frame_tracked !== undefined)
                     ? metadata.last_frame_tracked
@@ -1736,14 +1755,16 @@ function trace_movie_one_frame(_movie_id, div_controller, movie_metadata, frame0
     cc = new TracerController(div_controller, movie_metadata, api_key);
     let pendingDefaultFrame0Markers = false;
     cc.did_onload_callback = (imgStack) => {
-        const dimensionsWereMissing = cc.set_missing_dimensions_from_image(imgStack);
+        const dimensionsWereMissing = cc.set_analysis_dimensions_from_image(imgStack);
         if (dimensionsWereMissing) {
             $(cc.div_selector + ' #canvas-id').attr('width', cc.movie_metadata.width).attr('height', cc.movie_metadata.height);
             $(cc.div_selector + ' video').attr('width', cc.movie_metadata.width).attr('height', cc.movie_metadata.height);
-            if (pendingDefaultFrame0Markers) {
-                cc.frames[0].markers = create_default_markers().map(marker => cc.canvas_marker_to_trackpoint({ ...marker, name: marker.label }));
-                pendingDefaultFrame0Markers = false;
-            }
+        }
+        if (pendingDefaultFrame0Markers && cc.loaded_analysis_frame_height != null) {
+            cc.frames[0].markers = create_default_markers().map(marker => cc.canvas_marker_to_trackpoint({ ...marker, name: marker.label }));
+            pendingDefaultFrame0Markers = false;
+        }
+        if (cc.loaded_analysis_frame_height != null) {
             cc.goto_frame(cc.frame_number || 0);
         }
         if (demo_mode) {
@@ -1759,7 +1780,7 @@ function trace_movie_one_frame(_movie_id, div_controller, movie_metadata, frame0
     const frame0HasServerMarkers = metadata_frames && metadata_frames[0] && metadata_frames[0].markers && metadata_frames[0].markers.length;
     const frame0Markers = frame0HasServerMarkers
         ? metadata_frames[0].markers
-        : (cc.movie_metadata_has_dimensions()
+        : (!cc.uses_bottom_left_trackpoints() && cc.movie_metadata_has_dimensions()
             ? create_default_markers().map(marker => cc.canvas_marker_to_trackpoint({ ...marker, name: marker.label }))
             : []);
     pendingDefaultFrame0Markers = !frame0HasServerMarkers && frame0Markers.length === 0;
@@ -1803,19 +1824,29 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile_
 
     cc = new TracerController(div_controller, movie_metadata, api_key);
     cc.did_onload_callback = (imgStack) => {
-        const dimensionsWereMissing = cc.set_missing_dimensions_from_image(imgStack);
+        const dimensionsWereMissing = cc.set_analysis_dimensions_from_image(imgStack);
         if (dimensionsWereMissing) {
             // Do NOT set canvas attr('width'/'height') directly — that bypasses zoom and
             // resets the canvas to natural (100%) size. resize() in WebImage.onload
             // already ran before this callback and correctly applied cc.zoom.
             $(cc.div_selector + ' video').attr('width', cc.movie_metadata.width).attr('height', cc.movie_metadata.height);
+        }
+        if (cc.loaded_analysis_frame_height != null) {
             cc.goto_frame(cc.frame_number || 0);
         }
     };
     cc.set_movie_control_buttons();
+    const initialFrame = options.initialFrame != null
+        ? Number(options.initialFrame)
+        : cc.trim_start_frame;
+    if (initialFrame > 0) {
+        // Prevent MovieController.load_movie() from displaying frame 0 before
+        // the requested first included frame is selected.
+        cc.frame_number = initialFrame;
+    }
     cc.load_movie(movie_frames);
-    if (options.initialFrame != null) {
-        cc.goto_frame(options.initialFrame);
+    if (initialFrame > 0) {
+        cc.goto_frame(initialFrame);
     }
     cc.enableTrackButtonIfAllowed(); // enable Track when Lambda (if configured) is reachable
     // Track button label and download visibility are set in constructor from last_tracked_frame / total_frames.
