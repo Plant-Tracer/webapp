@@ -202,7 +202,7 @@ pytest-selenium:
 
 .PHONY: frame-step-browser-test
 frame-step-browser-test: .venv/pyvenv.cfg
-	poetry run pytest -v --log-cli-level=$(LOG_LEVEL) browser_tests/frame_step_browser_test.py
+	PYTHONPATH=.:$$PYTHONPATH poetry run pytest -v --log-cli-level=$(LOG_LEVEL) browser_tests/frame_step_browser_test.py
 
 # Set these during development to speed testing of the one function you care about:
 TEST1MODULE=tests/endpoint_test.py
