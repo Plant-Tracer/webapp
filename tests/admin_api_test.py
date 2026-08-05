@@ -90,6 +90,9 @@ def test_admin_summary_includes_enrollment_memberships_and_movies(client, new_mo
     assert movie["uploaded_at"] is not None
     assert movie["last_activity_at"] >= movie["uploaded_at"]
     assert movie["total_bytes"] > 0
+    assert movie["description"] == "Description"
+    assert movie["needs_retracing"] is False
+    assert "research_use" in movie
 
 
 def test_admin_movie_media_returns_fresh_urls(client, new_movie):

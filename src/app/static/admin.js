@@ -18,6 +18,7 @@ const state = {
   users: [],
   movies: [],
   viewerRole: "none",
+  verboseDetails: false,
   sort: Object.fromEntries(TABLE_NAMES.map((table) => [
     table,
     { key: TABLE_CONFIG[table].defaultKey, direction: 1 },
@@ -118,6 +119,20 @@ function courseNameCell(course) {
   return cell;
 }
 
+function verboseRow(text, columns) {
+  const row = document.createElement("tr");
+  row.className = "admin-verbose-row";
+  const cell = textCell(text);
+  cell.colSpan = columns;
+  row.append(cell);
+  return row;
+}
+
+function compactDetails(details) {
+  return details.filter((detail) => detail[1] !== null && detail[1] !== undefined && detail[1] !== "")
+    .map(([label, value]) => `${label}: ${value}`).join(" · ");
+}
+
 function appendCourseRows(courses) {
   const tbody = document.getElementById("admin-course-rows");
   for (const course of courses) {
@@ -135,6 +150,12 @@ function appendCourseRows(courses) {
       dateCell(course.last_movie_activity_at),
     );
     tbody.append(row);
+    if (state.verboseDetails) {
+      tbody.append(verboseRow(compactDetails([
+        ["Course ID", course.course_id],
+        ["Administrators", (course.admin_names || []).join(", ") || "none"],
+      ]), 7));
+    }
   }
 }
 
@@ -165,6 +186,12 @@ function appendUserRows(users) {
       dateCell(user.last_movie_activity_at),
     );
     tbody.append(row);
+    if (state.verboseDetails) {
+      tbody.append(verboseRow(compactDetails([
+        ["User ID", user.user_id],
+        ["Primary course ID", user.primary_course_id],
+      ]), 7));
+    }
   }
 }
 
@@ -301,6 +328,17 @@ function appendMovieRows(movies) {
       movieActionsCell(movie),
     );
     tbody.append(row);
+    if (state.verboseDetails) {
+      const dimensions = movie.width && movie.height ? `${movie.width} × ${movie.height}` : null;
+      tbody.append(verboseRow(compactDetails([
+        ["Movie ID", movie.movie_id], ["Description", movie.description],
+        ["Dimensions", dimensions], ["FPS", movie.fps], ["FPM", movie.fpm],
+        ["Rotation", movie.rotation], ["Trim start", movie.trim_start_frame],
+        ["Trim end", movie.trim_end_frame], ["Retrace required", movie.needs_retracing ? "yes" : "no"],
+        ["Research use", movie.research_use], ["Credit by name", movie.credit_by_name],
+        ["Attribution", movie.attribution_name],
+      ]), 9));
+    }
   }
 }
 
@@ -373,6 +411,18 @@ function bindSortButtons() {
     }
     button.dataset.sortBound = "true";
     button.addEventListener("click", () => changeSort(button.dataset.table, button.dataset.key));
+  });
+}
+
+function bindVerboseDetails() {
+  const checkbox = document.getElementById("admin-verbose-details");
+  if (!checkbox || checkbox.dataset.bound) {
+    return;
+  }
+  checkbox.dataset.bound = "true";
+  checkbox.addEventListener("change", () => {
+    state.verboseDetails = checkbox.checked;
+    TABLE_NAMES.forEach(renderTable);
   });
 }
 
@@ -468,6 +518,11 @@ function enrichCourseNames() {
       course.course_name = names.get(course.course_id) || course.course_id;
     });
   });
+  state.courses.forEach((course) => {
+    course.admin_names = state.users.filter((user) => user.courses.some((membership) => (
+      membership.course_id === course.course_id && membership.is_admin
+    ))).map((user) => user.user_name || user.email || user.user_id).sort();
+  });
   state.movies.forEach((movie) => {
     movie.course_name = names.get(movie.course_id) || movie.course_id;
   });
@@ -539,6 +594,7 @@ async function loadRemainingPages(table, marker) {
 
 async function loadAdminSummary() {
   bindSortButtons();
+  bindVerboseDetails();
   bindResizableTables();
   const status = document.getElementById("admin-status");
   status.className = "";
