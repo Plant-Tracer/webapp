@@ -125,19 +125,13 @@ def burn_frame_number(frame: np.ndarray, frame_number: int) -> np.ndarray:
     return labelled
 
 
-def source_fps(capture: cv2.VideoCapture) -> float:
-    """Return a usable source frame rate."""
-    fps = float(capture.get(cv2.CAP_PROP_FPS) or 0)
-    return fps if fps > 0 else DEFAULT_ANALYSIS_FPS
-
-
 def encode_analysis_mp4(*, source_path: Path, output_path: Path, options: AnalysisMp4Options) -> AnalysisMp4Result:
     """Encode one rotated, scaled, frame-numbered analysis MP4."""
     capture = cv2.VideoCapture(str(source_path))
     if not capture.isOpened():
         capture.release()
         raise ValueError(f"cannot open MP4: {source_path}")
-    fps = source_fps(capture)
+    fps = DEFAULT_ANALYSIS_FPS
     frame_count = 0
     width = 0
     height = 0

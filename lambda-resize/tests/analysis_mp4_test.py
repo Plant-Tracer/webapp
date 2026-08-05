@@ -29,7 +29,7 @@ def test_cli_uses_shared_encoder_and_creates_portable_bundle(tmp_path, capsys):
     """The CLI creates an atomic local-player bundle through the shared service."""
     source_path = tmp_path / "source.mp4"
     output_dir = tmp_path / "player"
-    write_four_color_movie(source_path)
+    write_four_color_movie(source_path, fps=8)
 
     assert analysis_mp4_cli.create_analysis_bundle is analysis_mp4.create_analysis_bundle
     assert analysis_mp4_cli.main([
@@ -56,14 +56,15 @@ def test_cli_uses_shared_encoder_and_creates_portable_bundle(tmp_path, capsys):
     assert (metadata.width, metadata.height) == (24, 48)
     assert metadata.rotation == 90
     assert metadata.b_frames == 0
+    assert metadata.fps == analysis_mp4.DEFAULT_ANALYSIS_FPS
 
     capture = cv2.VideoCapture(str(movie_path))
     try:
         assert int(capture.get(cv2.CAP_PROP_FRAME_COUNT)) == 4
-        assert capture.read()[0]
-        first_frame = capture.read()[1]
+        success, first_frame = capture.read()
     finally:
         capture.release()
+    assert success
     assert first_frame is not None
     assert first_frame.shape[:2] == (48, 24)
     assert np.any(np.all(first_frame[:20, -20:] >= 140, axis=2))
