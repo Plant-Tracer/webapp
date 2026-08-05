@@ -496,6 +496,7 @@ install-ubuntu:
 	which ffmpeg   || sudo apt-get install -y -qq ffmpeg
 	which lsof     || sudo apt-get install -y -qq lsof
 	which node     || sudo apt-get install -y -qq nodejs
+	node -e 'const [major, minor] = process.versions.node.split(".").map(Number); process.exit(major > 20 || (major === 20 && minor >= 8) ? 0 : 1)' || { curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -; sudo apt-get install -y -qq nodejs; }
 	which npm      || sudo apt-get install -y -qq npm
 	which zip      || sudo apt-get install -y -qq zip
 	which java     || sudo apt-get install -y -qq openjdk-21-jre-headless

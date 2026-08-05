@@ -4,6 +4,9 @@
     "jslint": "^0.12.1",
     "mp4box": "2.3.0"
   },
+  "engines": {
+    "node": ">=20.8.1"
+  },
   "devDependencies": {
     "@babel/core": "^7.25.8",
     "@babel/preset-env": "^7.25.8",

@@ -161,8 +161,8 @@ Portable Analysis-MP4 Bundle
 local MP4. It uses the same Python encoder service that Lambda will use for the
 analysis derivative: rotation is applied once, the frame fits within the chosen
 analysis dimensions, and every output frame has its one-based frame number
-burned into the upper-right corner. The MP4 uses H.264 ``yuv420p`` baseline
-compatibility settings with P-frames and no B-frames.
+burned into the upper-right corner. The MP4 uses a fixed 4 FPS H.264
+``yuv420p`` baseline profile with P-frames and no B-frames.
 
 For example:
 
