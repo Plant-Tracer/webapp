@@ -77,6 +77,11 @@ Release Notes
 
 Unreleased Summary
 ******************
+    * Developer: add a Makefile-driven analysis-MP4 CLI that creates a portable
+      WebCodecs player bundle for manual cross-browser frame-step verification
+    * Deployment: honor ``STACK_NAME`` as a per-stack config selector, pass the
+      target to SAM explicitly, reject stack and DynamoDB-prefix conflicts, and
+      use a TOML-aware Python writer for guided config bootstrapping
     * Analyze: open trimmed movies on their first included frame and keep
       Retrace disabled until marker data changes
     * Tracing: keep markers when optical flow temporarily loses them and use

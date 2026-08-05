@@ -30,6 +30,67 @@ Every commit message should reference a GitHub Issue number (preferred) or PR nu
 
 Every PR body must include `fixes #N` or `refs #N` for each Issue the PR resolves or references. This is the canonical place GitHub uses to auto-close Issues on merge and that release note tooling uses to associate PRs with Issues.
 
+### Codex commits and Copilot-to-Ready lifecycle
+
+GitHub activity authored by Codex must use `@simsong-codex`; do not use the
+personal `@simsong` account for writes, pushes, issues, pull requests, reviews,
+or comments.
+
+Before creating or amending a Codex-authored commit, configure and verify the
+author and committer as `Codex AI Assistant <simsong+codex@acm.org>` and verify
+the configured signing key belongs to that identity. SSH remote authentication
+controls push access only; it does not set commit metadata. Verify each result
+with `git log --format='%G? %GS %an <%ae> %cn <%ce>'`. When correcting an
+existing commit, use `git commit --amend --reset-author -S` rather than only
+amending the signature.
+
+For every Codex-authored pull request, follow the **Copilot-to-Ready lifecycle**
+in order:
+
+1. Push the branch and open the pull request as a draft.
+2. Request the Copilot bot with the exact GitHub API reviewer value
+   `copilot-pull-request-reviewer[bot]`; do not use the incomplete value
+   `copilot-pull-request-reviewer`. GitHub's UI Request control for Copilot is
+   an equivalent fallback when the API response is ambiguous. Verify a Copilot
+   pending-review entry or a `REVIEW_REQUESTED_EVENT`, not merely an HTTP
+   success response.
+3. Keep the pull request a draft while monitoring until a Copilot review or
+   review thread actually appears. Do not report a request or response based
+   only on a CLI command or an `@copilot` comment.
+4. Address every actionable Copilot finding. For each pushed fix, reply on the
+   exact Copilot thread with the commit and validation evidence, then request
+   and monitor Copilot's re-review of that new commit. Do not manually resolve
+   the thread; if GitHub resolves it automatically, report that fact.
+5. After Copilot is feedback-free and all required CI checks are green, mark
+   the pull request ready for review and assign it to `@simsong`.
+
+The lifecycle completes only after the current head's Copilot review and
+required CI are clear, the pull request is ready for review, and `@simsong` is
+assigned. If validation or feedback remains, retain draft status and report the
+exact blocker.
+
+When the Copilot-to-Ready timer is active, wake every 20 minutes and reconcile
+live GitHub state. For the current release milestone, scan its open issues
+assigned to `@simsong-codex`, then resume the highest-priority unblocked work or
+pending pull-request review/CI follow-through. Verify milestone, assignment, PR
+head, Copilot state, and checks live; do not rely on an earlier heartbeat. Do
+not change issue assignments or milestones, approve, merge, or close anything
+without explicit user instruction. If there is no in-scope work or nothing has
+changed, return a quiet heartbeat; otherwise report the exact next action or
+blocker.
+
+Do not approve or merge a pull request unless explicitly asked. Do not close
+GitHub issues unless the repository owner explicitly instructs you to do so.
+
+Delete a local branch once it has merged into `main`, but first verify it is an
+ancestor of the current `main`; preserve unmerged branches and linked-worktree
+files.
+
+Update `docs/ReleaseHistory.rst` in the same pull request for every
+user-visible behavior, build or platform-support, packaging, or documentation
+change. Do not add release-history entries for test-only or purely internal
+refactors.
+
 ## Beads Workflow
 
 This repository uses Beads for local/agent task tracking. Beads issue data is stored in a Dolt database and syncs separately from normal Git commits.

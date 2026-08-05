@@ -11,7 +11,7 @@ from urllib.parse import quote
 
 import pytest
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
+from browser_tests.video_probe import FRAME_SEQUENCE, matches_color, wait_for_decoded_frames
 
 
 FRAME_COLORS = (
@@ -20,7 +20,6 @@ FRAME_COLORS = (
     (0, 0, 255),
     (255, 255, 0),
 )
-FRAME_SEQUENCE = (0, 1, 2, 3, 3, 2, 1, 0)
 
 
 @pytest.fixture
@@ -59,14 +58,6 @@ def _four_frame_mpeg(tmp_path: Path) -> bytes:
     return movie.read_bytes()
 
 
-def _matches_color(sample: list[int], expected: tuple[int, int, int]) -> bool:
-    """Accept normal H.264 YUV conversion variance, but not another probe frame."""
-    return all(
-        actual >= 128 if wanted else actual <= 64
-        for actual, wanted in zip(sample[:3], expected)
-    )
-
-
 def _canvas_sample(driver) -> list[int]:
     """Read the center pixel from the WebCodecs player's rendered canvas."""
     return driver.execute_script(
@@ -81,14 +72,7 @@ def test_single_frame_stepping_recovers_forward_then_reverse_order(chrome_driver
     encoded = base64.b64encode(_four_frame_mpeg(tmp_path)).decode("ascii")
     data_url = f"data:video/mp4;base64,{encoded}"
     chrome_driver.get(f"{frame_step_server}/mp4player-demo3.html?src={quote(data_url, safe='')}")
-    wait = WebDriverWait(chrome_driver, 30)
-    status = wait.until(
-        lambda driver: (
-            value if not value.startswith(("Loading", "Fetching", "Decoding")) else False
-        )
-        if (value := driver.find_element(By.ID, "status-output").get_attribute("value"))
-        else False
-    )
+    status = wait_for_decoded_frames(chrome_driver)
     assert status.startswith("Decoded 4 frames"), status
     samples = [_canvas_sample(chrome_driver)]
     for button_id in ("next-frame-button",) * 3 + ("previous-frame-button",) * 3:
@@ -97,6 +81,6 @@ def test_single_frame_stepping_recovers_forward_then_reverse_order(chrome_driver
     samples.insert(4, samples[3])
     assert len(samples) == len(FRAME_SEQUENCE)
     for sample, frame_index in zip(samples, FRAME_SEQUENCE):
-        assert _matches_color(sample, FRAME_COLORS[frame_index]), (
+        assert matches_color(sample, FRAME_COLORS[frame_index]), (
             f"expected frame {frame_index + 1} {FRAME_COLORS[frame_index]}, got {sample}"
         )

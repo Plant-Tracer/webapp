@@ -1,7 +1,8 @@
 {
   "dependencies": {
     "crypto-js": "^4.2.0",
-    "jslint": "^0.12.1"
+    "jslint": "^0.12.1",
+    "mp4box": "2.3.0"
   },
   "devDependencies": {
     "@babel/core": "^7.25.8",

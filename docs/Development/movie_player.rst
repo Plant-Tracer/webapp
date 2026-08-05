@@ -153,3 +153,33 @@ The ``Frame-step browser conformance`` GitHub Actions workflow runs the probe
 on macOS Chrome, Windows Chrome, and Android Chrome in an emulator.  It is a
 required regression signal for a change to the MP4 single-frame implementation;
 a platform is supported only when its corresponding job passes.
+
+Portable Analysis-MP4 Bundle
+----------------------------
+
+``make analysis-mp4-bundle`` creates a manual-test directory for an arbitrary
+local MP4. It uses the same Python encoder service that Lambda will use for the
+analysis derivative: rotation is applied once, the frame fits within the chosen
+analysis dimensions, and every output frame has its one-based frame number
+burned into the upper-right corner. The MP4 uses H.264 ``yuv420p`` baseline
+compatibility settings with P-frames and no B-frames.
+
+For example:
+
+.. code-block:: console
+
+   make analysis-mp4-bundle \\
+     ANALYSIS_MP4_INPUT=/path/to/capture.mp4 \\
+     ANALYSIS_MP4_OUTPUT=/tmp/capture-player \\
+     ANALYSIS_MP4_ROTATION=90
+
+The new output directory contains ``capture_scaled.mp4``, ``index.html``, a
+local ``mp4box.all.js`` demuxer, a metadata manifest, and ``README.txt``.
+``index.html`` has no Flask, API-key, ZIP, CDN, or build-step dependency. Copy
+the complete directory to a static web server with ``scp`` and open
+``index.html`` over HTTP or HTTPS. Do not use ``file:`` URLs because browser
+module and fetch rules vary by platform.
+
+``make analysis-mp4-browser-test`` validates the generated bundle through a
+real local Chrome browser. It checks the rendered four-frame sequence forward
+and backward before a bundle is used for manual testing.
