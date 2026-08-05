@@ -202,7 +202,7 @@ pytest-selenium:
 
 .PHONY: frame-step-browser-test
 frame-step-browser-test: .venv/pyvenv.cfg
-	PYTHONPATH=.:$$PYTHONPATH poetry run pytest -v --log-cli-level=$(LOG_LEVEL) browser_tests/frame_step_browser_test.py
+	poetry run python -m pytest -v --log-cli-level=$(LOG_LEVEL) browser_tests/frame_step_browser_test.py
 
 ANALYSIS_MP4_INPUT ?=
 ANALYSIS_MP4_OUTPUT ?=
