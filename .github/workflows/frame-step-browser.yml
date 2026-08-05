@@ -1,0 +1,61 @@
+name: Frame-step browser conformance
+
+on:
+  pull_request:
+  push:
+    branches: [main, dev]
+
+jobs:
+  desktop:
+    name: ${{ matrix.os }} Chrome
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install test dependencies
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then choco install -y make ffmpeg; fi
+          if [ "${{ runner.os }}" = "macOS" ]; then brew install ffmpeg; fi
+          python -m pip install --user pipx
+          python -m pipx ensurepath
+          export PATH="$HOME/.local/bin:$PATH"
+          pipx install poetry
+          poetry install
+      - name: Verify frame stepping
+        run: make frame-step-browser-test
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python -m pip install --user pipx
+          python -m pipx ensurepath
+          export PATH="$HOME/.local/bin:$PATH"
+          pipx install poetry
+          poetry install
+      - name: Verify Android Chrome frame stepping
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_2
+          script: |
+            adb shell pm path com.android.chrome
+            export CHROME_ANDROID_SERIAL=emulator-5554
+            make frame-step-browser-test

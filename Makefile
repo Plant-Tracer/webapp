@@ -156,7 +156,7 @@ lint: $(REQ)
 pylint:
 	$(MAKE) vend-lambda-resize
 	$(MAKE) vend-lambda-web
-	poetry run pylint $(PYLINT_OPTS) lambda-web/src/lambda_web lambda-web/tests lambda-resize src tests \
+	poetry run pylint $(PYLINT_OPTS) browser_tests lambda-web/src/lambda_web lambda-web/tests lambda-resize src tests \
 		etc/sam_config_tool.py etc/sam_config_writer.py *.py
 
 ## Mypy static analysis
@@ -199,6 +199,10 @@ pytest-coverage: $(LOCAL_TEST_REQ)
 # This doesn't work yet...
 pytest-selenium:
 	poetry run pytest -v --log-cli-level=$(LOG_LEVEL) tests/sitetitle_test.py
+
+.PHONY: frame-step-browser-test
+frame-step-browser-test: .venv/pyvenv.cfg
+	poetry run pytest -v --log-cli-level=$(LOG_LEVEL) browser_tests/frame_step_browser_test.py
 
 # Set these during development to speed testing of the one function you care about:
 TEST1MODULE=tests/endpoint_test.py
