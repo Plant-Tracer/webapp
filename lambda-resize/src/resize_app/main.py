@@ -8,6 +8,7 @@ API's primary function:
 
 Methods:
 /resize-api/v1/ping
+/resize-api/v1/process-upload
 /resize-api/v1/first-frame
 /resize-api/v1/trace-movie
 
@@ -34,6 +35,7 @@ from aws_lambda_powertools.utilities.batch import (
 from . import movie_glue
 from . import mpeg_jpeg_zip
 from . import lambda_tracing_handler
+from . import upload_event
 from .src.app.constants import (
     __version__,
     stack_name,
@@ -150,6 +152,27 @@ def _movie_data_response():
 def api_resize_movie_data():
     return _movie_data_response()
 
+
+@app.post("/resize-api/v1/process-upload")
+def api_process_upload():
+    """Verify a completed direct-to-S3 upload and mark the movie ready."""
+    api_key = app.current_event.headers.get("x-api-key")
+    if not api_key:
+        return Response(status_code=401, body="x-api-key header must be provided")
+    body = app.current_event.json_body
+    if not body:
+        return Response(status_code=400, body="Request body must be provided")
+    movie_id = body.get("movie_id")
+    if not movie_id:
+        return Response(status_code=400, body="movie_id must be provided")
+    try:
+        result = movie_glue.complete_movie_upload(api_key=api_key, movie_id=movie_id)
+    except ValueError as exc:
+        LOGGER.exception("process-upload rejected: %s", exc)
+        return Response(status_code=403, body=str(exc))
+    return {"error": False, **result.model_dump()}
+
+
 @app.get("/resize-api/v1/first-frame")
 def handle_first_frame() -> Any:
     """GET /api/v1/first-frame.
@@ -225,7 +248,9 @@ def handle_post_actions():
 
 @LOGGER.inject_lambda_context(log_event=False)
 def lambda_handler(event: Dict[str, Any], context: LambdaContext) -> Dict[str, Any]:
-    """Unified Lambda entrypoint: dispatch between HTTP API and SQS events."""
+    """Unified Lambda entrypoint: dispatch EventBridge, SQS, or HTTP events."""
+    if isinstance(event, dict) and event.get("source") == "aws.s3":
+        return upload_event.process_upload_event(event).model_dump()
     if isinstance(event, dict) and "Records" in event:
         # Route to SQS handler for partial batch processing
         return process_partial_response( event=event, context=context,

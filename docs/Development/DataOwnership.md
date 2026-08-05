@@ -68,9 +68,9 @@ the `movies` table is named `demo-movies`.
 | `api_keys` | `ApiKey` plus runtime fields | `api_key` | Login/API token records: `user_id`, `enabled`, `use_count`, `created`, `first_used_at`, and `last_used_at` |
 | `courses` | `Course` | `course_id` | Course metadata: `course_name`, `course_key`, `admins_for_course`, and `max_enrollment` |
 | `course_users` | `CourseUser` | `course_id`, `user_id` | Enrollment join rows connecting users to courses |
-| `movies` | `Movie` | `movie_id` | Movie metadata and artifact pointers, including ownership, visibility, processing state, geometry, capture interval, trim bounds, research metadata, and S3 URNs |
+| `movies` | `Movie` | `movie_id` | Movie metadata and artifact pointers, including ownership, visibility, upload/post-upload state, geometry, capture interval, trim bounds, research metadata, and staging/durable S3 URNs |
 | `movie_frames` | `MovieFrame` and internal marker-map item | `movie_id`, `frame_number` | Per-frame trackpoints, optional frame URNs, and the marker map stored at `frame_number=-100` |
-| `logs` | `LogEntry` | `log_id` | Audit/query log records keyed by `log_id` and indexed by `ipaddr`, `user_id`, and `course_id`/`time_t` |
+| `logs` | `LogEntry` | `log_id` | Audit/query records indexed by `ipaddr`, `user_id`, and `course_id`/`time_t`; movie lifecycle events also identify `movie_id` and `event_type` |
 
 ### Relationship Rules
 
@@ -101,12 +101,14 @@ processing code and older migrations. Current rows store or use:
 - display metadata: `title`, `description`
 - state and visibility: `status`, `published`, `deleted`, `needs_retracing`,
   `version`
-- timestamps and sizes: `created_at`, `date_uploaded`, `total_frames`,
-  `total_bytes`
+- lifecycle timestamps and sizes: `created_at`, `uploaded_at`,
+  `last_activity_at`, `upload_bytes_expected`, `resize_queued_at`,
+  `resize_started_at`, `resized_at`, `total_frames`, `total_bytes`.
+  `date_uploaded` is a read-only compatibility field on legacy rows.
 - playback/analysis metadata: `fps`, `fpm`, `width`, `height`,
   `trackpoint_origin`, `rotation`, `trim_start_frame`, `trim_end_frame`
-- S3 references: `movie_data_urn`, `movie_zipfile_urn`, `first_frame_urn`, and
-  runtime `movie_traced_urn`
+- S3 references: temporary `upload_staging_urn`, durable `movie_data_urn`,
+  `movie_zipfile_urn`, `first_frame_urn`, and runtime `movie_traced_urn`
 - processing helpers: `processing_state`, `zip_frame_processing`,
   `last_frame_tracked`
 - research metadata: `research_use`, `credit_by_name`, `attribution_name`
@@ -114,6 +116,12 @@ processing code and older migrations. Current rows store or use:
 Some old rows or in-flight code paths may also contain legacy/operational fields
 such as `rotation_steps` and `status_updated_at`. Code that reads movie records
 must tolerate missing optional fields during upload, processing, and migration.
+
+Upload staging is deployment-scoped under `uploads/{stack}/`; durable originals
+and derived artifacts are under `movies/{stack}/`. The S3 EventBridge handler
+validates both stored URNs before moving bytes. The `logs` table records
+`movie.upload.completed`, `movie.resize.started`, and
+`movie.resize.completed`.
 
 ## Movie Frame Fields
 
@@ -139,22 +147,38 @@ S3 object names are deterministic and are converted into URNs of the form
 
 The live naming helpers are:
 
-- movie object template: `{course_id}/{movie_id}{ext}`
-- frame object template: `{course_id}/{movie_id}/{frame_number:06d}{ext}`
+- upload staging: `uploads/{deployment_id}/{course_id}/{movie_id}.mov`
+- durable movie: `movies/{deployment_id}/{course_id}/{movie_id}.mov`
+- frame: `movies/{deployment_id}/{course_id}/{movie_id}/{frame_number:06d}.jpg`
 
 The current S3 artifacts are:
 
 | Artifact | Typical key or URN field | Owner/lifetime |
 | --- | --- | --- |
-| Original uploaded movie | `movie_data_urn`, usually `s3://bucket/{course_id}/{movie_id}.mov` | Durable archive; browser uploads directly with a presigned POST |
-| Per-frame JPEG, when persisted | `frame_urn`, usually `s3://bucket/{course_id}/{movie_id}/{frame_number:06d}.jpg` | Derived artifact; may be regenerated from the movie |
+| Upload staging | `upload_staging_urn`, under `s3://bucket/uploads/{deployment_id}/...` | Temporary browser presigned POST target; removed after verification and copy |
+| Original uploaded movie | `movie_data_urn`, under `s3://bucket/movies/{deployment_id}/...` | Durable archive written by lambda-resize from staging |
+| Per-frame JPEG, when persisted | `frame_urn`, under the durable movie directory | Derived artifact; may be regenerated from the movie |
 | ZIP of analysis frames | `movie_zipfile_urn`, derived from `movie_data_urn` with a `_zipfile` suffix before the extension | Derived artifact written by lambda-resize tracing |
 | Traced movie | `movie_traced_urn`, derived from `movie_data_urn` with a `_traced` suffix before the extension | Derived artifact written by lambda-resize tracing |
 
 During upload, `/api/new-movie` first creates the DynamoDB movie row with
-`status="uploading"` and returns a presigned POST for the final S3 key. The
-browser uploads directly to S3/MinIO. There is no live S3 bucket notification
-pipeline and no live `uploads/` staging-prefix path.
+`status="uploading"` and `created_at`, but without `uploaded_at`. It records the
+expected byte count and returns a presigned POST whose content-length range has
+that exact lower and upper bound. In AWS, S3 sends the staging Object Created
+event through EventBridge to the one stack rule matching its deployment
+prefix. lambda-resize verifies and copies it to the durable key, records upload
+state, deletes staging, and queues post-upload processing. Local MinIO uses
+`/resize-api/v1/process-upload` as an authenticated adapter to that service.
+
+An absent `uploaded_at` means the movie row was created but the upload never
+completed. The admin page highlights these rows red. The lifecycle fields also
+provide the inputs for a future garbage collector that can remove pending rows
+older than two hours; that collector is not part of the current upload flow.
+
+All business-level movie writes use `DDBO.update_movie()`, which maintains
+`last_activity_at`. Reads and signed downloads do not touch that timestamp.
+Restore and historical coordinate-migration paths may explicitly preserve the
+stored activity time.
 
 ## Operational Artifacts Bucket
 

@@ -14,8 +14,10 @@ from .odb import (
     CREATED,
     CREATED_AT,
     DATE_UPLOADED,
+    LAST_ACTIVITY_AT,
     MOVIE_STATE_UPDATED_AT,
     MOVIES,
+    UPLOADED_AT,
     USERS,
 )
 
@@ -34,7 +36,13 @@ LIST_PREFIX_HEADERS = ("prefix", "courses", "users", "movies", "from", "to")
 LIST_PREFIX_RIGHT_ALIGNED = (False, True, True, True, False, False)
 COURSE_DATE_FIELDS = (CREATED, CREATED_AT)
 USER_DATE_FIELDS = (CREATED,)
-MOVIE_DATE_FIELDS = (CREATED_AT, DATE_UPLOADED, MOVIE_STATE_UPDATED_AT)
+MOVIE_DATE_FIELDS = (
+    CREATED_AT,
+    UPLOADED_AT,
+    LAST_ACTIVITY_AT,
+    DATE_UPLOADED,
+    MOVIE_STATE_UPDATED_AT,
+)
 DYNAMODB_TABLE_CONFIGURATIONS = tuple(odbmaint.load_table_configurations())
 REQUIRED_PREFIX_TABLES = tuple(
     table_config[odbmaint.TableName]

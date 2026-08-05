@@ -54,6 +54,10 @@ class LocalTracingQueue:
         self.start_worker()
         self._queue.put(message)
 
+    def worker_running(self) -> bool:
+        """Return whether this queue currently has a live consumer."""
+        return self._worker_thread is not None and self._worker_thread.is_alive()
+
     def stop_worker(self, timeout: float = 2.0) -> None:
         with self._worker_lock:
             if self._worker_thread is None:
@@ -73,6 +77,10 @@ def start_worker(*, processor: TracingProcessor | None = None) -> None:
 
 def enqueue_message(message: dict[str, Any]) -> None:
     LOCAL_TRACING_QUEUE.enqueue_message(message)
+
+
+def worker_running() -> bool:
+    return LOCAL_TRACING_QUEUE.worker_running()
 
 
 def stop_worker(timeout: float = 2.0) -> None:

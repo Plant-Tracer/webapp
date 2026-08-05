@@ -1,21 +1,69 @@
+from pathlib import Path
+
 import numpy as np
 
 from resize_app import tracer
 from resize_app.src.app.schema import Trackpoint
 
 
-def test_preserve_missing_undeletable_trackpoints_copies_only_missing_undeletable():
+TEST_MOVIE = Path(__file__).resolve().parents[2] / "tests/data/2019-07-31 plantmovie short.mov"
+ANALYSIS_FRAME_HEIGHT = 480
+NATIVE_FRAME_HEIGHT = 360
+FRAME_HEIGHT_DIFFERENCE = ANALYSIS_FRAME_HEIGHT - NATIVE_FRAME_HEIGHT
+
+
+def test_trace_movie_keeps_corrected_plantmovie_markers():
+    frame_trackpoints = {}
+    initial_trackpoints = [
+        Trackpoint(x=455, y=ANALYSIS_FRAME_HEIGHT - (13 + FRAME_HEIGHT_DIFFERENCE),
+                   label="Ruler 0mm", frame_number=0, undeletable=True),
+        Trackpoint(x=396, y=ANALYSIS_FRAME_HEIGHT - (5 + FRAME_HEIGHT_DIFFERENCE),
+                   label="Ruler 10mm", frame_number=0, undeletable=True),
+        Trackpoint(x=370, y=ANALYSIS_FRAME_HEIGHT - (62 + FRAME_HEIGHT_DIFFERENCE),
+                   label="Apex", frame_number=0),
+    ]
+
+    tracer.trace_movie_v2(
+        movie_url=TEST_MOVIE,
+        frame_start=0,
+        trackpoints=initial_trackpoints,
+        callback=lambda obj: frame_trackpoints.update({obj.frame_number: obj.frame_trackpoints}),
+    )
+
+    expected_labels = {"Ruler 0mm", "Ruler 10mm", "Apex"}
+    assert frame_trackpoints
+    assert all({point.label for point in points} == expected_labels
+               for points in frame_trackpoints.values())
+
+
+def test_trace_movie_moves_known_plant_feature():
+    frame_trackpoints = {}
+
+    tracer.trace_movie_v2(
+        movie_url=TEST_MOVIE,
+        frame_start=0,
+        trackpoints=[Trackpoint(x=370, y=298, label="Apex", frame_number=0)],
+        callback=lambda obj: frame_trackpoints.update({obj.frame_number: obj.frame_trackpoints}),
+    )
+
+    final_apex = frame_trackpoints[max(frame_trackpoints)][0]
+    assert final_apex.x < 365
+    assert final_apex.y < 292
+
+
+def test_preserve_missing_trackpoints_copies_every_missing_marker():
     previous_trackpoints = [
         Trackpoint(x=1, y=2, label="Apex", frame_number=4),
         Trackpoint(x=10, y=20, label="Ruler 0mm", frame_number=4, color="red", undeletable=True),
         Trackpoint(x=30, y=40, label="Ruler10mm", frame_number=4),
+        Trackpoint(x=50, y=60, label="Tip", frame_number=4),
     ]
     output_trackpoints = [
         Trackpoint(x=2, y=3, label="Apex", frame_number=5),
         Trackpoint(x=31, y=41, label="Ruler10mm", frame_number=5),
     ]
 
-    result = tracer.preserve_missing_undeletable_trackpoints(
+    result = tracer.preserve_missing_trackpoints(
         previous_trackpoints=previous_trackpoints,
         output_trackpoints=output_trackpoints,
         frame_number=5,
@@ -25,14 +73,16 @@ def test_preserve_missing_undeletable_trackpoints_copies_only_missing_undeletabl
         Trackpoint(x=2, y=3, label="Apex", frame_number=5),
         Trackpoint(x=31, y=41, label="Ruler10mm", frame_number=5),
         Trackpoint(x=10, y=20, label="Ruler 0mm", frame_number=5, color="red", undeletable=True),
+        Trackpoint(x=50, y=60, label="Tip", frame_number=5),
     ]
 
 
-def test_cv2_trace_frame_copies_ruler_marker_when_cv2_drops_it(monkeypatch):
+def test_cv2_trace_frame_carries_every_marker_cv2_drops(monkeypatch):
     previous_trackpoints = [
         Trackpoint(x=1, y=2, label="Apex", frame_number=4, color="orange"),
         Trackpoint(x=10, y=20, label="Ruler 0mm", frame_number=4, color="red", undeletable=True),
         Trackpoint(x=30, y=40, label="Ruler 10mm", frame_number=4, color="red", undeletable=True),
+        Trackpoint(x=50, y=60, label="Tip", frame_number=4, color="blue"),
     ]
 
     def fake_optical_flow(_gray_frame_prev, _gray_frame, _input_points, _unused, **_kwargs):
@@ -40,8 +90,9 @@ def test_cv2_trace_frame_copies_ruler_marker_when_cv2_drops_it(monkeypatch):
             [2, 3],
             [11, 21],
             [31, 41],
+            [51, 61],
         ], dtype=np.float32)
-        status = np.array([[1], [0], [1]], dtype=np.uint8)
+        status = np.array([[1], [0], [1], [0]], dtype=np.uint8)
         return points, status, None
 
     monkeypatch.setattr(tracer.cv2, "calcOpticalFlowPyrLK", fake_optical_flow)
@@ -57,6 +108,7 @@ def test_cv2_trace_frame_copies_ruler_marker_when_cv2_drops_it(monkeypatch):
         Trackpoint(x=2, y=3, label="Apex", frame_number=5, color="orange"),
         Trackpoint(x=31, y=41, label="Ruler 10mm", frame_number=5, color="red", undeletable=True),
         Trackpoint(x=10, y=20, label="Ruler 0mm", frame_number=5, color="red", undeletable=True),
+        Trackpoint(x=50, y=60, label="Tip", frame_number=5, color="blue"),
     ]
 
 

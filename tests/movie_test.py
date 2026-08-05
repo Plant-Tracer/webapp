@@ -9,10 +9,12 @@ import re
 import urllib
 from urllib.parse import quote
 import json
+import base64
 
 import requests
 import filetype
 import pytest
+from resize_app.movie_glue import complete_movie_upload
 
 from app import odb
 from app import s3_presigned
@@ -166,28 +168,55 @@ def test_movie_upload_presigned_post(client, new_course, local_s3):
                            data = {'api_key': api_key,
                                    "title": movie_title,
                                    "description": "test movie description",
-                                   "movie_data_sha256":movie_data_sha256
+                                   "movie_data_sha256": movie_data_sha256,
+                                   "movie_data_length": len(movie_data),
                                    })
     res = resp.get_json()
     assert res['error'] is False
 
-    # Now try the upload post
-    assert 'presigned_post' in res
+    movie_id = res['movie_id']
+    pending_movie = odb.get_movie(movie_id=movie_id)
+    assert pending_movie[odb.CREATED_AT] > 0
+    assert pending_movie[odb.LAST_ACTIVITY_AT] == pending_movie[odb.CREATED_AT]
+    assert pending_movie[odb.UPLOAD_BYTES_EXPECTED] == len(movie_data)
+    assert odb.UPLOADED_AT not in pending_movie
+    assert odb.DATE_UPLOADED not in pending_movie
 
-    odb_movie_data.purge_movie(movie_id = res['movie_id'])
-    logger.info("PURGE MOVIE %s",res['movie_id'])
+    presigned_post = res['presigned_post']
+    policy = json.loads(base64.b64decode(presigned_post['fields']['policy']))
+    assert ['content-length-range', len(movie_data), len(movie_data)] in policy['conditions']
+
+    upload = requests.post(
+        presigned_post['url'],
+        files={'file': ('movie.mp4', movie_data, 'video/mp4')},
+        data=presigned_post['fields'],
+        timeout=POST_TIMEOUT,
+    )
+    assert upload.ok
+
+    completed = complete_movie_upload(api_key=api_key, movie_id=movie_id)
+    assert completed.uploaded_at >= pending_movie[odb.CREATED_AT]
+    uploaded_movie = odb.get_movie(movie_id=movie_id)
+    assert uploaded_movie[odb.UPLOADED_AT] == completed.uploaded_at
+    assert uploaded_movie[odb.LAST_ACTIVITY_AT] >= uploaded_movie[odb.UPLOADED_AT]
+    assert uploaded_movie[odb.TOTAL_BYTES] == len(movie_data)
+
+    odb_movie_data.purge_movie(movie_id=movie_id)
+    logger.info("PURGE MOVIE %s", movie_id)
 
 
 def test_new_movie_stores_fpm_and_signs_metadata(client, new_course, local_s3):
     """new-movie with fpm stores it on the movie and includes x-amz-meta-fpm in the presigned post."""
     api_key = copy.copy(new_course)[API_KEY]
     with open(TEST_PLANTMOVIE_PATH, "rb") as f:
-        movie_data_sha256 = s3_presigned.sha256_hash(f.read())
+        movie_data = f.read()
+    movie_data_sha256 = s3_presigned.sha256_hash(movie_data)
     resp = client.post('/api/new-movie',
                        data={'api_key': api_key,
                              "title": f'fpm-movie {uuid.uuid4()}',
                              "description": "fpm movie",
                              "movie_data_sha256": movie_data_sha256,
+                             "movie_data_length": len(movie_data),
                              "fpm": "30"})
     res = resp.get_json()
     assert res['error'] is False
@@ -204,6 +233,7 @@ def test_new_movie_rejects_invalid_fpm(client, new_course):
                              "title": f'bad-fpm {uuid.uuid4()}',
                              "description": "bad fpm",
                              "movie_data_sha256": "a" * 64,
+                             "movie_data_length": 1,
                              "fpm": "-5"})
     res = resp.get_json()
     assert res['error'] is True
@@ -307,7 +337,8 @@ def test_new_movie_api(client, new_course):
                            data = {'api_key': api_key_invalid,
                                    "title": movie_title,
                                    "description": "test movie description",
-                                   "movie_data_sha256": movie_data_sha256})
+                                   "movie_data_sha256": movie_data_sha256,
+                                   "movie_data_length": len(movie_data)})
     logger.debug("invalid api_key resp=%s",resp)
     logger.debug("invalid api_key resp.text=%s",resp.text)
     logger.debug("invalid api_key resp.json=%s",resp.json)
@@ -319,7 +350,8 @@ def test_new_movie_api(client, new_course):
                            data = {'api_key': api_key,
                                    "title": movie_title,
                                    "description": "test movie description",
-                                   "movie_data_sha256": movie_data_sha256+"-invalid"})
+                                   "movie_data_sha256": movie_data_sha256+"-invalid",
+                                   "movie_data_length": len(movie_data)})
     assert resp.get_json()['error'] is True
 
     # Get the upload information
@@ -327,7 +359,8 @@ def test_new_movie_api(client, new_course):
                            data = {'api_key': api_key,
                     "title": movie_title,
                     "description": "test movie description",
-                    "movie_data_sha256": movie_data_sha256})
+                    "movie_data_sha256": movie_data_sha256,
+                    "movie_data_length": len(movie_data)})
     res = resp.get_json()
     assert res['error'] is False
     movie_id = res['movie_id']
@@ -352,6 +385,7 @@ def test_new_movie_api(client, new_course):
 
     # Make sure data got there
     logger.debug("new_movie fixture: movie uploaded")
+    complete_movie_upload(api_key=api_key, movie_id=movie_id)
     retrieved_movie_data = get_movie_bytes(movie_id)
     assert len(movie_data) == len(retrieved_movie_data)
     assert movie_data == retrieved_movie_data
@@ -385,6 +419,7 @@ def test_new_movie_attribution_paths(client, new_course, local_s3):
         "title": f"attribution-test-{uuid.uuid4()}",
         "description": "test description",
         "movie_data_sha256": movie_data_sha256,
+        "movie_data_length": len(movie_data),
     }
 
     # Path 0: Neither radio answered — research_use and credit_by_name absent from POST
@@ -483,6 +518,7 @@ def test_set_research_metadata(client, new_course):
         "title": f"research-test-{uuid.uuid4()}",
         "description": "test",
         "movie_data_sha256": sha256,
+        "movie_data_length": len(movie_data),
         "research_use": "1",
         "credit_by_name": "1",
     })

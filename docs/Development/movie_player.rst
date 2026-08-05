@@ -108,3 +108,48 @@ Invariants
 * ``0 <= current_frame < total_frames`` when ``total_frames`` is known.
 * ``last_frame_tracked`` is absent or between ``0`` and ``total_frames - 1``.
 * Marker coordinates are stored per frame in DynamoDB ``movie_frames`` rows.
+
+Single-Frame Browser Conformance Test
+-------------------------------------
+
+``make frame-step-browser-test`` builds a temporary four-frame MP4 from solid
+red, green, blue, and yellow PPM images.  A real Chrome/Chromium browser loads
+``/static/mp4player-demo3.html`` and copies the decoded center pixel from that
+page's canvas after every button click.  The test requires the exact sequence
+``1, 2, 3, 4, 4, 3, 2, 1``; it fails if WebCodecs drops, duplicates, or
+misorders a frame.  The fixture uses an H.264 B-frame GOP, which exercises the
+decoder timestamp path that is stricter on some Android and Windows devices.
+
+B-Frame Ordering
+----------------
+
+The WebCodecs player must not sort compressed B-frame samples into presentation
+order inside an MP4 file.  A B-frame can depend on a later reference frame, so
+``mp4player-demo3.html`` first orders the demuxed samples by their decoding
+timestamp (``dts``) before passing them to ``VideoDecoder``.  Each
+``EncodedVideoChunk`` retains its composition timestamp (``cts``), because the
+WebCodecs timestamp is the frame's presentation timestamp.  After decoding,
+the player orders ``VideoFrame`` objects by that presentation timestamp for the
+frame-step controls.
+
+This separates the two orderings that a B-frame stream requires:
+
+* decode compressed samples by ``dts``;
+* display decoded frames by ``cts``.
+
+If a target device cannot decode the source stream even with that ordering,
+produce a compatibility asset by re-encoding rather than reordering MP4
+packets.  For example:
+
+.. code-block:: console
+
+   ffmpeg -i input.mp4 -c:v libx264 -bf 0 -g 30 -pix_fmt yuv420p -c:a copy output-no-b-frames.mp4
+
+``-bf 0`` removes B-frames.  The command changes the video bitstream and is
+therefore an explicit compatibility transcode; it is not a lossless MP4
+metadata edit.
+
+The ``Frame-step browser conformance`` GitHub Actions workflow runs the probe
+on macOS Chrome, Windows Chrome, and Android Chrome in an emulator.  It is a
+required regression signal for a change to the MP4 single-frame implementation;
+a platform is supported only when its corresponding job passes.

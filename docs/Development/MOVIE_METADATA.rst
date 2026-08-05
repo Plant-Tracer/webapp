@@ -130,6 +130,13 @@ per-movie value used by the Analyze page to report results per minute of real
 time (see :doc:`AnalysisResults` and issues #1056/#1053). It is distinct from the
 encoded playback ``fps``.
 
+``fps`` describes how quickly a player presents encoded frames; it determines
+playback duration but does not describe the real-world time between plant
+images. ``fpm`` describes the time-lapse capture cadence. Administrative movie
+duration therefore means total experiment elapsed time and is calculated as
+``(total_frames - 1) / fpm`` minutes. The admin table does not display or derive
+time from ``fps``.
+
 - **DynamoDB is authoritative.** ``fpm`` is stored as a string on the movie row
   (``schema.Movie.fpm``; ``odb.FPM``) and is what the application reads and edits.
   The user can set it at upload (``/api/new-movie``) or later on the Analyze page

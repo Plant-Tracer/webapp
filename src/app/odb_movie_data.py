@@ -12,8 +12,8 @@ import urllib.parse
 import requests
 from botocore.exceptions import ClientError,ParamValidationError
 
-from .s3_presigned import s3_client,make_urn,make_object_name
-from .constants import C,logger
+from .s3_presigned import frame_object_key, make_urn, movie_object_key, s3_client
+from .constants import C, logger, storage_deployment_id
 from .odb import (
     DDBO,
     is_movie_id,
@@ -21,7 +21,7 @@ from .odb import (
     course_id_for_movie_id,
     MOVIE_DATA_URN,
     MOVIE_ZIPFILE_URN,
-    DATE_UPLOADED,
+    UPLOADED_AT,
     TOTAL_BYTES,
     TOTAL_FRAMES,
     FRAME_URN,
@@ -130,17 +130,19 @@ def set_movie_data(*,movie_id, movie_data):
     purge_movie_data(movie_id=movie_id)
     purge_movie_frames( movie_id=movie_id )
     purge_movie_zipfile( movie_id=movie_id )
-    oname = make_object_name( course_id = course_id_for_movie_id( movie_id ),
-                                        movie_id = movie_id,
-                                        ext=C.MOVIE_EXTENSION)
+    oname = movie_object_key(
+        deployment_id=storage_deployment_id(),
+        course_id=course_id_for_movie_id(movie_id),
+        movie_id=movie_id,
+    )
     movie_data_urn        = make_urn( object_name = oname)
 
     write_object(movie_data_urn, movie_data)
-    ddbo.update_table(ddbo.movies, movie_id, {MOVIE_DATA_URN:movie_data_urn,
-                                              DATE_UPLOADED:int(time.time()),
-                                              TOTAL_BYTES:len(movie_data),
-                                              TOTAL_FRAMES:None,
-                                              VERSION: version + 1})
+    ddbo.update_movie(movie_id, {MOVIE_DATA_URN:movie_data_urn,
+                                 UPLOADED_AT:int(time.time()),
+                                 TOTAL_BYTES:len(movie_data),
+                                 TOTAL_FRAMES:None,
+                                 VERSION: version + 1})
 
 
 ################################################################
@@ -153,7 +155,7 @@ def purge_movie_data(*,movie_id):
     urn = ddbo.get_movie(movie_id).get(MOVIE_DATA_URN,None)
     if urn:
         delete_object( urn )
-        ddbo.update_table(ddbo.movies,movie_id, {MOVIE_DATA_URN:None})
+        ddbo.update_movie(movie_id, {MOVIE_DATA_URN:None})
 
 def purge_movie_frames(*,movie_id, frame_numbers=None):
     """Delete the frames and zipfile associated with a movie.
@@ -183,7 +185,7 @@ def purge_movie_zipfile(*,movie_id):
     urn = movie.get(MOVIE_ZIPFILE_URN, None)
     if urn is not None:
         delete_object(urn)
-        ddbo.update_table(ddbo.movies, movie_id, {MOVIE_ZIPFILE_URN: None})
+        ddbo.update_movie(movie_id, {MOVIE_ZIPFILE_URN: None})
 
 def purge_movie(*,movie_id):
     """Actually delete a movie and all its frames"""
@@ -196,7 +198,7 @@ def delete_movie(*,movie_id, delete=1):
     """Set a movie's deleted bit to be true"""
     assert delete in (0,1)
     ddbo = DDBO()
-    ddbo.update_table(ddbo.movies,movie_id, {DELETED:delete})
+    ddbo.update_movie(movie_id, {DELETED:delete})
 
 
 # New implementation that writes to s3
@@ -211,10 +213,12 @@ def create_new_movie_frame(*, movie_id, frame_number, frame_data=None):
     course_id = course_id_for_movie_id(movie_id)
     if frame_data is not None:
         # upload the frame to the store and make a frame_urn
-        object_name = make_object_name(course_id=course_id,
-                                            movie_id=movie_id,
-                                            frame_number = frame_number,
-                                            ext=C.JPEG_EXTENSION)
+        object_name = frame_object_key(
+            deployment_id=storage_deployment_id(),
+            course_id=course_id,
+            movie_id=movie_id,
+            frame_number=frame_number,
+        )
         frame_urn = make_urn( object_name = object_name)
         write_object(frame_urn, frame_data)
     else:

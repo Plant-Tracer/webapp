@@ -213,6 +213,14 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False):
         super_role = odb.SUPER_ROLE_NONE
         logged_in = 0
 
+    course_view_id = ""
+    course_view_name = ""
+    requested_course_id = (request.args.get('course_id') or '').strip()
+    if requested_course_id and super_role in odb.SUPER_READ_ROLES:
+        course_view = odb.lookup_course_by_id(course_id=requested_course_id)
+        course_view_id = course_view[odb.COURSE_ID]
+        course_view_name = course_view.get(odb.COURSE_NAME) or course_view_id
+
     try:
         movie_id = int(request.query.get('movie_id'))
     except (AttributeError, KeyError, TypeError):
@@ -236,6 +244,8 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False):
         'super_role': super_role,
         'user_primary_course_id': user_primary_course_id,
         'primary_course_name': primary_course_name,
+        'course_view_id': course_view_id,
+        'course_view_name': course_view_name,
         'course_choices': course_choices,
         'title':'Plant Tracer '+title,
         'hostname':request.host,

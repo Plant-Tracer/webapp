@@ -41,20 +41,20 @@
         <input id='movie-file' type="file" onchange='check_upload_metadata()'>
         <span class="pure-form-message-inline">required</span>
       </div>
-      <div style='margin: 0.4em 0 0.2em 1em'>
+      <div class='upload-contributor-notice'>
         <small>Please review the <a href='tos#contributor-agreement' target='_blank'>Contributor Agreement</a> before answering.</small>
       </div>
-      <div style='margin: 0.2em 0 0.4em 1em'>
+      <div class='upload-research-use'>
         May this movie be used in academic research?
-        <label style='margin-left:0.75em'><input type='radio' name='research_use' value='1' onchange='sync_attribution_ui()'> Yes</label>
-        <label style='margin-left:0.5em'><input type='radio' name='research_use' value='0' onchange='sync_attribution_ui()'> No</label>
+        <label class='upload-choice-first'><input type='radio' name='research_use' value='1' onchange='sync_attribution_ui()'> Yes</label>
+        <label class='upload-choice'><input type='radio' name='research_use' value='0' onchange='sync_attribution_ui()'> No</label>
       </div>
-      <div id='attribution-group' style='display:none; margin: 0.4em 0 0.4em 1em'>
+      <div id='attribution-group'>
         Would you like credit by name for the use of this video in research?
-        <label style='margin-left:0.75em'><input type='radio' name='credit_by_name' value='1' onchange='sync_attribution_ui()'> Yes</label>
-        <label style='margin-left:0.5em'><input type='radio' name='credit_by_name' value='0' onchange='sync_attribution_ui()'> No (video used anonymously)</label>
+        <label class='upload-choice-first'><input type='radio' name='credit_by_name' value='1' onchange='sync_attribution_ui()'> Yes</label>
+        <label class='upload-choice'><input type='radio' name='credit_by_name' value='0' onchange='sync_attribution_ui()'> No (video used anonymously)</label>
       </div>
-      <div class='pure-control-group' id='attribution-name-group' style='display:none'>
+      <div class='pure-control-group' id='attribution-name-group'>
         <label for='attribution-name'>Name for attribution:</label>
         <input type='text' id='attribution-name' name='attribution_name' value='{{user_name}}' disabled>
       </div>
@@ -68,34 +68,14 @@
   <div id='upload_message'></div>
 </div>
 
-<style>
-  #rotate_movie_link.rotate-pending { pointer-events: none; cursor: not-allowed; opacity: 0.6; }
-/* Container to prevent layout shifting or overlap during rotation */
-.preview-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    width: 100%;
-    min-height: 640px; /* Matches MOVIE_MAX_WIDTH from constants */ 
-    margin: 20px 0;
-    background-color: #f4f4f4;
-    border-radius: 4px;
-}
-  #image-preview {
-    transition: transform 0.3s ease; /* Smooth rotation animation */
-    max-width: 100%;
-    max-height: 640px;
-    display:block;
-  }
-</style>
 <!-- uploaded image shows here -->
-<div style='display:none' id='upload-preview'>
+<div id='upload-preview'>
   <p>Movie <i><span id='uploaded_movie_title'></span></i> (<span id='movie_id'></span>) successfully uploaded.</p>
   <p>Here's the first frame of your movie:</p>
 <div class="preview-container">
   <img id='image-preview' src='' alt=''>
 </div>
-  <p id='image-preview-status' class='image-preview-status' style='display:none; margin-top:0.5em;'></p>
+  <p id='image-preview-status' class='image-preview-status'></p>
 
   <h2>Next steps</h2>
   <p>Review the first frame of the uploaded movie. If you need to rotate it, click the rotate link below:</p>

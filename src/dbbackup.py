@@ -50,7 +50,6 @@ from app.odb import (
     COURSES,
     CREATED,
     CREATED_AT,
-    DATE_UPLOADED,
     DELETED,
     EMAIL,
     FRAME_NUMBER,
@@ -58,7 +57,6 @@ from app.odb import (
     FRAMES,
     MOVIE_DATA_URN,
     MOVIE_ID,
-    MOVIE_STATE_UPDATED_AT,
     MOVIE_TRACED_URN,
     MOVIE_ZIPFILE_URN,
     MOVIES,
@@ -70,7 +68,7 @@ from app.odb import (
     USERS,
     USER_NAME,
 )
-from app.s3_presigned import parse_s3_urn, s3_client
+from app.s3_presigned import make_urn, parse_s3_urn, replace_course_object_key, s3_client
 
 
 FORMAT_VERSION = 1
@@ -100,7 +98,6 @@ ROW_SORT_KEYS = {
 MOVIE_S3_URN_FIELDS = (MOVIE_DATA_URN, MOVIE_ZIPFILE_URN, MOVIE_TRACED_URN)
 USER_DATE_FIELDS = (CREATED,)
 COURSE_DATE_FIELDS = (CREATED, CREATED_AT)
-MOVIE_DATE_FIELDS = (CREATED_AT, DATE_UPLOADED, MOVIE_STATE_UPDATED_AT)
 TRACKPOINTS = "trackpoints"
 TRACKPOINT_LABEL = "label"
 
@@ -1253,7 +1250,10 @@ def rewrite_movie_rows_for_target_bucket(
         movie_object = object_by_movie_id.get(row[MOVIE_ID])
         if movie_object is not None and new_row.get(MOVIE_DATA_URN):
             bucket = restore_bucket_for_movie_object(movie_object, bucket_plan)
-            new_row[MOVIE_DATA_URN] = f"s3://{bucket}/{movie_object.key}"
+            new_row[MOVIE_DATA_URN] = make_urn(
+                object_name=movie_object.key,
+                bucket=bucket,
+            )
         rewritten.append(new_row)
     return rewritten
 
@@ -1563,15 +1563,19 @@ def command_send_restore_links(args) -> int:
 
 def migrate_s3_urn(urn: str, *, from_course_id: str, to_course_id: str, commit: bool) -> str:
     bucket, key = parse_s3_urn(urn=urn)
-    source_prefix = f"{from_course_id}/"
-    if not key.startswith(source_prefix):
-        raise DbBackupError(f"S3 key {key} does not start with {source_prefix}")
-    new_key = f"{to_course_id}/{key[len(source_prefix):]}"
+    try:
+        new_key = replace_course_object_key(
+            object_key=key,
+            from_course_id=from_course_id,
+            to_course_id=to_course_id,
+        )
+    except ValueError as exc:
+        raise DbBackupError(str(exc)) from exc
     if commit and new_key != key:
         body = s3_client().get_object(Bucket=bucket, Key=key)["Body"].read()
         s3_client().put_object(Bucket=bucket, Key=new_key, Body=body)
         s3_client().delete_object(Bucket=bucket, Key=key)
-    return f"s3://{bucket}/{new_key}"
+    return make_urn(object_name=new_key, bucket=bucket)
 
 
 def migrate_movie_frames(
@@ -1655,7 +1659,7 @@ def migrate_movie_row(ddbo, movie: dict[str, Any], from_course_id: str, to_cours
                 to_course_id=to_course_id,
                 commit=True,
             )
-    ddbo.update_table(ddbo.movies, movie[MOVIE_ID], updates)
+    ddbo.update_movie(movie[MOVIE_ID], updates, touch_activity=False)
     migrate_movie_frames(
         ddbo,
         movie_id=movie[MOVIE_ID],

@@ -292,6 +292,28 @@ Resources:
           TABLE_PREFIX: !Ref DynamoDBTablePrefix
           TRACING_QUEUE_URL: !Ref TracingQueue
       Events:
+        UploadedMovieCreated:
+          Type: EventBridgeRule
+          Properties:
+            RuleName: !Sub "${AWS::StackName}-uploaded-movies"
+            Pattern:
+              source:
+                - aws.s3
+              detail-type:
+                - Object Created
+              detail:
+                bucket:
+                  name:
+                    - !Ref ImageBucketName
+                object:
+                  key:
+                    - prefix: !Sub "uploads/${AWS::StackName}/"
+            RetryPolicy:
+              MaximumEventAgeInSeconds: 3600
+              MaximumRetryAttempts: 10
+            DeadLetterConfig:
+              Type: SQS
+              QueueLogicalId: UploadEventDLQ
         ResizeApiProxy:
           Type: HttpApi
           Properties:
@@ -308,6 +330,23 @@ Resources:
             BatchSize: 10
             FunctionResponseTypes:
               - ReportBatchItemFailures
+
+  UploadEventDLQAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: !Sub "${AWS::StackName} has failed S3 upload events"
+      AlarmName: !Sub "${AWS::StackName}-upload-event-dlq-not-empty"
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt UploadEventDLQ.QueueName
+      EvaluationPeriods: 1
+      MetricName: ApproximateNumberOfMessagesVisible
+      Namespace: AWS/SQS
+      Period: 60
+      Statistic: Maximum
+      Threshold: 0
+      TreatMissingData: notBreaching
 
 Outputs:
   ApiId:
@@ -331,3 +370,9 @@ Outputs:
   TracingQueueUrl:
     Description: SQS queue URL for trace work
     Value: !Ref TracingQueue
+  UploadEventDLQUrl:
+    Description: Queue containing S3 upload events that exhausted EventBridge retries
+    Value: !Ref UploadEventDLQ
+  UploadEventDLQAlarmName:
+    Description: Alarm raised when an S3 upload event reaches the dead-letter queue
+    Value: !Ref UploadEventDLQAlarm

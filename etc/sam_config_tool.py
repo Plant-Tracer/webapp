@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
 """
 General-purpose tool for template.yaml and samconfig.toml.
-Parses SAM config and runs commands: ssh-clean (ssh-keygen -R hostname), ssh (SSH to VM), ssm-start-session (AWS SSM session).
+Parses SAM config, safely bootstraps config files, and runs operational commands.
 """
 import argparse
 import os
-import re
+import shlex
 import subprocess
 import sys
 from pathlib import Path
 
 import tomllib
+
+DEPLOY = "deploy"
+PARAMETERS = "parameters"
+PARAMETER_OVERRIDES = "parameter_overrides"
+STACK_NAME = "stack_name"
 
 
 def _find_deploy_parameters(config: dict) -> dict | None:
@@ -18,22 +23,59 @@ def _find_deploy_parameters(config: dict) -> dict | None:
     for _, top_val in config.items():
         if not isinstance(top_val, dict):
             continue
-        deploy = top_val.get("deploy")
+        deploy = top_val.get(DEPLOY)
         if not isinstance(deploy, dict):
             continue
-        params = deploy.get("parameters")
+        params = deploy.get(PARAMETERS)
         if isinstance(params, dict):
             return params
     return None
 
 
 def _parse_parameter_overrides(overrides_str: str) -> dict[str, str]:
-    """Parse parameter_overrides string into key=value dict (values may be quoted)."""
+    """Parse SAM parameter_overrides using shell-style quoting."""
     result: dict[str, str] = {}
-    # Match Key="value" or Key="value with spaces"
-    for match in re.finditer(r'(\w+)="([^"]*)"', overrides_str):
-        result[match.group(1)] = match.group(2)
+    for token in shlex.split(overrides_str):
+        key, separator, value = token.partition("=")
+        if separator and key:
+            result[key] = value
     return result
+
+
+def load_toml(config_path: str) -> dict:
+    """Load one SAM TOML file."""
+    path = Path(config_path)
+    if not path.exists():
+        raise FileNotFoundError(f"Config file not found: {config_path}")
+    with path.open("rb") as config_file:
+        return tomllib.load(config_file)
+
+
+def deploy_parameters(config_path: str) -> dict:
+    """Return the first SAM deploy-parameters table."""
+    params = _find_deploy_parameters(load_toml(config_path))
+    if params is None:
+        raise ValueError(f"No [env.deploy.parameters] section in {config_path}")
+    return params
+
+
+def stack_name(config_path: str) -> str:
+    """Return the configured CloudFormation stack name."""
+    value = deploy_parameters(config_path).get(STACK_NAME)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{STACK_NAME} not found in deploy.parameters")
+    return value.strip()
+
+
+def parameter_override(config_path: str, name: str) -> str:
+    """Return one value from SAM's parameter_overrides string."""
+    value = deploy_parameters(config_path).get(PARAMETER_OVERRIDES)
+    if not isinstance(value, str):
+        raise ValueError(f"{PARAMETER_OVERRIDES} not found in deploy.parameters")
+    overrides = _parse_parameter_overrides(value)
+    if name not in overrides:
+        raise ValueError(f"{name} not found in {PARAMETER_OVERRIDES}")
+    return overrides[name]
 
 
 def load_sam_config(config_path: str) -> tuple[str, str, str, str]:
@@ -42,22 +84,11 @@ def load_sam_config(config_path: str) -> tuple[str, str, str, str]:
     Hostname is derived from stack name: stack_name.base_domain (e.g. mystack.planttracer.com).
     host_label is the stack_name (for callers that expect a label).
     """
-    path = Path(config_path)
-    if not path.exists():
-        sys.exit(f"Config file not found: {config_path}")
-
-    with path.open("rb") as f:
-        config = tomllib.load(f)
-
-    params = _find_deploy_parameters(config)
-    if not params:
-        sys.exit(f"No [env.deploy.parameters] section in {config_path}")
-
-    stack_name = params.get("stack_name")
-    if isinstance(stack_name, str):
-        stack_name = stack_name.strip('"')
-    else:
-        sys.exit("stack_name not found in deploy.parameters")
+    try:
+        params = deploy_parameters(config_path)
+        configured_stack_name = stack_name(config_path)
+    except (FileNotFoundError, ValueError) as error:
+        sys.exit(str(error))
 
     region = params.get("region", "us-east-1")
     if isinstance(region, str):
@@ -65,14 +96,14 @@ def load_sam_config(config_path: str) -> tuple[str, str, str, str]:
     else:
         region = "us-east-1"
 
-    overrides_str = params.get("parameter_overrides")
+    overrides_str = params.get(PARAMETER_OVERRIDES)
     if not isinstance(overrides_str, str):
-        sys.exit("parameter_overrides not found in deploy.parameters")
+        sys.exit(f"{PARAMETER_OVERRIDES} not found in deploy.parameters")
 
     overrides = _parse_parameter_overrides(overrides_str)
     base_domain = overrides.get("BaseDomain", "planttracer.com").strip() or "planttracer.com"
-    hostname = f"{stack_name}.{base_domain}"
-    return (stack_name, region, hostname, stack_name)
+    hostname = f"{configured_stack_name}.{base_domain}"
+    return (configured_stack_name, region, hostname, configured_stack_name)
 
 
 def cmd_ssh_clean(config_path: str) -> None:
@@ -173,21 +204,33 @@ def main() -> None:
         dest="identity_file",
         help="SSH identity (private key) file, e.g. ~/.ssh/plantadmin.pem",
     )
-    parser.add_argument(
-        "command",
-        choices=["ssh-clean", "ssh", "ssm-start-session"],
-        help="ssh-clean: ssh-keygen -R hostname; ssh: SSH to VM; ssm-start-session: AWS SSM session",
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    subparsers.add_parser("stack-name", help="print configured stack_name")
+    parameter_parser = subparsers.add_parser(
+        "parameter-override",
+        help="print one value from parameter_overrides",
     )
+    parameter_parser.add_argument("--name", required=True)
+    subparsers.add_parser("ssh-clean", help="remove the configured hostname from known_hosts")
+    subparsers.add_parser("ssh", help="SSH to the configured stack")
+    subparsers.add_parser("ssm-start-session", help="start an AWS SSM session")
     args = parser.parse_args()
 
-    if args.command == "ssh-clean":
-        cmd_ssh_clean(args.samconfig)
-    elif args.command == "ssh":
-        cmd_ssh(args.samconfig, identity_file=getattr(args, "identity_file", None))
-    elif args.command == "ssm-start-session":
-        cmd_ssm_start_session(args.samconfig)
-    else:
-        parser.error(f"Unknown command: {args.command}")
+    try:
+        if args.command == "stack-name":
+            print(stack_name(args.samconfig))
+        elif args.command == "parameter-override":
+            print(parameter_override(args.samconfig, args.name))
+        elif args.command == "ssh-clean":
+            cmd_ssh_clean(args.samconfig)
+        elif args.command == "ssh":
+            cmd_ssh(args.samconfig, identity_file=getattr(args, "identity_file", None))
+        elif args.command == "ssm-start-session":
+            cmd_ssm_start_session(args.samconfig)
+        else:
+            parser.error(f"Unknown command: {args.command}")
+    except (FileNotFoundError, ValueError) as error:
+        parser.error(str(error))
 
 
 if __name__ == "__main__":

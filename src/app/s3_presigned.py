@@ -12,15 +12,13 @@ import os
 import logging
 import urllib.parse
 import hashlib
+import posixpath
 
 import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
 
 from .constants import C
-
-# Prefix under which uploads land so lambda-resize is triggered; lambda moves to final key.
-UPLOAD_STAGING_PREFIX = "uploads/"
 
 logger = logging.getLogger(__name__)
 
@@ -71,23 +69,91 @@ def sha256_hash(data):
     h.update(data)
     return h.hexdigest()
 
-def make_object_name(*,course_id,movie_id,frame_number=None, ext):
-    """object_name is a URN that is generated according to a scheme
-    that uses course_id, movie_id, and frame_number. URNs are deterministic.
-    """
-    if frame_number is None:
-        return C.MOVIE_TEMPLATE.format(course_id=course_id, movie_id=movie_id, ext=ext)
-    return C.FRAME_TEMPLATE.format(course_id=course_id, movie_id=movie_id, frame_number=frame_number, ext=ext)
+def _template_value(name, value):
+    """Return one required S3 template value without changing legacy IDs."""
+    if value is None or str(value) == "":
+        raise ValueError(f"{name} is required")
+    return str(value)
 
 
-def make_urn(*, object_name, scheme = C.SCHEME_S3 ):
-    """
-    If environment variable is not set, default to the database schema
-    We grab this every time through so that the bucket can be changed during unit tests
-    """
+def _deployment_value(value):
+    deployment = _template_value("deployment_id", value)
+    if "/" in deployment:
+        raise ValueError("deployment_id must be one S3 key component")
+    return deployment
+
+
+def course_object_prefix(*, deployment_id, course_id):
+    """Return the current course prefix for runtime movie objects."""
+    return C.S3_COURSE_PREFIX_TEMPLATE.format(
+        deployment_id=_deployment_value(deployment_id),
+        course_id=_template_value("course_id", course_id),
+    )
+
+
+def movie_object_key(*, deployment_id, course_id, movie_id):
+    """Return the durable original-movie object key."""
+    return C.S3_MOVIE_OBJECT_KEY_TEMPLATE.format(
+        deployment_id=_deployment_value(deployment_id),
+        course_id=_template_value("course_id", course_id),
+        movie_id=_template_value("movie_id", movie_id),
+    )
+
+
+def frame_object_key(*, deployment_id, course_id, movie_id, frame_number):
+    """Return a persisted JPEG frame object key."""
+    number = int(frame_number)
+    if number < 0:
+        raise ValueError("frame_number must be non-negative")
+    return C.S3_FRAME_OBJECT_KEY_TEMPLATE.format(
+        deployment_id=_deployment_value(deployment_id),
+        course_id=_template_value("course_id", course_id),
+        movie_id=_template_value("movie_id", movie_id),
+        frame_number=number,
+    )
+
+
+def upload_staging_object_key(*, deployment_id, course_id, movie_id):
+    """Return the deployment-scoped upload key reserved for issue #1152."""
+    deployment = _deployment_value(deployment_id)
+    return C.S3_UPLOAD_STAGING_OBJECT_KEY_TEMPLATE.format(
+        deployment_id=deployment,
+        course_id=_template_value("course_id", course_id),
+        movie_id=_template_value("movie_id", movie_id),
+    )
+
+
+def _derived_movie_object_key(*, source_movie_object_key, template):
+    source_stem, source_extension = posixpath.splitext(source_movie_object_key)
+    return template.format(
+        source_movie_stem=source_stem,
+        source_movie_extension=source_extension,
+    )
+
+
+def traced_movie_object_key(*, source_movie_object_key):
+    """Return the traced-movie key derived from an original movie key."""
+    return _derived_movie_object_key(
+        source_movie_object_key=source_movie_object_key,
+        template=C.S3_TRACED_MOVIE_OBJECT_KEY_TEMPLATE,
+    )
+
+
+def analysis_zip_object_key(*, source_movie_object_key):
+    """Return the analysis-frame ZIP key derived from an original movie key."""
+    return _derived_movie_object_key(
+        source_movie_object_key=source_movie_object_key,
+        template=C.S3_ANALYSIS_ZIP_OBJECT_KEY_TEMPLATE,
+    )
+
+
+def make_urn(*, object_name, scheme=C.SCHEME_S3, bucket=None):
+    """Build an S3 URN, using an explicit legacy bucket or the configured bucket."""
     if scheme not in SUPPORTED_SCHEMES:
         raise ValueError(f"Invalid scheme {scheme}")
-    netloc = os.getenv(C.PLANTTRACER_S3_BUCKET)
+    netloc = bucket or os.getenv(C.PLANTTRACER_S3_BUCKET)
+    if not netloc:
+        raise RuntimeError(f"{C.PLANTTRACER_S3_BUCKET} is not set")
     if netloc.startswith("s3:"):
         raise RuntimeError(f"{C.PLANTTRACER_S3_BUCKET} {netloc} should not start with s3://")
     ret = f"{scheme}://{netloc}/{object_name}"
@@ -105,16 +171,60 @@ def parse_s3_urn(*, urn):
     return parsed.netloc, parsed.path[1:]
 
 
-def make_signed_url(*,urn,operation=C.GET, expires=3600):
+def traced_movie_urn(*, movie_data_urn):
+    """Return a traced-movie URN while preserving the source bucket and extension."""
+    bucket, source_key = parse_s3_urn(urn=movie_data_urn)
+    return make_urn(
+        object_name=traced_movie_object_key(source_movie_object_key=source_key),
+        bucket=bucket,
+    )
+
+
+def analysis_zip_urn(*, movie_data_urn):
+    """Return an analysis-frame ZIP URN while preserving the source bucket and extension."""
+    bucket, source_key = parse_s3_urn(urn=movie_data_urn)
+    return make_urn(
+        object_name=analysis_zip_object_key(source_movie_object_key=source_key),
+        bucket=bucket,
+    )
+
+
+def replace_course_object_key(*, object_key, from_course_id, to_course_id):
+    """Move a namespaced or legacy key between course prefixes."""
+    legacy_prefix = f"{_template_value('from_course_id', from_course_id)}/"
+    namespaced_suffix = f"/{legacy_prefix}"
+    if object_key.startswith(legacy_prefix):
+        source_prefix = legacy_prefix
+        target_prefix = f"{_template_value('to_course_id', to_course_id)}/"
+    else:
+        marker = object_key.find(namespaced_suffix)
+        if marker < 0:
+            raise ValueError(f"S3 key {object_key} does not contain course {from_course_id}")
+        source_prefix = object_key[:marker + 1] + legacy_prefix
+        target_prefix = (
+            object_key[:marker + 1]
+            + f"{_template_value('to_course_id', to_course_id)}/"
+        )
+    return target_prefix + object_key[len(source_prefix):]
+
+
+def make_signed_url(*, urn, operation=C.GET, expires=3600, download_name=None):
     logger.debug("make_signed_url urn=%s",urn)
     bucket, key = parse_s3_urn(urn=urn)
     op = {C.PUT:'put_object', C.GET:'get_object'}[operation]
+    params = {'Bucket': bucket, 'Key': key}
+    if download_name is not None:
+        if operation != C.GET:
+            raise ValueError("download_name is valid only for signed GET URLs")
+        safe_name = str(download_name).replace('"', '').replace('\r', '').replace('\n', '')
+        params['ResponseContentDisposition'] = f'attachment; filename="{safe_name}"'
     return s3_client().generate_presigned_url(
         op,
-        Params={'Bucket': bucket, 'Key': key},
+        Params=params,
         ExpiresIn=expires)
 
-def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4', sha256=None, expires=3600,
+def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, exact_size=None,
+                        mime_type='video/mp4', sha256=None, expires=3600,
                         research_use='not-answered', credit_by_name='not-answered', attribution_name='',
                         fpm=''):
     """Returns a dictionary with 'url' and 'fields'.
@@ -123,8 +233,12 @@ def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4'
     Uses the bucket's region so the presigned URL is regional and S3 does not 307-redirect (avoids connection
     reset in the browser when POST body is not re-sent on redirect).
     """
-    logger.debug("make_presigned_post urn=%s maxsize=%s mime_type=%s sha256=%s expires=%s",
-                 urn, maxsize, mime_type, sha256, expires)
+    logger.debug("make_presigned_post urn=%s maxsize=%s exact_size=%s mime_type=%s sha256=%s expires=%s",
+                 urn, maxsize, exact_size, mime_type, sha256, expires)
+    if exact_size is not None:
+        exact_size = int(exact_size)
+        if exact_size < 1 or exact_size > maxsize:
+            raise ValueError(f"exact_size must be between 1 and {maxsize}")
     bucket, key = parse_s3_urn(urn=urn)
     region = _get_bucket_region(bucket)
     if region:
@@ -141,6 +255,7 @@ def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4'
     meta_credit = 'x-amz-meta-credit-by-name'
     meta_attribution = 'x-amz-meta-attribution-name'
     meta_fpm = 'x-amz-meta-fpm'
+    meta_sha256 = 'x-amz-meta-sha256'
     attribution_safe = (attribution_name or '')[:256]
     fpm_safe = (fpm or '')[:32]
     fields = {
@@ -149,14 +264,18 @@ def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, mime_type='video/mp4'
         meta_credit: credit_by_name,
         meta_attribution: attribution_safe,
         meta_fpm: fpm_safe,
+        meta_sha256: sha256 or '',
     }
+    minimum_size = exact_size if exact_size is not None else 1
+    maximum_size = exact_size if exact_size is not None else maxsize
     conditions = [
         {"Content-Type": mime_type},
-        ["content-length-range", 1, maxsize],
+        ["content-length-range", minimum_size, maximum_size],
         {meta_research: research_use},
         {meta_credit: credit_by_name},
         {meta_attribution: attribution_safe},
         {meta_fpm: fpm_safe},
+        {meta_sha256: sha256 or ''},
     ]
     return client.generate_presigned_post(
         Bucket=bucket,

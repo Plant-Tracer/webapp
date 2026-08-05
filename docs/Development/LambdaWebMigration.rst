@@ -126,10 +126,10 @@ Current template classification:
      - Not initial candidates. They rely on injected user, course, admin, demo,
        max-upload, and API-key state.
    * - Demo/tracer pages and shared includes
-     - ``demo_tracer*.html``, ``tracer_app.html``, ``tracer_app.css``,
+     - ``demo_tracer*.html``, ``tracer_app.html``, ``planttracer.css``,
        ``register_resend.html``, ``base.html``
-     - Keep as Jinja/includes for now. A later migration should treat shared
-       includes as normal static assets only after an asset versioning plan.
+     - Keep the HTML as Jinja/includes for now. Browser pages, including the
+       demos, load the shared ``static/planttracer.css`` stylesheet.
    * - Operational and email templates
      - ``config_error.html``, ``debug.html``, ``version.txt``,
        ``email_login.html``, ``email_course_created.html``
@@ -331,10 +331,11 @@ test stack cannot silently attach to production storage.
 
 Because those values identify one concrete stack and its data resources, SAM
 config files are local deployment state. They must not be committed to the
-repository. The normal Makefile workflow is to pass ``STACK=<name>``; the
-Makefile then selects ``samconfigs/<name>.toml``. The ``samconfigs/`` directory
-is ignored by Git, and deployment targets also refuse to use a relative SAM
-config path that is not ignored by Git.
+repository. The normal Makefile workflow is to pass ``STACK=<name>`` or its
+operator-facing alias ``STACK_NAME=<name>``; the Makefile then selects
+``samconfigs/<name>.toml``. The ``samconfigs/`` directory is ignored by Git,
+and deployment targets also refuse to use a relative SAM config path that is
+not ignored by Git.
 
 Use one visible, ignored SAM config file per stack. For example:
 
@@ -342,10 +343,20 @@ Use one visible, ignored SAM config file per stack. For example:
 
    STACK=dev-stack make sam-deploy
    STACK=alice-test make sam-deploy
-   STACK=prod make sam-deploy
+   STACK_NAME=slg-dev DYNAMODB_TABLE_PREFIX=prod make sam-deploy
 
-``STACK`` must be uppercase. GNU Make variables are case-sensitive, so
-``stack=prod`` is not the same variable and is rejected by the SAM config guard.
+``STACK`` and ``STACK_NAME`` must be uppercase. GNU Make variables are
+case-sensitive, so ``stack=prod`` is not the same variable and is rejected by
+the SAM config guard. If both supported variables are supplied, they must
+match.
+
+Normal deployment does not rewrite the selected TOML file. The Makefile reads
+it with a TOML parser, verifies that its ``stack_name`` matches the requested
+target, and passes SAM's ``--stack-name`` option explicitly. If
+``DYNAMODB_TABLE_PREFIX`` is also supplied, the Makefile verifies it against
+the config's ``DynamoDBTablePrefix`` override (ignoring one conventional
+trailing hyphen) and refuses a mismatch. Other deployment parameters continue
+to come from the per-stack TOML file.
 
 ``sam deploy --guided`` can also create the selected stack config:
 
@@ -354,16 +365,19 @@ Use one visible, ignored SAM config file per stack. For example:
    STACK=alice-test make sam-deploy-guided
 
 If ``samconfigs/alice-test.toml`` does not exist yet, the Makefile creates a
-minimal ignored config file before invoking SAM because the SAM CLI requires the
-``--config-file`` path to be readable even in guided mode. When ``STACK`` is
-set, the bootstrap config includes ``stack_name`` so the normal deploy-version
-guard can still run before the guided deployment.
+minimal ignored config file before invoking SAM because the SAM CLI requires
+the ``--config-file`` path to be readable even in guided mode. A Python TOML
+writer creates or updates this bootstrap file so TOML quoting and existing
+values are preserved. When a stack selector is set, the bootstrap config
+includes ``stack_name`` so the normal deploy-version guard can still run before
+the guided deployment.
 
 For a stack named ``app``, the selected config is ``samconfigs/app.toml`` and
 the template creates ``https://app.planttracer.com/`` when ``BaseDomain`` is
-``planttracer.com``. The Makefile passes ``--stack-name app`` during guided
-deploys and refuses an existing ``samconfigs/app.toml`` whose ``stack_name`` is
-not ``app``.
+``planttracer.com``. The hostname comes from ``AWS::StackName`` and
+``BaseDomain`` in ``template.yaml``. The Makefile passes ``--stack-name app``
+during both normal and guided deploys and refuses an existing
+``samconfigs/app.toml`` whose ``stack_name`` is not ``app``.
 
 The Makefile still accepts ``SAM_CONFIG=<path>`` as an explicit escape hatch.
 For compatibility with older local setups, omitting ``STACK`` and ``SAM_CONFIG``
@@ -371,8 +385,8 @@ uses ``samconfig.toml``. Any relative config path must be ignored by Git.
 
 SAM supports multiple profiles in a single config file, but this project avoids
 that pattern. With multiple stacks in flight, separate visible files selected by
-``STACK`` make the target stack obvious and work better with SAM's habit of
-rewriting config during guided deploys.
+``STACK`` or ``STACK_NAME`` make the target stack obvious and work better with
+SAM's habit of rewriting config during guided deploys.
 
 Cutover Runbook
 ---------------
@@ -381,16 +395,17 @@ Validate each stack on its own hostname, for example
 ``https://{stack}.planttracer.com/``. This migration does not depend on moving
 a shared production DNS record to Lambda; new and test deployments come up as
 separate named stacks. SAM config files are stack-local deployment state and
-are not committed to the repository. Use ``STACK=<name>`` to select the ignored
-``samconfigs/<name>.toml`` config for the stack being tested. The branch must
-be pushed before ``make sam-build`` will build artifacts. This prevents
-deploying local-only commits that nobody else can inspect or rebuild.
+are not committed to the repository. Use ``STACK=<name>`` or
+``STACK_NAME=<name>`` to select the ignored ``samconfigs/<name>.toml`` config
+for the stack being tested. The branch must be pushed before ``make sam-build``
+will build artifacts. This prevents deploying local-only commits that nobody
+else can inspect or rebuild.
 
 Preflight:
 
 * confirm ``git status`` is clean and the branch has no unpushed commits;
 * confirm ``pyproject.toml`` has the intended version;
-* confirm ``STACK`` names the intended stack and the selected
+* confirm ``STACK`` or ``STACK_NAME`` names the intended stack and the selected
   ``samconfigs/<stack>.toml`` has the intended table prefix;
 * confirm the S3 movie bucket and DynamoDB table prefix are the intended test
   resources;
@@ -402,14 +417,19 @@ Preflight:
 
 Deploy:
 
-* run ``STACK=<name> make sam-deploy`` for an
-  existing configured stack, or
-  ``STACK=<name> make sam-deploy-guided`` for a new stack;
+* run ``STACK=<name> make sam-deploy`` for an existing configured stack, or
+  ``STACK=<name> make sam-deploy-guided`` for a new stack. ``STACK_NAME`` is an
+  equivalent alias;
 * let ``make sam-status`` verify ``/api/ver``,
   ``/static/planttracer.js``, and ``/resize-api/v1/ping``. The deploy targets
   stamp the built ``lambda-resize`` artifact before ``sam deploy``. The web
   version API response is printed in full, and resize ping should report the
   application version and UTC deployment timestamp;
+* let the deploy target run ``make sam-deployed-workflow-test``. It creates or
+  reuses a stack-specific test course/user, creates a movie, uploads a real
+  test video through ``uploads/{stack}/``, waits for EventBridge/post-upload
+  processing, writes a starting trackpoint, requests a short trace, verifies
+  completion, and removes its movie artifacts;
 * inspect recent logs with ``make sam-logs-web`` and ``make sam-logs-resize``
   if any smoke check reports a failure.
 
@@ -446,7 +466,8 @@ Manual smoke checks on the non-production stack:
 * resend a login link and confirm the user can log in;
 * for ``MailerDryRun=true`` stacks, confirm the login email appears in Lambda
   web logs and treat the logged link as test-only secret material;
-* upload a small movie and confirm it appears in the list page;
+* confirm the automated deployed workflow uploaded a small movie through the
+  stack's EventBridge rule and completed its short trace;
 * open the analysis page, load the first frame, save at least one marker
   change, and start tracing;
 * confirm the trace job reaches SQS/``lambda-resize`` and produces expected

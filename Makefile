@@ -32,11 +32,17 @@ FLASK_DEBUG_RUN=poetry run flask --debug --app src.app.flask_app:app run --port 
 LOCAL_LAMBDA_PROBE=python3 -c 'import socket, sys; s=socket.socket(); s.settimeout(0.2); sys.exit(0 if s.connect_ex(("127.0.0.1", $(LOCAL_LAMBDA_PORT))) == 0 else 1)'
 LOCAL_LAMBDA_WAIT_SECONDS ?= 30
 
-STACK ?=
+# STACK is the canonical selector. STACK_NAME is accepted as an operator-facing
+# alias because it is also the CloudFormation/SAM term shown during deployment.
+STACK_NAME_INPUT := $(if $(filter environment command line,$(origin STACK_NAME)),$(strip $(STACK_NAME)),)
+DYNAMODB_TABLE_PREFIX_INPUT := $(if $(filter environment command line,$(origin DYNAMODB_TABLE_PREFIX)),$(strip $(DYNAMODB_TABLE_PREFIX)),)
+STACK ?= $(STACK_NAME_INPUT)
 SAM_CONFIG_DIR ?= samconfigs
 SAM_CONFIG ?= $(if $(STACK),$(SAM_CONFIG_DIR)/$(STACK).toml,samconfig.toml)
 SAM_BUILD_DIR=.aws-sam/build
-STACK_NAME = $(shell grep -m1 '^[[:space:]]*stack_name[[:space:]]*=' "$(SAM_CONFIG)" 2>/dev/null | cut -d'=' -f2 | tr -d ' "')
+SAM_CONFIG_STACK_NAME = $(shell python3 etc/sam_config_tool.py --samconfig "$(SAM_CONFIG)" stack-name 2>/dev/null)
+SAM_CONFIG_DYNAMODB_TABLE_PREFIX = $(shell python3 etc/sam_config_tool.py --samconfig "$(SAM_CONFIG)" parameter-override --name DynamoDBTablePrefix 2>/dev/null)
+EFFECTIVE_STACK_NAME = $(if $(STACK),$(STACK),$(SAM_CONFIG_STACK_NAME))
 APP_VERSION := $(shell python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml","rb"))["project"]["version"])')
 
 # Only show events from the last N minutes (filter-log-events returns ascending order, so without this we get oldest events).
@@ -102,7 +108,7 @@ distclean:
 
 ################################################################
 # Main targets used by CI/CD system and developers
-.PHONY: all check coverage tags admin-list admin-create course-create demo-course-create sam-course-create
+.PHONY: all check coverage tags admin-list admin-create course-create demo-course-create sam-course-create s3-eventbridge-status s3-eventbridge-enable
 
 all:
 	@echo verify syntax and then restart
@@ -150,7 +156,8 @@ lint: $(REQ)
 pylint:
 	$(MAKE) vend-lambda-resize
 	$(MAKE) vend-lambda-web
-	poetry run pylint $(PYLINT_OPTS) lambda-web/src/lambda_web lambda-web/tests lambda-resize src tests  *.py
+	poetry run pylint $(PYLINT_OPTS) browser_tests lambda-web/src/lambda_web lambda-web/tests lambda-resize src tests \
+		etc/sam_config_tool.py etc/sam_config_writer.py *.py
 
 ## Mypy static analysis
 mypy:
@@ -192,6 +199,10 @@ pytest-coverage: $(LOCAL_TEST_REQ)
 # This doesn't work yet...
 pytest-selenium:
 	poetry run pytest -v --log-cli-level=$(LOG_LEVEL) tests/sitetitle_test.py
+
+.PHONY: frame-step-browser-test
+frame-step-browser-test: .venv/pyvenv.cfg
+	PYTHONPATH=.:$$PYTHONPATH poetry run pytest -v --log-cli-level=$(LOG_LEVEL) browser_tests/frame_step_browser_test.py
 
 # Set these during development to speed testing of the one function you care about:
 TEST1MODULE=tests/endpoint_test.py
@@ -595,8 +606,8 @@ lambda-resize-lint: install-lambda-deps
 	poetry run ruff check --fix lambda-resize/src
 	PYTHONPATH=lambda-resize/src poetry run pylint lambda-resize/src
 
-lambda-resize-check: lambda-resize-lint
-	PYTHONPATH=lambda-resize/src poetry run pytest lambda-resize/tests -q --cov=lambda-resize/src --cov-report=term -o junit_family=legacy --log-cli-level=DEBUG
+lambda-resize-check: lambda-resize-lint $(LOCAL_TEST_REQ)
+	$(LOCAL_AWS_ENV) PYTHONPATH=.:src:lambda-resize/src:$$PYTHONPATH poetry run pytest lambda-resize/tests -q --cov=lambda-resize/src --cov-report=term -o junit_family=legacy --log-cli-level=DEBUG
 
 ################################################################
 ## lambda-web
@@ -623,7 +634,7 @@ lambda-web-check: lambda-web-lint
 	$(MAKE) vend-lambda-web
 	PYTHONPATH=.:src:lambda-web/src poetry run pytest lambda-web/tests -q --cov=lambda-web/src/lambda_web --cov-report=term -o junit_family=legacy --log-cli-level=DEBUG
 
-.PHONY: lambda-resize/src/requirements.txt lambda-web/src/requirements.txt template-lint sam-config-path-check sam-config-check sam-config-guided-bootstrap sam-version-check sam-deploy-version-check stamp-sam-deploy-metadata sam-status
+.PHONY: lambda-resize/src/requirements.txt lambda-web/src/requirements.txt template-lint sam-config-show sam-config-path-check sam-config-check sam-config-guided-bootstrap sam-version-check sam-deploy-version-check stamp-sam-deploy-metadata sam-status
 lambda-resize/src/requirements.txt:
 	poetry export --with lambda --without dev --without vm --format=requirements.txt --output lambda-resize/src/requirements.txt --without-hashes
 
@@ -635,21 +646,45 @@ template-lint: .venv/pyvenv.cfg
 	@echo cfn-lint requires a valid AWS_REGION so we use us-east-1
 	AWS_REGION=us-east-1 poetry run cfn-lint template.yaml
 
+sam-config-show:
+	@echo "SAM_CONFIG=$(SAM_CONFIG)"
+	@echo "STACK_NAME=$(EFFECTIVE_STACK_NAME)"
+	@echo "CONFIG_STACK_NAME=$(SAM_CONFIG_STACK_NAME)"
+	@echo "DYNAMODB_TABLE_PREFIX=$(SAM_CONFIG_DYNAMODB_TABLE_PREFIX)"
+
 sam-config-path-check:
 	@if [ -n "$(stack)" ] && [ -z "$(STACK)" ]; then \
-		echo "Refusing to use SAM: found lowercase stack=$(stack), but this Makefile expects STACK=<name>."; \
+		echo "Refusing to use SAM: found lowercase stack=$(stack), but this Makefile expects STACK=<name> or STACK_NAME=<name>."; \
 		echo "Make variables are case-sensitive; rerun with STACK=$(stack)."; \
+		exit 1; \
+	fi
+	@if [ -n "$(STACK_NAME_INPUT)" ] && [ -n "$(STACK)" ] && [ "$(STACK_NAME_INPUT)" != "$(STACK)" ]; then \
+		echo "Refusing to use SAM: STACK_NAME=$(STACK_NAME_INPUT) conflicts with STACK=$(STACK)."; \
+		echo "Set only one target name, or give both variables the same value."; \
 		exit 1; \
 	fi
 	@if [ -z "$(SAM_CONFIG)" ]; then \
 		echo "Refusing to use SAM: SAM_CONFIG is not set."; \
-		echo "Pass STACK=<name> to use $(SAM_CONFIG_DIR)/<name>.toml, or pass SAM_CONFIG=<path>."; \
+		echo "Pass STACK=<name> or STACK_NAME=<name> to use $(SAM_CONFIG_DIR)/<name>.toml, or pass SAM_CONFIG=<path>."; \
 		exit 1; \
 	fi
-	@if [ -n "$(STACK)" ] && [ -n "$(STACK_NAME)" ] && [ "$(STACK_NAME)" != "$(STACK)" ]; then \
-		echo "Refusing to use SAM: STACK=$(STACK) but $(SAM_CONFIG) has stack_name=$(STACK_NAME)."; \
+	@if [ -n "$(EFFECTIVE_STACK_NAME)" ] && [ -n "$(SAM_CONFIG_STACK_NAME)" ] && [ "$(SAM_CONFIG_STACK_NAME)" != "$(EFFECTIVE_STACK_NAME)" ]; then \
+		echo "Refusing to use SAM: target stack=$(EFFECTIVE_STACK_NAME) but $(SAM_CONFIG) has stack_name=$(SAM_CONFIG_STACK_NAME)."; \
 		echo "Use the matching STACK value, fix $(SAM_CONFIG), or unset STACK and pass the intended SAM_CONFIG explicitly."; \
 		exit 1; \
+	fi
+	@if [ -n "$(DYNAMODB_TABLE_PREFIX_INPUT)" ] && [ -f "$(SAM_CONFIG)" ]; then \
+		REQUESTED_PREFIX="$(DYNAMODB_TABLE_PREFIX_INPUT)"; \
+		CONFIG_PREFIX="$(SAM_CONFIG_DYNAMODB_TABLE_PREFIX)"; \
+		if [ -z "$$CONFIG_PREFIX" ] && [ "$(SAM_CONFIG_ALLOW_MISSING_DDB_PREFIX)" != "1" ]; then \
+			echo "Refusing to use SAM: $(SAM_CONFIG) has no DynamoDBTablePrefix override."; \
+			exit 1; \
+		fi; \
+		if [ -n "$$CONFIG_PREFIX" ] && [ "$${REQUESTED_PREFIX%-}" != "$${CONFIG_PREFIX%-}" ]; then \
+			echo "Refusing to use SAM: DYNAMODB_TABLE_PREFIX=$$REQUESTED_PREFIX but $(SAM_CONFIG) configures $$CONFIG_PREFIX."; \
+			echo "Update the selected per-stack TOML config before deploying."; \
+			exit 1; \
+		fi; \
 	fi
 	@if git ls-files --error-unmatch "$(SAM_CONFIG)" >/dev/null 2>&1; then \
 		echo "Refusing to use SAM: $(SAM_CONFIG) is tracked by git."; \
@@ -660,7 +695,7 @@ sam-config-path-check:
 		/*) ;; \
 		*) if ! git check-ignore -q "$(SAM_CONFIG)"; then \
 			echo "Refusing to use SAM: $(SAM_CONFIG) is not ignored by git."; \
-			echo "Use STACK=<name> for $(SAM_CONFIG_DIR)/<name>.toml, or add the local SAM config path to .gitignore."; \
+			echo "Use STACK=<name> or STACK_NAME=<name> for $(SAM_CONFIG_DIR)/<name>.toml, or add the local SAM config path to .gitignore."; \
 			exit 1; \
 		fi ;; \
 	esac
@@ -668,28 +703,13 @@ sam-config-path-check:
 sam-config-check: sam-config-path-check
 	@if [ ! -f "$(SAM_CONFIG)" ]; then \
 		echo "Refusing to use SAM: $(SAM_CONFIG) does not exist."; \
-		echo "Run STACK=<name> make sam-deploy-guided to create it, or pass SAM_CONFIG=<path>."; \
+		echo "Run STACK=<name> or STACK_NAME=<name> with make sam-deploy-guided to create it, or pass SAM_CONFIG=<path>."; \
 		exit 1; \
 	fi
 
+sam-config-guided-bootstrap: SAM_CONFIG_ALLOW_MISSING_DDB_PREFIX=1
 sam-config-guided-bootstrap: sam-config-path-check
-	mkdir -p "$(dir $(SAM_CONFIG))"
-	@if [ ! -f "$(SAM_CONFIG)" ]; then \
-		if [ -n "$(STACK)" ]; then \
-			printf 'version = 0.1\n\n[default.deploy.parameters]\nstack_name = "%s"\n' "$(STACK)" > "$(SAM_CONFIG)"; \
-		else \
-			printf 'version = 0.1\n' > "$(SAM_CONFIG)"; \
-		fi; \
-		echo "Created $(SAM_CONFIG) for SAM guided deploy."; \
-	elif [ -n "$(STACK)" ] && ! grep -q '^[[:space:]]*stack_name[[:space:]]*=' "$(SAM_CONFIG)"; then \
-		if grep -q '^[[:space:]]*\[default\.deploy\.parameters\]' "$(SAM_CONFIG)"; then \
-			echo "Refusing to repair $(SAM_CONFIG): [default.deploy.parameters] exists but stack_name is missing."; \
-			echo "Add stack_name = \"$(STACK)\" to $(SAM_CONFIG)."; \
-			exit 1; \
-		fi; \
-		printf '\n[default.deploy.parameters]\nstack_name = "%s"\n' "$(STACK)" >> "$(SAM_CONFIG)"; \
-		echo "Added stack_name=$(STACK) to $(SAM_CONFIG)."; \
-	fi
+	poetry run python etc/sam_config_writer.py --samconfig "$(SAM_CONFIG)" $(if $(EFFECTIVE_STACK_NAME),--stack-name "$(EFFECTIVE_STACK_NAME)",)
 
 stamp-sam-deploy-metadata: sam-version-check
 	@if [ ! -d "$(SAM_BUILD_DIR)/LambdaResizeFunction/resize_app" ]; then \
@@ -775,19 +795,19 @@ sam-version-check:
 	@echo "Application version check passed for version $(APP_VERSION)."
 
 sam-deploy-version-check: sam-config-check sam-version-check
-	@if [ -z "$(STACK_NAME)" ]; then \
+	@if [ -z "$(EFFECTIVE_STACK_NAME)" ]; then \
 		echo "Refusing to deploy: stack_name is not set in $(SAM_CONFIG)."; \
 		exit 1; \
 	fi
-	@APP_URL=$$(aws cloudformation describe-stacks --stack-name "$(STACK_NAME)" --query 'Stacks[0].Outputs[?OutputKey==`ApplicationUrl`].OutputValue | [0]' --output text 2>/dev/null || true); \
+	@APP_URL=$$(aws cloudformation describe-stacks --stack-name "$(EFFECTIVE_STACK_NAME)" --query 'Stacks[0].Outputs[?OutputKey==`ApplicationUrl`].OutputValue | [0]' --output text 2>/dev/null || true); \
 	if [ -z "$$APP_URL" ] || [ "$$APP_URL" = "None" ]; then \
-		DNS=$$(aws cloudformation describe-stacks --stack-name "$(STACK_NAME)" --query 'Stacks[0].Outputs[?OutputKey==`LambdaDnsName`].OutputValue | [0]' --output text 2>/dev/null || true); \
+		DNS=$$(aws cloudformation describe-stacks --stack-name "$(EFFECTIVE_STACK_NAME)" --query 'Stacks[0].Outputs[?OutputKey==`LambdaDnsName`].OutputValue | [0]' --output text 2>/dev/null || true); \
 		if [ -n "$$DNS" ] && [ "$$DNS" != "None" ]; then \
 			APP_URL="https://$$DNS/"; \
 		fi; \
 	fi; \
 	if [ -z "$$APP_URL" ] || [ "$$APP_URL" = "None" ]; then \
-		echo "WARNING: could not resolve deployed URL for $(STACK_NAME); allowing deploy."; \
+		echo "WARNING: could not resolve deployed URL for $(EFFECTIVE_STACK_NAME); allowing deploy."; \
 	else \
 			VERSION_URL="$${APP_URL%/}/api/ver"; \
 			VERSION_BODY=$$(curl -fsS --max-time 10 "$$VERSION_URL" 2>/dev/null || true); \
@@ -796,14 +816,14 @@ sam-deploy-version-check: sam-config-check sam-version-check
 			if [ -z "$$DEPLOYED_VERSION" ]; then \
 				echo "WARNING: could not read deployed version from $$VERSION_URL; allowing deploy."; \
 			elif [ "$$DEPLOYED_VERSION" = "$(APP_VERSION)" ] && [ "$(SAM_DEPLOY_ALLOW_SAME_VERSION)" != "1" ]; then \
-				echo "Refusing to deploy $(STACK_NAME): deployed stack already reports version $(APP_VERSION) at $$VERSION_URL."; \
+				echo "Refusing to deploy $(EFFECTIVE_STACK_NAME): deployed stack already reports version $(APP_VERSION) at $$VERSION_URL."; \
 				echo "Deployed endpoint stack_name: $${DEPLOYED_STACK:-unavailable}."; \
 				echo "Bump pyproject.toml before deploying again."; \
 				echo "This matters for Lambda SnapStart: lambda-web snapshots published versions, so each normal deploy should publish a deliberately new application version."; \
 				echo "For an intentional same-version redeploy, set SAM_DEPLOY_ALLOW_SAME_VERSION=1."; \
 				exit 1; \
 			else \
-				echo "Deploy version check passed for $(STACK_NAME): deployed=$$DEPLOYED_VERSION local=$(APP_VERSION) endpoint_stack=$${DEPLOYED_STACK:-unavailable}."; \
+				echo "Deploy version check passed for $(EFFECTIVE_STACK_NAME): deployed=$$DEPLOYED_VERSION local=$(APP_VERSION) endpoint_stack=$${DEPLOYED_STACK:-unavailable}."; \
 			fi; \
 		fi
 
@@ -814,8 +834,9 @@ endif
 	$(MAKE) sam-deploy-version-check
 	$(MAKE) stamp-sam-deploy-metadata
 	aws sts get-caller-identity --no-cli-pager
-	sam deploy --config-file "$(SAM_CONFIG)" --no-confirm-changeset --capabilities CAPABILITY_IAM
+	sam deploy --config-file "$(SAM_CONFIG)" --stack-name "$(EFFECTIVE_STACK_NAME)" --no-confirm-changeset --capabilities CAPABILITY_IAM
 	$(MAKE) sam-status
+	$(MAKE) sam-deployed-workflow-test
 
 sam-deploy-guided: $(REQ)
 ifeq ($(AWS_REGION),local)
@@ -823,7 +844,7 @@ ifeq ($(AWS_REGION),local)
 endif
 	$(MAKE) sam-version-check
 	$(MAKE) sam-config-guided-bootstrap
-	@if grep -q '^[[:space:]]*stack_name[[:space:]]*=' "$(SAM_CONFIG)"; then \
+	@if [ -n "$(SAM_CONFIG_STACK_NAME)" ] && [ -n "$(SAM_CONFIG_DYNAMODB_TABLE_PREFIX)" ]; then \
 		$(MAKE) sam-deploy-version-check; \
 	fi
 	$(MAKE) stamp-sam-deploy-metadata
@@ -831,64 +852,98 @@ endif
 	@echo ===============================
 	@echo use one of these S3 buckets:
 	aws s3 ls
-	sam deploy --config-file "$(SAM_CONFIG)" --guided $(if $(STACK),--stack-name "$(STACK)",) --capabilities CAPABILITY_IAM
+	sam deploy --config-file "$(SAM_CONFIG)" --guided $(if $(EFFECTIVE_STACK_NAME),--stack-name "$(EFFECTIVE_STACK_NAME)",) --capabilities CAPABILITY_IAM
 	$(MAKE) sam-status
+	$(MAKE) sam-deployed-workflow-test
 
 sam-course-create: sam-config-check
 ifeq ($(AWS_REGION),local)
 	@echo cannot initialize a deployed stack course with AWS_REGION=local. Please specify AWS_REGION. && exit 1
 endif
-	@if [ -z "$(STACK_NAME)" ]; then \
+	@if [ -z "$(EFFECTIVE_STACK_NAME)" ]; then \
 		echo "Refusing to create course: stack_name is not set in $(SAM_CONFIG)."; \
 		exit 1; \
 	fi
-	@DDB_PREFIX=$$(aws cloudformation describe-stacks --stack-name "$(STACK_NAME)" --query 'Stacks[0].Parameters[?ParameterKey==`DynamoDBTablePrefix`].ParameterValue | [0]' --output text); \
-	APP_URL=$$(aws cloudformation describe-stacks --stack-name "$(STACK_NAME)" --query 'Stacks[0].Outputs[?OutputKey==`ApplicationUrl`].OutputValue | [0]' --output text); \
+	@DDB_PREFIX=$$(aws cloudformation describe-stacks --stack-name "$(EFFECTIVE_STACK_NAME)" --query 'Stacks[0].Parameters[?ParameterKey==`DynamoDBTablePrefix`].ParameterValue | [0]' --output text); \
+	APP_URL=$$(aws cloudformation describe-stacks --stack-name "$(EFFECTIVE_STACK_NAME)" --query 'Stacks[0].Outputs[?OutputKey==`ApplicationUrl`].OutputValue | [0]' --output text); \
 	if [ -z "$$APP_URL" ] || [ "$$APP_URL" = "None" ]; then \
-		DNS=$$(aws cloudformation describe-stacks --stack-name "$(STACK_NAME)" --query 'Stacks[0].Outputs[?OutputKey==`LambdaDnsName`].OutputValue | [0]' --output text); \
+		DNS=$$(aws cloudformation describe-stacks --stack-name "$(EFFECTIVE_STACK_NAME)" --query 'Stacks[0].Outputs[?OutputKey==`LambdaDnsName`].OutputValue | [0]' --output text); \
 		APP_URL="https://$$DNS/"; \
 	fi; \
-	MAILER_DRY_RUN_STACK=$$(aws cloudformation describe-stacks --stack-name "$(STACK_NAME)" --query 'Stacks[0].Parameters[?ParameterKey==`MailerDryRun`].ParameterValue | [0]' --output text); \
+	MAILER_DRY_RUN_STACK=$$(aws cloudformation describe-stacks --stack-name "$(EFFECTIVE_STACK_NAME)" --query 'Stacks[0].Parameters[?ParameterKey==`MailerDryRun`].ParameterValue | [0]' --output text); \
 	if [ -z "$$DDB_PREFIX" ] || [ "$$DDB_PREFIX" = "None" ]; then \
-		echo "Refusing to create course: stack $(STACK_NAME) did not report DynamoDBTablePrefix."; \
+		echo "Refusing to create course: stack $(EFFECTIVE_STACK_NAME) did not report DynamoDBTablePrefix."; \
 		exit 1; \
 	fi; \
 	if [ -z "$$APP_URL" ] || [ "$$APP_URL" = "https://None/" ]; then \
-		echo "Refusing to create course: stack $(STACK_NAME) did not report ApplicationUrl or LambdaDnsName."; \
+		echo "Refusing to create course: stack $(EFFECTIVE_STACK_NAME) did not report ApplicationUrl or LambdaDnsName."; \
 		exit 1; \
 	fi; \
 	if [ -z "$$MAILER_DRY_RUN_STACK" ] || [ "$$MAILER_DRY_RUN_STACK" = "None" ]; then \
 		MAILER_DRY_RUN_STACK=false; \
 	fi; \
-	echo "Creating or verifying course for stack $(STACK_NAME) using DYNAMODB_TABLE_PREFIX=$$DDB_PREFIX and endpoint $$APP_URL"; \
+	echo "Creating or verifying course for stack $(EFFECTIVE_STACK_NAME) using DYNAMODB_TABLE_PREFIX=$$DDB_PREFIX and endpoint $$APP_URL"; \
 	env -u AWS_ENDPOINT_URL_DYNAMODB -u AWS_ENDPOINT_URL_S3 \
 		DYNAMODB_TABLE_PREFIX="$$DDB_PREFIX" MAILER_DRY_RUN="$$MAILER_DRY_RUN_STACK" \
 		poetry run python $(DBUTIL) create-course --send-email --planttracer_endpoint "$$APP_URL" $(COURSE_CREATE_FLAGS)
+
+s3-eventbridge-status:
+	@if [ -z "$(PLANTTRACER_S3_BUCKET)" ]; then \
+		echo "PLANTTRACER_S3_BUCKET must be set."; \
+		exit 1; \
+	fi
+	poetry run python etc/s3_upload_trigger.py
+
+s3-eventbridge-enable:
+	@if [ -z "$(PLANTTRACER_S3_BUCKET)" ]; then \
+		echo "PLANTTRACER_S3_BUCKET must be set."; \
+		exit 1; \
+	fi
+	@if [ "$(CONFIRM_BUCKET)" != "$(PLANTTRACER_S3_BUCKET)" ]; then \
+		echo "Refusing to modify bucket notifications. Set CONFIRM_BUCKET=$(PLANTTRACER_S3_BUCKET)."; \
+		exit 1; \
+	fi
+	poetry run python etc/s3_upload_trigger.py --apply --confirm-bucket "$(CONFIRM_BUCKET)"
 
 # After deploy: verify Lambda URLs. Use curl -s (no -f) so we capture and show body on 4xx/5xx.
 # Simplified by Simson
 sam-status: sam-config-check
 	@echo "Checking Lambda status...";\
-	APP_URL="https://$(STACK_NAME).planttracer.com/"; \
+	APP_URL="https://$(EFFECTIVE_STACK_NAME).planttracer.com/"; \
 	echo APP_URL=$$APP_URL; \
 	BASE_URL="$${APP_URL%/}"; \
 	VERSION_URL="$$BASE_URL/api/ver"; \
 	curl -f -s -w "\n%{http_code}\n" --max-time 10 "$$VERSION_URL"
 
+sam-deployed-workflow-test: sam-config-check
+	@DDB_PREFIX=$$(aws cloudformation describe-stacks --stack-name "$(EFFECTIVE_STACK_NAME)" --query 'Stacks[0].Parameters[?ParameterKey==`DynamoDBTablePrefix`].ParameterValue | [0]' --output text); \
+	BUCKET=$$(aws cloudformation describe-stacks --stack-name "$(EFFECTIVE_STACK_NAME)" --query 'Stacks[0].Parameters[?ParameterKey==`ImageBucketName`].ParameterValue | [0]' --output text); \
+	if [ -z "$$DDB_PREFIX" ] || [ "$$DDB_PREFIX" = "None" ] || [ -z "$$BUCKET" ] || [ "$$BUCKET" = "None" ]; then \
+		echo "Refusing workflow test: stack parameters are incomplete."; \
+		exit 1; \
+	fi; \
+	env -u AWS_ENDPOINT_URL_DYNAMODB -u AWS_ENDPOINT_URL_S3 \
+		DYNAMODB_TABLE_PREFIX="$$DDB_PREFIX" PLANTTRACER_S3_BUCKET="$$BUCKET" \
+		PLANTTRACER_STACK_NAME="$(EFFECTIVE_STACK_NAME)" \
+		poetry run python bin/deployed_workflow_test.py \
+			--endpoint "https://$(EFFECTIVE_STACK_NAME).planttracer.com/" \
+			--stack-name "$(EFFECTIVE_STACK_NAME)" \
+			--movie "tests/data/2019-07-31 plantmovie.mov"
+
 # Shared resolution of Lambda function name (FUNC) and start time (START) for log targets.
 # Used by sam-logs, sam-logs-simple, sam-logs-simple-tail.
 define SAM_LOGS_RESOLVE
-	FUNC=$$(aws cloudformation describe-stacks --stack-name $(STACK_NAME) --query 'Stacks[0].Outputs[?OutputKey==`$(SAM_LOGS_FUNCTION_OUTPUT)`].OutputValue' --output text 2>/dev/null); \
+	FUNC=$$(aws cloudformation describe-stacks --stack-name "$(EFFECTIVE_STACK_NAME)" --query 'Stacks[0].Outputs[?OutputKey==`$(SAM_LOGS_FUNCTION_OUTPUT)`].OutputValue' --output text 2>/dev/null); \
 	if [ -z "$$FUNC" ]; then \
-	  FUNC=$$(aws cloudformation describe-stack-resources --stack-name $(STACK_NAME) --query "StackResources[?ResourceType=='AWS::Lambda::Function'].PhysicalResourceId" --output text 2>/dev/null | tr '\t' '\n' | head -1); \
+	  FUNC=$$(aws cloudformation describe-stack-resources --stack-name "$(EFFECTIVE_STACK_NAME)" --query "StackResources[?ResourceType=='AWS::Lambda::Function'].PhysicalResourceId" --output text 2>/dev/null | tr '\t' '\n' | head -1); \
 	fi; \
 	if [ -z "$$FUNC" ]; then \
-	  for NESTED in $$(aws cloudformation describe-stack-resources --stack-name $(STACK_NAME) --query "StackResources[?ResourceType=='AWS::CloudFormation::Stack'].PhysicalResourceId" --output text 2>/dev/null); do \
+	  for NESTED in $$(aws cloudformation describe-stack-resources --stack-name "$(EFFECTIVE_STACK_NAME)" --query "StackResources[?ResourceType=='AWS::CloudFormation::Stack'].PhysicalResourceId" --output text 2>/dev/null); do \
 	    FUNC=$$(aws cloudformation describe-stack-resources --stack-name "$$NESTED" --query "StackResources[?ResourceType=='AWS::Lambda::Function'].PhysicalResourceId" --output text 2>/dev/null | tr '\t' '\n' | head -1); \
 	    [ -n "$$FUNC" ] && break; \
 	  done; \
 	fi; \
-	if [ -z "$$FUNC" ]; then echo "No Lambda function found for stack $(STACK_NAME)"; exit 1; fi; \
+	if [ -z "$$FUNC" ]; then echo "No Lambda function found for stack $(EFFECTIVE_STACK_NAME)"; exit 1; fi; \
 	START=$$(($$(date +%s) - $(SAM_LOGS_MINUTES) * 60))000
 endef
 
@@ -900,7 +955,7 @@ SAM_LOGS_FUNCTION_OUTPUT ?= LambdaWebFunction
 sam-logs: sam-config-check
 	@$(SAM_LOGS_RESOLVE); \
 	REQ=$$(( $(SAM_LOGS_LIMIT) * 5 )); \
-	echo "Last $(SAM_LOGS_LIMIT) log events (past $(SAM_LOGS_MINUTES) min) for /aws/lambda/$$FUNC (stack=$(STACK_NAME))..."; \
+	echo "Last $(SAM_LOGS_LIMIT) log events (past $(SAM_LOGS_MINUTES) min) for /aws/lambda/$$FUNC (stack=$(EFFECTIVE_STACK_NAME))..."; \
 	aws logs filter-log-events --log-group-name "/aws/lambda/$$FUNC" --start-time "$$START" --limit $$REQ --output text 2>/dev/null | tail -n $(SAM_LOGS_LIMIT) || true
 
 # Same as sam-logs but output only timestamp (ISO) and message (no event IDs, no extra columns).
@@ -938,7 +993,7 @@ sam-logs-resize-tail:
 sqs-logs: SAM_LOGS_FUNCTION_OUTPUT=LambdaResizeFunction
 sqs-logs:
 	@$(SAM_LOGS_RESOLVE); \
-	echo "SQS-related log events (past $(SAM_LOGS_MINUTES) min, limit $(SAM_LOGS_LIMIT)) for /aws/lambda/$$FUNC (stack=$(STACK_NAME))..."; \
+	echo "SQS-related log events (past $(SAM_LOGS_MINUTES) min, limit $(SAM_LOGS_LIMIT)) for /aws/lambda/$$FUNC (stack=$(EFFECTIVE_STACK_NAME))..."; \
 	aws logs filter-log-events --log-group-name "/aws/lambda/$$FUNC" --start-time "$$START" --limit $(SAM_LOGS_LIMIT) --filter-pattern "SQS" --output text || true
 
 # Stream Lambda logs, showing only lines that contain SQS.
@@ -951,11 +1006,11 @@ sqs-logs-tail:
 sam-delete:
 	@echo Deletion will begin in 10 seconds. Press Ctrl-C to cancel.
 	sleep 10
-	@echo "Deleting stack: $(STACK_NAME)..."
-	sam delete --stack-name $(STACK_NAME) --no-prompts
+	@echo "Deleting stack: $(EFFECTIVE_STACK_NAME)..."
+	sam delete --stack-name "$(EFFECTIVE_STACK_NAME)" --no-prompts
 	@echo "Waiting for deletion to complete..."
-	aws cloudformation wait stack-delete-complete --stack-name $(STACK_NAME)
-	@echo "Stack $(STACK_NAME) deleted successfully."
+	aws cloudformation wait stack-delete-complete --stack-name "$(EFFECTIVE_STACK_NAME)"
+	@echo "Stack $(EFFECTIVE_STACK_NAME) deleted successfully."
 
 ssh:
 	@echo "ssh is not available for Lambda-only SAM stacks."

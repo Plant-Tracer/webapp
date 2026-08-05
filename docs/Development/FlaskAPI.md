@@ -92,7 +92,9 @@ receive HTTP 400.
         "course_name": "Intro Biology",
         "enrollment_count": 42,
         "max_enrollment": 100,
-        "admin_count": 1
+        "admin_count": 1,
+        "created_at": 1784800000,
+        "last_movie_activity_at": null
       }
     ],
     "restart_marker": null
@@ -105,6 +107,8 @@ receive HTTP 400.
         "email": "alice@example.edu",
         "primary_course_id": "PlantTracer 101",
         "super_role": "none",
+        "created_at": 1784800100,
+        "last_movie_activity_at": null,
         "courses": [
           {
             "course_id": "PlantTracer 101",
@@ -121,9 +125,17 @@ receive HTTP 400.
         "movie_id": "m...",
         "title": "Bean Growth",
         "course_id": "PlantTracer 101",
+        "user_id": "u...",
         "owner_name": "Alice",
         "state": "published",
-        "status": "ready"
+        "status": "ready",
+        "created_at": 1784800200,
+        "uploaded_at": 1784800300,
+        "last_activity_at": 1784800400,
+        "total_frames": 1441,
+        "total_bytes": 12500000,
+        "fpm": "60",
+        "has_traced_movie": true
       }
     ],
     "restart_marker": null
@@ -137,12 +149,37 @@ The summary deliberately omits object URNs, descriptions, API keys, and research
 metadata. Course enrollment counts are read consistently from the `course_users`
 table. User memberships and movies carry `course_id`; the admin page joins those
 IDs to the separately downloaded course names after all bounded pages arrive.
+The same browser-side join derives each course's first upload and latest movie
+activity and each user's latest movie activity. A course's displayed creation
+date uses `created_at`, falling back to its first movie upload for legacy rows.
+Movies without `uploaded_at` are pending uploads and are displayed with a red
+background. Movie elapsed time is `(total_frames - 1) / fpm`; encoded playback
+`fps` is deliberately not used.
 DynamoDB scan order is not stable. The admin page requests bounded pages until
 all three tables are loaded, then sorts complete result sets in the browser;
 clients must treat restart markers as opaque. Course rows include the registration
 `course_key`; callers must treat it as a secret because anyone with the key can
 request enrollment in that course. The admin page masks each course key by default;
 its per-row eye control reveals or hides the value without changing it.
+Admin table columns have visible drag/keyboard resize handles. Course links open
+`/list?course_id=...` in a new tab without changing the user's persisted primary
+course. Movie rows use a visible `⋮` menu for play, traced download, and—for
+`superadmin` only—Analyze.
+
+#### `GET /api/admin/movies/{movie_id}/media`
+
+Return fresh five-minute signed URLs for the original movie and, when present,
+the traced movie. The response does not expose stored S3 URNs. Both
+`superauditor` and `superadmin` may use this authenticated, read-only endpoint.
+
+```json
+{
+  "error": false,
+  "movie_id": "m...",
+  "play_url": "https://...",
+  "traced_download_url": "https://..."
+}
+```
 
 ### User & Registration
 
@@ -304,8 +341,14 @@ Both routes are equivalent. Return users and courses visible to the caller.
 #### `POST /api/new-movie`
 
 Create a movie record and obtain a presigned S3 POST URL for uploading the
-video file directly to its final S3 key. After upload, the browser requests the
-first frame from lambda-resize and links the user to Analyze.
+video file to a deployment-scoped staging key. The row initially has
+`created_at`, `upload_staging_urn`, and the durable `movie_data_urn`, but not
+`uploaded_at`. In AWS, an S3 Object Created EventBridge event makes
+lambda-resize verify the exact byte count, move the object to its durable key,
+record upload metadata, and queue post-upload processing. In local MinIO mode,
+the browser invokes the authenticated `/resize-api/v1/process-upload`
+compatibility adapter. The browser polls metadata until processing is complete,
+then requests the first frame and links the user to Analyze.
 
 **Parameters**
 
@@ -315,6 +358,7 @@ first frame from lambda-resize and links the user to Analyze.
 | `title` | No | Movie title |
 | `description` | No | Movie description |
 | `movie_data_sha256` | Yes | SHA-256 hex digest of the video file (64 chars) |
+| `movie_data_length` | Yes | Exact movie byte length, from 1 through the configured upload limit. The returned S3 policy accepts exactly this size. |
 | `research_use` | No | `"1"` = yes, `"0"` = no, omit = not answered |
 | `credit_by_name` | No | `"1"` = yes, `"0"` = no, omit = not answered (only meaningful when `research_use=1`) |
 | `attribution_name` | No | Attribution name (only stored when `credit_by_name=1`) |
@@ -329,15 +373,22 @@ first frame from lambda-resize and links the user to Analyze.
   "presigned_post": {
     "url": "https://s3.amazonaws.com/...",
     "fields": { ... }
-  }
+  },
+  "upload_completion_mode": "eventbridge"
 }
 ```
+
+`upload_completion_mode` is `eventbridge` in deployed AWS stacks and `http` in
+local MinIO development.
 
 ---
 
 #### `POST /api/list-movies`
 
-List all movies visible to the caller (their own movies and published movies in their course; admins additionally see unpublished movies from other users in their course).
+List all movies visible to the caller. An optional `course_id` selects one
+course for a tab-local admin view; the caller must be a member or have a
+`superauditor`/`superadmin` role. The query does not alter the user's primary
+course.
 
 **Response**
 

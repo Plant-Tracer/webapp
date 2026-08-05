@@ -31,7 +31,7 @@ from .apikey import get_user_api_key, get_user_dict, in_demo_mode
 from .auth import AuthError,EmailNotInDatabase
 from .constants import (
     C, E, POST, GET_POST, __version__, logger, log_level, printable80,
-    stack_name, STACK_NAME,
+    stack_name, storage_deployment_id, STACK_NAME,
 )
 from .odb import (
     InvalidAPI_Key,
@@ -40,6 +40,7 @@ from .odb import (
     MOVIE_ID,
     COURSE_ID,
     MOVIE_DATA_URN,
+    UPLOAD_STAGING_URN,
     MOVIE_ZIPFILE_URN,
     MOVIE_TRACED_URN,
     MOVIE_TRACED_URL,
@@ -56,7 +57,8 @@ from .odb import (
     clear_movie_tracking,
 )
 from .s3_presigned import (
-    make_object_name,
+    movie_object_key,
+    upload_staging_object_key,
     make_urn,
     make_signed_url,
     make_presigned_post,
@@ -768,9 +770,15 @@ def api_new_movie():
     user_id    = get_user_id(allow_demo=False)    # require a valid user_id
     user       = odb.get_user(user_id)
     movie_data_sha256 = get('movie_data_sha256')
+    movie_data_length = get_int('movie_data_length')
 
     if (movie_data_sha256 is None) or (len(movie_data_sha256)!=64):
         return {'error':True,'message':'Movie SHA256 not provided or is invalid. Uploaded failed.'}
+    if movie_data_length is None or not 1 <= movie_data_length <= C.MAX_FILE_UPLOAD:
+        return {
+            'error': True,
+            'message': f'Movie byte length must be between 1 and {C.MAX_FILE_UPLOAD}.',
+        }
 
     ret = {'error': False}
 
@@ -802,16 +810,30 @@ def api_new_movie():
                                          research_use=research_use,
                                          credit_by_name=credit_by_name,
                                          attribution_name=attribution_name,
-                                         fpm=fpm)
+                                         fpm=fpm,
+                                         upload_bytes_expected=movie_data_length)
 
-    oname = make_object_name(course_id=odb.course_id_for_movie_id(ret[MOVIE_ID]),
-                             movie_id=ret[MOVIE_ID],
-                             ext=C.MOVIE_EXTENSION)
+    deployment_id = storage_deployment_id()
+    course_id = odb.course_id_for_movie_id(ret[MOVIE_ID])
+    oname = movie_object_key(
+        deployment_id=deployment_id,
+        course_id=course_id,
+        movie_id=ret[MOVIE_ID],
+    )
     movie_data_urn = make_urn(object_name=oname)
-    odb.set_movie_data_urn(movie_id=ret[MOVIE_ID], movie_data_urn=movie_data_urn)
-
-    # Always upload to final key
-    upload_urn = movie_data_urn
+    upload_urn = make_urn(object_name=upload_staging_object_key(
+        deployment_id=deployment_id,
+        course_id=course_id,
+        movie_id=ret[MOVIE_ID],
+    ))
+    DDBO().update_movie(
+        ret[MOVIE_ID],
+        {
+            MOVIE_DATA_URN: movie_data_urn,
+            UPLOAD_STAGING_URN: upload_urn,
+        },
+        touch_activity=False,
+    )
     def _tristate_to_str(val):
         """Convert tristate int|None to S3 metadata string."""
         if val is None:
@@ -820,12 +842,16 @@ def api_new_movie():
 
     ret['presigned_post'] = make_presigned_post(
         urn=upload_urn,
+        exact_size=movie_data_length,
         mime_type='video/mp4',
         sha256=movie_data_sha256,
         research_use=_tristate_to_str(research_use),
         credit_by_name=_tristate_to_str(credit_by_name),
         attribution_name=attribution_name or '',
         fpm=fpm or '')
+    ret['upload_completion_mode'] = (
+        'http' if os.environ.get(C.AWS_REGION) == 'local' else 'eventbridge'
+    )
     return ret
 
 def set_movie_metadata(*, user_id=odb.ROOT_USER_ID, set_movie_id, movie_metadata):
@@ -851,7 +877,7 @@ def api_edit_movie():
     """
     movie_id = get_movie_id()
     user_id = get_user_id(allow_demo=False)
-    odb.can_access_movie(user_id=user_id, movie_id=movie_id)
+    odb.can_edit_movie(user_id=user_id, movie_id=movie_id)
 
     rotation = get_int("rotation")
     if rotation not in [0,90,180,270]:
@@ -859,7 +885,7 @@ def api_edit_movie():
 
     clear_movie_tracking(movie_id)
     ddbo = DDBO()
-    ddbo.update_table(ddbo.movies, movie_id, {MOVIE_ROTATION: rotation})
+    ddbo.update_movie(movie_id, {MOVIE_ROTATION: rotation})
     logger.debug("edit-movie: movie_id=%s rotation=%s",movie_id,rotation)
     return {"error": False}
 
@@ -871,8 +897,8 @@ def api_delete_movie():
     :param movie_id: the id of the movie to delete
     :param delete: 1 (default) to delete the movie, 0 to undelete the movie.
     """
-    movie = odb.can_access_movie(user_id=get_user_id(allow_demo=False),
-                                 movie_id=get_movie_id())
+    movie = odb.can_edit_movie(user_id=get_user_id(allow_demo=False),
+                               movie_id=get_movie_id())
     delete_movie(movie_id=movie[MOVIE_ID], delete=get_bool('delete',True))
     return {'error': False}
 
@@ -881,7 +907,10 @@ def api_delete_movie():
 
 @api_bp.route('/list-movies', methods=POST)
 def api_list_movies():
-    movies = odb.list_movies(user_id=get_user_id())
+    movies = odb.list_movies(
+        user_id=get_user_id(),
+        course_id=(request.values.get(COURSE_ID) or "").strip() or None,
+    )
     for movie in movies:
         traced_urn = movie.get(MOVIE_TRACED_URN)
         if (traced_urn or "").startswith("s3:"):
@@ -989,7 +1018,7 @@ def api_get_movie_trackpoints():
 def api_set_movie_trim():
     """Set one inclusive movie trim bound."""
     movie_id = get_movie_id()
-    movie = odb.can_access_movie(user_id=get_user_id(allow_demo=False), movie_id=movie_id)
+    movie = odb.can_edit_movie(user_id=get_user_id(allow_demo=False), movie_id=movie_id)
     trim_start_frame = get_int(TRIM_START_FRAME)
     trim_end_frame = get_int(TRIM_END_FRAME)
     if (trim_start_frame is None) == (trim_end_frame is None):
@@ -1012,7 +1041,7 @@ def api_set_movie_fpm():
     """Set the capture interval (frames/minute) for a movie. Owner/admin only."""
     user_id = get_user_id(allow_demo=False)
     movie_id = get_movie_id()
-    movie = odb.can_access_movie(user_id=user_id, movie_id=movie_id)
+    movie = odb.can_edit_movie(user_id=user_id, movie_id=movie_id)
     try:
         fpm = odb.normalize_fpm(request.values.get('fpm'))
     except ValueError as exc:
@@ -1096,7 +1125,7 @@ def api_put_frame_trackpoints():
     frame_number = get_int('frame_number')
     raw_trackpoints = get_json('trackpoints')
     trackpoints = [odb.Trackpoint(**tp) for tp in raw_trackpoints]
-    movie = odb.can_access_movie(user_id=user_id, movie_id=movie_id)
+    movie = odb.can_edit_movie(user_id=user_id, movie_id=movie_id)
     if log_level=='DEBUG':
         logger.debug("put_frame_analysis. user_id=%s movie_id=%s frame_number=%s",user_id,movie[MOVIE_ID],frame_number)
         for tp in trackpoints:
@@ -1114,7 +1143,7 @@ def api_rename_marker():
     """Rename a marker label across all stored trackpoints for a movie."""
     user_id = get_user_id(allow_demo=False)
     movie_id = get_movie_id()
-    movie = odb.can_access_movie(user_id=user_id, movie_id=movie_id)
+    movie = odb.can_edit_movie(user_id=user_id, movie_id=movie_id)
     try:
         rename_result = odb.rename_movie_marker(
             movie_id=movie[MOVIE_ID],

@@ -226,13 +226,28 @@ contain stale enrollment records.
 movies
 ~~~~~~
 
-One record per uploaded movie. Key attributes:
+One record per created movie, including rows whose direct upload is still
+pending. Key attributes:
 
 ``movie_id``, ``title``, ``description``, ``user_id``, ``course_id``, ``published`` (0/1; defaults to 1 on creation),
 ``deleted`` (0/1), ``status``, ``total_frames``, ``fps``, ``width``, ``height``,
-``movie_data_urn`` (S3 URN of the MP4), ``movie_zipfile_urn``, ``movie_traced_urn``, ``first_frame_urn``,
+``upload_staging_urn`` (temporary upload S3 URN), ``movie_data_urn`` (durable S3 URN of the MP4), ``movie_zipfile_urn``, ``movie_traced_urn``, ``first_frame_urn``,
 ``last_frame_tracked``, ``research_use`` (0/1/None; None = not yet answered), ``credit_by_name`` (0/1/None; None = not yet answered), ``attribution_name``,
 ``rotation`` (0/90/180/270 degrees), ``needs_retracing`` (0/1; traced MP4 may be stale after marker edits).
+
+Lifecycle fields are ``created_at`` (row allocation), ``uploaded_at`` (set
+only after staging is verified and copied to the durable S3 key),
+``last_activity_at`` (latest movie write, excluding reads/downloads),
+``upload_bytes_expected`` (the exact byte count signed into the direct-upload
+policy), ``upload_event_id``, ``resize_queued_at``, ``resize_started_at``, and
+``resized_at``. ``date_uploaded`` is accepted only when reading legacy rows.
+DynamoDB is schemaless, so deploying these fields requires no table rebuild or
+backfill.
+
+The ``logs`` table records ``movie.upload.completed``,
+``movie.resize.started``, and ``movie.resize.completed``. Entries identify the
+movie, user, course, and event time. Upload records may include EventBridge and
+S3 details; resize completion includes elapsed seconds.
 
 See ``src/app/schema.py`` ``Movie`` class for the full schema and constraints.
 

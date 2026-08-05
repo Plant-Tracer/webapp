@@ -27,6 +27,7 @@ from .schema import (
     User,
     AdminCourse,
     Movie,
+    LogEntry,
     Trackpoint,
     RenameMarkerRequest,
     validate_movie_field,
@@ -47,6 +48,7 @@ FRAMES = 'movie_frames'
 COURSES = 'courses'
 COURSE_USERS = 'course_users'
 LOGS = 'logs'
+LOG_ID = 'log_id'
 ROOT_USER_ID = 'u0'                # the root user
 
 
@@ -101,7 +103,15 @@ TOTAL_BYTES = 'total_bytes'
 TOTAL_FRAMES = 'total_frames'
 TRIM_START_FRAME = 'trim_start_frame'
 TRIM_END_FRAME = 'trim_end_frame'
-DATE_UPLOADED = 'date_uploaded'
+UPLOADED_AT = 'uploaded_at'
+LAST_ACTIVITY_AT = 'last_activity_at'
+UPLOAD_BYTES_EXPECTED = 'upload_bytes_expected'
+UPLOAD_STAGING_URN = 'upload_staging_urn'
+UPLOAD_EVENT_ID = 'upload_event_id'
+RESIZE_QUEUED_AT = 'resize_queued_at'
+RESIZE_STARTED_AT = 'resize_started_at'
+RESIZED_AT = 'resized_at'
+DATE_UPLOADED = 'date_uploaded'  # legacy read-only field
 VERSION = 'version'
 DELETED = 'deleted'
 PUBLISHED = 'published'
@@ -141,6 +151,7 @@ LAST_FRAME_TRACKED = 'last_frame_tracked' # computed, not stored
 # When status (tracking progress) was last updated; used to detect stale "tracking" lock (e.g. >1h ago)
 MOVIE_STATUS = 'status'
 MOVIE_STATE_UPLOADING  = 'uploading'
+MOVIE_STATE_PROCESSING = 'processing'
 MOVIE_STATE_READY      = 'ready'
 MOVIE_STATE_TRACING   = 'tracing'
 MOVIE_STATE_TRACING_COMPLETED    = 'tracing completed'
@@ -341,7 +352,7 @@ class DDBO:
                     if item['KeyType'] == 'HASH')
 
     # pylint: disable=too-many-locals
-    def update_table(self, table, key_value, updates: dict):
+    def update_table(self, table, key_value, updates: dict, *, condition_expression=None):
         """
         Generic updater for any DynamoDB Table resource.
 
@@ -390,9 +401,68 @@ class DDBO:
         }
         if expr_values:
             params["ExpressionAttributeValues"] = expr_values
+        if condition_expression is not None:
+            params["ConditionExpression"] = condition_expression
 
         # 5) run the update
         return table.update_item(**params)
+
+    def update_movie(self, movie_id, updates: dict, *, touch_activity=True, expected_status=None):
+        """Update a movie and, by default, record its latest write activity.
+
+        The former MySQL movie table exposed an automatically maintained
+        ``mtime``. DynamoDB has no equivalent, so every business-level movie
+        update goes through this method. Restore and maintenance code may pass
+        ``touch_activity=False`` when preserving historical timestamps.
+        """
+        assert is_movie_id(movie_id)
+        movie_updates = {
+            prop: fix_movie_prop_value(prop, value)
+            for prop, value in updates.items()
+        }
+        if touch_activity:
+            movie_updates[LAST_ACTIVITY_AT] = int(time.time())
+        condition = None if expected_status is None else Attr(MOVIE_STATUS).eq(expected_status)
+        return self.update_table(
+            self.movies,
+            movie_id,
+            movie_updates,
+            condition_expression=condition,
+        )
+
+    def put_movie_log(self, *, event_type, movie, ipaddr, log_id=None, event_id=None,
+                      object_key=None, sequencer=None, total_bytes=None,
+                      elapsed_seconds=None, if_absent=False):
+        """Validate and persist one movie lifecycle audit event."""
+        entry = LogEntry(
+            log_id=log_id or f"{int(time.time() * 1000)}-{uuid.uuid4()}",
+            ipaddr=ipaddr,
+            user_id=movie[USER_ID],
+            course_id=movie[COURSE_ID],
+            time_t=int(time.time()),
+            event_type=event_type,
+            movie_id=movie[MOVIE_ID],
+            event_id=event_id,
+            object_key=object_key,
+            sequencer=sequencer,
+            total_bytes=total_bytes,
+            elapsed_seconds=(
+                None if elapsed_seconds is None else Decimal(str(elapsed_seconds))
+            ),
+        )
+        params = {"Item": entry.model_dump(exclude_none=True)}
+        if if_absent:
+            params["ConditionExpression"] = Attr(LOG_ID).not_exists()
+        try:
+            self.logs.put_item(**params)
+        except ClientError as exc:
+            if (
+                    not if_absent
+                    or exc.response.get("Error", {}).get("Code")
+                    != "ConditionalCheckFailedException"
+            ):
+                raise
+        return entry
 
     ### api_key management
 
@@ -666,7 +736,7 @@ class DDBO:
     def put_course(self, coursedict, *, ok_if_exists=False):
         """Puts the course into the database. Raises an error if the course already exists"""
         try:
-            coursedict = Course(**coursedict).model_dump() # validate coursedict
+            coursedict = Course(**coursedict).model_dump(exclude_none=True) # validate coursedict
         except ValidationError:
             logger.error("coursedict=%s",coursedict)
             raise
@@ -765,6 +835,8 @@ class DDBO:
     def put_movie(self, moviedict):
         assert is_movie_id(moviedict[MOVIE_ID])
         assert MOVIE_ZIPFILE_URL not in moviedict
+        moviedict = copy.copy(moviedict)
+        moviedict.setdefault(LAST_ACTIVITY_AT, moviedict.get(CREATED_AT, int(time.time())))
         try:
             _moviedict = Movie(**moviedict).model_dump() # validate moviedict
         except ValidationError:
@@ -1277,7 +1349,8 @@ def create_course(*, course_id, course_name, course_key, max_enrollment=C.DEFAUL
                         COURSE_NAME:course_name,
                         COURSE_KEY:course_key,
                         ADMINS_FOR_COURSE:[],
-                        MAX_ENROLLMENT:max_enrollment},
+                        MAX_ENROLLMENT:max_enrollment,
+                        CREATED_AT:int(time.time())},
                       ok_if_exists=ok_if_exists)
 
 def delete_course(*,course_id):
@@ -1613,7 +1686,7 @@ def set_movie_trim_frame(*, movie_id: str, prop: str, frame_number: int) -> dict
     validate_trim_bounds(trim_start_frame=new_start, trim_end_frame=new_end, total_frames=total_frames)
     if prop == TRIM_START_FRAME and new_start < old_start:
         _copy_frame_trackpoints_if_missing(movie_id=movie_id, from_frame=old_start, to_frame=new_start)
-    ddbo.update_table(ddbo.movies, movie_id, {prop: frame_number})
+    ddbo.update_movie(movie_id, {prop: frame_number})
     return movie_metadata_with_trim_defaults(get_movie_metadata(movie_id=movie_id, get_last_frame_tracked=True))
 
 
@@ -1626,8 +1699,8 @@ def can_access_movie(*, user_id, movie_id):
 
     User can access the movie if:
     - User is movie owner
-    - User is in the movie's course (NOTE: it should check to see if movie is published or if the user is the course admin)
-    - (Note: should allow access if the user is a superadmin)
+    - User is in the movie's course
+    - User is a superauditor or superadmin
 
     Raises UnauthorizedUser if user is not allowed to access the movie. This is caught by the flask framework, so we don't need special handling.
     """
@@ -1637,12 +1710,33 @@ def can_access_movie(*, user_id, movie_id):
     if movie[ USER_ID ] == user_id:
         return movie
     user = ddbo.get_user(user_id)
+    if normalize_super_role(user) in SUPER_READ_ROLES:
+        return movie
     if movie[ COURSE_ID ] in user[ COURSES ]:
         return movie
     raise UnauthorizedUser(f"user {user_id} attempted to access movie {movie_id}")
 
+
+def can_edit_movie(*, user_id, movie_id):
+    """Return a movie when the user may modify it.
+
+    Superauditors have cross-course read access but never gain write access.
+    Owners, course administrators, and superadmins may modify a movie.
+    """
+    ddbo = DDBO()
+    movie = ddbo.get_movie(movie_id)
+    if movie[USER_ID] == user_id:
+        return movie
+    user = ddbo.get_user(user_id)
+    if normalize_super_role(user) == SUPER_ROLE_SUPERADMIN:
+        return movie
+    if movie[COURSE_ID] in user.get(ADMIN_FOR_COURSES, []):
+        return movie
+    raise UnauthorizedUser(f"user {user_id} attempted to modify movie {movie_id}")
+
 def create_new_movie(*, user_id, course_id=None, title=None, description=None, orig_movie=None,
-                     research_use=None, credit_by_name=None, attribution_name=None, fpm=None):
+                     research_use=None, credit_by_name=None, attribution_name=None, fpm=None,
+                     upload_bytes_expected=None):
     """
     Creates an entry for a new movie and returns the movie_id. The movie content must be uploaded separately.
 
@@ -1654,6 +1748,7 @@ def create_new_movie(*, user_id, course_id=None, title=None, description=None, o
     :param credit_by_name: - 1 if user wants credit by name, 0 if anonymous, None if not yet answered
     :param attribution_name: - name for attribution when credit_by_name is 1, else None
     :param fpm: - capture interval in frames/minute (time-lapse), as a string, or None
+    :param upload_bytes_expected: exact byte size signed into the S3 upload policy
     :return: movie_id of the created movie
 
     """
@@ -1663,6 +1758,7 @@ def create_new_movie(*, user_id, course_id=None, title=None, description=None, o
     if course_id is None:
         course_id = user[PRIMARY_COURSE_ID]
     movie_id = new_movie_id()
+    created_at = int(time.time())
     ddbo.put_movie({MOVIE_ID: movie_id,
                     COURSE_ID: course_id,
                     USER_ID: user_id,
@@ -1675,8 +1771,9 @@ def create_new_movie(*, user_id, course_id=None, title=None, description=None, o
                     MOVIE_ZIPFILE_URN: None,
                     MOVIE_DATA_URN: None,
                     LAST_FRAME_TRACKED: None,
-                    CREATED_AT: int(time.time()),
-                    DATE_UPLOADED: int(time.time()),
+                    CREATED_AT: created_at,
+                    LAST_ACTIVITY_AT: created_at,
+                    UPLOAD_BYTES_EXPECTED: upload_bytes_expected,
                     TOTAL_FRAMES: None,
                     TOTAL_BYTES: None,
                     FPM: fpm,
@@ -1704,7 +1801,7 @@ def set_research_use(*, user_id, movie_id, research_use):
     update = {RESEARCH_USE: research_use}
     if research_use != 1:
         update[CREDIT_BY_NAME] = None
-    ddbo.update_table(ddbo.movies, movie_id, update)
+    ddbo.update_movie(movie_id, update)
 
 def get_movie(*, movie_id):
     """Returns the movie's data"""
@@ -1720,16 +1817,16 @@ def set_movie_metadata(*, movie_id, movie_metadata):
         movie_metadata = copy.copy(movie_metadata)
         movie_metadata['fps'] = str(movie_metadata['fps'])
     ddbo = DDBO()
-    ddbo.update_table(ddbo.movies, movie_id, movie_metadata)
+    ddbo.update_movie(movie_id, movie_metadata)
 
 def set_movie_data_urn(*,movie_id, movie_data_urn):
     """If we are setting the movie data, be sure that any old data (frames, zipfile, stored objects) are gone"""
     assert is_movie_id(movie_id)
     ddbo = DDBO()
-    ddbo.update_table(ddbo.movies, movie_id, {MOVIE_DATA_URN:movie_data_urn})
+    ddbo.update_movie(movie_id, {MOVIE_DATA_URN:movie_data_urn})
 
 
-def list_movies(*,user_id, movie_id=None, orig_movie=None):
+def list_movies(*,user_id, movie_id=None, orig_movie=None, course_id=None):
     """
     :param user_id:  only list movies visible to user_id (0 for all movies)
     :param movie_id:  if provided, only use this movie
@@ -1750,11 +1847,19 @@ def list_movies(*,user_id, movie_id=None, orig_movie=None):
     movies = []
     if movie_id is not None:
         return fix_movies([ddbo.get_movie(movie_id)])
+    if course_id is not None:
+        if (
+                course_id not in user.get(COURSES, [])
+                and normalize_super_role(user) not in SUPER_READ_ROLES):
+            raise UnauthorizedUser(
+                f"user {user_id} attempted to list movies for course {course_id}"
+            )
+        return fix_movies(ddbo.get_movies_for_course_id(course_id))
 
     # build a query for all movies for which the user is in the course
-    for course_id in user[ COURSES ]:
-        logger.debug("extending for course_id=%s",course_id)
-        movies.extend( ddbo.get_movies_for_course_id(course_id) )
+    for member_course_id in user[COURSES]:
+        logger.debug("extending for course_id=%s", member_course_id)
+        movies.extend(ddbo.get_movies_for_course_id(member_course_id))
     return fix_movies(movies)
 
 
@@ -1850,14 +1955,18 @@ def ensure_bottom_left_trackpoints(*, movie_id: str, frame_height: int | None = 
     frames = ddbo.get_frames(movie_id)
     frames_with_trackpoints = [frame for frame in frames if frame.get('trackpoints')]
     if not frames_with_trackpoints:
-        ddbo.update_table(ddbo.movies, movie_id, {
+        ddbo.update_movie(movie_id, {
             TRACKPOINT_ORIGIN: TRACKPOINT_ORIGIN_BOTTOM_LEFT,
             TRACKPOINT_MIGRATION_STATE: None,
-        })
+        }, touch_activity=False)
         return ddbo.get_movie(movie_id)
 
     frame_height = frame_height or trackpoint_frame_height(movie)
-    ddbo.update_table(ddbo.movies, movie_id, {TRACKPOINT_MIGRATION_STATE: TRACKPOINT_MIGRATION_IN_PROGRESS})
+    ddbo.update_movie(
+        movie_id,
+        {TRACKPOINT_MIGRATION_STATE: TRACKPOINT_MIGRATION_IN_PROGRESS},
+        touch_activity=False,
+    )
 
     for frame in frames_with_trackpoints:
         if frame.get(TRACKPOINT_MIGRATION_ORIGIN) == TRACKPOINT_ORIGIN_BOTTOM_LEFT:
@@ -1888,10 +1997,10 @@ def ensure_bottom_left_trackpoints(*, movie_id: str, frame_height: int | None = 
     # The per-frame markers are intentionally left in place. Once the movie's
     # trackpoint_origin is bottom-left, ensure_bottom_left_trackpoints() returns early and
     # never reads them again, so they cannot re-expose a flipped frame to a second flip.
-    ddbo.update_table(ddbo.movies, movie_id, {
+    ddbo.update_movie(movie_id, {
         TRACKPOINT_ORIGIN: TRACKPOINT_ORIGIN_BOTTOM_LEFT,
         TRACKPOINT_MIGRATION_STATE: None,
-    })
+    }, touch_activity=False)
     return ddbo.get_movie(movie_id)
 
 
@@ -2222,20 +2331,26 @@ def rename_movie_marker(*, movie_id: str, old_label: str, new_label: str,
             },
         },
     }]
+    movie_update_expression = 'SET #last_activity_at = :last_activity_at'
+    movie_expression_names = {
+        '#movie_id': MOVIE_ID,
+        '#last_activity_at': LAST_ACTIVITY_AT,
+    }
+    movie_expression_values = {':last_activity_at': int(time.time())}
     if needs_retracing:
-        transact_items.append({
-            'Update': {
-                'TableName': ddbo.movies.name,
-                'Key': {MOVIE_ID: movie_id},
-                'UpdateExpression': 'SET #needs_retracing = :needs_retracing',
-                'ConditionExpression': 'attribute_exists(#movie_id)',
-                'ExpressionAttributeNames': {
-                    '#movie_id': MOVIE_ID,
-                    '#needs_retracing': NEEDS_RETRACING,
-                },
-                'ExpressionAttributeValues': {':needs_retracing': 1},
-            },
-        })
+        movie_update_expression += ', #needs_retracing = :needs_retracing'
+        movie_expression_names['#needs_retracing'] = NEEDS_RETRACING
+        movie_expression_values[':needs_retracing'] = 1
+    transact_items.append({
+        'Update': {
+            'TableName': ddbo.movies.name,
+            'Key': {MOVIE_ID: movie_id},
+            'UpdateExpression': movie_update_expression,
+            'ConditionExpression': 'attribute_exists(#movie_id)',
+            'ExpressionAttributeNames': movie_expression_names,
+            'ExpressionAttributeValues': movie_expression_values,
+        },
+    })
 
     try:
         ddbo.dynamodb.meta.client.transact_write_items(
@@ -2333,7 +2448,12 @@ def clear_movie_tracking(movie_id):
     # Clear stored last_frame_tracked on the movie so next get_movie_metadata computes correctly.
     ddbo.movies.update_item(
         Key={MOVIE_ID: movie_id},
-        UpdateExpression='REMOVE last_frame_tracked',
+        UpdateExpression='SET #last_activity_at = :last_activity_at REMOVE #last_frame_tracked',
+        ExpressionAttributeNames={
+            '#last_activity_at': LAST_ACTIVITY_AT,
+            '#last_frame_tracked': LAST_FRAME_TRACKED,
+        },
+        ExpressionAttributeValues={':last_activity_at': int(time.time())},
     )
 
 
@@ -2404,15 +2524,18 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
             user = ddbo.get_user(user_id)
             is_owner = movie[ USER_ID ] == user_id
             is_admin = movie[ COURSE_ID ] in user[ ADMIN_FOR_COURSES ]
+            is_superadmin = normalize_super_role(user) == SUPER_ROLE_SUPERADMIN
 
             acl  = SET_MOVIE_METADATA[prop]
-            logger.debug("is_owner=%s is_admin=%s acl=%s",is_owner, is_admin, acl)
+            logger.debug("is_owner=%s is_admin=%s is_superadmin=%s acl=%s",
+                         is_owner, is_admin, is_superadmin, acl)
 
-            if not ((is_owner is not None and '@is_owner' in acl) or (is_admin is not None and '@is_admin' in acl)):
+            if not ((is_owner and '@is_owner' in acl)
+                    or ((is_admin or is_superadmin) and '@is_admin' in acl)):
                 # permission not granted
                 raise UnauthorizedUser("permission denied")
 
-        ddbo.update_table(ddbo.movies, set_movie_id, {prop:value})
+        ddbo.update_movie(set_movie_id, {prop:value})
     elif set_user_id is not None:
         value = validate_user_field(prop, value)
         if user_id != ROOT_USER_ID:

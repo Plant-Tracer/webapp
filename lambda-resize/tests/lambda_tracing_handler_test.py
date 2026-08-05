@@ -28,7 +28,13 @@ def test_process_tracing_record_decodes_json_body():
     with patch("resize_app.lambda_tracing_handler.process_tracing_message") as process:
         lambda_tracing_handler.process_tracing_record(record)
 
-    process.assert_called_once_with({"movie_id": "m123", "frame_start": 7})
+    process.assert_called_once_with({
+        "job_type": "trace",
+        "movie_id": "m123",
+        "frame_start": 7,
+        "frame_end": None,
+        "api_key": None,
+    })
 
 
 def test_process_tracing_record_rejects_invalid_json():

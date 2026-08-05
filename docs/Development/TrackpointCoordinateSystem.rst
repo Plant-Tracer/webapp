@@ -141,10 +141,12 @@ When loading frame markers:
   ``POST /api/get-movie-metadata``.
 * For ``"bottom-left"`` movies, convert stored trackpoints to canvas coordinates
   before creating ``Marker`` and ``Line`` objects.
-* If movie metadata lacks analysis-frame dimensions when the first frame is
-  added, rebuild the current frame after the loaded image reports its natural
-  dimensions. Do not flip bottom-left trackpoints against the placeholder canvas
-  height.
+* Use the loaded analysis image's natural height for the Y conversion. Movie
+  metadata records the source movie dimensions, which can differ when Lambda
+  scales the analysis frame (for example, a 480x360 source becomes 640x480).
+* Rebuild the current frame after the loaded image reports its natural
+  dimensions. Do not flip bottom-left trackpoints against the source-movie or
+  placeholder canvas height.
 * For legacy ``"top-left"`` movies that have not yet been migrated, use stored
   coordinates as canvas coordinates for visual correctness.
 
@@ -161,6 +163,11 @@ When dragging markers:
 
 The marker table and the posted payload must use the same conversion path so
 initial render, drag updates, saved data, and CSV export agree.
+
+Trackpoints saved by a buggy client that flipped against the source-movie height
+remain numerically displaced. They cannot be migrated globally because the
+stored record does not identify which frame height the client used. Repair an
+affected frame 0 from evidence, then retrace it.
 
 The ``Location (mm)`` column is calibrated only after both default ruler markers
 (``Ruler 0mm`` and ``Ruler 10mm``) have moved away from their starting
@@ -214,6 +221,12 @@ formula is:
 
 * before ``cv2.calcOpticalFlowPyrLK``: ``image_y = frame_height - trackpoint_y``
 * before ``put_frame_trackpoints``: ``trackpoint_y = frame_height - image_y``
+
+OpenCV reports a status for each marker independently. When the status says a
+marker could not be resolved, Lambda carries its last known position into the
+next frame. This preserves the marker for later frames and future retracing;
+successfully resolved markers continue to use the updated optical-flow
+position.
 
 The traced MP4 and frame ZIP are visual artifacts. Marker overlays in those
 artifacts are drawn in image coordinates after conversion; the underlying movie
