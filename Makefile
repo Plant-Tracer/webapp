@@ -65,7 +65,7 @@ VEND_FILES := src/app/odb.py \
               src/app/s3_presigned.py
 
 export DEBIAN_FRONTEND=noninteractive
-export LOG_LEVEL ?= DEBUG
+export LOG_LEVEL ?= INFO
 
 # if AWS_REGION is set, we use the live system. Otherwise use minio and DynamoDBlocal
 ifeq ($(AWS_REGION),)
@@ -629,7 +629,7 @@ lambda-resize-lint: install-lambda-deps
 	PYTHONPATH=lambda-resize/src poetry run pylint lambda-resize/src
 
 lambda-resize-check: lambda-resize-lint $(LOCAL_TEST_REQ)
-	$(LOCAL_AWS_ENV) PYTHONPATH=.:src:lambda-resize/src:$$PYTHONPATH poetry run pytest lambda-resize/tests -q --cov=lambda-resize/src --cov-report=term -o junit_family=legacy --log-cli-level=DEBUG
+	$(LOCAL_AWS_ENV) PYTHONPATH=.:src:lambda-resize/src:$$PYTHONPATH poetry run pytest lambda-resize/tests -q --cov=lambda-resize/src --cov-report=term -o junit_family=legacy --log-cli-level=$(LOG_LEVEL)
 
 ################################################################
 ## lambda-web
@@ -654,7 +654,7 @@ lambda-web-lint: install-lambda-web-deps
 
 lambda-web-check: lambda-web-lint
 	$(MAKE) vend-lambda-web
-	PYTHONPATH=.:src:lambda-web/src poetry run pytest lambda-web/tests -q --cov=lambda-web/src/lambda_web --cov-report=term -o junit_family=legacy --log-cli-level=DEBUG
+	PYTHONPATH=.:src:lambda-web/src poetry run pytest lambda-web/tests -q --cov=lambda-web/src/lambda_web --cov-report=term -o junit_family=legacy --log-cli-level=$(LOG_LEVEL)
 
 .PHONY: lambda-resize/src/requirements.txt lambda-web/src/requirements.txt template-lint sam-config-show sam-config-path-check sam-config-check sam-config-guided-bootstrap sam-version-check sam-deploy-version-check stamp-sam-deploy-metadata sam-status
 lambda-resize/src/requirements.txt:
