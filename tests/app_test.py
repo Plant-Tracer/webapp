@@ -24,6 +24,17 @@ def test_version(client):  # Use the app fixture
     assert os.environ[C.DYNAMODB_TABLE_PREFIX] in response.text
 
 
+def test_root_clears_invalid_api_key_cookie(client):
+    """An invalid browser cookie must use the normal logout redirect, not a 500."""
+    client.set_cookie(apikey.cookie_name(), "not-a-valid-api-key")
+
+    response = client.get("/")
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/logout")
+    assert f"{apikey.cookie_name()}=" in response.headers["Set-Cookie"]
+
+
 # These check type conversion
 
 def test_get_float(mocker):
