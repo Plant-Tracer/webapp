@@ -124,8 +124,9 @@ admin activity work in PR #1151.
 
 ``S3_UPLOAD_STAGING_OBJECT_KEY_TEMPLATE`` reserves the proposed
 ``uploads/{deployment_id}/{course_id}/{movie_id}.mov`` contract for that work.
-It is tested for deployment isolation but is not used by the current browser
-upload flow. Issue #1152 will decide and implement any corresponding
+Each placeholder is one S3 key component and may not contain ``/``. It is
+tested for deployment isolation but is not used by the current browser upload
+flow. Issue #1152 will decide and implement any corresponding
 ``movies/{deployment_id}/`` durable layout.
 
 Metadata Stored with Original Movies
