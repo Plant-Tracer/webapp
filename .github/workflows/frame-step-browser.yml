@@ -53,6 +53,9 @@ jobs:
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
+          # ChromeDriver targets com.android.chrome; the default AOSP image
+          # intentionally does not include it.
+          target: google_apis_playstore
           arch: x86_64
           profile: pixel_2
           script: |
