@@ -156,7 +156,7 @@ lint: $(REQ)
 pylint:
 	$(MAKE) vend-lambda-resize
 	$(MAKE) vend-lambda-web
-	poetry run pylint $(PYLINT_OPTS) lambda-web/src/lambda_web lambda-web/tests lambda-resize src tests \
+	poetry run pylint $(PYLINT_OPTS) browser_tests lambda-web/src/lambda_web lambda-web/tests lambda-resize src tests \
 		etc/sam_config_tool.py etc/sam_config_writer.py *.py
 
 ## Mypy static analysis
@@ -199,6 +199,31 @@ pytest-coverage: $(LOCAL_TEST_REQ)
 # This doesn't work yet...
 pytest-selenium:
 	poetry run pytest -v --log-cli-level=$(LOG_LEVEL) tests/sitetitle_test.py
+
+.PHONY: frame-step-browser-test
+frame-step-browser-test: .venv/pyvenv.cfg
+	poetry run python -m pytest -v --log-cli-level=$(LOG_LEVEL) browser_tests/frame_step_browser_test.py
+
+ANALYSIS_MP4_INPUT ?=
+ANALYSIS_MP4_OUTPUT ?=
+ANALYSIS_MP4_ROTATION ?= 0
+ANALYSIS_MP4_MAX_WIDTH ?= 640
+ANALYSIS_MP4_MAX_HEIGHT ?= 480
+
+.PHONY: analysis-mp4-bundle analysis-mp4-browser-test
+analysis-mp4-bundle: install-lambda-deps
+	@test -n "$(ANALYSIS_MP4_INPUT)" || (echo "set ANALYSIS_MP4_INPUT=/path/to/movie.mp4"; exit 2)
+	@test -n "$(ANALYSIS_MP4_OUTPUT)" || (echo "set ANALYSIS_MP4_OUTPUT=/path/to/new-bundle-directory"; exit 2)
+	$(MAKE) vend-lambda-resize
+	PYTHONPATH=lambda-resize/src:$$PYTHONPATH poetry run python -m resize_app.analysis_mp4_cli \
+		"$(ANALYSIS_MP4_INPUT)" "$(ANALYSIS_MP4_OUTPUT)" \
+		--rotation "$(ANALYSIS_MP4_ROTATION)" \
+		--max-width "$(ANALYSIS_MP4_MAX_WIDTH)" \
+		--max-height "$(ANALYSIS_MP4_MAX_HEIGHT)"
+
+analysis-mp4-browser-test: install-lambda-deps
+	$(MAKE) vend-lambda-resize
+	PYTHONPATH=.:lambda-resize/src:$$PYTHONPATH poetry run pytest -v --log-cli-level=$(LOG_LEVEL) browser_tests/analysis_mp4_browser_test.py
 
 # Set these during development to speed testing of the one function you care about:
 TEST1MODULE=tests/endpoint_test.py
@@ -471,6 +496,7 @@ install-ubuntu:
 	which ffmpeg   || sudo apt-get install -y -qq ffmpeg
 	which lsof     || sudo apt-get install -y -qq lsof
 	which node     || sudo apt-get install -y -qq nodejs
+	node -e 'const [major, minor] = process.versions.node.split(".").map(Number); process.exit(major > 20 || (major === 20 && minor >= 8) ? 0 : 1)' || { curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -; sudo apt-get install -y -qq nodejs; }
 	which npm      || sudo apt-get install -y -qq npm
 	which zip      || sudo apt-get install -y -qq zip
 	which java     || sudo apt-get install -y -qq openjdk-21-jre-headless

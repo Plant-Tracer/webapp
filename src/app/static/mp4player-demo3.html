@@ -371,6 +371,10 @@
         return sample.is_sync || sample.is_rap ? 'key' : 'delta';
       }
 
+      function samplesInDecodeOrder(samples) {
+        return [...samples].sort((left, right) => left.dts - right.dts);
+      }
+
       async function decodeSamples(samples, videoTrack) {
         if (!window.VideoDecoder || !window.EncodedVideoChunk) {
           throw new Error('WebCodecs VideoDecoder is not available in this browser.');
@@ -407,7 +411,7 @@
         });
         decoder.configure(support.config);
 
-        for (const sample of samples) {
+        for (const sample of samplesInDecodeOrder(samples)) {
           if (decoderError) {
             throw decoderError;
           }
