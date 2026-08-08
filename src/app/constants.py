@@ -145,20 +145,27 @@ class C:
     DEFAULT_GET_TIMEOUT = 10
     YES = 'YES'
     NO = 'NO'
-    MOVIE_EXTENSION = ".mov"
-    MOVIE_PROCESSED_EXTENSION = '_processed.mp4'  # rotated/scaled movie written by Lambda (rotate or tracking)
-    ZIP_MOVIE_EXTENSION = '_mp4.zip'
     # Single place for analysis/shrunk frame size (zip frames and get-frame?size=analysis).
     ANALYSIS_FRAME_MAX_WIDTH = 640
     ANALYSIS_FRAME_MAX_HEIGHT = 480
-    JPEG_EXTENSION = ".jpg"
     PUT = 'put'
     GET = 'get'
     SCHEME_S3 = 's3'
     SCHEME_DB = 'db'
-    # S3 object key templates (course_id/movie_id{ext} and course_id/movie_id/frame_number{ext})
-    MOVIE_TEMPLATE = "{course_id}/{movie_id}{ext}"
-    FRAME_TEMPLATE = "{course_id}/{movie_id}/{frame_number:06d}{ext}"
+    # Runtime S3 object-key templates. Keep these synchronized with
+    # docs/Development/S3.rst. The staging template is reserved for issue #1152.
+    S3_COURSE_PREFIX_TEMPLATE = "{course_id}/"
+    S3_MOVIE_OBJECT_KEY_TEMPLATE = "{course_id}/{movie_id}.mov"
+    S3_TRACED_MOVIE_OBJECT_KEY_TEMPLATE = (
+        "{source_movie_stem}_traced{source_movie_extension}"
+    )
+    S3_ANALYSIS_ZIP_OBJECT_KEY_TEMPLATE = (
+        "{source_movie_stem}_zipfile{source_movie_extension}"
+    )
+    S3_FRAME_OBJECT_KEY_TEMPLATE = "{course_id}/{movie_id}/{frame_number:06d}.jpg"
+    S3_UPLOAD_STAGING_OBJECT_KEY_TEMPLATE = (
+        "uploads/{deployment_id}/{course_id}/{movie_id}.mov"
+    )
     SCHEME_DB_MAX_OBJECT_LEN = 16_000_000
     REDIRECT_FOUND = 302
     API_KEY_COOKIE_BASE = 'api_key'

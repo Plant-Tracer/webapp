@@ -15,3 +15,6 @@ exclude_also =
 omit =
     config.py
     config-3.py
+    # Generated copies of src/app; report coverage against the canonical source.
+    lambda-resize/src/resize_app/src/app/*
+    lambda-web/src/app/*

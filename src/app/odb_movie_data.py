@@ -12,7 +12,7 @@ import urllib.parse
 import requests
 from botocore.exceptions import ClientError,ParamValidationError
 
-from .s3_presigned import s3_client,make_urn,make_object_name
+from .s3_presigned import frame_object_key, make_urn, movie_object_key, s3_client
 from .constants import C,logger
 from .odb import (
     DDBO,
@@ -130,9 +130,10 @@ def set_movie_data(*,movie_id, movie_data):
     purge_movie_data(movie_id=movie_id)
     purge_movie_frames( movie_id=movie_id )
     purge_movie_zipfile( movie_id=movie_id )
-    oname = make_object_name( course_id = course_id_for_movie_id( movie_id ),
-                                        movie_id = movie_id,
-                                        ext=C.MOVIE_EXTENSION)
+    oname = movie_object_key(
+        course_id=course_id_for_movie_id(movie_id),
+        movie_id=movie_id,
+    )
     movie_data_urn        = make_urn( object_name = oname)
 
     write_object(movie_data_urn, movie_data)
@@ -211,10 +212,11 @@ def create_new_movie_frame(*, movie_id, frame_number, frame_data=None):
     course_id = course_id_for_movie_id(movie_id)
     if frame_data is not None:
         # upload the frame to the store and make a frame_urn
-        object_name = make_object_name(course_id=course_id,
-                                            movie_id=movie_id,
-                                            frame_number = frame_number,
-                                            ext=C.JPEG_EXTENSION)
+        object_name = frame_object_key(
+            course_id=course_id,
+            movie_id=movie_id,
+            frame_number=frame_number,
+        )
         frame_urn = make_urn( object_name = object_name)
         write_object(frame_urn, frame_data)
     else:
