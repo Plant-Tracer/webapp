@@ -27,6 +27,7 @@ from .schema import (
     User,
     AdminCourse,
     Movie,
+    LogEntry,
     Trackpoint,
     RenameMarkerRequest,
     validate_movie_field,
@@ -47,6 +48,7 @@ FRAMES = 'movie_frames'
 COURSES = 'courses'
 COURSE_USERS = 'course_users'
 LOGS = 'logs'
+LOG_ID = 'log_id'
 ROOT_USER_ID = 'u0'                # the root user
 
 
@@ -104,6 +106,11 @@ TRIM_END_FRAME = 'trim_end_frame'
 UPLOADED_AT = 'uploaded_at'
 LAST_ACTIVITY_AT = 'last_activity_at'
 UPLOAD_BYTES_EXPECTED = 'upload_bytes_expected'
+UPLOAD_STAGING_URN = 'upload_staging_urn'
+UPLOAD_EVENT_ID = 'upload_event_id'
+RESIZE_QUEUED_AT = 'resize_queued_at'
+RESIZE_STARTED_AT = 'resize_started_at'
+RESIZED_AT = 'resized_at'
 DATE_UPLOADED = 'date_uploaded'  # legacy read-only field
 VERSION = 'version'
 DELETED = 'deleted'
@@ -144,6 +151,7 @@ LAST_FRAME_TRACKED = 'last_frame_tracked' # computed, not stored
 # When status (tracking progress) was last updated; used to detect stale "tracking" lock (e.g. >1h ago)
 MOVIE_STATUS = 'status'
 MOVIE_STATE_UPLOADING  = 'uploading'
+MOVIE_STATE_PROCESSING = 'processing'
 MOVIE_STATE_READY      = 'ready'
 MOVIE_STATE_TRACING   = 'tracing'
 MOVIE_STATE_TRACING_COMPLETED    = 'tracing completed'
@@ -344,7 +352,7 @@ class DDBO:
                     if item['KeyType'] == 'HASH')
 
     # pylint: disable=too-many-locals
-    def update_table(self, table, key_value, updates: dict):
+    def update_table(self, table, key_value, updates: dict, *, condition_expression=None):
         """
         Generic updater for any DynamoDB Table resource.
 
@@ -393,11 +401,13 @@ class DDBO:
         }
         if expr_values:
             params["ExpressionAttributeValues"] = expr_values
+        if condition_expression is not None:
+            params["ConditionExpression"] = condition_expression
 
         # 5) run the update
         return table.update_item(**params)
 
-    def update_movie(self, movie_id, updates: dict, *, touch_activity=True):
+    def update_movie(self, movie_id, updates: dict, *, touch_activity=True, expected_status=None):
         """Update a movie and, by default, record its latest write activity.
 
         The former MySQL movie table exposed an automatically maintained
@@ -412,7 +422,47 @@ class DDBO:
         }
         if touch_activity:
             movie_updates[LAST_ACTIVITY_AT] = int(time.time())
-        return self.update_table(self.movies, movie_id, movie_updates)
+        condition = None if expected_status is None else Attr(MOVIE_STATUS).eq(expected_status)
+        return self.update_table(
+            self.movies,
+            movie_id,
+            movie_updates,
+            condition_expression=condition,
+        )
+
+    def put_movie_log(self, *, event_type, movie, ipaddr, log_id=None, event_id=None,
+                      object_key=None, sequencer=None, total_bytes=None,
+                      elapsed_seconds=None, if_absent=False):
+        """Validate and persist one movie lifecycle audit event."""
+        entry = LogEntry(
+            log_id=log_id or f"{int(time.time() * 1000)}-{uuid.uuid4()}",
+            ipaddr=ipaddr,
+            user_id=movie[USER_ID],
+            course_id=movie[COURSE_ID],
+            time_t=int(time.time()),
+            event_type=event_type,
+            movie_id=movie[MOVIE_ID],
+            event_id=event_id,
+            object_key=object_key,
+            sequencer=sequencer,
+            total_bytes=total_bytes,
+            elapsed_seconds=(
+                None if elapsed_seconds is None else Decimal(str(elapsed_seconds))
+            ),
+        )
+        params = {"Item": entry.model_dump(exclude_none=True)}
+        if if_absent:
+            params["ConditionExpression"] = Attr(LOG_ID).not_exists()
+        try:
+            self.logs.put_item(**params)
+        except ClientError as exc:
+            if (
+                    not if_absent
+                    or exc.response.get("Error", {}).get("Code")
+                    != "ConditionalCheckFailedException"
+            ):
+                raise
+        return entry
 
     ### api_key management
 

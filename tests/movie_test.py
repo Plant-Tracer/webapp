@@ -385,6 +385,7 @@ def test_new_movie_api(client, new_course):
 
     # Make sure data got there
     logger.debug("new_movie fixture: movie uploaded")
+    complete_movie_upload(api_key=api_key, movie_id=movie_id)
     retrieved_movie_data = get_movie_bytes(movie_id)
     assert len(movie_data) == len(retrieved_movie_data)
     assert movie_data == retrieved_movie_data

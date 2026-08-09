@@ -31,7 +31,7 @@ from .apikey import get_user_api_key, get_user_dict, in_demo_mode
 from .auth import AuthError,EmailNotInDatabase
 from .constants import (
     C, E, POST, GET_POST, __version__, logger, log_level, printable80,
-    stack_name, STACK_NAME,
+    stack_name, storage_deployment_id, STACK_NAME,
 )
 from .odb import (
     InvalidAPI_Key,
@@ -40,6 +40,7 @@ from .odb import (
     MOVIE_ID,
     COURSE_ID,
     MOVIE_DATA_URN,
+    UPLOAD_STAGING_URN,
     MOVIE_ZIPFILE_URN,
     MOVIE_TRACED_URN,
     MOVIE_TRACED_URL,
@@ -57,6 +58,7 @@ from .odb import (
 )
 from .s3_presigned import (
     movie_object_key,
+    upload_staging_object_key,
     make_urn,
     make_signed_url,
     make_presigned_post,
@@ -811,15 +813,27 @@ def api_new_movie():
                                          fpm=fpm,
                                          upload_bytes_expected=movie_data_length)
 
+    deployment_id = storage_deployment_id()
+    course_id = odb.course_id_for_movie_id(ret[MOVIE_ID])
     oname = movie_object_key(
-        course_id=odb.course_id_for_movie_id(ret[MOVIE_ID]),
+        deployment_id=deployment_id,
+        course_id=course_id,
         movie_id=ret[MOVIE_ID],
     )
     movie_data_urn = make_urn(object_name=oname)
-    odb.set_movie_data_urn(movie_id=ret[MOVIE_ID], movie_data_urn=movie_data_urn)
-
-    # Always upload to final key
-    upload_urn = movie_data_urn
+    upload_urn = make_urn(object_name=upload_staging_object_key(
+        deployment_id=deployment_id,
+        course_id=course_id,
+        movie_id=ret[MOVIE_ID],
+    ))
+    DDBO().update_movie(
+        ret[MOVIE_ID],
+        {
+            MOVIE_DATA_URN: movie_data_urn,
+            UPLOAD_STAGING_URN: upload_urn,
+        },
+        touch_activity=False,
+    )
     def _tristate_to_str(val):
         """Convert tristate int|None to S3 metadata string."""
         if val is None:
@@ -835,6 +849,9 @@ def api_new_movie():
         credit_by_name=_tristate_to_str(credit_by_name),
         attribution_name=attribution_name or '',
         fpm=fpm or '')
+    ret['upload_completion_mode'] = (
+        'http' if os.environ.get(C.AWS_REGION) == 'local' else 'eventbridge'
+    )
     return ret
 
 def set_movie_metadata(*, user_id=odb.ROOT_USER_ID, set_movie_id, movie_metadata):

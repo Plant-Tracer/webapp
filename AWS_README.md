@@ -21,4 +21,11 @@ Common variables:
 | `PLANTTRACER_S3_BUCKET` | Existing S3 bucket name, without `s3://`. |
 | `PLANTTRACER_LAMBDA_API_BASE` | Explicit lambda-resize HTTP API base URL. |
 
+Authentication
+--------------
+
+Deployment and live-stack commands use AWS IAM Identity Center (SSO). Refresh
+an expired session with `aws sso login` (optionally `aws sso login --profile
+<profile>`); do not use `aws login`.
+
 The S3 bucket is pre-existing and outlives the CloudFormation stack.

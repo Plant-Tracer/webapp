@@ -46,6 +46,9 @@ for example setting `status`, `total_frames`, `movie_zipfile_urn`, and
 - DynamoDB stores users, courses, API keys, movie metadata, frame trackpoints,
   and audit logs.
 - The S3 bucket is pre-existing and outlives the CloudFormation stack.
+- Browser uploads land in `uploads/{stack}/`. A prefix-filtered EventBridge
+  rule invokes lambda-resize, which validates and moves them to
+  `movies/{stack}/` before post-upload processing.
 - Research and attribution metadata must also be embedded in the MP4 so the S3
   archive remains self-describing if DynamoDB is rebuilt.
 

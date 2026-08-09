@@ -31,7 +31,7 @@ asset plan for external static hosting.
 | Operation | Method | Path | Auth | Purpose |
 |-----------|--------|------|------|---------|
 | Ping | GET | `/resize-api/v1/ping` | none | Health check; returns `{ "error": false, "status": "ok", ... }` with `app_version`, `deployed_at`, and selected stack parameters. |
-| Complete upload | POST | `/resize-api/v1/process-upload` | `x-api-key` header | Verifies the final S3 object and exact expected byte length, then records `uploaded_at` and `total_bytes`. |
+| Complete upload (local adapter) | POST | `/resize-api/v1/process-upload` | `x-api-key` header | Completes a MinIO staging upload through the same service used by the AWS EventBridge handler. |
 | First frame | GET | `/resize-api/v1/first-frame?api_key=...&movie_id=...` | query `api_key` | Returns JPEG frame 0 with saved rotation applied and scaled to the analysis size. |
 | Movie data | GET | `/resize-api/v1/movie-data?api_key=...&movie_id=...&format=json` | query `api_key` | Returns signed playback/download URLs as JSON. |
 | Movie data redirect | GET | `/resize-api/v1/movie-data?api_key=...&movie_id=...` | query `api_key` | 302 redirect to signed movie URL. |
@@ -51,11 +51,17 @@ Content-Type: application/json
 { "movie_id": "m..." }
 ```
 
-The caller must be allowed to edit the movie. Lambda-resize reads the final
-object with `HeadObject`, rejects a missing object or a byte count different
-from `upload_bytes_expected`, and sets `uploaded_at`, `total_bytes`, and
-`status="ready"`. Read-only superauditors cannot complete or otherwise mutate
-movies; superadmins can.
+This is a local-development compatibility adapter for MinIO. Deployed browsers
+do not call it; S3 Object Created events reach lambda-resize through
+EventBridge. The caller must be allowed to edit the movie. Lambda-resize reads
+the staging object with `HeadObject`, rejects a missing object or a byte count
+different from `upload_bytes_expected`, copies it to the durable key, records
+upload metadata, deletes staging, and starts post-upload processing. Read-only
+superauditors cannot complete or otherwise mutate movies; superadmins can.
+
+The EventBridge invocation is not a public HTTP endpoint. Its Pydantic envelope
+validation additionally checks the event source/type, bucket, deployment
+prefix, course/movie identifiers, and corresponding DynamoDB row.
 
 ## Trace Movie Request
 

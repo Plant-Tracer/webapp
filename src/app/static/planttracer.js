@@ -183,7 +183,7 @@ async function checkLambdaStatus() {
 }
 
 /*
- * Tell lambda-resize to verify the uploaded S3 object and record uploaded_at.
+ * Complete a local MinIO upload through lambda-resize's authenticated adapter.
  */
 async function startLambdaProcessing(movie_id) {
   if (typeof LAMBDA_API_BASE === 'undefined' || !LAMBDA_API_BASE) {
@@ -202,6 +202,20 @@ async function startLambdaProcessing(movie_id) {
     throw new Error(message || `Upload processing failed (${response.status}).`);
   }
   return response.json();
+}
+
+const UPLOAD_PROCESSING_TIMEOUT_MS = 5 * 60 * 1000;
+
+async function waitForUploadProcessing(movie_id) {
+  const deadline = Date.now() + UPLOAD_PROCESSING_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    const metadata = await _get_movie_metadata(movie_id);
+    if (metadata && metadata.resized_at && metadata.status === 'ready') {
+      return metadata;
+    }
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+  throw new Error('Timed out waiting for the uploaded movie to be processed.');
 }
 
 /*
@@ -296,10 +310,12 @@ async function upload_movie_post(movie_title, description, movieFile, research_u
       $('#upload_message').html(`Error uploading movie status=${r.status} ${r.statusText}`);
       return;
     }
-    // Phase 2: verify the object and set uploaded_at before it becomes visible.
-    await startLambdaProcessing(movie_id);
-    // Brief delay so DynamoDB is updated before we poll for first frame
-    await new Promise(resolve => setTimeout(resolve, 250));
+    // Production completion is authoritative from S3/EventBridge. MinIO local
+    // development uses the authenticated HTTP adapter for the same service.
+    if (obj.upload_completion_mode === 'http') {
+      await startLambdaProcessing(movie_id);
+    }
+    await waitForUploadProcessing(movie_id);
   } catch (e) {
     // #region agent log
     console.log("[DEBUG]", JSON.stringify({hypothesisId:"H_all",location:"planttracer.js:catch",message:"Upload catch",data:{name:e.name,message:e.message,cause:e.cause?String(e.cause):null},timestamp:Date.now()}));
@@ -402,7 +418,8 @@ async function _get_movie_metadata(movie_id){
   formData.append("movie_id",    movie_id);
   const r = await fetch(`${API_BASE}api/get-movie-metadata`, { method:"POST", body:formData});
   if (r.ok) {
-    return await r.json()['metadata'];
+    const response = await r.json();
+    return response.metadata;
   }
 }
 

@@ -341,13 +341,13 @@ Both routes are equivalent. Return users and courses visible to the caller.
 #### `POST /api/new-movie`
 
 Create a movie record and obtain a presigned S3 POST URL for uploading the
-video file directly to its final S3 key. The row initially has `created_at` but
-not `uploaded_at`. After S3 accepts the exact-size upload, the browser calls
-lambda-resize `POST /resize-api/v1/process-upload`; that service verifies the
-object with `HeadObject` and records `uploaded_at` and `total_bytes`. The browser
-does not construct the key: the API uses the canonical current-layout template
-`{course_id}/{movie_id}.mov` and returns the presigned POST fields needed to
-upload to it.
+video file to a deployment-scoped staging key. The row initially has
+`created_at`, `upload_staging_urn`, and the durable `movie_data_urn`, but not
+`uploaded_at`. In AWS, an S3 Object Created EventBridge event makes
+lambda-resize verify the exact byte count, move the object to its durable key,
+record upload metadata, and queue post-upload processing. In local MinIO mode,
+the browser invokes the authenticated `/resize-api/v1/process-upload`
+compatibility adapter. The browser polls metadata until processing is complete,
 then requests the first frame and links the user to Analyze.
 
 **Parameters**
@@ -373,9 +373,13 @@ then requests the first frame and links the user to Analyze.
   "presigned_post": {
     "url": "https://s3.amazonaws.com/...",
     "fields": { ... }
-  }
+  },
+  "upload_completion_mode": "eventbridge"
 }
 ```
+
+`upload_completion_mode` is `eventbridge` in deployed AWS stacks and `http` in
+local MinIO development.
 
 ---
 

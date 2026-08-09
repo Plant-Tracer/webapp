@@ -138,6 +138,11 @@ class Movie(BaseModel):
     uploaded_at: int | None = None
     last_activity_at: int | None = None
     upload_bytes_expected: Annotated[int | None, Field(ge=1)] = None
+    upload_staging_urn: str | None = None
+    upload_event_id: str | None = None
+    resize_queued_at: int | None = None
+    resize_started_at: int | None = None
+    resized_at: int | None = None
     # Read compatibility for DynamoDB rows created before uploaded_at replaced
     # date_uploaded. New writes must use uploaded_at.
     date_uploaded: int | None = None
@@ -237,13 +242,20 @@ class MovieFrame(BaseModel):
 
 
 class LogEntry(BaseModel):
-    """Logs"""
+    """DynamoDB audit event."""
 
     log_id: str
     ipaddr: str
     user_id: str
     course_id: str
     time_t: Annotated[int, Field(ge=0)]
+    event_type: str
+    movie_id: str
+    event_id: str | None = None
+    object_key: str | None = None
+    sequencer: str | None = None
+    total_bytes: Annotated[int | None, Field(ge=0)] = None
+    elapsed_seconds: Annotated[Decimal | None, Field(ge=0)] = None
 
 
 # Function to validate a single prop and value using the Movie schema

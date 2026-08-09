@@ -1,7 +1,8 @@
 # lambda-resize
 
-`lambda-resize` is the Plant Tracer video/frame/tracing service. It is deployed
-as a Lambda HTTP API and can also run locally through `make run-local-lambda-debug`.
+`lambda-resize` is the Plant Tracer video/frame/tracing service. It handles HTTP,
+SQS, and S3 Object Created EventBridge invocations and can also run locally
+through `make run-local-lambda-debug`.
 
 ## HTTP Routes
 
@@ -25,12 +26,24 @@ as a Lambda HTTP API and can also run locally through `make run-local-lambda-deb
   Queue retracing. The API key is sent in the `x-api-key` header. The JSON body
   contains `movie_id`, `frame_start`, and optionally `frame_end`.
 
+- `POST /resize-api/v1/process-upload`
+  Local MinIO compatibility adapter for the upload-completion service used by
+  the deployed EventBridge handler. Production browsers do not call this route.
+
 ## Queue Modes
 
 - Local: `TRACING_QUEUE_MODE=local` sends retrace work to an in-process queue
   drained by the local debug process.
 - Deployed: `TRACING_QUEUE_URL` points to SQS. SQS events are handled by the
-  same Lambda entry point.
+  same Lambda entry point. The queue carries retrace and post-upload jobs.
+
+## Upload Events
+
+Each deployed stack has an EventBridge rule matching the shared movie bucket
+and only `uploads/{stack}/`. The handler validates the event, copies the exact-
+size staging object to `movies/{stack}/`, deletes staging, and queues
+post-upload metadata processing. Upload completion, resize start, and resize
+completion are written to the DynamoDB `logs` table.
 
 ## Shared Code
 
