@@ -204,8 +204,10 @@ async function startLambdaProcessing(movie_id) {
   return response.json();
 }
 
+const UPLOAD_PROCESSING_TIMEOUT_MS = 5 * 60 * 1000;
+
 async function waitForUploadProcessing(movie_id) {
-  const deadline = Date.now() + (2 * 60 * 1000);
+  const deadline = Date.now() + UPLOAD_PROCESSING_TIMEOUT_MS;
   while (Date.now() < deadline) {
     const metadata = await _get_movie_metadata(movie_id);
     if (metadata && metadata.resized_at && metadata.status === 'ready') {
