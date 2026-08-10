@@ -14,6 +14,14 @@ from resize_app import analysis_mp4, analysis_mp4_cli
 from tests.fixtures.analysis_mp4_fixture import write_four_color_movie
 
 
+def test_project_root_contains_bundle_assets():
+    """The bundle builder finds the player and its local MP4 demuxer."""
+    root = analysis_mp4.project_root()
+
+    assert (root / "src/app/static/mp4player-demo3.html").is_file()
+    assert (root / "node_modules/mp4box/dist/mp4box.all.js").is_file()
+
+
 def ffmpeg_description(path: Path) -> str:
     """Return the installed ImageIO FFmpeg stream description."""
     result = subprocess.run(
