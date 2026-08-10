@@ -158,7 +158,8 @@ Development And Diagnostics
 ---------------------------
 
 ``LOG_LEVEL``
-   Logging level. Local Make targets default to ``DEBUG``.
+   Logging level. Local Make targets default to ``INFO``; set
+   ``LOG_LEVEL=DEBUG`` for an explicitly requested diagnostic run.
 
 ``FFMPEG_PATH``
    Optional path used by legacy/local tooling.

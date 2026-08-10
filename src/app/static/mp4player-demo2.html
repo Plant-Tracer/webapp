@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>MP4 Player Demo 2</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/video.js@8/dist/video-js.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@douglassllc/videojs-framebyframe@1.2.0/videojs.framebyframe.css">
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Arial, Helvetica, sans-serif;
+      }
+
+      body {
+        margin: 0;
+        background: #f6f7f8;
+        color: #1f2933;
+      }
+
+      main {
+        box-sizing: border-box;
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 32px 20px;
+      }
+
+      h1 {
+        margin: 0 0 18px;
+        font-size: 1.5rem;
+        font-weight: 700;
+      }
+
+      .video-js {
+        display: block;
+        width: 100%;
+        max-height: 70vh;
+        background: #000;
+      }
+
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+        margin-top: 14px;
+      }
+
+      button {
+        min-width: 72px;
+        border: 1px solid #9aa5b1;
+        border-radius: 4px;
+        padding: 8px 12px;
+        background: #fff;
+        color: #1f2933;
+        font: inherit;
+        cursor: pointer;
+      }
+
+      button:disabled {
+        color: #7b8794;
+        cursor: not-allowed;
+      }
+
+      output {
+        margin-left: auto;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Video.js 1 FPS Step Demo</h1>
+      <video
+        id="plant-movie"
+        class="video-js vjs-default-skin"
+        controls
+        preload="metadata">
+        <source src="https://simson.net/plantmovie.mp4" type="video/mp4">
+      </video>
+      <div class="controls">
+        <button id="play-button" type="button">Play</button>
+        <button id="pause-button" type="button">Pause</button>
+        <button id="next-frame-button" type="button">+1</button>
+        <button id="previous-frame-button" type="button">-1</button>
+        <output id="time-output">0.000 s</output>
+      </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/video.js@8/dist/video.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@douglassllc/videojs-framebyframe@1.2.0/videojs.framebyframe.js"></script>
+    <script>
+      const LOGICAL_FPS = 1;
+      const SOURCE_FPS = 15;
+
+      const player = videojs('plant-movie');
+      const playButton = document.getElementById('play-button');
+      const pauseButton = document.getElementById('pause-button');
+      const nextFrameButton = document.getElementById('next-frame-button');
+      const previousFrameButton = document.getElementById('previous-frame-button');
+      const timeOutput = document.getElementById('time-output');
+
+      let animationFrameId = 0;
+
+      function formatSeconds(seconds) {
+        return `${seconds.toFixed(3)} s`;
+      }
+
+      function currentTime() {
+        return player.currentTime() || 0;
+      }
+
+      function currentFrame() {
+        return Math.round(currentTime() * SOURCE_FPS);
+      }
+
+      function currentLogicalTime() {
+        return currentFrame() / LOGICAL_FPS;
+      }
+
+      function clampTime(seconds) {
+        const duration = player.duration();
+        if (Number.isFinite(duration)) {
+          return Math.min(Math.max(seconds, 0), duration);
+        }
+        return Math.max(seconds, 0);
+      }
+
+      function updateTime() {
+        timeOutput.value = formatSeconds(currentLogicalTime());
+      }
+
+      function updateFrameButtons() {
+        const paused = player.paused() || player.ended();
+        nextFrameButton.disabled = !paused;
+        previousFrameButton.disabled = !paused;
+      }
+
+      function updateWhilePlaying() {
+        updateTime();
+        if (!player.paused() && !player.ended()) {
+          animationFrameId = window.requestAnimationFrame(updateWhilePlaying);
+        }
+      }
+
+      function stopTimeUpdates() {
+        if (animationFrameId) {
+          window.cancelAnimationFrame(animationFrameId);
+          animationFrameId = 0;
+        }
+        updateTime();
+      }
+
+      function seekFrames(delta) {
+        if (!player.paused() && !player.ended()) {
+          return;
+        }
+        const frame = Math.max(currentFrame() + delta, 0);
+        player.currentTime(clampTime(frame / SOURCE_FPS));
+        updateTime();
+      }
+
+      playButton.addEventListener('click', () => {
+        player.playbackRate(LOGICAL_FPS / SOURCE_FPS);
+        void player.play();
+      });
+
+      pauseButton.addEventListener('click', () => {
+        player.pause();
+      });
+
+      nextFrameButton.addEventListener('click', () => {
+        seekFrames(1);
+      });
+
+      previousFrameButton.addEventListener('click', () => {
+        seekFrames(-1);
+      });
+
+      player.ready(() => {
+        player.playbackRate(LOGICAL_FPS / SOURCE_FPS);
+        if (player.framebyframe) {
+          player.controlBar.seekBack = player.controlBar.fullscreenToggle;
+          player.framebyframe({
+            fps: SOURCE_FPS,
+            steps: [
+              { text: '-1', step: -1 },
+              { text: '+1', step: 1 },
+            ],
+          });
+        }
+        updateFrameButtons();
+        updateTime();
+      });
+      player.on('loadedmetadata', updateTime);
+      player.on('timeupdate', updateTime);
+      player.on('seeked', updateTime);
+      player.on('play', () => {
+        updateFrameButtons();
+        updateWhilePlaying();
+      });
+      player.on('pause', () => {
+        updateFrameButtons();
+        stopTimeUpdates();
+      });
+      player.on('ended', () => {
+        updateFrameButtons();
+        stopTimeUpdates();
+      });
+    </script>
+  </body>
+</html>

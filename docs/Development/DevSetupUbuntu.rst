@@ -7,7 +7,9 @@ Install OS packages:
 
    sudo apt update
    sudo apt upgrade
-   sudo apt install git gh make curl lsof nodejs npm zip chromium-browser chromium-chromedriver openjdk-21-jre-headless ffmpeg
+   sudo apt install git gh make curl lsof zip chromium-browser chromium-chromedriver openjdk-21-jre-headless ffmpeg
+   curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+   sudo apt install nodejs
 
 Install Poetry if it is not already available, then clone and install:
 
