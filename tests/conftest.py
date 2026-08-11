@@ -15,9 +15,6 @@ from typing import Generator
 import urllib.parse
 import pytest
 from werkzeug.serving import make_server
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.common.exceptions import WebDriverException
 
 # Set FFMPEG_PATH before importing flask_app if ffmpeg is available (for tests that use resize_app.tracer).
 from app.constants import C
@@ -39,6 +36,8 @@ from .fixtures.app_client import client  # pylint: disable=wrong-import-position
 # Suppress verbose logging from urllib3 and selenium
 logging.getLogger('urllib3').setLevel(logging.WARNING)
 logging.getLogger('selenium').setLevel(logging.WARNING)
+
+pytest_plugins = ("browser_tests.chrome",)
 
 # Cursor/Electron inject env vars that can make Chrome crash when launched as a subprocess (e.g. Selenium).
 # Strip them so browser tests don't take down Chrome or the IDE.
@@ -106,32 +105,6 @@ def live_server(local_ddb, local_s3) -> Generator[str, None, None]:
         os.environ.pop(C.PLANTTRACER_LAMBDA_API_BASE, None)
     else:
         os.environ[C.PLANTTRACER_LAMBDA_API_BASE] = previous_lambda_api_base
-
-
-@pytest.fixture(scope="function")
-def chrome_driver() -> Generator[webdriver.Chrome, None, None]:
-    """Fixture to provide a configured Chrome/Chromium WebDriver.
-
-    Also collects JavaScript coverage if available (when files are instrumented
-    with babel-plugin-istanbul).
-    """
-    options = Options()
-    options.add_argument("--headless")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--window-size=1920,1080")
-
-    # Set Chrome path if specified in environment
-    if 'CHROME_PATH' in os.environ:
-        options.binary_location = os.environ['CHROME_PATH']
-
-    try:
-        driver = webdriver.Chrome(options=options)  # pylint: disable=not-callable
-        yield driver
-        driver.quit()
-    except WebDriverException as e:
-        pytest.skip(f"Chrome/Chromium not available: {e}")
 
 
 def get_movie_bytes(movie_id: str) -> bytes:
