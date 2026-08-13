@@ -28,6 +28,16 @@ def test_project_root_contains_bundle_assets():
     assert vendored_library.read_text(encoding="utf-8") == normalized_installed_text
 
 
+def test_require_file_validates_bundle_assets(tmp_path):
+    """Required bundle assets return unchanged and report an actionable missing-file error."""
+    asset = tmp_path / "asset.js"
+    asset.write_text("export {};\n", encoding="utf-8")
+
+    assert analysis_mp4.require_file(asset, missing_message="missing asset") == asset
+    with pytest.raises(FileNotFoundError, match="missing asset"):
+        analysis_mp4.require_file(tmp_path / "missing.js", missing_message="missing asset")
+
+
 def ffmpeg_description(path: Path) -> str:
     """Return the installed ImageIO FFmpeg stream description."""
     result = subprocess.run(
