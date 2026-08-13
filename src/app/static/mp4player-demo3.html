@@ -171,6 +171,11 @@
         return new URLSearchParams(window.location.search).get('src') || DEFAULT_MOVIE_URL;
       }
 
+      function canAutoLoadMovie() {
+        const url = new URL(movieUrl(), window.location.href);
+        return url.protocol === 'data:' || url.origin === window.location.origin;
+      }
+
       function setStatus(message) {
         statusOutput.value = message;
       }
@@ -518,7 +523,7 @@
       updateButtons();
       updateTime();
       updatePlaybackFps();
-      if (DEFAULT_MOVIE_URL.startsWith('./')) {
+      if (canAutoLoadMovie()) {
         void loadUrl();
       } else {
         setStatus('Click Load URL or choose a local MP4 file.');
