@@ -1,4 +1,4 @@
-const { changeCurrentCourse, makeDefaultCourse } = require('current_course');
+const { changeCurrentCourse, initCurrentCourse, makeDefaultCourse } = require('current_course');
 
 function coursePicker() {
   document.body.innerHTML = `
@@ -6,6 +6,7 @@ function coursePicker() {
       <option value="BIO-1">Biology</option>
       <option value="CHEM-2">Chemistry</option>
     </select>
+    <span id="current-course-name">Biology</span>
     <span id="current-course-status"></span>`;
   return document.getElementById('current-course-select');
 }
@@ -18,6 +19,7 @@ describe('current course picker', () => {
       { course_id: 'BIO-1', course_name: 'Biology' },
       { course_id: 'CHEM-2', course_name: 'Chemistry' },
     ];
+    global.course_view_id = null;
     sessionStorage.clear();
     fetch.resetMocks();
   });
@@ -64,5 +66,16 @@ describe('current course picker', () => {
       method: 'PATCH',
       body: JSON.stringify({ course_id: 'CHEM-2' }),
     }));
+  });
+
+  test('preserves the server label for an explicit course view', () => {
+    const select = coursePicker();
+    global.course_view_id = 'BIO-1';
+    sessionStorage.setItem('planttracer.active_course_id', 'CHEM-2');
+
+    initCurrentCourse();
+
+    expect(select.value).toBe('CHEM-2');
+    expect(document.getElementById('current-course-name').textContent).toBe('Biology');
   });
 });

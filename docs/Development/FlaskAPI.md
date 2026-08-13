@@ -665,7 +665,9 @@ Set a single metadata property on a movie or user record.
 
 Return audit log entries. At least one index filter is required by the database
 layer (`log_user_id`, `course_id`, or `ipaddr`). If the request provides none,
-the API defaults to the caller's own `log_user_id`.
+the API defaults to the caller's own `log_user_id`. Course administrators and
+super read roles may request course-wide logs. Other course members remain
+restricted to their own logs even when they supply `course_id`.
 
 **Parameters** (all optional filters)
 

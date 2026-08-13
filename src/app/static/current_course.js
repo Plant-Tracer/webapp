@@ -58,7 +58,7 @@ export function initCurrentCourse() {
       select.value = courseId;
       select.dataset.currentCourseId = courseId;
       const label = document.getElementById("current-course-name");
-      if (label) {
+      if (label && !course_view_id) {
         label.textContent = courseName(courseId);
       }
     }

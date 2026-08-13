@@ -632,7 +632,7 @@ def api_check_api_key():
 
 @api_bp.route('/get-logs', methods=POST)
 def api_get_logs():
-    """Get logs and return in JSON. The database function does all of the security checks, but we need to have a valid user."""
+    """Return audit logs visible to the authenticated user."""
     kwargs = {}
     for kw in ['start_time','end_time','course_id','course_key',
                'movie_id','log_user_id','ipaddr','count','offset']:
@@ -648,13 +648,13 @@ def api_get_logs():
             mode=course_context.CourseContextMode.READ,
         )
         kwargs[COURSE_ID] = context.effective_course_id
-    elif not any(k in kwargs for k in ('log_user_id', 'ipaddr')):
-        context = course_context.resolve_course_context(
-            user=user,
-            requested_course_id=None,
-            mode=course_context.CourseContextMode.READ,
+        may_read_course_logs = (
+            context.effective_course_id in user.get(odb.ADMIN_FOR_COURSES, [])
+            or odb.normalize_super_role(user) in odb.SUPER_READ_ROLES
         )
-        kwargs[COURSE_ID] = context.effective_course_id
+        if not may_read_course_logs:
+            kwargs.pop(COURSE_ID)
+            kwargs['log_user_id'] = user[USER_ID]
 
     # get_logs requires at least one index key (log_user_id, course_id, or ipaddr).
     if not any(k in kwargs for k in ('log_user_id', 'course_id', 'ipaddr')):
