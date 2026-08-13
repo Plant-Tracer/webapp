@@ -29,6 +29,7 @@ describe('list_movies_data', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    sessionStorage.clear();
     // Assign global variables from globalData
     global.user_id = parseInt(globalData.user_id, 10);
     global.admin = globalData.admin === 'true';
@@ -63,6 +64,20 @@ describe('list_movies_data', () => {
 
     // Mock document.querySelectorAll (kept for safety; no longer called by movies code)
     document.querySelectorAll = jest.fn(() => []);
+  });
+
+  test('requests movies for the course selected in this browser tab', () => {
+    global.API_BASE = '/';
+    global.api_key = 'test-api-key';
+    global.course_view_id = null;
+    sessionStorage.setItem('planttracer.active_course_id', 'CHEM-2');
+    fetch.mockImplementationOnce(() => new Promise(() => {}));
+
+    window.list_ready_function();
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const requestBody = fetch.mock.calls[0][1].body;
+    expect(requestBody.get('course_id')).toBe('CHEM-2');
   });
 
   test('should create the correct HTML for published movies', () => {
