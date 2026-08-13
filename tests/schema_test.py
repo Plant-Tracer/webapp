@@ -46,8 +46,8 @@ def test_user_schema():
         created=0,
         enabled=0,
         admin_for_courses=[],
-        primary_course_id="p",
-        primary_course_name="c",
+        default_course_id="p",
+        default_course_name="c",
         courses=["p"],
     )
     assert u.super_role == "none"
@@ -66,8 +66,8 @@ def test_user_schema():
             created=0,
             enabled=0,
             admin_for_courses=[],
-            primary_course_id="p",
-            primary_course_name="c",
+            default_course_id="p",
+            default_course_name="c",
             courses=["p"],
             super_role="auditor",
         )

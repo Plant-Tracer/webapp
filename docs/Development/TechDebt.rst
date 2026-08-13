@@ -13,7 +13,7 @@ Easy / Fast
   movies through direct API/Lambda calls. Files: 4-6.
 
 * Validate upload preconditions before creating a movie.
-  Impact: medium; returns a clear error when a user lacks ``primary_course_id``
+  Impact: medium; returns a clear error when a user lacks a valid course context
   instead of raising a late ``KeyError``. Files: 3-5.
 
 * Remove temporary upload debug logging and stale comments.

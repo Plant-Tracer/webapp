@@ -77,6 +77,11 @@ Release Notes
 
 Unreleased Summary
 ******************
+    * Courses: make the current-course pull-down tab-local, send ``course_id``
+      with course-scoped browser requests, and add an explicit **Make default**
+      action
+    * Data model: rename the profile's ``primary_course_*`` fields to
+      ``default_course_*`` with read compatibility and a dry-run migration tool
     * Security: serve the MP4 demuxer locally, integrity-protect the remaining
       pinned demo dependencies, bound WebCodecs frame retention, and avoid
       automatically contacting the demo movie host

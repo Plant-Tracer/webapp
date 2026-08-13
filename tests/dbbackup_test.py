@@ -75,7 +75,7 @@ class BackupScenario:
 
     source_prefix: str
     bucket: str
-    primary_course_id: str
+    default_course_id: str
     movie_course_id: str
     migration_course_id: str
     owner_user_id: str
@@ -288,8 +288,8 @@ def make_user(
     user_id: str,
     email: str,
     name: str,
-    primary_course_id: str,
-    primary_course_name: str,
+    default_course_id: str,
+    default_course_name: str,
     courses: list[str],
     admin_for_courses: list[str] | None = None,
     created: int = 1_800_000_000,
@@ -302,8 +302,8 @@ def make_user(
             CREATED: created,
             ENABLED: 1,
             "admin_for_courses": admin_for_courses or [],
-            "primary_course_id": primary_course_id,
-            "primary_course_name": primary_course_name,
+            "default_course_id": default_course_id,
+            "default_course_name": default_course_name,
             "courses": courses,
         }
     )
@@ -375,7 +375,7 @@ def create_movie(
 def backup_scenario(prefix_tools, local_s3) -> BackupScenario:
     ddbo = prefix_tools["set_prefix"](prefix_tools["source_prefix"])
     suffix = uuid.uuid4().hex[:8]
-    primary_course_id = f"backup-primary-{suffix}"
+    default_course_id = f"backup-default-{suffix}"
     movie_course_id = f"backup-movies-{suffix}"
     migration_course_id = f"backup-target-{suffix}"
     owner_user_id = odb.new_user_id()
@@ -383,7 +383,7 @@ def backup_scenario(prefix_tools, local_s3) -> BackupScenario:
     owner_email = f"backup-owner-{suffix}@example.com"
     admin_email = f"backup-admin-{suffix}@example.com"
 
-    make_course(ddbo, primary_course_id)
+    make_course(ddbo, default_course_id)
     make_course(ddbo, movie_course_id, admins=[admin_user_id])
     make_course(ddbo, migration_course_id)
     make_user(
@@ -391,17 +391,17 @@ def backup_scenario(prefix_tools, local_s3) -> BackupScenario:
         user_id=owner_user_id,
         email=owner_email,
         name="Backup Owner",
-        primary_course_id=primary_course_id,
-        primary_course_name=f"Course {primary_course_id}",
-        courses=[primary_course_id, movie_course_id],
+        default_course_id=default_course_id,
+        default_course_name=f"Course {default_course_id}",
+        courses=[default_course_id, movie_course_id],
     )
     make_user(
         ddbo,
         user_id=admin_user_id,
         email=admin_email,
         name="Backup Admin",
-        primary_course_id=movie_course_id,
-        primary_course_name=f"Course {movie_course_id}",
+        default_course_id=movie_course_id,
+        default_course_name=f"Course {movie_course_id}",
         courses=[movie_course_id],
         admin_for_courses=[movie_course_id],
     )
@@ -437,7 +437,7 @@ def backup_scenario(prefix_tools, local_s3) -> BackupScenario:
     return BackupScenario(
         source_prefix=prefix_tools["source_prefix"],
         bucket=local_s3,
-        primary_course_id=primary_course_id,
+        default_course_id=default_course_id,
         movie_course_id=movie_course_id,
         migration_course_id=migration_course_id,
         owner_user_id=owner_user_id,
@@ -532,7 +532,7 @@ def test_backup_selection_matrix(
     assert (backup_scenario.deleted_movie_id in movies) is include_deleted
 
     if len(selection_args) > 1 and selection_args[1] == "--user-email":
-        assert backup_scenario.primary_course_id in courses
+        assert backup_scenario.default_course_id in courses
 
 
 def test_backup_warns_and_skips_missing_movie_object(
@@ -642,8 +642,8 @@ def test_list_prefixes_reports_complete_prefix_counts(prefix_tools):
         user_id=user_id,
         email=email,
         name="Prefix List User",
-        primary_course_id=course_id,
-        primary_course_name=f"Course {course_id}",
+        default_course_id=course_id,
+        default_course_name=f"Course {course_id}",
         courses=[course_id],
         created=1_700_000_000,
     )
@@ -769,15 +769,15 @@ def test_restore_preflight_commit_and_collision(tmp_path, prefix_tools, backup_s
     assert s3_object_bytes(backup_scenario.bucket, backup_scenario.active_movie_key) == backup_scenario.active_movie_bytes
 
     collision_ddbo = prefix_tools["create_empty_prefix"](collision_prefix)
-    make_course(collision_ddbo, backup_scenario.primary_course_id)
+    make_course(collision_ddbo, backup_scenario.default_course_id)
     make_user(
         collision_ddbo,
         user_id=odb.new_user_id(),
         email=backup_scenario.owner_email,
         name="Existing User",
-        primary_course_id=backup_scenario.primary_course_id,
-        primary_course_name=f"Course {backup_scenario.primary_course_id}",
-        courses=[backup_scenario.primary_course_id],
+        default_course_id=backup_scenario.default_course_id,
+        default_course_name=f"Course {backup_scenario.default_course_id}",
+        courses=[backup_scenario.default_course_id],
     )
     before_collision = snapshot_prefix(prefix_tools, collision_prefix)
     collision = run_dbbackup(

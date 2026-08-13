@@ -44,8 +44,9 @@
       {% else %}
       const demo_mode = false;
       {% endif %}
-      const user_primary_course_id = {{ user_primary_course_id | tojson }};
-      const primary_course_name = {{ primary_course_name | tojson }};
+      const user_default_course_id = {{ user_default_course_id | tojson }};
+      const default_course_name = {{ default_course_name | tojson }};
+      const course_choices = {{ course_choices | tojson }};
       const course_view_id = {{ course_view_id | tojson }};
       const course_view_name = {{ course_view_name | tojson }};
       const super_role = {{ super_role | tojson }};
@@ -54,8 +55,9 @@
       const api_key = null;
       const user_id = null;
       const demo_mode = false;
-      const user_primary_course_id = null;
-      const primary_course_name = null;
+      const user_default_course_id = null;
+      const default_course_name = null;
+      const course_choices = [];
       const course_view_id = null;
       const course_view_name = null;
       const super_role = "none";
@@ -142,16 +144,20 @@
     <div>
       {% if demo_mode %}<b>DEMO MODE:</b> {% endif %}
       Logged in as <b>{{user_name}}</b>. Current course:
-      <select id="current-course-select" data-current-course-id="{{user_primary_course_id}}"
+      <select id="current-course-select" data-current-course-id="{{user_default_course_id}}"
+              data-default-course-id="{{user_default_course_id}}"
               aria-label="Current course">
         {% for course in course_choices %}
-        {% if course.course_id == user_primary_course_id %}
+        {% if course.course_id == user_default_course_id %}
         <option value="{{course.course_id}}" selected>{{course.course_name}}</option>
         {% else %}
         <option value="{{course.course_id}}">{{course.course_name}}</option>
         {% endif %}
         {% endfor %}
       </select>.
+      {% if not demo_mode %}
+      <button id="current-course-make-default" type="button">Make default</button>
+      {% endif %}
       <span id="current-course-status" role="status" aria-live="polite"></span>
     </div>
     <script type="module" src="{{ url_for('static', filename='current_course.js') }}"></script>

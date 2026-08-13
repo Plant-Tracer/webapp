@@ -13,7 +13,9 @@ describe('bulk_register_users_func', () => {
         global.planttracer_endpoint = 'some_endpoint'
         global.API_BASE = 'http://example.com/'
         global.api_key = 'test_api_key';
-        global.user_primary_course_id = 1;
+        global.user_default_course_id = 1;
+        global.course_choices = [{ course_id: 1, course_name: 'Course 1' }];
+        sessionStorage.clear();
         global.list_users = jest.fn();
 
       // Add the mock DOM elements the function expects to find
@@ -49,7 +51,7 @@ describe('bulk_register_users_func', () => {
         expect($.post).toHaveBeenCalledWith(`${API_BASE}api/bulk-register`, {
             api_key,
             planttracer_endpoint: window.origin + "",
-            course_id: user_primary_course_id,
+            course_id: user_default_course_id,
             "email-addresses": 'test@example.com',
             "names": '',
         });
@@ -73,7 +75,7 @@ describe('bulk_register_users_func', () => {
         expect($.post).toHaveBeenCalledWith(`${API_BASE}api/bulk-register`, {
             api_key,
             planttracer_endpoint: window.origin + "",
-            course_id: user_primary_course_id,
+            course_id: user_default_course_id,
             "email-addresses": 'missingdomain@.com',
             "names": '',
         });
@@ -93,7 +95,7 @@ describe('bulk_register_users_func', () => {
         expect($.post).toHaveBeenCalledWith(`${API_BASE}api/bulk-register`, {
             api_key,
             planttracer_endpoint: window.origin + "",
-            course_id: user_primary_course_id,
+            course_id: user_default_course_id,
             "email-addresses": 'alice@example.com',
             "names": 'Alice Smith',
         });
@@ -112,7 +114,7 @@ describe('bulk_register_users_func', () => {
         expect($.post).toHaveBeenCalledWith(`${API_BASE}api/bulk-register`, {
             api_key,
             planttracer_endpoint: window.origin + "",
-            course_id: user_primary_course_id,
+            course_id: user_default_course_id,
             "email-addresses": 'alice@example.com\nbob@example.com\ncharlie@example.com',
             "names": 'Alice Smith\n\nCharlie Darwin',
         });
@@ -131,7 +133,7 @@ describe('bulk_register_users_func', () => {
         expect($.post).toHaveBeenCalledWith(`${API_BASE}api/bulk-register`, {
             api_key,
             planttracer_endpoint: window.origin + "",
-            course_id: user_primary_course_id,
+            course_id: user_default_course_id,
             "email-addresses": 'alice@example.com\nbob@example.com',
             "names": '\n',
         });

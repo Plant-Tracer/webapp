@@ -105,7 +105,7 @@ receive HTTP 400.
         "user_id": "u...",
         "user_name": "Alice",
         "email": "alice@example.edu",
-        "primary_course_id": "PlantTracer 101",
+        "default_course_id": "PlantTracer 101",
         "super_role": "none",
         "created_at": 1784800100,
         "last_movie_activity_at": null,
@@ -162,7 +162,7 @@ clients must treat restart markers as opaque. Course rows include the registrati
 request enrollment in that course. The admin page masks each course key by default;
 its per-row eye control reveals or hides the value without changing it.
 Admin table columns have visible drag/keyboard resize handles. Course links open
-`/list?course_id=...` in a new tab without changing the user's persisted primary
+`/list?course_id=...` in a new tab without changing the user's persisted default
 course. Movie rows use a visible `⋮` menu for play, traced download, and—for
 `superadmin` only—Analyze.
 
@@ -183,11 +183,12 @@ the traced movie. The response does not expose stored S3 URNs. Both
 
 ### User & Registration
 
-#### `PATCH /api/current-course`
+#### `PATCH /api/default-course`
 
-Change the signed-in user's current/primary course. The selected course must
+Change the signed-in user's profile default. The selected course must
 already be present in that user's course memberships. The endpoint uses the
 existing authentication cookie and does not grant course membership.
+``PATCH /api/current-course`` is a temporary compatibility alias.
 
 **JSON request**
 
@@ -297,6 +298,21 @@ Validate an API key and return the associated user record.
 
 ### User Listing
 
+### Course context
+
+Authenticated browser requests that operate on course data send ``course_id``.
+The server validates that course against the authenticated user's memberships.
+For reads, an omitted or deleted course falls back to the profile's valid
+``default_course_id`` and then to the first valid membership. Mutations reject a
+deleted explicit course with HTTP 409, and all operations reject an existing
+course outside the caller's authority with HTTP 403.
+
+The pull-down stores the active course in tab-scoped ``sessionStorage``. It does
+not update the user profile. ``PATCH /api/default-course`` with
+``{"course_id": "..."}`` is the explicit operation for changing the profile
+default. ``PATCH /api/current-course`` remains a compatibility alias during the
+migration.
+
 #### `POST /api/list-users`
 #### `POST /api/list-users-courses`
 
@@ -304,9 +320,8 @@ Both routes are equivalent. Return users and courses visible to the caller.
 
 **Behavior by role**
 
-- **Admin:** Returns all users enrolled in every course the caller admins, sorted by
-  `primary_course_id`. Also returns all those courses in the `courses` list.
-- **Non-admin:** Returns only the caller's own user record and their enrolled courses.
+- **Admin:** Returns users enrolled in the requested administered course.
+- **Non-admin:** Returns only the caller's own record for the resolved course.
 
 **Response**
 
@@ -318,7 +333,7 @@ Both routes are equivalent. Return users and courses visible to the caller.
       "user_id": "u...",
       "user_name": "Alice",
       "email": "alice@example.com",
-      "primary_course_id": "PlantTracer-101",
+      "default_course_id": "PlantTracer-101",
       "courses": ["PlantTracer-101"],
       "admin_for_courses": [],
       "first": 1714000000,
@@ -386,9 +401,9 @@ local MinIO development.
 #### `POST /api/list-movies`
 
 List all movies visible to the caller. An optional `course_id` selects one
-course for a tab-local admin view; the caller must be a member or have a
-`superauditor`/`superadmin` role. The query does not alter the user's primary
-course.
+course for the tab; the caller must be a member or have a
+`superauditor`/`superadmin` read role. The query does not alter the user's
+default course. A missing deleted course falls back to the valid default.
 
 **Response**
 

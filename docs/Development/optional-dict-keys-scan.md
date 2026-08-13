@@ -8,7 +8,7 @@ move often.
 
 | Area | Risk | Notes |
 |------|------|-------|
-| User primary course | High | Upload and page-context code assumes `primary_course_id` exists for logged-in users. Return a clear 400 or setup error before creating movies. |
+| User default course | High | Course-aware APIs resolve a valid explicit `course_id`, then `default_course_id`, then a membership; return a setup error if none exists. |
 | Movie access | High | Direct movie access checks must match movie-list visibility: owner, admin, or published course-visible movie. |
 | Movie artifact URNs | Medium | `movie_data_urn`, `movie_zipfile_urn`, and `movie_traced_urn` are absent during parts of upload/tracing. Use `.get()` or typed optional fields. |
 | Lambda queue messages | Medium | Local/SQS messages are dicts with `api_key`, `movie_id`, and `frame_start`. A Pydantic message model would make retries safer. |

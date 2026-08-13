@@ -25,7 +25,7 @@ from .odb import (
     MOVIE_DATA_URN,
     MOVIE_STATUS,
     MOVIE_TRACED_URN,
-    PRIMARY_COURSE_ID,
+    DEFAULT_COURSE_ID,
     PUBLISHED,
     TITLE,
     TOTAL_BYTES,
@@ -128,7 +128,7 @@ class AdminUserSummary(BaseModel):
     user_id: str
     user_name: str
     email: str
-    primary_course_id: str
+    default_course_id: str
     super_role: str
     courses: list[AdminUserCourseSummary]
     created_at: int | None = None
@@ -305,7 +305,7 @@ def user_summary(user) -> AdminUserSummary:
         user_id=user[USER_ID],
         user_name=user.get(USER_NAME, ""),
         email=user.get(EMAIL, ""),
-        primary_course_id=user.get(PRIMARY_COURSE_ID, ""),
+        default_course_id=odb.normalize_user_default_course(user).get(DEFAULT_COURSE_ID, ""),
         super_role=odb.normalize_super_role(user),
         courses=sorted(courses, key=lambda course: course.course_id),
         created_at=user.get(CREATED),

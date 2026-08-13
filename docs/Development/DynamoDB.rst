@@ -123,18 +123,23 @@ One record per registered user.
        or ``superadmin`` for read/write admin access. Legacy ``super_auditor`` and
        ``super_admin`` values are normalized at read time; rows without the field are
        treated as ``none``.
-   * - ``primary_course_id``
+   * - ``default_course_id``
      - String
-     - The course the user registered through; used as default context
-   * - ``primary_course_name``
+     - Profile default used only when a request has no valid course context
+   * - ``default_course_name``
      - String
-     - Denormalized name of the primary course
+     - Denormalized name of the default course
    * - ``courses``
      - List of strings
      - All courses the user is enrolled in
    * - ``admin_for_courses``
      - List of strings
      - Courses for which the user has admin privileges
+
+Legacy ``primary_course_id`` and ``primary_course_name`` attributes are read
+only for migration compatibility. Run ``dbutil.py
+migrate-default-course-fields`` to preview the migration and repeat with
+``--commit`` to write the default names and remove the legacy attributes.
 
 
 unique_emails

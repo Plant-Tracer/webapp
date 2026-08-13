@@ -204,7 +204,7 @@ downloading it again. If the current S3 object is missing but the same object is
 already present in the existing archive, ``backup`` records a warning and reuses
 the existing archived copy.
 
-For a user backup, include the user, the user's primary course, every course
+For a user backup, include the user, the user's default course, every course
 that contains one of the user's movies, the corresponding enrollment rows, the
 user's selected movie rows, their frame rows, and their movie MP4 files.
 
@@ -307,7 +307,7 @@ backup and restore.
 Moving a user or course must update every field and index table needed to avoid
 database inconsistency, including:
 
-* user course lists and primary course fields where applicable;
+* user course lists and default course fields where applicable;
 * ``course_users`` rows;
 * course admin lists when affected;
 * movie ``course_id`` values;

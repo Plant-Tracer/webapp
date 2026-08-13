@@ -198,7 +198,7 @@ The base template currently emits these globals:
      const api_key = "{{api_key}}";
      const user_id = "{{user_id}}";
      const demo_mode = true_or_false;
-     const user_primary_course_id = "{{user_primary_course_id}}";
+     const user_default_course_id = "{{user_default_course_id}}";
      const MAX_FILE_UPLOAD = {{MAX_FILE_UPLOAD}};
      const admin = true_or_false;
    </script>
@@ -239,7 +239,7 @@ Relevant Browser Globals
 |                          |                                | Enabled when ``DEMO_MODE`` is set or the      | status text, and hides controls that should not be     |
 |                          |                                | request hostname has a ``-demo`` label.       | available in demo mode.                                |
 +--------------------------+--------------------------------+-----------------------------------------------+--------------------------------------------------------+
-| ``user_primary_course_id`` | ``user_primary_course_id``   | The current user's validated record.          | Used by course-scoped browser features such as user    |
+| ``user_default_course_id`` | ``user_default_course_id``   | The current user's profile default.           | Fallback for the tab-scoped active course.             |
 |                          |                                |                                               | management and course movie filtering.                 |
 +--------------------------+--------------------------------+-----------------------------------------------+--------------------------------------------------------+
 | ``admin``                | ``admin``                      | ``odb.check_course_admin(...)`` for the       | Enables admin-only browser behavior such as bulk       |
@@ -281,7 +281,7 @@ The most important runtime uses are:
   * Included in Flask form posts and in Lambda calls such as retrace and
     first-frame fetch.
 
-* ``user_id``, ``demo_mode``, ``user_primary_course_id``, ``admin``
+* ``user_id``, ``demo_mode``, ``user_default_course_id``, ``admin``
 
   * Used by the browser to decide which controls to show, which actions are
     allowed, and which movies belong in each UI section.

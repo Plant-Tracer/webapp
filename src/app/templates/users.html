@@ -8,7 +8,7 @@
 {% if admin %}
 Below is a list of all of the users in all of the courses in which you are an admin.
 {% else %}
-Below is your user information for course {{ primary_course_name }}.
+Below is your user information for the active course.
 {% endif %}
 
 <div id='your-users'></div>
@@ -18,7 +18,7 @@ Below is your user information for course {{ primary_course_name }}.
 
 <div id="bulk-register-users">
   <form id="bulk_register_form" class="pure-form pure-form-aligned" action="javascript:void(0)">
-    <input id="br_course_id" type="hidden" name="course_id" value="{{user_primary_course_id}}">
+    <input id="br_course_id" type="hidden" name="course_id" value="{{user_default_course_id}}">
 
     <p>You can register students for your class by entering their information
       into the text box below.</p>

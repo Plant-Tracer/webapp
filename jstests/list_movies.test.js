@@ -42,7 +42,11 @@ describe('list_movies_data', () => {
     global.DELETE_BUTTON = globalData.DELETE_BUTTON;
     global.UNDELETE_BUTTON = globalData.UNDELETE_BUTTON;
     global.TABLE_HEAD = globalData.TABLE_HEAD;
-    global.user_primary_course_id = parseInt(globalData.user_primary_course_id, 10);
+    global.user_default_course_id = parseInt(globalData.user_default_course_id, 10);
+    global.course_choices = [
+      { course_id: global.user_default_course_id, course_name: 'Default' },
+      { course_id: 'CHEM-2', course_name: 'Chemistry' },
+    ];
     global.course_view_id = null;
 
     // Mock DataTables so planttracer.js can call $.fn.DataTable() without a real browser
@@ -133,7 +137,7 @@ describe('list_movies_data', () => {
       {
         movie_id: 2,
         user_id: 2,
-        course_id: global.user_primary_course_id,
+        course_id: global.user_default_course_id,
         published: 1,
         title: 'Read-only Movie',
         deleted: 0,
