@@ -69,74 +69,77 @@ def ensure_test_identity(*, stack_name):
 
 
 def run_workflow(*, endpoint, stack_name, movie_path, timeout):
-    """Run the deployed workflow and remove the test movie on success."""
+    """Run the deployed workflow and always revoke its temporary API key."""
     ddbo = odb.DDBO()
     course_id, _user_id, api_key = ensure_test_identity(stack_name=stack_name)
-    movie_bytes = movie_path.read_bytes()
-    response = requests.post(
-        f"{endpoint.rstrip('/')}/{NEW_MOVIE_PATH}",
-        data={
-            API_KEY_FIELD: api_key,
-            "title": f"deployment test {int(time.time())}",
-            "description": "automated post-deploy EventBridge workflow test",
-            "movie_data_sha256": hashlib.sha256(movie_bytes).hexdigest(),
-            "movie_data_length": len(movie_bytes),
-            "fpm": "30",
-        },
-        timeout=30,
-    )
-    response.raise_for_status()
-    created = NewMovieResponse.model_validate(response.json())
-    if created.error or created.upload_completion_mode != "eventbridge":
-        raise RuntimeError("deployed new-movie did not select EventBridge completion")
+    try:
+        movie_bytes = movie_path.read_bytes()
+        response = requests.post(
+            f"{endpoint.rstrip('/')}/{NEW_MOVIE_PATH}",
+            data={
+                API_KEY_FIELD: api_key,
+                "title": f"deployment test {int(time.time())}",
+                "description": "automated post-deploy EventBridge workflow test",
+                "movie_data_sha256": hashlib.sha256(movie_bytes).hexdigest(),
+                "movie_data_length": len(movie_bytes),
+                "fpm": "30",
+            },
+            timeout=30,
+        )
+        response.raise_for_status()
+        created = NewMovieResponse.model_validate(response.json())
+        if created.error or created.upload_completion_mode != "eventbridge":
+            raise RuntimeError("deployed new-movie did not select EventBridge completion")
 
-    movie_id = created.movie_id
-    upload = requests.post(
-        created.presigned_post.url,
-        data=created.presigned_post.fields,
-        files={"file": (movie_path.name, movie_bytes, "video/mp4")},
-        timeout=timeout,
-    )
-    upload.raise_for_status()
-    uploaded_movie = wait_for_movie(
-        ddbo,
-        movie_id,
-        lambda movie: bool(movie.get(odb.RESIZED_AT)),
-        timeout=timeout,
-        phase="upload processing",
-    )
-    if uploaded_movie.get(odb.MOVIE_STATUS) != odb.MOVIE_STATE_READY:
-        raise RuntimeError(f"movie {movie_id} is not ready after upload processing")
+        movie_id = created.movie_id
+        upload = requests.post(
+            created.presigned_post.url,
+            data=created.presigned_post.fields,
+            files={"file": (movie_path.name, movie_bytes, "video/mp4")},
+            timeout=timeout,
+        )
+        upload.raise_for_status()
+        uploaded_movie = wait_for_movie(
+            ddbo,
+            movie_id,
+            lambda movie: bool(movie.get(odb.RESIZED_AT)),
+            timeout=timeout,
+            phase="upload processing",
+        )
+        if uploaded_movie.get(odb.MOVIE_STATUS) != odb.MOVIE_STATE_READY:
+            raise RuntimeError(f"movie {movie_id} is not ready after upload processing")
 
-    odb.put_frame_trackpoints(
-        movie_id=movie_id,
-        frame_number=0,
-        trackpoints=[
-            Trackpoint(
-                x=max(1, int(uploaded_movie[odb.WIDTH]) // 2),
-                y=max(1, int(uploaded_movie[odb.HEIGHT]) // 2),
-                label="Apex",
-                frame_number=0,
-            )
-        ],
-    )
-    traced = requests.post(
-        f"{endpoint.rstrip('/')}/{TRACE_MOVIE_PATH}",
-        headers={"x-api-key": api_key},
-        json={MOVIE_ID_FIELD: movie_id, "frame_start": 0, "frame_end": 2},
-        timeout=30,
-    )
-    traced.raise_for_status()
-    wait_for_movie(
-        ddbo,
-        movie_id,
-        lambda movie: movie.get(odb.MOVIE_STATUS) == odb.MOVIE_STATE_TRACING_COMPLETED,
-        timeout=timeout,
-        phase="tracing",
-    )
-    odb_movie_data.purge_movie(movie_id=movie_id)
-    ddbo.batch_delete_movie_ids([movie_id])
-    logging.info("deployed workflow passed for stack=%s course=%s", stack_name, course_id)
+        odb.put_frame_trackpoints(
+            movie_id=movie_id,
+            frame_number=0,
+            trackpoints=[
+                Trackpoint(
+                    x=max(1, int(uploaded_movie[odb.WIDTH]) // 2),
+                    y=max(1, int(uploaded_movie[odb.HEIGHT]) // 2),
+                    label="Apex",
+                    frame_number=0,
+                )
+            ],
+        )
+        traced = requests.post(
+            f"{endpoint.rstrip('/')}/{TRACE_MOVIE_PATH}",
+            headers={"x-api-key": api_key},
+            json={MOVIE_ID_FIELD: movie_id, "frame_start": 0, "frame_end": 2},
+            timeout=30,
+        )
+        traced.raise_for_status()
+        wait_for_movie(
+            ddbo,
+            movie_id,
+            lambda movie: movie.get(odb.MOVIE_STATUS) == odb.MOVIE_STATE_TRACING_COMPLETED,
+            timeout=timeout,
+            phase="tracing",
+        )
+        odb_movie_data.purge_movie(movie_id=movie_id)
+        ddbo.batch_delete_movie_ids([movie_id])
+        logging.info("deployed workflow passed for stack=%s course=%s", stack_name, course_id)
+    finally:
+        ddbo.api_keys.delete_item(Key={odb.API_KEY: api_key})
 
 
 def parse_args():

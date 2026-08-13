@@ -7,7 +7,6 @@ Main Flask application for planttracer.
 import sys
 import os
 import time
-import traceback
 import logging
 
 from flask import Flask, request, render_template, jsonify, make_response, Response, redirect
@@ -260,12 +259,9 @@ def func_config_error():
 ## These mostly do forms or static content
 
 @app.route('/', methods=GET)
-def func_root() -> str | tuple[str, int]:
+def func_root() -> str:
     """/ - serve the home page"""
-    try:
-        return render_template('index.html', **page_dict())
-    except Exception as ex:     # pylint: disable=broad-exception-caught
-        return f"<h1>500 Exception:</h1><pre>\n{ex}\n{traceback.print_exception(ex)}</pre>", 500
+    return render_template('index.html', **page_dict())
 
 
 @app.route('/about', methods=GET)

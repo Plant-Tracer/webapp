@@ -90,12 +90,19 @@ def test_object_key_components_cannot_escape_their_prefix():
         with pytest.raises(ValueError, match=name):
             build_key()
 
-    with pytest.raises(ValueError, match="deployment_id"):
-        s3_presigned.upload_staging_object_key(
-            deployment_id="prod/other",
-            course_id="c1",
-            movie_id="m2",
-        )
+    for name, kwargs in (
+        ("deployment_id", {"deployment_id": "prod/other"}),
+        ("course_id", {"course_id": "course/other"}),
+        ("movie_id", {"movie_id": "movie/other"}),
+    ):
+        values = {
+            "deployment_id": "prod",
+            "course_id": "c1",
+            "movie_id": "m2",
+        }
+        values.update(kwargs)
+        with pytest.raises(ValueError, match=name):
+            s3_presigned.upload_staging_object_key(**values)
     with pytest.raises(ValueError, match="non-negative"):
         s3_presigned.frame_object_key(
             deployment_id="prod",

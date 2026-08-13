@@ -76,11 +76,17 @@ def _template_value(name, value):
     return str(value)
 
 
+def _template_component(name, value):
+    """Return one required S3 key component."""
+    component = _template_value(name, value)
+    if "/" in component:
+        raise ValueError(f"{name} must be one S3 key component")
+    return component
+
+
 def _deployment_value(value):
-    deployment = _template_value("deployment_id", value)
-    if "/" in deployment:
-        raise ValueError("deployment_id must be one S3 key component")
-    return deployment
+    """Return one deployment identifier used in namespaced object keys."""
+    return _template_component("deployment_id", value)
 
 
 def course_object_prefix(*, deployment_id, course_id):
@@ -115,11 +121,10 @@ def frame_object_key(*, deployment_id, course_id, movie_id, frame_number):
 
 def upload_staging_object_key(*, deployment_id, course_id, movie_id):
     """Return the deployment-scoped upload key reserved for issue #1152."""
-    deployment = _deployment_value(deployment_id)
     return C.S3_UPLOAD_STAGING_OBJECT_KEY_TEMPLATE.format(
-        deployment_id=deployment,
-        course_id=_template_value("course_id", course_id),
-        movie_id=_template_value("movie_id", movie_id),
+        deployment_id=_deployment_value(deployment_id),
+        course_id=_template_component("course_id", course_id),
+        movie_id=_template_component("movie_id", movie_id),
     )
 
 

@@ -67,7 +67,8 @@ class AnalysisMp4Result(BaseModel):
 
 def project_root() -> Path:
     """Return the repository root from the Lambda package source."""
-    return Path(__file__).resolve().parents[3]
+    source_directory = Path(__file__).resolve().parent
+    return source_directory.parents[2]
 
 
 def scaled_movie_name(source_path: Path) -> str:
