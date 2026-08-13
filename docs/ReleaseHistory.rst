@@ -77,6 +77,9 @@ Release Notes
 
 Unreleased Summary
 ******************
+    * Security: serve the MP4 demuxer locally, integrity-protect the remaining
+      pinned demo dependencies, bound WebCodecs frame retention, and avoid
+      automatically contacting the demo movie host
     * Developer: add a Makefile-driven analysis-MP4 CLI that creates a portable
       WebCodecs player bundle for manual cross-browser frame-step verification
     * Deployment: honor ``STACK_NAME`` as a per-stack config selector, pass the

@@ -137,11 +137,13 @@
     </main>
 
     <script type="module">
-      import { createFile } from 'https://cdn.jsdelivr.net/npm/mp4box@2.3.0/dist/mp4box.all.js';
+      import { createFile } from './mp4box.all.js';
 
       const DEFAULT_MOVIE_URL = 'https://simson.net/plantmovie.mp4';
       const LOGICAL_FPS = 1;
       const MICROSECONDS_PER_SECOND = 1000000;
+      const MAX_ENCODED_BYTES = 64 * 1024 * 1024;
+      const MAX_DECODED_BYTES = 256 * 1024 * 1024;
 
       const canvas = document.getElementById('movie-canvas');
       const ctx = canvas.getContext('2d');
@@ -375,6 +377,17 @@
         return [...samples].sort((left, right) => left.dts - right.dts);
       }
 
+      function validateMovieSize(arrayBuffer, videoTrack) {
+        if (arrayBuffer.byteLength > MAX_ENCODED_BYTES) {
+          throw new Error('Movie exceeds the 64 MiB encoded-size limit.');
+        }
+        const { width, height } = videoTrack.video;
+        const decodedBytes = width * height * 4 * videoTrack.nb_samples;
+        if (!Number.isSafeInteger(decodedBytes) || decodedBytes > MAX_DECODED_BYTES) {
+          throw new Error('Movie exceeds the 256 MiB decoded-frame limit.');
+        }
+      }
+
       async function decodeSamples(samples, videoTrack) {
         if (!window.VideoDecoder || !window.EncodedVideoChunk) {
           throw new Error('WebCodecs VideoDecoder is not available in this browser.');
@@ -440,6 +453,7 @@
           updateButtons();
           setStatus(`Decoding ${label}...`);
           const { samples, videoTrack } = await extractMp4Samples(arrayBuffer);
+          validateMovieSize(arrayBuffer, videoTrack);
           sourceFps = videoTrack.nb_samples / (videoTrack.duration / videoTrack.timescale);
           frames = await decodeSamples(samples, videoTrack);
           renderFrame(0);
@@ -504,7 +518,11 @@
       updateButtons();
       updateTime();
       updatePlaybackFps();
-      void loadUrl();
+      if (DEFAULT_MOVIE_URL.startsWith('./')) {
+        void loadUrl();
+      } else {
+        setStatus('Click Load URL or choose a local MP4 file.');
+      }
     </script>
   </body>
 </html>

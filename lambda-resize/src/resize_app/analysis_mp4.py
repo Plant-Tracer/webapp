@@ -183,14 +183,10 @@ def copy_player_bundle(*, bundle_dir: Path, movie_name: str) -> Path:
     """Copy the WebCodecs player and its local MP4 demuxer into a bundle."""
     root = project_root()
     player_source = root / "src/app/static/mp4player-demo3.html"
-    library_source = root / "node_modules/mp4box/dist/mp4box.all.js"
+    library_source = root / "src/app/static" / ANALYSIS_PLAYER_LIBRARY_FILENAME
     if not library_source.is_file():
-        raise FileNotFoundError("mp4box dependency is missing; run npm install")
+        raise FileNotFoundError("the vendored mp4box browser module is missing")
     player_text = player_source.read_text(encoding="utf-8")
-    player_text = player_text.replace(
-        "https://cdn.jsdelivr.net/npm/mp4box@2.3.0/dist/mp4box.all.js",
-        f"./{ANALYSIS_PLAYER_LIBRARY_FILENAME}",
-    )
     player_text = player_text.replace(
         "https://simson.net/plantmovie.mp4",
         f"./{movie_name}",
