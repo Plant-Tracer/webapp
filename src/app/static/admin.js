@@ -119,11 +119,11 @@ function courseNameCell(course) {
   return cell;
 }
 
-function verboseRow(text, columns) {
+function verboseRow(text, dataRow) {
   const row = document.createElement("tr");
   row.className = "admin-verbose-row";
   const cell = textCell(text);
-  cell.colSpan = columns;
+  cell.colSpan = dataRow.cells.length;
   row.append(cell);
   return row;
 }
@@ -154,7 +154,7 @@ function appendCourseRows(courses) {
       tbody.append(verboseRow(compactDetails([
         ["Course ID", course.course_id],
         ["Administrators", (course.admin_names || []).join(", ") || "none"],
-      ]), 7));
+      ]), row));
     }
   }
 }
@@ -190,7 +190,7 @@ function appendUserRows(users) {
       tbody.append(verboseRow(compactDetails([
         ["User ID", user.user_id],
         ["Primary course ID", user.primary_course_id],
-      ]), 7));
+      ]), row));
     }
   }
 }
@@ -337,7 +337,7 @@ function appendMovieRows(movies) {
         ["Trim end", movie.trim_end_frame], ["Retrace required", movie.needs_retracing ? "yes" : "no"],
         ["Research use", movie.research_use], ["Credit by name", movie.credit_by_name],
         ["Attribution", movie.attribution_name],
-      ]), 9));
+      ]), row));
     }
   }
 }
@@ -513,15 +513,20 @@ function enrichCourseNames() {
     course.course_id,
     course.course_name || course.course_id,
   ]));
+  const adminNames = new Map();
   state.users.forEach((user) => {
-    user.courses.forEach((course) => {
-      course.course_name = names.get(course.course_id) || course.course_id;
+    const adminName = user.user_name || user.email || user.user_id;
+    user.courses.forEach((membership) => {
+      membership.course_name = names.get(membership.course_id) || membership.course_id;
+      if (membership.is_admin) {
+        const courseAdminNames = adminNames.get(membership.course_id) || [];
+        courseAdminNames.push(adminName);
+        adminNames.set(membership.course_id, courseAdminNames);
+      }
     });
   });
   state.courses.forEach((course) => {
-    course.admin_names = state.users.filter((user) => user.courses.some((membership) => (
-      membership.course_id === course.course_id && membership.is_admin
-    ))).map((user) => user.user_name || user.email || user.user_id).sort();
+    course.admin_names = (adminNames.get(course.course_id) || []).sort();
   });
   state.movies.forEach((movie) => {
     movie.course_name = names.get(movie.course_id) || movie.course_id;
