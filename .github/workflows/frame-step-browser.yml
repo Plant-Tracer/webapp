@@ -23,8 +23,7 @@ jobs:
           python-version: '3.12'
       - name: Install test dependencies
         run: |
-          if [ "${{ runner.os }}" = "Windows" ]; then choco install -y make ffmpeg; fi
-          if [ "${{ runner.os }}" = "macOS" ]; then brew install ffmpeg; fi
+          if [ "${{ runner.os }}" = "Windows" ]; then choco install -y make; fi
           python -m pip install --user pipx
           python -m pipx ensurepath
           export PATH="$HOME/.local/bin:$PATH"
@@ -42,8 +41,6 @@ jobs:
           python-version: '3.12'
       - name: Install test dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
           python -m pip install --user pipx
           python -m pipx ensurepath
           export PATH="$HOME/.local/bin:$PATH"
