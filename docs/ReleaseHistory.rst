@@ -82,6 +82,7 @@ Unreleased Summary
       action
     * Data model: rename the profile's ``primary_course_*`` fields to
       ``default_course_*`` with read compatibility and a dry-run migration tool
+    * Upload: prevent duplicate movie-rotation requests while a rotation is being saved
     * Developer: add a Makefile-driven analysis-MP4 CLI that creates a portable
       WebCodecs player bundle for manual cross-browser frame-step verification
     * Deployment: honor ``STACK_NAME`` as a per-stack config selector, pass the
