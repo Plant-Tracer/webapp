@@ -1,7 +1,7 @@
 import uuid
 
 from app import apikey, odb
-from app.odb import API_KEY, COURSE_ID, COURSE_NAME, PRIMARY_COURSE_ID, USER_ID
+from app.odb import API_KEY, COURSE_ID, COURSE_NAME, MOVIE_ID, PRIMARY_COURSE_ID, USER_ID
 
 from .constants import USER_EMAIL
 
@@ -69,3 +69,39 @@ def test_current_course_requires_authentication(client, new_course):
     response = client.patch("/api/current-course", json={COURSE_ID: new_course[COURSE_ID]})
 
     assert response.status_code == 403
+
+
+def test_movie_list_without_course_uses_current_profile_course(client, new_movie):
+    course_id = additional_course_id()
+    odb.create_course(
+        course_id=course_id,
+        course_name="Second Course",
+        course_key=f"key-{uuid.uuid4()}",
+    )
+    second_movie_id = None
+    try:
+        odb.register_email(
+            email=new_movie[USER_EMAIL],
+            user_name="Course User",
+            course_id=course_id,
+        )
+        second_movie_id = odb.create_new_movie(
+            user_id=new_movie[USER_ID],
+            course_id=course_id,
+            title="Second-course movie",
+            description="Regression fixture",
+        )
+        client.set_cookie(apikey.cookie_name(), new_movie[API_KEY])
+
+        change = client.patch("/api/current-course", json={COURSE_ID: course_id})
+        assert change.status_code == 200
+
+        response = client.post("/api/list-movies")
+
+        assert response.status_code == 200
+        assert [movie[MOVIE_ID] for movie in response.json["movies"]] == [second_movie_id]
+    finally:
+        if second_movie_id is not None:
+            new_movie["ddbo"].movies.delete_item(Key={MOVIE_ID: second_movie_id})
+        odb.unregister_from_course(course_id=course_id, user_id=new_movie[USER_ID])
+        odb.delete_course(course_id=course_id)
