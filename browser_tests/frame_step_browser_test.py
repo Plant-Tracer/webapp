@@ -5,7 +5,6 @@ from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import os
 from pathlib import Path
-import subprocess
 import threading
 from urllib.parse import quote
 
@@ -14,12 +13,9 @@ from selenium.webdriver.common.by import By
 from browser_tests.video_probe import FRAME_SEQUENCE, matches_color, wait_for_decoded_frames
 
 
-FRAME_COLORS = (
-    (255, 0, 0),
-    (0, 255, 0),
-    (0, 0, 255),
-    (255, 255, 0),
-)
+FIXTURE_DIR = Path(__file__).with_name("fixtures") / "frame_step"
+FRAME_PATHS = tuple(FIXTURE_DIR / f"frame_{index}.ppm" for index in range(1, 5))
+MOVIE_PATH = FIXTURE_DIR / "four-frame-probe.mp4"
 
 
 @pytest.fixture
@@ -36,26 +32,13 @@ def frame_step_server() -> str:
     thread.join()
 
 
-def _write_ppm(path: Path, color: tuple[int, int, int]) -> None:
-    """Write one uncompressed, solid-color 64x64 PPM frame."""
-    pixels = bytes(color) * (64 * 64)
-    path.write_bytes(b"P6\n64 64\n255\n" + pixels)
-
-
-def _four_frame_mpeg(tmp_path: Path) -> bytes:
-    """Build the MP4 probe from four visually distinct source frames."""
-    for index, color in enumerate(FRAME_COLORS, start=1):
-        _write_ppm(tmp_path / f"frame_{index}.ppm", color)
-    movie = tmp_path / "four-frame-probe.mp4"
-    command = [
-        "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-        "-framerate", "4", "-i", str(tmp_path / "frame_%d.ppm"),
-        "-frames:v", "4", "-c:v", "libx264", "-pix_fmt", "yuv420p",
-        "-g", "4", "-bf", "2", "-sc_threshold", "0",
-        "-movflags", "+faststart", str(movie),
-    ]
-    subprocess.run(command, check=True)
-    return movie.read_bytes()
+def _ppm_center_color(path: Path) -> tuple[int, int, int]:
+    """Read the center RGB pixel from a committed binary PPM fixture."""
+    magic, dimensions, maximum, pixels = path.read_bytes().split(b"\n", 3)
+    width, height = (int(value) for value in dimensions.split())
+    assert magic == b"P6" and maximum == b"255" and (width, height) == (64, 64)
+    offset = ((height // 2) * width + (width // 2)) * 3
+    return pixels[offset], pixels[offset + 1], pixels[offset + 2]
 
 
 def _canvas_sample(driver) -> list[int]:
@@ -67,9 +50,10 @@ def _canvas_sample(driver) -> list[int]:
 
 
 @pytest.mark.selenium
-def test_single_frame_stepping_recovers_forward_then_reverse_order(chrome_driver, frame_step_server, tmp_path):
+def test_single_frame_stepping_recovers_forward_then_reverse_order(chrome_driver, frame_step_server):
     """Exercise the WebCodecs player's +1/-1 controls against a B-frame MP4."""
-    encoded = base64.b64encode(_four_frame_mpeg(tmp_path)).decode("ascii")
+    frame_colors = tuple(_ppm_center_color(path) for path in FRAME_PATHS)
+    encoded = base64.b64encode(MOVIE_PATH.read_bytes()).decode("ascii")
     data_url = f"data:video/mp4;base64,{encoded}"
     chrome_driver.get(f"{frame_step_server}/mp4player-demo3.html?src={quote(data_url, safe='')}")
     status = wait_for_decoded_frames(chrome_driver)
@@ -81,8 +65,8 @@ def test_single_frame_stepping_recovers_forward_then_reverse_order(chrome_driver
     samples.insert(4, samples[3])
     assert len(samples) == len(FRAME_SEQUENCE)
     for sample, frame_index in zip(samples, FRAME_SEQUENCE):
-        assert matches_color(sample, FRAME_COLORS[frame_index]), (
-            f"expected frame {frame_index + 1} {FRAME_COLORS[frame_index]}, got {sample}"
+        assert matches_color(sample, frame_colors[frame_index]), (
+            f"expected frame {frame_index + 1} {frame_colors[frame_index]}, got {sample}"
         )
 
 

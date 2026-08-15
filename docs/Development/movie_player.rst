@@ -112,13 +112,16 @@ Invariants
 Single-Frame Browser Conformance Test
 -------------------------------------
 
-``make frame-step-browser-test`` builds a temporary four-frame MP4 from solid
-red, green, blue, and yellow PPM images.  A real Chrome/Chromium browser loads
+``make frame-step-browser-test`` reads four committed solid red, green, blue,
+and yellow PPM frames plus their committed four-frame MP4 from
+``browser_tests/fixtures/frame_step``.  A real Chrome/Chromium browser loads
 ``/static/mp4player-demo3.html`` and copies the decoded center pixel from that
 page's canvas after every button click.  The test requires the exact sequence
 ``1, 2, 3, 4, 4, 3, 2, 1``; it fails if WebCodecs drops, duplicates, or
-misorders a frame.  The fixture uses an H.264 B-frame GOP, which exercises the
+misorders a frame.  The MP4 uses an H.264 B-frame GOP, which exercises the
 decoder timestamp path that is stricter on some Android and Windows devices.
+The conformance workflow does not install or run FFmpeg; FFmpeg is needed only
+when intentionally regenerating the committed MP4.
 
 B-Frame Ordering
 ----------------
