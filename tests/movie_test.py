@@ -798,3 +798,32 @@ def test_set_movie_fpm_rejects_invalid(client, new_movie):
     resp = client.post('/api/set-movie-fpm', data={'api_key': api_key, 'movie_id': movie_id})
     assert resp.status_code == 400
     assert resp.get_json()['message'] == "fpm is required"
+
+
+def test_active_trace_lease_is_visible_and_rejects_movie_writes(client, new_movie):
+    ddbo = new_movie["ddbo"]
+    movie_id = new_movie[MOVIE_ID]
+    movie = ddbo.get_movie(movie_id)
+    lock = ddbo.acquire_movie_trace_lock(
+        movie=movie,
+        started_by_user_id=new_movie[USER_ID],
+        started_by_user_name=ddbo.get_user(new_movie[USER_ID])[odb.USER_NAME],
+    )
+
+    listed = get_movie(client, new_movie[API_KEY], movie_id)
+    metadata_response = client.post('/api/get-movie-metadata', data={
+        'api_key': new_movie[API_KEY], 'movie_id': movie_id,
+    })
+    write_response = client.post('/api/set-movie-fpm', data={
+        'api_key': new_movie[API_KEY], 'movie_id': movie_id, 'fpm': '30',
+    })
+
+    for payload in (listed, metadata_response.get_json()['metadata']):
+        assert payload[odb.MOVIE_STATUS] == odb.MOVIE_STATE_TRACING
+        assert payload['tracking_lock'] == {
+            'active': True,
+            'acquired_at': lock.acquired_at,
+            'started_by_user_name': lock.started_by_user_name,
+        }
+    assert write_response.status_code == 409
+    assert write_response.get_json()['message'] == "This movie is currently being traced and is read-only."
