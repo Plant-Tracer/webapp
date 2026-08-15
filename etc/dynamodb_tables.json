@@ -232,6 +232,16 @@
       "BillingMode": "PAY_PER_REQUEST"
     },
     {
+      "TableName": "movie_trace_locks",
+      "KeySchema": [
+        { "AttributeName": "movie_id", "KeyType": "HASH" }
+      ],
+      "AttributeDefinitions": [
+        { "AttributeName": "movie_id", "AttributeType": "S" }
+      ],
+      "BillingMode": "PAY_PER_REQUEST"
+    },
+    {
       "TableName": "logs",
       "KeySchema": [
         {

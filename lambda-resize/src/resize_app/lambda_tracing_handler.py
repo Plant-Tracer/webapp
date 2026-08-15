@@ -26,6 +26,7 @@ class TraceJob(BaseModel):
     movie_id: str
     frame_start: int = 0
     frame_end: int | None = None
+    job_id: str | None = None
     api_key: str | None = None
 
 
@@ -49,11 +50,10 @@ def process_tracing_message(body: dict):
     t0 = time.time()
     LOGGER.info("SQS Start tracing batch: movie_id=%s frame_start=%s frame_end=%s",
                 job.movie_id, job.frame_start, job.frame_end)
-    movie_glue.run_tracing(
-        movie_id=job.movie_id,
-        frame_start=job.frame_start,
-        frame_end=job.frame_end,
-    )
+    kwargs = {"movie_id": job.movie_id, "frame_start": job.frame_start, "frame_end": job.frame_end}
+    if job.job_id is not None:
+        kwargs["job_id"] = job.job_id
+    movie_glue.run_tracing(**kwargs)
     LOGGER.info(
         "SQS Completed tracing batch: movie_id=%s frame_start=%s frame_end=%s elapsed_time=%s",
         job.movie_id,

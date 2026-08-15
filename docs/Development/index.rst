@@ -30,6 +30,7 @@ Developer Documentation
    trim-design
    AnalysisResults
    ProcessingPhases
+   TracingLocks
    THEORY_OF_DESIGN
    NOTES_ON_SIMPLIFYING
    notes_on_resizing

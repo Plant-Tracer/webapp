@@ -74,8 +74,15 @@ from .schema import DefaultCourseRequest
 api_bp = Blueprint('api', __name__)
 
 
+def tracing_lock_response(movie_id):
+    """Reject browser writes while another worker owns the trace lease."""
+    if odb.DDBO().get_active_movie_trace_lock(movie_id):
+        return jsonify({C.API_KEY_ERROR: True,
+                        C.API_KEY_MESSAGE: "This movie is currently being traced and is read-only."}), 409
+    return None
+
+
 @api_bp.patch('/default-course')
-@api_bp.patch('/current-course')
 def api_default_course():
     """Change the signed-in user's profile default to an existing membership."""
     try:
@@ -970,7 +977,16 @@ def api_list_movies():
         user_id=user[USER_ID],
         course_id=context.effective_course_id,
     )
+    ddbo = odb.DDBO()
     for movie in movies:
+        trace_lock = ddbo.get_active_movie_trace_lock(movie[MOVIE_ID])
+        if trace_lock:
+            movie[MOVIE_STATUS] = odb.MOVIE_STATE_TRACING
+            movie['tracking_lock'] = {
+                'active': True,
+                'acquired_at': trace_lock.acquired_at,
+                'started_by_user_name': trace_lock.started_by_user_name,
+            }
         traced_urn = movie.get(MOVIE_TRACED_URN)
         if (traced_urn or "").startswith("s3:"):
             movie[MOVIE_TRACED_URL] = make_signed_url(urn=traced_urn)
@@ -1004,6 +1020,14 @@ def api_get_movie_metadata():
 
     movie = odb.can_access_movie(user_id=user_id, movie_id=movie_id)
     movie_metadata = odb.get_movie_metadata(movie_id=movie[MOVIE_ID], get_last_frame_tracked=True)
+    trace_lock = odb.DDBO().get_active_movie_trace_lock(movie_id)
+    if trace_lock:
+        movie_metadata[MOVIE_STATUS] = odb.MOVIE_STATE_TRACING
+        movie_metadata['tracking_lock'] = {
+            'active': True,
+            'acquired_at': trace_lock.acquired_at,
+            'started_by_user_name': trace_lock.started_by_user_name,
+        }
 
     # If status TRACKING_COMPLETED_FLAG and the user has requested to get all trackpoints,
     # then get all the trackpoints.
@@ -1082,6 +1106,8 @@ def api_set_movie_trim():
     """Set one inclusive movie trim bound."""
     movie_id = get_movie_id()
     movie = odb.can_edit_movie(user_id=get_user_id(allow_demo=False), movie_id=movie_id)
+    if response := tracing_lock_response(movie[MOVIE_ID]):
+        return response
     trim_start_frame = get_int(TRIM_START_FRAME)
     trim_end_frame = get_int(TRIM_END_FRAME)
     if (trim_start_frame is None) == (trim_end_frame is None):
@@ -1105,6 +1131,8 @@ def api_set_movie_fpm():
     user_id = get_user_id(allow_demo=False)
     movie_id = get_movie_id()
     movie = odb.can_edit_movie(user_id=user_id, movie_id=movie_id)
+    if response := tracing_lock_response(movie[MOVIE_ID]):
+        return response
     try:
         fpm = odb.normalize_fpm(request.values.get('fpm'))
     except ValueError as exc:
@@ -1201,6 +1229,8 @@ def api_put_frame_trackpoints():
     raw_trackpoints = get_json('trackpoints')
     trackpoints = [odb.Trackpoint(**tp) for tp in raw_trackpoints]
     movie = odb.can_edit_movie(user_id=user_id, movie_id=movie_id)
+    if response := tracing_lock_response(movie[MOVIE_ID]):
+        return response
     if log_level=='DEBUG':
         logger.debug("put_frame_analysis. user_id=%s movie_id=%s frame_number=%s",user_id,movie[MOVIE_ID],frame_number)
         for tp in trackpoints:
@@ -1219,6 +1249,8 @@ def api_rename_marker():
     user_id = get_user_id(allow_demo=False)
     movie_id = get_movie_id()
     movie = odb.can_edit_movie(user_id=user_id, movie_id=movie_id)
+    if response := tracing_lock_response(movie[MOVIE_ID]):
+        return response
     try:
         rename_result = odb.rename_movie_marker(
             movie_id=movie[MOVIE_ID],

@@ -234,13 +234,15 @@ def handle_post_actions():
     frame_end = body.get("frame_end")
     LOGGER.info("trace-movie. movie_id=%s", movie_id)
     try:
-        movie_glue.prepare_tracing_request(
+        prepared = movie_glue.prepare_tracing_request(
             api_key=api_key,
             movie_id=movie_id,
             frame_start=frame_start,
             frame_end=frame_end,
         )
-        return movie_glue.queue_tracing(api_key, movie_id, frame_start, frame_end)
+        return movie_glue.queue_tracing(api_key, movie_id, frame_start, frame_end, prepared["job_id"])
+    except movie_glue.odb.MovieTracingLocked:
+        return Response(status_code=409, body="This movie is already being traced")
     except ValueError as e:
         LOGGER.exception("trace-movie rejected: %s", e)
         return Response(status_code=403, body=str(e.args))

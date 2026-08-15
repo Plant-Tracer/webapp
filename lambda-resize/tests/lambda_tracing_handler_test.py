@@ -18,6 +18,13 @@ def test_process_tracing_message_passes_frame_end_to_runner():
     run_tracing.assert_called_once_with(movie_id="m123", frame_start=7, frame_end=20)
 
 
+def test_process_tracing_message_passes_job_id_to_runner():
+    with patch("resize_app.lambda_tracing_handler.movie_glue.run_tracing") as run_tracing:
+        lambda_tracing_handler.process_tracing_message({"movie_id": "m123", "job_id": "j1"})
+
+    run_tracing.assert_called_once_with(movie_id="m123", frame_start=0, frame_end=None, job_id="j1")
+
+
 def test_process_tracing_message_rejects_missing_movie_id():
     with pytest.raises(ValueError, match="movie_id is required"):
         lambda_tracing_handler.process_tracing_message({"frame_start": 7})
@@ -33,6 +40,7 @@ def test_process_tracing_record_decodes_json_body():
         "movie_id": "m123",
         "frame_start": 7,
         "frame_end": None,
+        "job_id": None,
         "api_key": None,
     })
 

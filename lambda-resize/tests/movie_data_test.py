@@ -208,13 +208,13 @@ def test_trace_movie_queues_with_optional_frame_end():
         {"movie_id": "m123", "frame_start": 7, "frame_end": 20},
         {"x-api-key": "test-key"},
     )
-    with patch("resize_app.main.movie_glue.prepare_tracing_request") as prepare, \
+    with patch("resize_app.main.movie_glue.prepare_tracing_request", return_value={"job_id": "j1"}) as prepare, \
          patch("resize_app.main.movie_glue.queue_tracing", return_value={"error": False, "message": "queued"}) as queue:
         response = lambda_handler(event, DummyContext())
 
     assert response["statusCode"] == 200
     prepare.assert_called_once_with(api_key="test-key", movie_id="m123", frame_start=7, frame_end=20)
-    queue.assert_called_once_with("test-key", "m123", 7, 20)
+    queue.assert_called_once_with("test-key", "m123", 7, 20, "j1")
     assert json.loads(response["body"]) == {"error": False, "message": "queued"}
 
 
