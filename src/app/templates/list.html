@@ -41,16 +41,16 @@
 <div class="nodemo">
   <h3>Published</h3>
   <p class='instructions'><i>Newly uploaded movies are published by default and can be viewed by anyone in
-      your course. Click the 'unpublish' button to unpublish a
+      your course. Click the 'hide' button to hide a
       movie. Click the 'delete' button to delete a movie.</i></p>
   <div class='mtable' id='your-published-movies'></div>
 </div>
 <div class='nodemo'>
-  <h3>Unpublished</h3>
-  <p class='instructions'><i>Unpublished movies can only be seen by you
-      and the course admins. Only the course admins can
-      publish a movie. Click the 'delete' button to delete a movie.</i></p>
-  <div class='mtable' id='your-unpublished-movies'></div>
+  <h3>Hidden</h3>
+  <p class='instructions'><i>Hidden movies can only be seen by you
+      and the course admins. Only course admins can
+      unhide a movie. Click the 'delete' button to delete a movie.</i></p>
+  <div class='mtable' id='your-hidden-movies'></div>
 </div>
 
 <h3 class='nodemo'>Course movies for <span id="current-course-name">{{course_view_name or default_course_name}}</span></h3>
@@ -59,7 +59,7 @@
   other students in this course, while the course admins can see all of the movies. </p>
 
 {% if admin %}
-<p class='instructions'>Admins can publish or unpublish movies by pressing the PUBLISH or UNPUBLISH buttons, respectively. Admins cannot delete or undelete movies; only
+<p class='instructions'>Admins can hide or unhide movies by pressing the HIDE or UNHIDE buttons, respectively. Admins cannot delete or undelete movies; only
   students can delete or undelete their own movies.</p>
 {% endif %}
 <div class='mtable' id='course-movies'></div>

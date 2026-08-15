@@ -2565,7 +2565,7 @@ SET_MOVIE_METADATA = {
     # the user can delete or undelete movies; the admin can only delete them
     DELETED: 'update movies set deleted=%s where id=%s and (@is_owner or (@is_admin and deleted=0))',
 
-    # the admin can publish or unpublish movies; the user can only unpublish them
+    # admins can publish or hide movies; owners can only hide their own movies
     PUBLISHED: 'update movies set published=%s where id=%s and (@is_admin or (@is_owner and published!=0))',
 
     # Preview rotation (0–3); applied when tracking (rotate/scale then save as processed movie).
