@@ -29,6 +29,7 @@ describe('list_movies_data', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    sessionStorage.clear();
     // Assign global variables from globalData
     global.user_id = parseInt(globalData.user_id, 10);
     global.admin = globalData.admin === 'true';
@@ -41,7 +42,11 @@ describe('list_movies_data', () => {
     global.DELETE_BUTTON = globalData.DELETE_BUTTON;
     global.UNDELETE_BUTTON = globalData.UNDELETE_BUTTON;
     global.TABLE_HEAD = globalData.TABLE_HEAD;
-    global.user_primary_course_id = parseInt(globalData.user_primary_course_id, 10);
+    global.user_default_course_id = parseInt(globalData.user_default_course_id, 10);
+    global.course_choices = [
+      { course_id: global.user_default_course_id, course_name: 'Default' },
+      { course_id: 'CHEM-2', course_name: 'Chemistry' },
+    ];
     global.course_view_id = null;
 
     // Mock DataTables so planttracer.js can call $.fn.DataTable() without a real browser
@@ -63,6 +68,20 @@ describe('list_movies_data', () => {
 
     // Mock document.querySelectorAll (kept for safety; no longer called by movies code)
     document.querySelectorAll = jest.fn(() => []);
+  });
+
+  test('requests movies for the course selected in this browser tab', () => {
+    global.API_BASE = '/';
+    global.api_key = 'test-api-key';
+    global.course_view_id = null;
+    sessionStorage.setItem('planttracer.active_course_id', 'CHEM-2');
+    fetch.mockImplementationOnce(() => new Promise(() => {}));
+
+    window.list_ready_function();
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const requestBody = fetch.mock.calls[0][1].body;
+    expect(requestBody.get('course_id')).toBe('CHEM-2');
   });
 
   test('should create the correct HTML for published movies', () => {
@@ -118,7 +137,7 @@ describe('list_movies_data', () => {
       {
         movie_id: 2,
         user_id: 2,
-        course_id: global.user_primary_course_id,
+        course_id: global.user_default_course_id,
         published: 1,
         title: 'Read-only Movie',
         deleted: 0,

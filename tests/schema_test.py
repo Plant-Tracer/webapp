@@ -46,8 +46,8 @@ def test_user_schema():
         created=0,
         enabled=0,
         admin_for_courses=[],
-        primary_course_id="p",
-        primary_course_name="c",
+        default_course_id="p",
+        default_course_name="c",
         courses=["p"],
     )
     assert u.super_role == "none"
@@ -66,8 +66,8 @@ def test_user_schema():
             created=0,
             enabled=0,
             admin_for_courses=[],
-            primary_course_id="p",
-            primary_course_name="c",
+            default_course_id="p",
+            default_course_name="c",
             courses=["p"],
             super_role="auditor",
         )
@@ -85,6 +85,25 @@ def test_user_schema():
         )
         logger.debug("m=%s", m)
     logger.debug("u=%s", u)
+
+
+def test_user_schema_accepts_no_course_state():
+    user = schema.User(
+        user_id="utest",
+        email="etest",
+        user_name="utest",
+        created=0,
+        enabled=1,
+        admin_for_courses=[],
+        default_course_id=None,
+        default_course_name=None,
+        courses=[],
+    )
+
+    assert user.default_course_id is None
+    assert user.default_course_name is None
+    assert schema.validate_user_field("default_course_id", None) is None
+    assert schema.validate_user_field("default_course_name", None) is None
 
 
 def test_trackpoint_schema_accepts_marker_metadata():

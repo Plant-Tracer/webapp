@@ -1,5 +1,7 @@
 "use strict";
 
+import { activeCourseId } from "./course_context.js";
+
 //code for /analyze
 
 /* eslint-env es6 */
@@ -236,6 +238,7 @@ class TracerController extends MovieController {
         this.download_form.attr('action',`${API_BASE}api/get-movie-trackpoints`);
         this.dl_api_key = $("#dl_api_key");
         this.dl_api_key.attr("value", api_key);
+        $("#dl_course_id").attr("value", activeCourseId());
         this.dl_movie_id = $("#dl_movie_id");
         this.dl_movie_id.attr("value", this.movie_id);
         this.download_button = $(".download_button");
@@ -342,6 +345,7 @@ class TracerController extends MovieController {
         }
         const params = {
             api_key: this.api_key,
+            course_id: activeCourseId(),
             movie_id: this.movie_id,
             fpm: this.fpm_input.val(),
         };
@@ -624,6 +628,7 @@ class TracerController extends MovieController {
         }
         const params = {
             api_key: this.api_key,
+            course_id: activeCourseId(),
             movie_id: this.movie_id,
         };
         params[prop] = frameNumber;
@@ -1178,6 +1183,7 @@ class TracerController extends MovieController {
         return new Promise((resolve) => {
             $.post(`${API_BASE}api/rename-marker`, {
                 api_key: this.api_key,
+                course_id: activeCourseId(),
                 movie_id: this.movie_id,
                 old_label: oldName,
                 new_label: newName
@@ -1268,6 +1274,7 @@ class TracerController extends MovieController {
         const requests = updates.map(update => new Promise((resolve, reject) => {
             const params = {
                 api_key      : this.api_key,
+                course_id    : activeCourseId(),
                 movie_id     : this.movie_id,
                 frame_number : update.frame_number,
                 trackpoints  : JSON.stringify(update.markers)
@@ -1357,6 +1364,7 @@ class TracerController extends MovieController {
         const markers = this.get_markers();
         const put_frame_markers_params = {
             api_key      : this.api_key,
+            course_id    : activeCourseId(),
             movie_id     : this.movie_id,
             frame_number : frameNumber,
             trackpoints  : JSON.stringify(markers) // markers as a JSON string because we do POST as a form, not as REST
@@ -1406,6 +1414,7 @@ class TracerController extends MovieController {
 
         const url = `${LAMBDA_API_BASE}resize-api/v1/trace-movie`;
         const requestBody = {
+            course_id: activeCourseId(),
             movie_id: this.movie_id,
             frame_start: this.frame_number
         };
@@ -1601,6 +1610,7 @@ class TracerController extends MovieController {
   poll_for_track_end() {
         const params = {
             api_key:this.api_key,
+            course_id:activeCourseId(),
             movie_id:this.movie_id,
             get_all_if_tracking_completed: true
         };
@@ -1690,6 +1700,7 @@ class TracerController extends MovieController {
                     $('#status-big').text('Tracing complete. Waiting for ZIP file to be processed…');
                     $.post(`${API_BASE}api/get-movie-metadata`, {
                         api_key: self.api_key,
+                        course_id: activeCourseId(),
                         movie_id: self.movie_id,
                         frame_start: 0,
                         frame_count: MAX_FRAMES,
@@ -2227,6 +2238,7 @@ function trace_movie(div_controller, movie_id, api_key) {
 
     const params = {
         api_key: api_key,
+        course_id: activeCourseId(),
         movie_id: movie_id,
         frame_start: 0,
         frame_count: MAX_FRAMES
@@ -2243,7 +2255,7 @@ function trace_movie(div_controller, movie_id, api_key) {
         }
         if (!resp.metadata.movie_zipfile_url) {
             // No zip yet: show frame 0 only. User places markers and clicks "Trace movie".
-            const frame0 = `${LAMBDA_API_BASE}resize-api/v1/first-frame?api_key=${api_key}&movie_id=${movie_id}`;
+            const frame0 = `${LAMBDA_API_BASE}resize-api/v1/first-frame?api_key=${api_key}&movie_id=${movie_id}&course_id=${encodeURIComponent(activeCourseId() || '')}`;
             trace_movie_one_frame(movie_id, div_controller, resp.metadata, frame0, resp.frames, api_key);
             if (demo_mode) {
                 $('#status-big').html(MOVIE_READY_FOR_TRACING_MESSAGE);

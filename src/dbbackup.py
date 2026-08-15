@@ -60,8 +60,8 @@ from app.odb import (
     MOVIE_TRACED_URN,
     MOVIE_ZIPFILE_URN,
     MOVIES,
-    PRIMARY_COURSE_ID,
-    PRIMARY_COURSE_NAME,
+    DEFAULT_COURSE_ID,
+    DEFAULT_COURSE_NAME,
     TITLE,
     UNIQUE_EMAILS,
     USER_ID,
@@ -570,8 +570,9 @@ def build_backup_dataset(ddbo, selection: Selection, *, include_deleted: bool) -
             if is_selected_movie(movie, include_deleted=include_deleted)
         ]
         course_ids = {movie[COURSE_ID] for movie in user_movies}
-        if user.get(PRIMARY_COURSE_ID):
-            course_ids.add(user[PRIMARY_COURSE_ID])
+        user = odb.normalize_user_default_course(user)
+        if user.get(DEFAULT_COURSE_ID):
+            course_ids.add(user[DEFAULT_COURSE_ID])
         for course_id in course_ids:
             add_course(course_id)
             add_course_user(course_id, user[USER_ID])
@@ -966,8 +967,9 @@ def selected_archive_data(data: ArchiveData, selection: Selection) -> ArchiveDat
         selected_course_ids.update(
             row[COURSE_ID] for row in movies if row[MOVIE_ID] in selected_movie_ids
         )
-        if selected_users[0].get(PRIMARY_COURSE_ID):
-            selected_course_ids.add(selected_users[0][PRIMARY_COURSE_ID])
+        selected_user = odb.normalize_user_default_course(selected_users[0])
+        if selected_user.get(DEFAULT_COURSE_ID):
+            selected_course_ids.add(selected_user[DEFAULT_COURSE_ID])
     elif selection.movie_id is not None:
         selected_movies = [row for row in movies if row[MOVIE_ID] == selection.movie_id]
         if not selected_movies:
@@ -1033,7 +1035,7 @@ def print_user_summaries(users: list[dict[str, Any]], *, stream) -> None:
         print(
             f"  {user[USER_ID]} email={short_value(user.get(EMAIL))} "
             f"name={short_value(user.get(USER_NAME))} "
-            f"primary_course_id={short_value(user.get(PRIMARY_COURSE_ID))}",
+            f"default_course_id={short_value(odb.normalize_user_default_course(user).get(DEFAULT_COURSE_ID))}",
             file=stream,
         )
 
@@ -1619,9 +1621,9 @@ def update_user_course_reference(ddbo, user_id: str, from_course: dict, to_cours
         COURSES: sorted(courses),
         ADMIN_FOR_COURSES: sorted(set(admin_for_courses)),
     }
-    if user.get(PRIMARY_COURSE_ID) == from_course[COURSE_ID]:
-        updates[PRIMARY_COURSE_ID] = to_course[COURSE_ID]
-        updates[PRIMARY_COURSE_NAME] = to_course[COURSE_NAME]
+    if odb.normalize_user_default_course(user).get(DEFAULT_COURSE_ID) == from_course[COURSE_ID]:
+        updates[DEFAULT_COURSE_ID] = to_course[COURSE_ID]
+        updates[DEFAULT_COURSE_NAME] = to_course[COURSE_NAME]
     ddbo.update_table(ddbo.users, user_id, updates)
 
 

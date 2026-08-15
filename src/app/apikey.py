@@ -191,11 +191,15 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False):
         user_name  = user_dict['user_name']
         user_email = user_dict['email']
         user_id    = user_dict['user_id']
-        user_primary_course_id = user_dict['primary_course_id']
-        primary_course_name    = user_dict['primary_course_name']
-        course_choices = odb.course_choices_for_user(user_dict)
+        user_default_course_id = user_dict.get(odb.DEFAULT_COURSE_ID)
+        default_course_name = user_dict.get(odb.DEFAULT_COURSE_NAME)
+        course_choices = [course.model_dump() for course in odb.course_choices_for_user(user_dict)]
         logged_in = 1
-        admin = 1 if odb.check_course_admin(user_id=user_id, course_id=user_primary_course_id) and not in_demo_mode() else 0
+        admin = 1 if (
+            user_default_course_id
+            and odb.check_course_admin(user_id=user_id, course_id=user_default_course_id)
+            and not in_demo_mode()
+        ) else 0
         admin_access = odb.admin_read_access(user_dict)
         admin_read = 1 if admin_access.allowed and not in_demo_mode() else 0
         super_role = admin_access.super_role
@@ -205,8 +209,8 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False):
         user_name  = None
         user_email = None
         user_id    = None
-        user_primary_course_id = None
-        primary_course_name = None
+        user_default_course_id = None
+        default_course_name = None
         course_choices = []
         admin = 0
         admin_read = 0
@@ -216,10 +220,21 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False):
     course_view_id = ""
     course_view_name = ""
     requested_course_id = (request.args.get('course_id') or '').strip()
-    if requested_course_id and super_role in odb.SUPER_READ_ROLES:
-        course_view = odb.lookup_course_by_id(course_id=requested_course_id)
-        course_view_id = course_view[odb.COURSE_ID]
-        course_view_name = course_view.get(odb.COURSE_NAME) or course_view_id
+    can_view_requested_course = (
+        logged_in
+        and (
+            requested_course_id in user_dict.get(odb.COURSES, [])
+            or super_role in odb.SUPER_READ_ROLES
+        )
+    )
+    if requested_course_id and can_view_requested_course:
+        try:
+            course_view = odb.lookup_course_by_id(course_id=requested_course_id)
+        except odb.InvalidCourse_Id:
+            course_view = None
+        if course_view is not None:
+            course_view_id = course_view[odb.COURSE_ID]
+            course_view_name = course_view.get(odb.COURSE_NAME) or course_view_id
 
     try:
         movie_id = int(request.query.get('movie_id'))
@@ -242,8 +257,8 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False):
         'admin':admin,
         'admin_read': admin_read,
         'super_role': super_role,
-        'user_primary_course_id': user_primary_course_id,
-        'primary_course_name': primary_course_name,
+        'user_default_course_id': user_default_course_id,
+        'default_course_name': default_course_name,
         'course_view_id': course_view_id,
         'course_view_name': course_view_name,
         'course_choices': course_choices,

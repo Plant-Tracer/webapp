@@ -77,6 +77,11 @@ Release Notes
 
 Unreleased Summary
 ******************
+    * Courses: make the current-course pull-down tab-local, send ``course_id``
+      with course-scoped browser requests, and add an explicit **Make default**
+      action
+    * Data model: rename the profile's ``primary_course_*`` fields to
+      ``default_course_*`` with read compatibility and a dry-run migration tool
     * Upload: prevent duplicate movie-rotation requests while a rotation is being saved
     * Developer: add a Makefile-driven analysis-MP4 CLI that creates a portable
       WebCodecs player bundle for manual cross-browser frame-step verification

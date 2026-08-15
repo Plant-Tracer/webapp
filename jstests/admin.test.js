@@ -57,7 +57,7 @@ function payload() {
     },
     users: {
       items: [{
-        user_id: 'user-1', user_name: 'Ada', email: 'ada@example.test', primary_course_id: 'BIO-1',
+        user_id: 'user-1', user_name: 'Ada', email: 'ada@example.test', default_course_id: 'BIO-1',
         super_role: 'none', created_at: 1700000000, last_movie_activity_at: null,
         courses: [
           { course_id: 'BIO-1', is_admin: true },

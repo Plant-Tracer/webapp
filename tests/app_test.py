@@ -13,7 +13,7 @@ from app import flask_api
 from app import flask_app
 from app import apikey
 
-from app.odb import API_KEY, PRIMARY_COURSE_ID, PRIMARY_COURSE_NAME, USER_ID, DDBO
+from app.odb import API_KEY, DEFAULT_COURSE_ID, DEFAULT_COURSE_NAME, USER_ID, DDBO
 
 # Fixtures are imported in conftest.py
 from app.constants import C, logger
@@ -94,8 +94,8 @@ def test_base_template_json_escapes_logged_in_script_globals(client, new_course)
         ddbo.users,
         user_id,
         {
-            PRIMARY_COURSE_ID: 'Course "A"',
-            PRIMARY_COURSE_NAME: 'Plant "Biology" <101>',
+            DEFAULT_COURSE_ID: 'Course "A"',
+            DEFAULT_COURSE_NAME: 'Plant "Biology" <101>',
         },
     )
 
@@ -103,8 +103,8 @@ def test_base_template_json_escapes_logged_in_script_globals(client, new_course)
     response = client.get('/about')
 
     assert response.status_code == 200
-    assert 'const user_primary_course_id = "Course \\"A\\"";' in response.text
-    assert 'const primary_course_name = "Plant \\"Biology\\" \\u003c101\\u003e";' in response.text
+    assert 'const user_default_course_id = "Course \\"A\\"";' in response.text
+    assert 'const default_course_name = "Plant \\"Biology\\" \\u003c101\\u003e";' in response.text
 
 
 #

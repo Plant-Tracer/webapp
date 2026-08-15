@@ -23,7 +23,7 @@ from app import mailer
 from app.paths import TEST_DATA_DIR
 from app.odb import (
     ADMIN_FOR_COURSES, COURSE_ID, COURSE_KEY, COURSE_NAME, COURSES, EMAIL,
-    ENABLED, PRIMARY_COURSE_ID, USER_ID, USER_NAME, DDBO, InvalidCourse_Id,
+    ENABLED, DEFAULT_COURSE_ID, USER_ID, USER_NAME, DDBO, InvalidCourse_Id,
     MOVIE_STATUS, MOVIE_STATE_READY, TITLE,
 )
 from app.odb_movie_data import set_movie_data
@@ -59,10 +59,26 @@ class UserListRow(BaseModel):
     email: str
     user_id: str
     enabled: int
-    primary_course_id: str
+    default_course_id: str
     courses: str
     admin_courses: str
     super_role: str
+
+
+class DefaultCourseMigration(BaseModel):
+    """One legacy user row's default-course migration."""
+
+    user_id: str
+    default_course_id: str | None
+    default_course_name: str | None
+
+
+class DefaultCourseMigrationResult(BaseModel):
+    """Summary returned by the default-course field migration."""
+
+    examined: int
+    changed: int
+    committed: bool
 
 
 class SuperRoleChange(BaseModel):
@@ -296,7 +312,7 @@ def user_list_row(user):
         email=str(user.get(EMAIL) or ""),
         user_id=str(user.get(USER_ID) or ""),
         enabled=int(user.get(ENABLED, 0)),
-        primary_course_id=str(user.get(PRIMARY_COURSE_ID) or ""),
+        default_course_id=str(odb.normalize_user_default_course(user).get(DEFAULT_COURSE_ID) or ""),
         courses=join_ids(user.get(COURSES, [])),
         admin_courses=join_ids(user.get(ADMIN_FOR_COURSES, [])),
         super_role=odb.normalize_super_role(user),
@@ -312,7 +328,7 @@ def print_user_rows(rows):
                 row.email,
                 row.user_id,
                 row.enabled,
-                row.primary_course_id,
+                row.default_course_id,
                 row.courses,
                 row.admin_courses,
                 row.super_role,
@@ -324,7 +340,7 @@ def print_user_rows(rows):
             "email",
             "user ID",
             "enabled",
-            "primary course",
+            "default course",
             "courses",
             "admin courses",
             "super role",
@@ -339,6 +355,47 @@ def user_list():
         print("No users found.")
         return
     print_user_rows(rows)
+
+
+def migrate_default_course_fields(*, commit=False, ddbo=None):
+    """Copy legacy primary-course fields to default-course fields and remove the legacy names."""
+    ddbo = ddbo or DDBO()
+    examined = 0
+    changes = []
+    for user in scan_all(ddbo.users, consistent_read=True):
+        examined += 1
+        has_legacy = (
+            odb.LEGACY_PRIMARY_COURSE_ID in user
+            or odb.LEGACY_PRIMARY_COURSE_NAME in user
+        )
+        if not has_legacy:
+            continue
+        normalized = odb.normalize_user_default_course(user)
+        migration = DefaultCourseMigration(
+            user_id=user[USER_ID],
+            default_course_id=normalized.get(odb.DEFAULT_COURSE_ID),
+            default_course_name=normalized.get(odb.DEFAULT_COURSE_NAME),
+        )
+        changes.append(migration)
+        if commit:
+            ddbo.update_table(
+                ddbo.users,
+                migration.user_id,
+                {
+                    odb.DEFAULT_COURSE_ID: migration.default_course_id,
+                    odb.DEFAULT_COURSE_NAME: migration.default_course_name,
+                    odb.LEGACY_PRIMARY_COURSE_ID: None,
+                    odb.LEGACY_PRIMARY_COURSE_NAME: None,
+                },
+            )
+    for migration in changes:
+        action = "migrated" if commit else "would migrate"
+        print(f"{action} {migration.user_id}: default_course_id={migration.default_course_id}")
+    return DefaultCourseMigrationResult(
+        examined=examined,
+        changed=len(changes),
+        committed=commit,
+    )
 
 
 def superadmin_list(args):
@@ -931,6 +988,12 @@ def build_parser():
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     subparsers.add_parser("report", help="Print database tables, courses, and students")
+    migration_parser = subparsers.add_parser(
+        "migrate-default-course-fields",
+        aliases=["migrate_default_course_fields"],
+        help="Rename legacy primary-course user fields; dry-run unless --commit is supplied",
+    )
+    migration_parser.add_argument("--commit", action="store_true")
     subparsers.add_parser(
         "list-prefixes",
         aliases=["list_prefixes"],
@@ -1144,6 +1207,13 @@ def main():  # pragma: no cover
         return 0
     if args.command == "report":
         print_report()
+        return 0
+    if args.command in ("migrate-default-course-fields", "migrate_default_course_fields"):
+        result = migrate_default_course_fields(commit=args.commit)
+        print(
+            f"examined={result.examined} changed={result.changed} "
+            f"committed={result.committed}"
+        )
         return 0
     if args.command in ("admin-list", "admin_list"):
         admin_list()

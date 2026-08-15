@@ -11,7 +11,7 @@ from app import odbmaint
 from app.constants import C,logger
 from app.odb import (
     ExistingCourse_Id, UserExists, COURSE_ID, COURSE_NAME, API_KEY, COURSE_KEY,
-    USER_ID, ADMINS_FOR_COURSE, MAX_ENROLLMENT, DDBO,
+    USER_ID, USERS, COURSES, ADMINS_FOR_COURSE, MAX_ENROLLMENT, DDBO,
 )
 from dbutil import DEMO_COURSE_ID,DEMO_COURSE_NAME,DEFAULT_ADMIN_EMAIL,DEFAULT_ADMIN_NAME,DEMO_USER_EMAIL,DEMO_USER_NAME
 
@@ -136,7 +136,6 @@ def test_course_list(client, new_course):
 
     user_dict = odb.validate_api_key(api_key)
     user_id   = user_dict['user_id']
-    #primary_course_id = user_dict['primary_course_id']
 
     recs1 = odb.list_users_courses(user_id=user_id)
     users1 = recs1['users']
@@ -296,8 +295,7 @@ def test_admin_sees_all_enrolled_users(client, new_course):
 
 
 def test_admin_two_courses(client, new_course):
-    """An admin for two courses should see all users from both courses,
-    and both courses should appear in the courses list."""
+    """An admin for two courses sees only the explicitly selected course."""
     admin_id    = new_course['admin_id']
     admin_email = new_course[ADMIN_EMAIL]
     user1_id    = new_course[USER_ID]        # enrolled in course 1 via fixture
@@ -329,17 +327,28 @@ def test_admin_two_courses(client, new_course):
         assert new_course[COURSE_ID] in course_ids, "course 1 should be in courses list"
         assert course2_id in course_ids,             "course 2 should be in courses list"
 
-        # Verify via the HTTP endpoint too
+        # The browser API is course-scoped even though the underlying ODB helper
+        # retains its aggregate form for maintenance callers.
         admin_api_key = odb.make_new_api_key(email=admin_email)
-        response  = client.post('/api/list-users', data={'api_key': admin_api_key})
-        res       = response.get_json()
-        assert res['error'] is False
-        http_ids      = {u['user_id'] for u in res['users']}
-        http_course_ids = {c['course_id'] for c in res['courses']}
-        assert admin_id in http_ids
-        assert user1_id in http_ids
-        assert user2_id in http_ids
-        assert course2_id in http_course_ids
+        response1 = client.post('/api/list-users', data={
+            'api_key': admin_api_key,
+            COURSE_ID: new_course[COURSE_ID],
+        })
+        res1 = response1.get_json()
+        assert res1['error'] is False
+        assert user1_id in {u[USER_ID] for u in res1[USERS]}
+        assert user2_id not in {u[USER_ID] for u in res1[USERS]}
+        assert [course[COURSE_ID] for course in res1[COURSES]] == [new_course[COURSE_ID]]
+
+        response2 = client.post('/api/list-users', data={
+            'api_key': admin_api_key,
+            COURSE_ID: course2_id,
+        })
+        res2 = response2.get_json()
+        assert res2['error'] is False
+        assert user2_id in {u[USER_ID] for u in res2[USERS]}
+        assert user1_id not in {u[USER_ID] for u in res2[USERS]}
+        assert [course[COURSE_ID] for course in res2[COURSES]] == [course2_id]
 
     finally:
         odb.remove_course_admin(admin_id=admin_id, course_id=course2_id)

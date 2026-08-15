@@ -1,6 +1,7 @@
 "use strict";
 /* jshint esversion: 8 */
 import { $ } from "./utils.js";
+import { activeCourseId } from "./course_context.js";
 
 
 ////////////////////////////////////////////////////////////////
@@ -32,7 +33,7 @@ function bulk_register_users() {
     const payload = {
         "api_key": api_key,
         "planttracer_endpoint": window.origin + "",
-        "course_id": user_primary_course_id,
+        "course_id": activeCourseId(),
         "email-addresses": emails.join('\n'),
         "names": names.join('\n')
     };
