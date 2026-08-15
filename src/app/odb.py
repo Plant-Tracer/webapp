@@ -159,8 +159,49 @@ MOVIE_STATE_UPDATED_AT = 'status_updated_at'
 
 USER_ID = 'user_id'
 
-PRIMARY_COURSE_ID = 'primary_course_id'
-PRIMARY_COURSE_NAME = 'primary_course_name'
+DEFAULT_COURSE_ID = 'default_course_id'
+DEFAULT_COURSE_NAME = 'default_course_name'
+# Read-only compatibility for rows created before the default-course migration.
+LEGACY_PRIMARY_COURSE_ID = 'primary_course_id'
+LEGACY_PRIMARY_COURSE_NAME = 'primary_course_name'
+
+
+def normalize_user_default_course(user):
+    """Expose migrated default-course names for a legacy DynamoDB user row."""
+    normalized = copy.copy(user)
+    if DEFAULT_COURSE_ID not in normalized and LEGACY_PRIMARY_COURSE_ID in user:
+        normalized[DEFAULT_COURSE_ID] = user[LEGACY_PRIMARY_COURSE_ID]
+    if DEFAULT_COURSE_NAME not in normalized and LEGACY_PRIMARY_COURSE_NAME in user:
+        normalized[DEFAULT_COURSE_NAME] = user[LEGACY_PRIMARY_COURSE_NAME]
+    return normalized
+
+
+def repaired_default_course_updates(ddbo, user, course_ids):
+    """Return updates needed when a user's stored default is no longer valid."""
+    default_course_id = normalize_user_default_course(user).get(DEFAULT_COURSE_ID)
+    existing_courses = []
+    for course_id in course_ids:
+        try:
+            existing_courses.append(ddbo.get_course(course_id))
+        except InvalidCourse_Id:
+            continue
+    if any(course[COURSE_ID] == default_course_id for course in existing_courses):
+        return {}
+    existing_courses.sort(key=lambda course: (
+        (course.get(COURSE_NAME) or course[COURSE_ID]).casefold(),
+        course[COURSE_ID],
+    ))
+    replacement = existing_courses[0] if existing_courses else None
+    return {
+        DEFAULT_COURSE_ID: replacement[COURSE_ID] if replacement else None,
+        DEFAULT_COURSE_NAME: (
+            replacement.get(COURSE_NAME) or replacement[COURSE_ID]
+            if replacement else None
+        ),
+        LEGACY_PRIMARY_COURSE_ID: None,
+        LEGACY_PRIMARY_COURSE_NAME: None,
+    }
+
 
 CHECK_MX = False            # True doesn't work
 
@@ -530,7 +571,7 @@ class DDBO:
         """
         item = self.users.get_item(Key = { USER_ID :user_id},ConsistentRead=True).get('Item',None)
         if item:
-            return item
+            return normalize_user_default_course(item)
         raise InvalidUser_Id(user_id)
 
     def get_user_email(self, email):
@@ -542,7 +583,7 @@ class DDBO:
         )
         items = response.get('Items', [])
         if items:
-            return items[0]
+            return normalize_user_default_course(items[0])
         logger.debug("email %s not in table %s", email, self.users)
         raise InvalidUser_Email(email)
 
@@ -561,13 +602,13 @@ class DDBO:
         user_id = user[ USER_ID ]
         assert is_user_id(user_id)
         logger.debug("put_user email=%s user_id=%s user=%s",email,user_id,user)
-        primary_course_id = user.get(PRIMARY_COURSE_ID)
-        if primary_course_id is not None:
+        default_course_id = user.get(DEFAULT_COURSE_ID)
+        if default_course_id is not None:
             try:
-                self.get_course(primary_course_id)
+                self.get_course(default_course_id)
             except InvalidCourse_Id:
                 raise ValueError(
-                    f"Course {primary_course_id} does not exist; cannot create user for {email}"
+                    f"Course {default_course_id} does not exist; cannot create user for {email}"
                 ) from None
 
         try:
@@ -794,7 +835,14 @@ class DDBO:
                 courses = user[ COURSES ]
                 if course_id in courses:
                     courses.remove(course_id)
-                    self.update_table(self.users, user[ USER_ID ], {'courses':courses})
+                    self.update_table(
+                        self.users,
+                        user[USER_ID],
+                        {
+                            COURSES: courses,
+                            **repaired_default_course_updates(self, user, courses),
+                        },
+                    )
             last_evaluated_key = response.get('LastEvaluatedKey')
             if not last_evaluated_key:
                 break
@@ -1055,7 +1103,7 @@ def get_logs( *, user_id , start_time = 0, end_time = None, course_id=None,
 ## User management
 
 
-def list_users_courses(*, user_id):
+def list_users_courses(*, user_id, course_id=None):
     """Returns a dictionary with keys:
     'users' - all the users to which the user has access, and all of the people in them.
     'courses' - all of the courses to which the user has access, and all the people in them.
@@ -1068,6 +1116,27 @@ def list_users_courses(*, user_id):
     user = ddbo.get_user(user_id)
     admin_for_courses = user.get(ADMIN_FOR_COURSES, [])
 
+    if course_id is not None:
+        course = ddbo.get_course(course_id)
+        may_list_enrollment = (
+            course_id in admin_for_courses
+            or normalize_super_role(user) in SUPER_READ_ROLES
+        )
+        visible_user_ids = course_enrollments(course_id) if may_list_enrollment else [user_id]
+        users_list = []
+        for visible_user_id in visible_user_ids:
+            try:
+                visible_user = ddbo.get_user(visible_user_id)
+            except InvalidUser_Id:
+                logger.warning("course_enrollments returned unknown user_id %s for course %s — skipping",
+                               visible_user_id, course_id)
+                continue
+            visible_user[COURSE_ID] = course_id
+            visible_user['first'], visible_user['last'] = ddbo.get_user_login_times(visible_user_id)
+            users_list.append(visible_user)
+        users_list.sort(key=lambda item: (item.get(USER_NAME, "").casefold(), item.get(USER_ID, "")))
+        return {USERS: users_list, COURSES: [course]}
+
     if not admin_for_courses:
         first, last = ddbo.get_user_login_times(user_id)
         user['first'] = first
@@ -1078,30 +1147,31 @@ def list_users_courses(*, user_id):
     # Collect all users enrolled in any course this user admins (deduplicated)
     seen_user_ids = set()
     users_list = []
-    for course_id in admin_for_courses:
-        for enrolled_user_id in course_enrollments(course_id):
+    for admin_course_id in admin_for_courses:
+        for enrolled_user_id in course_enrollments(admin_course_id):
             if enrolled_user_id not in seen_user_ids:
                 seen_user_ids.add(enrolled_user_id)
                 try:
                     enrolled_user = ddbo.get_user(enrolled_user_id)
                 except InvalidUser_Id:
                     logger.warning("course_enrollments returned unknown user_id %s for course %s — skipping",
-                                   enrolled_user_id, course_id)
+                                   enrolled_user_id, admin_course_id)
                     continue
                 first, last = ddbo.get_user_login_times(enrolled_user_id)
                 enrolled_user['first'] = first
                 enrolled_user['last'] = last
                 users_list.append(enrolled_user)
 
-    # Include all admin courses plus any primary courses referenced by the returned users
+    # Include all admin courses plus any default courses referenced by the returned users.
     course_ids = set(admin_for_courses)
     for u in users_list:
-        if u.get(PRIMARY_COURSE_ID):
-            course_ids.add(u[PRIMARY_COURSE_ID])
+        u = normalize_user_default_course(u)
+        if u.get(DEFAULT_COURSE_ID):
+            course_ids.add(u[DEFAULT_COURSE_ID])
     courses_list = [c for c in (ddbo.get_course(cid) for cid in course_ids) if c]
 
-    # Sort by primary_course_id so the JS grouping logic produces one section per course
-    users_list.sort(key=lambda u: u.get(PRIMARY_COURSE_ID, ''))
+    # Sort by default_course_id so the JS grouping logic produces one section per course
+    users_list.sort(key=lambda u: normalize_user_default_course(u).get(DEFAULT_COURSE_ID, ''))
 
     return {USERS: users_list, COURSES: courses_list}
 
@@ -1109,7 +1179,7 @@ def list_users_courses(*, user_id):
 # pylint-x: disable=too-many-arguments
 def register_email(email, user_name, *, course_key=None, course_id=None, admin=False):
     """Register a user as identified by their email address for a given course.
-    If the user exists, just change their primary course Id and add them to the course.
+    If the user exists, change their default course ID and add them to the course.
     If the user does not exist, create them.
     - Add the user to the specified course.
     - If the user is admin, add them to the list of course admins
@@ -1160,28 +1230,30 @@ def register_email(email, user_name, *, course_key=None, course_id=None, admin=F
                            'created' : int(time.time()),
                            ENABLED:1,
                            ADMIN_FOR_COURSES:admin_for_courses,
-                           PRIMARY_COURSE_ID:course_id,
-                           PRIMARY_COURSE_NAME:course[COURSE_NAME],
+                           DEFAULT_COURSE_ID:course_id,
+                           DEFAULT_COURSE_NAME:course[COURSE_NAME],
                            COURSES:[course_id]
                            })
     except UserExists:
         user = ddbo.get_user_email(email)
 
     if user is not None:
-        # The user exists! Change the primary course and add them to this course.
+        # The user exists! Change the default course and add them to this course.
         admin_for_courses = user[ADMIN_FOR_COURSES]
         if admin:
             admin_for_courses = list(set(admin_for_courses).union([course_id]))
         logger.debug("user=%s",user)
-        # Do not overwrite primary course when adding user to the demo course (so verification-link login stays on main course).
+        # Do not overwrite the default when adding a user to the demo course.
         update_payload = {
             ENABLED: 1,
             COURSES: list(set(user[COURSES] + [course_id])),
             ADMIN_FOR_COURSES: admin_for_courses,
         }
         if course_id != "demo-course":
-            update_payload[PRIMARY_COURSE_ID] = course[COURSE_ID]
-            update_payload[PRIMARY_COURSE_NAME] = course[COURSE_NAME]
+            update_payload[DEFAULT_COURSE_ID] = course[COURSE_ID]
+            update_payload[DEFAULT_COURSE_NAME] = course[COURSE_NAME]
+            update_payload[LEGACY_PRIMARY_COURSE_ID] = None
+            update_payload[LEGACY_PRIMARY_COURSE_NAME] = None
         ddbo.update_table(ddbo.users, user[USER_ID], update_payload)
 
         user_id = user[ USER_ID ]
@@ -1198,12 +1270,19 @@ def register_email(email, user_name, *, course_key=None, course_id=None, admin=F
 
 
 def unregister_from_course(*, course_id, user_id):
-    """Remove user_id from course_id, but do not make other changes."""
+    """Remove a membership and repair the profile default when necessary."""
     ddbo = DDBO()
     user = ddbo.get_user(user_id)
     try:
         user[COURSES].remove(course_id)
-        ddbo.update_table(ddbo.users, user_id, {COURSES:user[COURSES]})
+        ddbo.update_table(
+            ddbo.users,
+            user_id,
+            {
+                COURSES: user[COURSES],
+                **repaired_default_course_updates(ddbo, user, user[COURSES]),
+            },
+        )
     except ValueError:
         pass
     ddbo.course_users.delete_item(Key={COURSE_ID:course_id, USER_ID:user_id})
@@ -1372,8 +1451,10 @@ def add_course_admin(*, admin_id, course_id):
 
     ddbo.update_table(ddbo.users,
                       admin_id,
-                      {PRIMARY_COURSE_ID:course_id,
-                       PRIMARY_COURSE_NAME:course[COURSE_NAME],
+                      {DEFAULT_COURSE_ID:course_id,
+                       DEFAULT_COURSE_NAME:course[COURSE_NAME],
+                       LEGACY_PRIMARY_COURSE_ID:None,
+                       LEGACY_PRIMARY_COURSE_NAME:None,
                        COURSES: courses,
                        ADMIN_FOR_COURSES: admin_for_courses})
 
@@ -1395,10 +1476,14 @@ def remove_course_admin(*, course_id, admin_id):
     try:
         courses = admin[ COURSES ]
         courses.remove(course_id)
-        ddbo.update_table(ddbo.users, admin_id,
-                           { COURSES:courses,
-                            PRIMARY_COURSE_ID:None,
-                            PRIMARY_COURSE_NAME:None})
+        ddbo.update_table(
+            ddbo.users,
+            admin_id,
+            {
+                COURSES: courses,
+                **repaired_default_course_updates(ddbo, admin, courses),
+            },
+        )
 
     except ValueError:
         logger.warning("removing courses from %s from user %s",course_id,admin_id)
@@ -1407,9 +1492,7 @@ def remove_course_admin(*, course_id, admin_id):
         admin_for_courses = admin[ ADMIN_FOR_COURSES ]
         admin_for_courses.remove(course_id)
         ddbo.update_table(ddbo.users, admin_id,
-                           { ADMIN_FOR_COURSES:admin_for_courses,
-                            PRIMARY_COURSE_ID:None,
-                            PRIMARY_COURSE_NAME:None})
+                          {ADMIN_FOR_COURSES: admin_for_courses})
 
     except ValueError:
         logger.warning("remove admin_for_courses fail: %s from user %s",course_id,admin_id)
@@ -1756,7 +1839,7 @@ def create_new_movie(*, user_id, course_id=None, title=None, description=None, o
     ddbo = DDBO()
     user = ddbo.get_user(user_id)
     if course_id is None:
-        course_id = user[PRIMARY_COURSE_ID]
+        course_id = user[DEFAULT_COURSE_ID]
     movie_id = new_movie_id()
     created_at = int(time.time())
     ddbo.put_movie({MOVIE_ID: movie_id,

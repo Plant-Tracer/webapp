@@ -1,4 +1,4 @@
-- [ ] user.primary_course_name must be set.
+- [ ] user.default_course_name must be set when default_course_id is present.
 - [ ] remove 'admin' property. What makes a user an admin is that they are listed in the course.admins[] and their user.admin_for[] includes the course.
 - [ ] create another table 'user.courses' which has a list of all the courses in which the user is registered.
 - [ ]  - no list!

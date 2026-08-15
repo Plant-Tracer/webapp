@@ -137,8 +137,8 @@ TEST_USER_DATA = {
     'enabled': 1,
     'admin_for_courses': [],
     'courses': [],
-    'primary_course_id': TEST_COURSE_ID,
-    'primary_course_name': TEST_COURSE_NAME,
+    'default_course_id': TEST_COURSE_ID,
+    'default_course_name': TEST_COURSE_NAME,
     'super_role': odb.SUPER_ROLE_NONE,
 }
 
@@ -150,8 +150,8 @@ TEST_ADMIN_DATA = {
     'enabled': 1,
     'admin_for_courses': [TEST_COURSE_ID],
     'courses': [TEST_COURSE_ID],
-    'primary_course_id': TEST_COURSE_ID,
-    'primary_course_name': TEST_COURSE_NAME,
+    'default_course_id': TEST_COURSE_ID,
+    'default_course_name': TEST_COURSE_NAME,
     'super_role': odb.SUPER_ROLE_NONE,
 }
 
@@ -205,8 +205,8 @@ def create_trim_test_movie(local_ddb, *, total_frames=5, trim_start_frame=None, 
         'enabled': 1,
         'admin_for_courses': [],
         'courses': [course_id],
-        'primary_course_id': course_id,
-        'primary_course_name': 'Trim Course',
+        'default_course_id': course_id,
+        'default_course_name': 'Trim Course',
     })
     movie = {
         MOVIE_ID: movie_id,
@@ -469,8 +469,8 @@ def test_clear_movie_tracking_after_frame(local_ddb):
         'enabled': 1,
         'admin_for_courses': [],
         'courses': [course_id],
-        'primary_course_id': course_id,
-        'primary_course_name': course_name,
+        'default_course_id': course_id,
+        'default_course_name': course_name,
     })
     ddbo.put_movie({
         MOVIE_ID: movie_id,
@@ -786,8 +786,8 @@ def test_create_new_movie_stores_fpm(local_ddb):
         'enabled': 1,
         'admin_for_courses': [],
         'courses': [course_id],
-        'primary_course_id': course_id,
-        'primary_course_name': 'FPM Course',
+        'default_course_id': course_id,
+        'default_course_name': 'FPM Course',
     })
     movie_id = odb.create_new_movie(user_id=user_id, course_id=course_id, title='t', description='d', fpm='20')
     assert odb.get_movie(movie_id=movie_id)[odb.FPM] == '20'

@@ -2,6 +2,7 @@
 /* jshint esversion: 8 */
 import { $, begin_inline_text_edit } from "./utils.js";
 import { RETRACE_REQUIRED_MESSAGE } from "./ui_constants.js";
+import { activeCourseId, appendCourseContext } from "./course_context.js";
 
 
 
@@ -163,7 +164,7 @@ async function computeSHA256(file) {
  */
 function first_frame_url(movie_id)
 {
-  return `${LAMBDA_API_BASE}resize-api/v1/first-frame?api_key=${api_key}&movie_id=${movie_id}`;
+  return `${LAMBDA_API_BASE}resize-api/v1/first-frame?api_key=${api_key}&movie_id=${movie_id}&course_id=${encodeURIComponent(activeCourseId() || '')}`;
 }
 
 /*
@@ -195,7 +196,7 @@ async function startLambdaProcessing(movie_id) {
       'Content-Type': 'application/json',
       'x-api-key': api_key,
     },
-    body: JSON.stringify({ movie_id }),
+    body: JSON.stringify({ movie_id, course_id: activeCourseId() }),
   });
   if (!response.ok) {
     const message = await response.text();
@@ -239,6 +240,7 @@ async function upload_movie_post(movie_title, description, movieFile, research_u
   // Get a new movie_id
   const movie_data_sha256 = await computeSHA256(movieFile);
   const formData = new FormData();
+  appendCourseContext(formData);
   formData.append("api_key",     api_key);
   formData.append("title",       movie_title);
   formData.append("description", description);
@@ -414,6 +416,7 @@ function upload_movie()
 
 async function _get_movie_metadata(movie_id){
   let formData = new FormData();
+  appendCourseContext(formData);
   formData.append("api_key",     api_key);   // on the upload form
   formData.append("movie_id",    movie_id);
   const r = await fetch(`${API_BASE}api/get-movie-metadata`, { method:"POST", body:formData});
@@ -462,6 +465,7 @@ async function apply_rotation_and_zip() {
 // 3. Update the backend via /rotate-movie
     try {
         const formData = new FormData();
+        appendCourseContext(formData);
         formData.append('api_key', api_key);
         formData.append('movie_id', movie_id);   // Matches get_movie_id() [cite: 355]
         formData.append('rotation', String(current_rotation)); // Matches get_int("rotation")
@@ -514,7 +518,7 @@ function play_clicked( e ) {
   }
   // ask the movie-data service for JSON information about the movie,
   // which will be a signed S3 GET URL
-  const apiUrl = `${base}/resize-api/v1/movie-data?api_key=${api_key}&movie_id=${movie_id}&format=json`;
+  const apiUrl = `${base}/resize-api/v1/movie-data?api_key=${api_key}&movie_id=${movie_id}&course_id=${encodeURIComponent(activeCourseId() || '')}&format=json`;
   const tr = e.closest('tr');
   const row = dt.row(tr);
   row.child('<td colspan="8"><span class="loading">Loading…</span></td>').show();
@@ -595,6 +599,7 @@ function set_property(user_id, movie_id, property, value)
 {
   console.log(`set_property('${user_id}', ${movie_id}, ${property}, ${value})`);
   let formData = new FormData();
+  appendCourseContext(formData);
   formData.append("api_key",  api_key); // on the upload form
   if (user_id) formData.append("set_user_id", user_id);
   if (movie_id) formData.append("set_movie_id", movie_id);
@@ -639,6 +644,7 @@ function research_metadata_changed( e ) {
   if (!creditRaw   && property === 'credit_by_name') { return; }
 
   const formData = new FormData();
+  appendCourseContext(formData);
   formData.append('api_key', api_key);
   formData.append('movie_id', movie_id);
   if (researchRaw) { formData.append('research_use', researchRaw); }
@@ -964,7 +970,7 @@ function list_movies_data( movies ) {
   movies_fill_div( '#your-unpublished-movies',
                    UNPUBLISHED, movies.filter( m => (m.user_id==user_id && m.published==0 && m.deleted==0 && !m.orig_movie)).sort(byNewest));
   const requestedCourseViewId = typeof course_view_id === 'undefined' ? null : course_view_id;
-  const displayedCourseId = requestedCourseViewId || user_primary_course_id;
+  const displayedCourseId = requestedCourseViewId || activeCourseId();
   movies_fill_div( '#course-movies',
                    COURSE, movies.filter( m => (m.course_id==displayedCourseId && (demo_mode || (m.user_id!=user_id)) && !m.orig_movie && (m.published==1 || admin || requestedCourseViewId))).sort(byNewest));
   movies_fill_div( '#your-deleted-movies',
@@ -984,6 +990,8 @@ function list_ready_function() {
   const requestedCourseViewId = typeof course_view_id === 'undefined' ? null : course_view_id;
   if (requestedCourseViewId) {
     formData.append("course_id", requestedCourseViewId);
+  } else {
+    appendCourseContext(formData);
   }
   fetch(`${API_BASE}api/list-movies`, { method:"POST", body:formData })
     .then((response) => response.json())
@@ -1023,15 +1031,16 @@ function list_users_data( users, course_array ) {
     let d1 = user.first ? new Date(user.first * 1000).toString() : "n/a";
     let d2 = user.last ? new Date(user.last  * 1000).toString() : "n/a";
     let ret = '';
-    if (current_course != user.primary_course_id) {
+    const userCourseId = user.course_id || user.default_course_id;
+    if (current_course != userCourseId) {
       if (current_course !== null) {
         ret += '</tbody></table>\n';
       }
-      const course_label = (user.primary_course_id === user_primary_course_id) ? 'Primary course' : 'Course';
-      ret += `<p><b>${course_label}: ${course_array[user.primary_course_id].course_name} (${user.primary_course_id})</b></p>\n`;
+      const course_label = (userCourseId === user_default_course_id) ? 'Default course' : 'Course';
+      ret += `<p><b>${course_label}: ${course_array[userCourseId].course_name} (${userCourseId})</b></p>\n`;
       ret += '<table><tbody>\n';
       ret += '<tr><th>Name</th><th>Email</th><th>ID</th><th>First Seen</th><th>Last Seen</th></tr>\n';
-      current_course = user.primary_course_id;
+      current_course = userCourseId;
     }
     ret +=  `<tr><td>${user.user_name}</td><td>${user.email}</td><td>${user.user_id}</td><td>${d1}</td><td>${d2}</td></tr>\n`;
     return ret;
@@ -1049,6 +1058,7 @@ function list_users()
 {
   let formData = new FormData();
   formData.append("api_key",  api_key); // on the upload form
+  appendCourseContext(formData);
   fetch(`${API_BASE}api/list-users`, { method:"POST", body:formData })
     .then((response) => response.json())
     .then((data) => {

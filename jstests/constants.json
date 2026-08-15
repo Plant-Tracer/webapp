@@ -9,5 +9,5 @@
     "DELETE_BUTTON" : "Delete",
     "UNDELETE_BUTTON" : "Undelete",
     "TABLE_HEAD" : "<tr><th>ID</th><th>Name</th><th>Date</th><th>Title</th><th>Description</th><th>Stats</th><th>Actions</th></tr>",
-    "user_primary_course_id" : "2"
+    "user_default_course_id" : "2"
 }

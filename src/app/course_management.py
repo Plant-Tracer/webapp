@@ -14,8 +14,10 @@ from .odb import (
     COURSE_NAME,
     COURSES,
     EMAIL,
-    PRIMARY_COURSE_ID,
-    PRIMARY_COURSE_NAME,
+    DEFAULT_COURSE_ID,
+    DEFAULT_COURSE_NAME,
+    LEGACY_PRIMARY_COURSE_ID,
+    LEGACY_PRIMARY_COURSE_NAME,
     USER_ID,
     USER_NAME,
     DDBO,
@@ -70,8 +72,8 @@ def scan_table_items(table, *, consistent_read=False):
         scan_kwargs[EXCLUSIVE_START_KEY] = last_key
 
 
-def set_current_course(*, user_id: str, course_id: str) -> AdminCourse:
-    """Set a user's current course to one of their existing memberships."""
+def set_default_course(*, user_id: str, course_id: str) -> AdminCourse:
+    """Set a user's default course to one of their existing memberships."""
     ddbo = DDBO()
     user = ddbo.get_user(user_id)
     if course_id not in user.get(COURSES, []):
@@ -81,8 +83,10 @@ def set_current_course(*, user_id: str, course_id: str) -> AdminCourse:
         ddbo.users,
         user_id,
         {
-            PRIMARY_COURSE_ID: course_id,
-            PRIMARY_COURSE_NAME: course.get(COURSE_NAME) or course_id,
+            DEFAULT_COURSE_ID: course_id,
+            DEFAULT_COURSE_NAME: course.get(COURSE_NAME) or course_id,
+            LEGACY_PRIMARY_COURSE_ID: None,
+            LEGACY_PRIMARY_COURSE_NAME: None,
         },
     )
     return AdminCourse(

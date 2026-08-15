@@ -21,6 +21,7 @@ from app.constants import C, STACK_NAME, __version__, logger, stack_name
 # Fixtures are imported in conftest.py
 from app.odb import API_KEY, COURSE_ID, USER_ID, USER_NAME
 from .constants import ADMIN_EMAIL
+from .fixtures.local_aws import ADMIN_ID
 
 FRAME_FILES = glob.glob(os.path.join(TEST_DIR, "data", "frame_*.jpg"))
 FRAME_RE = re.compile(r"frame_(\d+).jpg")
@@ -69,6 +70,58 @@ def test_api_get_logs(client, new_course):
     obj = r.json
     assert obj['error'] is False
     assert 'logs' in obj
+
+
+def test_api_get_logs_keeps_course_members_user_scoped(client, new_course):
+    ddbo = new_course['ddbo']
+    own_log = ddbo.put_movie_log(
+        event_type='own-event',
+        movie={
+            USER_ID: new_course[USER_ID],
+            COURSE_ID: new_course[COURSE_ID],
+            odb.MOVIE_ID: odb.new_movie_id(),
+        },
+        ipaddr='127.0.0.1',
+    )
+    admin_log = ddbo.put_movie_log(
+        event_type='admin-event',
+        movie={
+            USER_ID: new_course[ADMIN_ID],
+            COURSE_ID: new_course[COURSE_ID],
+            odb.MOVIE_ID: odb.new_movie_id(),
+        },
+        ipaddr='127.0.0.2',
+    )
+
+    for data in (
+            {'api_key': new_course[API_KEY]},
+            {'api_key': new_course[API_KEY], COURSE_ID: new_course[COURSE_ID]}):
+        response = client.post('/api/get-logs', data=data)
+        log_ids = {entry[odb.LOG_ID] for entry in response.json['logs']}
+        assert own_log.log_id in log_ids
+        assert admin_log.log_id not in log_ids
+
+
+def test_api_get_logs_allows_course_admin_scope(client, new_course):
+    ddbo = new_course['ddbo']
+    member_log = ddbo.put_movie_log(
+        event_type='member-event',
+        movie={
+            USER_ID: new_course[USER_ID],
+            COURSE_ID: new_course[COURSE_ID],
+            odb.MOVIE_ID: odb.new_movie_id(),
+        },
+        ipaddr='127.0.0.1',
+    )
+    admin_api_key = odb.make_new_api_key(email=new_course[ADMIN_EMAIL])
+
+    response = client.post('/api/get-logs', data={
+        'api_key': admin_api_key,
+        COURSE_ID: new_course[COURSE_ID],
+    })
+
+    assert response.status_code == 200
+    assert member_log.log_id in {entry[odb.LOG_ID] for entry in response.json['logs']}
 
 # need /api/register
 # need /api/resend-link

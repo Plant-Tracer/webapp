@@ -1,6 +1,7 @@
 "use strict";
 /* jshint esversion: 8 */
 import { $ } from "./utils.js";
+import { appendCourseContext } from "./course_context.js";
 
 ////////////////////////////////////////////////////////////////
 // page: /audit
@@ -121,6 +122,7 @@ function filterTable(searchText) {
 
 function build_audit_table() {
     const formData = new FormData();
+    appendCourseContext(formData);
     formData.append("api_key", api_key);
     fetch(`${API_BASE}api/get-logs`, { method:"POST", body:formData })
         .then((response) => response.json())

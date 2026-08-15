@@ -41,8 +41,9 @@ the durable user profile:
 * ``user_name``: the user's display name. This is the name shown in page
   headers, movie lists, course user lists, and some movie metadata defaults.
 * ``enabled``: whether the user can authenticate.
-* ``primary_course_id`` and ``primary_course_name``: the course context used by
-  normal page rendering and uploads.
+* ``default_course_id`` and ``default_course_name``: the user's profile default.
+  The browser's active course is tab-scoped and is sent as ``course_id`` on
+  course-aware API calls.
 * ``courses``: the course ids in which the user is enrolled.
 * ``admin_for_courses``: the course ids for which the user has course
   administrator privileges.
@@ -103,7 +104,7 @@ reuse the same read model.
 
 Operators can list all registered users with ``make user-list``. The target
 runs ``poetry run dbutil user-list`` and prints each user's display name, email
-address, ``user_id``, enabled flag, primary course, course memberships,
+address, ``user_id``, enabled flag, default course, course memberships,
 administered courses, and ``super_role``. Operators can list only users with
 cross-course super roles with ``make superadmin-list``. The underlying
 ``poetry run dbutil superadmin-list`` command accepts ``--role superadmin`` or
@@ -251,8 +252,12 @@ Normal ownership and permission checks use:
 * ``courses`` and ``course_users`` for course membership.
 * ``admin_for_courses`` and ``admins_for_course`` for course administrator
   privileges.
-* ``primary_course_id`` for the current course context on rendered pages and
-  uploads.
+* ``default_course_id`` as a fallback when a request omits a valid active
+  ``course_id``.
+
+The course pull-down stores its active value in browser ``sessionStorage`` so
+different tabs or browsers can use different courses. Changing it does not
+change the profile default; the separate **Make default** action does.
 
 Course administrators are still normal users. Their extra authority applies to
 the courses listed in their administrator fields; it does not make their email

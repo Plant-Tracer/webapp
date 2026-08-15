@@ -97,7 +97,7 @@ selection, runtime URL selection, and JavaScript bootstrap injection. The base
 template uses that state for:
 
 * browser globals: ``API_BASE``, ``LAMBDA_API_BASE``, ``api_key``, ``user_id``,
-  ``demo_mode``, ``user_primary_course_id``, ``primary_course_name``,
+  ``demo_mode``, ``user_default_course_id``, ``default_course_name``,
   ``MAX_FILE_UPLOAD``, ``MOVIE_STATE``, and ``admin``;
 * authenticated navigation and logged-in user/course display;
 * admin-only and demo-mode menu behavior;
@@ -143,7 +143,7 @@ before changing templates:
   ``API_BASE``, ``LAMBDA_API_BASE``, ``MOVIE_STATE``, ``MAX_FILE_UPLOAD``,
   app version, and asset version;
 * a same-origin ``/api/session`` endpoint for logged-in state, user identity,
-  primary course, admin status, and demo mode;
+  default course, course memberships, admin status, and demo mode;
 * a login-link flow that consumes ``?api_key=...``, sets the cookie, and
   redirects to a clean URL before browser JavaScript runs;
 * a CSRF/log-safety decision for cookie-authenticated mutating endpoints;

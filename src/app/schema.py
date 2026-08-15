@@ -35,8 +35,8 @@ class User(BaseModel):
     created: int
     enabled: Annotated[int, Field(ge=0, le=1)]
     admin_for_courses: List[str]
-    primary_course_id: str
-    primary_course_name: str
+    default_course_id: str
+    default_course_name: str
     courses: List[str]
     super_role: Literal["none", "superauditor", "superadmin"] = "none"
 
@@ -106,8 +106,8 @@ class AdminCourse(BaseModel):
     course_name: str
 
 
-class CurrentCourseRequest(BaseModel):
-    """Request to change the signed-in user's current course."""
+class DefaultCourseRequest(BaseModel):
+    """Request to change the signed-in user's default course."""
 
     course_id: str
 
