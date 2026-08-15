@@ -335,6 +335,10 @@ function appendMovieRows(movies) {
         ["Dimensions", dimensions], ["FPS", movie.fps], ["FPM", movie.fpm],
         ["Rotation", movie.rotation], ["Trim start", movie.trim_start_frame],
         ["Trim end", movie.trim_end_frame], ["Retrace required", movie.needs_retracing ? "yes" : "no"],
+        ["Original object", movie.original_object_state], ["Traced object", movie.traced_object_state],
+        ["ZIP object", movie.zip_object_state],
+        ["Pending upload age", movie.pending_upload_age_seconds == null
+          ? null : `${movie.pending_upload_age_seconds} seconds`],
         ["Research use", movie.research_use], ["Credit by name", movie.credit_by_name],
         ["Attribution", movie.attribution_name],
       ]), row));

@@ -162,7 +162,9 @@ The admin summary reports the same states as ``published``, ``hidden``, or
 The summary deliberately omits object URNs and API keys. The default table view
 stays compact: its `Verbose details` control reveals stable IDs, named course
 administrators, and movie metadata including description, dimensions, trimming,
-rotation, retrace state, and research attribution. Course enrollment counts are
+rotation, retrace state, per-object storage health, pending-upload age, and research attribution.
+Storage health reports only ``present``, ``missing``, or ``not created`` and never
+exposes raw S3 URIs. Course enrollment counts are
 read consistently from the `course_users` table. User memberships and movies
 carry `course_id`; the admin page joins those IDs to the separately downloaded
 course names after all bounded pages arrive.

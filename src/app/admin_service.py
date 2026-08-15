@@ -3,6 +3,7 @@
 import base64
 import binascii
 import json
+import time
 from enum import StrEnum
 
 from boto3.dynamodb.conditions import Key
@@ -25,6 +26,7 @@ from .odb import (
     MOVIE_DATA_URN,
     MOVIE_STATUS,
     MOVIE_TRACED_URN,
+    MOVIE_ZIPFILE_URN,
     DEFAULT_COURSE_ID,
     PUBLISHED,
     TITLE,
@@ -87,6 +89,14 @@ class AdminSection(StrEnum):
     COURSES = "courses"
     USERS = "users"
     MOVIES = "movies"
+
+
+class StorageObjectState(StrEnum):
+    """Read-only storage state shown without an object identifier."""
+
+    PRESENT = "present"
+    MISSING = "missing"
+    NOT_CREATED = "not created"
 
 
 class RestartMarker(BaseModel):
@@ -163,6 +173,10 @@ class AdminMovieSummary(BaseModel):
     total_bytes: int | None = None
     fpm: str | None = None
     has_traced_movie: bool = False
+    original_object_state: StorageObjectState
+    traced_object_state: StorageObjectState
+    zip_object_state: StorageObjectState
+    pending_upload_age_seconds: int | None = None
     description: str = ""
     fps: str | None = None
     width: int | None = None
@@ -334,7 +348,14 @@ def user_summary(user) -> AdminUserSummary:
     )
 
 
-def movie_summary(movie) -> AdminMovieSummary:
+def object_state(urn) -> StorageObjectState:
+    """Report the state of a derived object without disclosing its URN."""
+    if not urn:
+        return StorageObjectState.NOT_CREATED
+    return StorageObjectState.PRESENT if s3_presigned.object_exists(urn) else StorageObjectState.MISSING
+
+
+def movie_summary(movie, *, now=None) -> AdminMovieSummary:
     """Convert a DynamoDB movie item into a privacy-aware admin row."""
     course_id = movie.get(COURSE_ID, "")
     if movie.get(DELETED, 0):
@@ -345,6 +366,9 @@ def movie_summary(movie) -> AdminMovieSummary:
         state = "hidden"
     uploaded_at = movie.get(UPLOADED_AT) or movie.get(DATE_UPLOADED)
     created_at = movie.get(CREATED_AT)
+    pending_upload_age_seconds = None
+    if not uploaded_at and created_at:
+        pending_upload_age_seconds = max(0, int((now or time.time()) - int(created_at)))
     return AdminMovieSummary(
         movie_id=movie[MOVIE_ID],
         title=movie.get(TITLE, ""),
@@ -360,6 +384,10 @@ def movie_summary(movie) -> AdminMovieSummary:
         total_bytes=movie.get(TOTAL_BYTES),
         fpm=movie.get(FPM),
         has_traced_movie=bool(movie.get(MOVIE_TRACED_URN)),
+        original_object_state=object_state(movie.get(MOVIE_DATA_URN)),
+        traced_object_state=object_state(movie.get(MOVIE_TRACED_URN)),
+        zip_object_state=object_state(movie.get(MOVIE_ZIPFILE_URN)),
+        pending_upload_age_seconds=pending_upload_age_seconds,
         description=movie.get(DESCRIPTION) or "",
         fps=movie.get(FPS),
         width=movie.get(WIDTH),
