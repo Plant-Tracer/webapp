@@ -425,62 +425,64 @@ async function _get_movie_metadata(movie_id){
 
 
 //
-// Rotate: debounce multiple clicks (~1s), then send one request with total rotation_steps (1–3).
-// Server rotates that many 90° steps and builds the zip in the background.
-const ROTATE_DEBOUNCE_MS = 1000;
-let rotate_pending = 0;
-let rotate_debounce_timer = null;
-
 function rotate_movie() {
   const linkEl = $('#rotate_movie_link').get(0);
   if (!linkEl || linkEl.classList.contains('rotate-pending')) {
     return;
   }
-  rotate_pending += 90;
-  $('#rotate_status').text(rotate_pending);
-  if (rotate_debounce_timer) {
-    clearTimeout(rotate_debounce_timer);
-  }
-  rotate_debounce_timer = setTimeout(() => apply_rotation_and_zip(), ROTATE_DEBOUNCE_MS);
+  linkEl.classList.add('rotate-pending');
+  linkEl.setAttribute('aria-disabled', 'true');
+  return apply_rotation_and_zip().finally(() => {
+    linkEl.classList.remove('rotate-pending');
+    linkEl.removeAttribute('aria-disabled');
+  });
 }
 
 let current_rotation = 0;
 
 async function apply_rotation_and_zip() {
-    const movie_id = window.movie_id;
-    const previewImg = $('#image-preview').get(0);
-    const rotateStatus = $('#rotate_status');
+  const movie_id = window.movie_id;
+  const previewImg = $('#image-preview').get(0);
+  const rotateStatus = $('#rotate_status');
+  const previousRotation = current_rotation;
 
-    // 1. Update Visuals
-    current_rotation = (current_rotation + 90) % 360;
+  const restorePersistedRotation = () => {
+    current_rotation = previousRotation;
     previewImg.style.transform = `rotate(${current_rotation}deg)`;
-    rotateStatus.text(' … Saving rotation…');
+  };
 
-    // 2. Point 'Analyze' directly to the analysis page
-    $('#process_movie_link').attr('href', `/analyze?movie_id=${movie_id}`);
+  // 1. Update Visuals
+  current_rotation = (current_rotation + 90) % 360;
+  previewImg.style.transform = `rotate(${current_rotation}deg)`;
+  rotateStatus.text(' … Saving rotation…');
 
-// 3. Update the backend via /rotate-movie
-    try {
-        const formData = new FormData();
-        formData.append('api_key', api_key);
-        formData.append('movie_id', movie_id);   // Matches get_movie_id() [cite: 355]
-        formData.append('rotation', String(current_rotation)); // Matches get_int("rotation")
+  // 2. Point 'Analyze' directly to the analysis page
+  $('#process_movie_link').attr('href', `/analyze?movie_id=${movie_id}`);
 
-        const r = await fetch(`${API_BASE}api/rotate-movie`, {
-            method: 'POST',
-            body: formData
-        });
+  // 3. Update the backend via /rotate-movie
+  try {
+    const formData = new FormData();
+    formData.append('api_key', api_key);
+    formData.append('movie_id', movie_id);
+    formData.append('rotation', String(current_rotation));
 
-        const resp = await r.json();
-        if (resp.error) {
-            rotateStatus.text(' Error: ' + resp.message);
-        } else {
-            rotateStatus.text(' (Rotation saved)');
-        }
-    } catch (e) {
-        rotateStatus.text(' Network error updating rotation.');
-        console.error("Rotation sync failed:", e);
+    const r = await fetch(`${API_BASE}api/rotate-movie`, {
+      method: 'POST',
+      body: formData
+    });
+
+    const resp = await r.json();
+    if (resp.error) {
+      restorePersistedRotation();
+      rotateStatus.text(' Error: ' + resp.message);
+    } else {
+      rotateStatus.text(' (Rotation saved)');
     }
+  } catch (e) {
+    restorePersistedRotation();
+    rotateStatus.text(' Network error updating rotation.');
+    console.error("Rotation sync failed:", e);
+  }
 }
 
 function purge_movie() {
@@ -1112,6 +1114,7 @@ if (typeof module != 'undefined'){
     purge_movie,
     register_func,
     resend_func,
+    rotate_movie,
     hide_clicked,
     play_clicked,
     research_metadata_changed,
