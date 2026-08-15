@@ -51,13 +51,37 @@ describe('rotate_movie', () => {
 
   test('re-enables rotation after a failed save so the user can retry', async () => {
     jest.spyOn(global.console, 'error').mockImplementation(() => {});
-    global.fetch = jest.fn().mockRejectedValue(new Error('offline'));
+    global.fetch = jest.fn().mockResolvedValueOnce({ json: async () => ({ error: false }) });
+    await rotate_movie();
+    const preview = document.querySelector('#image-preview');
+    const persistedTransform = preview.style.transform;
 
+    global.fetch.mockRejectedValueOnce(new Error('offline'));
     await rotate_movie();
 
     const link = document.querySelector('#rotate_movie_link');
     expect(link.classList.contains('rotate-pending')).toBe(false);
     expect(link.hasAttribute('aria-disabled')).toBe(false);
+    expect(preview.style.transform).toBe(persistedTransform);
     expect(document.querySelector('#rotate_status').textContent).toContain('Network error');
+
+    global.fetch.mockResolvedValueOnce({ json: async () => ({ error: false }) });
+    await rotate_movie();
+    expect(preview.style.transform).not.toBe(persistedTransform);
+  });
+
+  test('restores the persisted preview when the backend rejects a rotation', async () => {
+    global.fetch = jest.fn().mockResolvedValueOnce({ json: async () => ({ error: false }) });
+    await rotate_movie();
+    const preview = document.querySelector('#image-preview');
+    const persistedTransform = preview.style.transform;
+
+    global.fetch.mockResolvedValueOnce({
+      json: async () => ({ error: true, message: 'save rejected' }),
+    });
+    await rotate_movie();
+
+    expect(preview.style.transform).toBe(persistedTransform);
+    expect(document.querySelector('#rotate_status').textContent).toContain('save rejected');
   });
 });

@@ -444,6 +444,12 @@ async function apply_rotation_and_zip() {
   const movie_id = window.movie_id;
   const previewImg = $('#image-preview').get(0);
   const rotateStatus = $('#rotate_status');
+  const previousRotation = current_rotation;
+
+  const restorePersistedRotation = () => {
+    current_rotation = previousRotation;
+    previewImg.style.transform = `rotate(${current_rotation}deg)`;
+  };
 
   // 1. Update Visuals
   current_rotation = (current_rotation + 90) % 360;
@@ -467,11 +473,13 @@ async function apply_rotation_and_zip() {
 
     const resp = await r.json();
     if (resp.error) {
+      restorePersistedRotation();
       rotateStatus.text(' Error: ' + resp.message);
     } else {
       rotateStatus.text(' (Rotation saved)');
     }
   } catch (e) {
+    restorePersistedRotation();
     rotateStatus.text(' Network error updating rotation.');
     console.error("Rotation sync failed:", e);
   }
