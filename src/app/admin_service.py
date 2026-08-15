@@ -31,6 +31,17 @@ from .odb import (
     TOTAL_BYTES,
     TOTAL_FRAMES,
     FPM,
+    FPS,
+    WIDTH,
+    HEIGHT,
+    DESCRIPTION,
+    MOVIE_ROTATION,
+    TRIM_START_FRAME,
+    TRIM_END_FRAME,
+    NEEDS_RETRACING,
+    RESEARCH_USE,
+    CREDIT_BY_NAME,
+    ATTRIBUTION_NAME,
     LAST_ACTIVITY_AT,
     UPLOADED_AT,
     USER_ID,
@@ -152,6 +163,17 @@ class AdminMovieSummary(BaseModel):
     total_bytes: int | None = None
     fpm: str | None = None
     has_traced_movie: bool = False
+    description: str = ""
+    fps: str | None = None
+    width: int | None = None
+    height: int | None = None
+    rotation: int | None = None
+    trim_start_frame: int | None = None
+    trim_end_frame: int | None = None
+    needs_retracing: bool = False
+    research_use: int | None = None
+    credit_by_name: str | None = None
+    attribution_name: str | None = None
 
 
 class AdminMovieMediaResponse(BaseModel):
@@ -338,6 +360,17 @@ def movie_summary(movie) -> AdminMovieSummary:
         total_bytes=movie.get(TOTAL_BYTES),
         fpm=movie.get(FPM),
         has_traced_movie=bool(movie.get(MOVIE_TRACED_URN)),
+        description=movie.get(DESCRIPTION) or "",
+        fps=movie.get(FPS),
+        width=movie.get(WIDTH),
+        height=movie.get(HEIGHT),
+        rotation=movie.get(MOVIE_ROTATION),
+        trim_start_frame=movie.get(TRIM_START_FRAME),
+        trim_end_frame=movie.get(TRIM_END_FRAME),
+        needs_retracing=bool(movie.get(NEEDS_RETRACING)),
+        research_use=movie.get(RESEARCH_USE),
+        credit_by_name=movie.get(CREDIT_BY_NAME),
+        attribution_name=movie.get(ATTRIBUTION_NAME),
     )
 
 
