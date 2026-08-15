@@ -35,8 +35,8 @@ class User(BaseModel):
     created: int
     enabled: Annotated[int, Field(ge=0, le=1)]
     admin_for_courses: List[str]
-    default_course_id: str
-    default_course_name: str
+    default_course_id: str | None
+    default_course_name: str | None
     courses: List[str]
     super_role: Literal["none", "superauditor", "superadmin"] = "none"
 

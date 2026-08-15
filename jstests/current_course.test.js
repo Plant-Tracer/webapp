@@ -1,3 +1,4 @@
+const { activeCourseId, appendCourseContext } = require('course_context');
 const { changeCurrentCourse, initCurrentCourse, makeDefaultCourse } = require('current_course');
 
 function coursePicker() {
@@ -21,6 +22,7 @@ describe('current course picker', () => {
     ];
     global.course_view_id = null;
     sessionStorage.clear();
+    window.history.replaceState({}, '', '/');
     fetch.resetMocks();
   });
 
@@ -75,7 +77,27 @@ describe('current course picker', () => {
 
     initCurrentCourse();
 
-    expect(select.value).toBe('CHEM-2');
+    expect(select.value).toBe('BIO-1');
     expect(document.getElementById('current-course-name').textContent).toBe('Biology');
+  });
+
+  test('uses a server-authorized cross-course view for request context', () => {
+    const select = coursePicker();
+    global.course_view_id = 'PHYS-3';
+    sessionStorage.setItem('planttracer.active_course_id', 'CHEM-2');
+
+    expect(activeCourseId()).toBe('PHYS-3');
+    const formData = appendCourseContext(new FormData());
+    expect(formData.get('course_id')).toBe('PHYS-3');
+
+    initCurrentCourse();
+    expect(select.value).toBe('BIO-1');
+  });
+
+  test('does not trust an unauthorized URL course', () => {
+    window.history.replaceState({}, '', '/list?course_id=PHYS-3');
+    sessionStorage.setItem('planttracer.active_course_id', 'CHEM-2');
+
+    expect(activeCourseId()).toBe('CHEM-2');
   });
 });

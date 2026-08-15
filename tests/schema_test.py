@@ -87,6 +87,25 @@ def test_user_schema():
     logger.debug("u=%s", u)
 
 
+def test_user_schema_accepts_no_course_state():
+    user = schema.User(
+        user_id="utest",
+        email="etest",
+        user_name="utest",
+        created=0,
+        enabled=1,
+        admin_for_courses=[],
+        default_course_id=None,
+        default_course_name=None,
+        courses=[],
+    )
+
+    assert user.default_course_id is None
+    assert user.default_course_name is None
+    assert schema.validate_user_field("default_course_id", None) is None
+    assert schema.validate_user_field("default_course_name", None) is None
+
+
 def test_trackpoint_schema_accepts_marker_metadata():
     trackpoint = schema.Trackpoint(x=1, y=2, label="Ruler 0mm", color="red", undeletable=True)
 

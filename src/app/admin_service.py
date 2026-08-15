@@ -128,7 +128,7 @@ class AdminUserSummary(BaseModel):
     user_id: str
     user_name: str
     email: str
-    default_course_id: str
+    default_course_id: str | None
     super_role: str
     courses: list[AdminUserCourseSummary]
     created_at: int | None = None
