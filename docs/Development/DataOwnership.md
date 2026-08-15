@@ -63,7 +63,7 @@ the `movies` table is named `demo-movies`.
 
 | Table | Pydantic model | Key fields | Owned data |
 | --- | --- | --- | --- |
-| `users` | `User` | `user_id` | Registered user profile: `email`, `user_name`, `created`, `enabled`, `primary_course_id`, `primary_course_name`, enrolled `courses`, and `admin_for_courses` |
+| `users` | `User` | `user_id` | Registered user profile: `email`, `user_name`, `created`, `enabled`, `default_course_id`, `default_course_name`, enrolled `courses`, and `admin_for_courses` |
 | `unique_emails` | `UniqueEmail` | `email` | Email uniqueness guard used transactionally with `users` |
 | `api_keys` | `ApiKey` plus runtime fields | `api_key` | Login/API token records: `user_id`, `enabled`, `use_count`, `created`, `first_used_at`, and `last_used_at` |
 | `courses` | `Course` | `course_id` | Course metadata: `course_name`, `course_key`, `admins_for_course`, and `max_enrollment` |

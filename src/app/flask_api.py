@@ -23,6 +23,7 @@ from pydantic import ValidationError
 from validate_email_address import validate_email
 
 from . import course_management
+from . import course_context
 from . import config_check
 from . import odb
 from . import mailer
@@ -67,19 +68,20 @@ from .odb_movie_data import (
     delete_movie,
     read_object,
 )
-from .schema import CurrentCourseRequest
+from .schema import DefaultCourseRequest
 
 
 api_bp = Blueprint('api', __name__)
 
 
+@api_bp.patch('/default-course')
 @api_bp.patch('/current-course')
-def api_current_course():
-    """Change the signed-in user's current course to an existing membership."""
+def api_default_course():
+    """Change the signed-in user's profile default to an existing membership."""
     try:
         user = get_user_dict()
-        change = CurrentCourseRequest.model_validate(request.get_json(silent=True) or {})
-        course = course_management.set_current_course(
+        change = DefaultCourseRequest.model_validate(request.get_json(silent=True) or {})
+        course = course_management.set_default_course(
             user_id=user[USER_ID],
             course_id=change.course_id,
         )
@@ -533,6 +535,26 @@ def unauthorized_user(ex):
     return E.INVALID_MOVIE_ACCESS, 403
 
 
+@api_bp.errorhandler(course_context.CourseAccessDenied)
+def course_access_denied(ex):
+    return jsonify({'error': True, 'message': f'Course access denied: {ex}'}), 403
+
+
+@api_bp.errorhandler(course_context.StaleCourseContext)
+def stale_course_context(ex):
+    return jsonify({'error': True, 'message': f'Course no longer exists: {ex}'}), 409
+
+
+@api_bp.errorhandler(course_context.CourseContextConflict)
+def course_context_conflict(_ex):
+    return jsonify({'error': True, 'message': 'Course context does not match the requested resource'}), 409
+
+
+@api_bp.errorhandler(course_context.CourseSetupRequired)
+def course_setup_required(_ex):
+    return jsonify({'error': True, 'message': 'No valid course membership is available'}), 409
+
+
 ################################################################
 # define get(), which gets a variable from either the forms request or the query string
 def get(key, default=None):
@@ -546,6 +568,11 @@ def get_movie_id():
     ret = get(MOVIE_ID)
     if not odb.is_movie_id( ret ):
         raise InvalidMovie_Id( ret )
+    requested_course_id = (get(COURSE_ID) or "").strip()
+    if requested_course_id:
+        movie = odb.DDBO().get_movie(ret)
+        if movie.get(COURSE_ID) != requested_course_id:
+            raise course_context.CourseContextConflict(requested_course_id)
     return ret
 
 def get_course_id():
@@ -613,12 +640,27 @@ def api_get_logs():
         if val:
             kwargs[kw] = val
 
-    # get_logs requires at least one index key (log_user_id, course_id, or ipaddr).
-    # Default to the current user so the audit page shows their own logs.
-    if not any(k in kwargs for k in ('log_user_id', 'course_id', 'ipaddr')):
-        kwargs['log_user_id'] = get_user_id()
+    user = get_user_dict()
+    if COURSE_ID in kwargs:
+        context = course_context.resolve_course_context(
+            user=user,
+            requested_course_id=kwargs[COURSE_ID],
+            mode=course_context.CourseContextMode.READ,
+        )
+        kwargs[COURSE_ID] = context.effective_course_id
+    elif not any(k in kwargs for k in ('log_user_id', 'ipaddr')):
+        context = course_context.resolve_course_context(
+            user=user,
+            requested_course_id=None,
+            mode=course_context.CourseContextMode.READ,
+        )
+        kwargs[COURSE_ID] = context.effective_course_id
 
-    logs    = odb.get_logs(user_id=get_user_id(),**kwargs)
+    # get_logs requires at least one index key (log_user_id, course_id, or ipaddr).
+    if not any(k in kwargs for k in ('log_user_id', 'course_id', 'ipaddr')):
+        kwargs['log_user_id'] = user[USER_ID]
+
+    logs = odb.get_logs(user_id=user[USER_ID], **kwargs)
     return {'error':False, 'logs': logs}
 
 @api_bp.route('/register', methods=GET_POST)
@@ -689,8 +731,14 @@ def api_send_link():
 def api_bulk_register():
     """Allow an admin to register people in the class, increasing the class size as necessary to do so."""
 
-    course_id = get_course_id()
-    user_id   = get_user_id()
+    user = get_user_dict()
+    context = course_context.resolve_course_context(
+        user=user,
+        requested_course_id=get_course_id(),
+        mode=course_context.CourseContextMode.MUTATION,
+    )
+    course_id = context.effective_course_id
+    user_id = user[USER_ID]
     if not odb.check_course_admin(course_id = course_id, user_id=user_id):
         return E.INVALID_COURSE_ACCESS
 
@@ -767,8 +815,13 @@ def api_new_movie():
     upload_ok, upload_msg = config_check.check_s3_upload_readiness(origin)
     if not upload_ok:
         return jsonify({'error': True, 'message': upload_msg}), 503
-    user_id    = get_user_id(allow_demo=False)    # require a valid user_id
-    user       = odb.get_user(user_id)
+    user_id = get_user_id(allow_demo=False)
+    user = odb.get_user(user_id)
+    context = course_context.resolve_course_context(
+        user=user,
+        requested_course_id=request.values.get(COURSE_ID),
+        mode=course_context.CourseContextMode.MUTATION,
+    )
     movie_data_sha256 = get('movie_data_sha256')
     movie_data_length = get_int('movie_data_length')
 
@@ -804,7 +857,7 @@ def api_new_movie():
         return {'error': True, 'message': str(exc)}
 
     ret[MOVIE_ID] = odb.create_new_movie(user_id=user_id,
-                                         course_id=user['primary_course_id'],
+                                         course_id=context.effective_course_id,
                                          title=request.values.get('title'),
                                          description=request.values.get('description'),
                                          research_use=research_use,
@@ -907,15 +960,25 @@ def api_delete_movie():
 
 @api_bp.route('/list-movies', methods=POST)
 def api_list_movies():
+    user = get_user_dict()
+    context = course_context.resolve_course_context(
+        user=user,
+        requested_course_id=request.values.get(COURSE_ID),
+        mode=course_context.CourseContextMode.READ,
+    )
     movies = odb.list_movies(
-        user_id=get_user_id(),
-        course_id=(request.values.get(COURSE_ID) or "").strip() or None,
+        user_id=user[USER_ID],
+        course_id=context.effective_course_id,
     )
     for movie in movies:
         traced_urn = movie.get(MOVIE_TRACED_URN)
         if (traced_urn or "").startswith("s3:"):
             movie[MOVIE_TRACED_URL] = make_signed_url(urn=traced_urn)
-    return jsonify({'error': False, 'movies': movies})
+    return jsonify({
+        'error': False,
+        'movies': movies,
+        'course_context': context.model_dump(),
+    })
 
 @api_bp.route('/get-movie-metadata', methods=GET_POST)
 def api_get_movie_metadata():
@@ -1062,11 +1125,23 @@ def api_set_movie_fpm():
 ##
 @api_bp.route('/list-users', methods=POST)
 def api_list_users():
-    return {**{'error': False}, **odb.list_users_courses(user_id=get_user_id())}
+    user = get_user_dict()
+    context = course_context.resolve_course_context(
+        user=user,
+        requested_course_id=get_course_id(),
+        mode=course_context.CourseContextMode.READ,
+    )
+    return {
+        **{'error': False, 'course_context': context.model_dump()},
+        **odb.list_users_courses(
+            user_id=user[USER_ID],
+            course_id=context.effective_course_id,
+        ),
+    }
 
 @api_bp.route('/list-users-courses', methods=POST)
 def api_list_users_courses():
-    return {**{'error': False}, **odb.list_users_courses(user_id=get_user_id())}
+    return api_list_users()
 
 @api_bp.route('/ver', methods=GET_POST)
 def api_ver():

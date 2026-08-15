@@ -136,7 +136,6 @@ def test_course_list(client, new_course):
 
     user_dict = odb.validate_api_key(api_key)
     user_id   = user_dict['user_id']
-    #primary_course_id = user_dict['primary_course_id']
 
     recs1 = odb.list_users_courses(user_id=user_id)
     users1 = recs1['users']

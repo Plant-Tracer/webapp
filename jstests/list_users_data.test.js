@@ -24,7 +24,7 @@ beforeAll(() => {
 describe('list_users_data', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    global.user_primary_course_id = 1;
+    global.user_default_course_id = 1;
     document.body.innerHTML = '<div id="your-users"></div>';
   });
 
@@ -35,7 +35,7 @@ describe('list_users_data', () => {
         user_id: parseInt(userData.user1.user_id, 10),
         user_name: userData.user1.name,
         email: userData.user1.email,
-        primary_course_id: 1,
+        default_course_id: 1,
         first: parseInt(userData.user1.date_joined, 10),
         last: parseInt(userData.user1.last_login, 10),
       },
@@ -54,7 +54,7 @@ describe('list_users_data', () => {
         user_id: parseInt(userData.user1.user_id, 10),
         user_name: userData.user1.name,
         email: userData.user1.email,
-        primary_course_id: 1,
+        default_course_id: 1,
         first: parseInt(userData.user1.date_joined, 10),
         last: parseInt(userData.user1.last_login, 10),
       },
@@ -62,7 +62,7 @@ describe('list_users_data', () => {
         user_id: parseInt(userData.user2.user_id, 10),
         user_name: userData.user2.name,
         email: userData.user2.email,
-        primary_course_id: 1,
+        default_course_id: 1,
         first: parseInt(userData.user2.date_joined, 10),
         last: parseInt(userData.user2.last_login, 10),
       },
@@ -95,36 +95,36 @@ describe('list_users_data', () => {
     expect(html).not.toContain('Click here to invite a user');
   });
 
-  test('should label primary course as "Primary course" and others as "Course"', () => {
+  test('should label the default course and other courses', () => {
     const course_array = {
       1: { course_id: 1, course_name: 'Primary Course' },
       2: { course_id: 2, course_name: 'Other Course' },
     };
-    global.user_primary_course_id = 1;
+    global.user_default_course_id = 1;
     const users = [
-      { user_id: 10, user_name: 'Alice', email: 'alice@example.com', primary_course_id: 1, first: null, last: null },
-      { user_id: 20, user_name: 'Bob',   email: 'bob@example.com',   primary_course_id: 2, first: null, last: null },
+      { user_id: 10, user_name: 'Alice', email: 'alice@example.com', default_course_id: 1, first: null, last: null },
+      { user_id: 20, user_name: 'Bob',   email: 'bob@example.com',   default_course_id: 2, first: null, last: null },
     ];
 
     list_users_data(users, course_array);
 
     const html = document.getElementById('your-users').innerHTML;
-    expect(html).toContain('Primary course: Primary Course');
+    expect(html).toContain('Default course: Primary Course');
     expect(html).toContain('Course: Other Course');
-    expect(html).not.toContain('Primary course: Other Course');
+    expect(html).not.toContain('Default course: Other Course');
   });
 
-  test('should not duplicate course sections when users are sorted by primary_course_id', () => {
+  test('should not duplicate course sections when users are sorted by default_course_id', () => {
     const course_array = {
       1: { course_id: 1, course_name: 'Course One' },
       2: { course_id: 2, course_name: 'Course Two' },
     };
-    global.user_primary_course_id = 1;
-    // Users already sorted by primary_course_id (as the backend now guarantees)
+    global.user_default_course_id = 1;
+    // Users already sorted by default_course_id (as the backend guarantees)
     const users = [
-      { user_id: 10, user_name: 'Alice', email: 'alice@example.com', primary_course_id: 1, first: null, last: null },
-      { user_id: 20, user_name: 'Bob',   email: 'bob@example.com',   primary_course_id: 2, first: null, last: null },
-      { user_id: 30, user_name: 'Carol', email: 'carol@example.com', primary_course_id: 2, first: null, last: null },
+      { user_id: 10, user_name: 'Alice', email: 'alice@example.com', default_course_id: 1, first: null, last: null },
+      { user_id: 20, user_name: 'Bob',   email: 'bob@example.com',   default_course_id: 2, first: null, last: null },
+      { user_id: 30, user_name: 'Carol', email: 'carol@example.com', default_course_id: 2, first: null, last: null },
     ];
 
     list_users_data(users, course_array);

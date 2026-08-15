@@ -64,6 +64,14 @@ def test_dbutil_create_course_can_disable_email():
     assert args.send_email is False
 
 
+def test_default_course_migration_requires_explicit_commit():
+    dry_run = parse_args("migrate-default-course-fields")
+    commit = parse_args("migrate-default-course-fields", "--commit")
+
+    assert dry_run.commit is False
+    assert commit.commit is True
+
+
 def test_create_course_missing_flags_usage_is_brief():
     usage = dbutil.create_course_usage_text(["course_id", "admin_email"])
 

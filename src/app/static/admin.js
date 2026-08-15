@@ -158,7 +158,7 @@ function appendUserRows(users) {
     row.append(
       textCell(user.user_name),
       textCell(user.email),
-      textCell(user.primary_course_id),
+      textCell(user.default_course_id),
       textCell(user.super_role === "none" ? "no" : user.super_role),
       coursesCell(user.courses),
       dateCell(user.created_at),
