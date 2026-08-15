@@ -14,7 +14,7 @@ import base64
 import requests
 import filetype
 import pytest
-from resize_app.movie_glue import complete_movie_upload
+from resize_app.movie_glue import complete_movie_upload, prepare_tracing_request
 
 from app import odb
 from app import s3_presigned
@@ -803,12 +803,13 @@ def test_set_movie_fpm_rejects_invalid(client, new_movie):
 def test_active_trace_lease_is_visible_and_rejects_movie_writes(client, new_movie):
     ddbo = new_movie["ddbo"]
     movie_id = new_movie[MOVIE_ID]
-    movie = ddbo.get_movie(movie_id)
-    lock = ddbo.acquire_movie_trace_lock(
-        movie=movie,
-        started_by_user_id=new_movie[USER_ID],
-        started_by_user_name=ddbo.get_user(new_movie[USER_ID])[odb.USER_NAME],
+    prepare_tracing_request(
+        api_key=new_movie[API_KEY],
+        movie_id=movie_id,
+        frame_start=0,
     )
+    lock = ddbo.get_active_movie_trace_lock(movie_id)
+    assert lock
 
     listed = get_movie(client, new_movie[API_KEY], movie_id)
     metadata_response = client.post('/api/get-movie-metadata', data={
