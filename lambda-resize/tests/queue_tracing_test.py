@@ -67,6 +67,28 @@ def test_prepare_tracing_request_rejects_second_active_lock(new_movie):
         movie_glue.prepare_tracing_request(**kwargs)
 
 
+def test_prepare_tracing_request_replaces_stale_lock(new_movie):
+    ddbo = new_movie["ddbo"]
+    movie_id = new_movie[movie_glue.odb.MOVIE_ID]
+    kwargs = {
+        "api_key": new_movie[movie_glue.odb.API_KEY],
+        "movie_id": movie_id,
+        "frame_start": 0,
+    }
+    first = movie_glue.prepare_tracing_request(**kwargs)
+    ddbo.update_movie(
+        movie_id,
+        {movie_glue.odb.TRACE_LOCK_EXPIRES_AT: 1},
+        touch_activity=False,
+    )
+
+    second = movie_glue.prepare_tracing_request(**kwargs)
+
+    assert second["job_id"] != first["job_id"]
+    lock = ddbo.get_active_movie_trace_lock(movie_id)
+    assert lock and lock.job_id == second["job_id"]
+
+
 def test_run_tracing_passes_frame_end_and_ignores_callback_frames_after_end(new_movie):
     ddbo = new_movie["ddbo"]
     movie_id = new_movie[movie_glue.odb.MOVIE_ID]

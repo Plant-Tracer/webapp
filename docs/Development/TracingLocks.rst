@@ -1,11 +1,13 @@
 Tracing locks
 =============
 
-Only one tracing job may modify a movie at a time. A DynamoDB
-``movie_trace_locks`` row is the durable source of truth. It contains the
-movie ID, a random job ID, the initiating user, acquisition time, heartbeat,
-and a renewable 15-minute expiry. DynamoDB TTL eventually removes abandoned
-rows, but application reads and conditional writes enforce expiry immediately.
+Only one tracing job may modify a movie at a time. The DynamoDB ``movies`` row
+is the durable source of truth. It stores a random job ID, the initiating
+user, acquisition time, heartbeat, and a renewable 15-minute expiry. A stale
+lease is deliberately handled by application reads and conditional writes:
+when the expiry is older than 15 minutes, it is ignored and the next trace
+request atomically replaces it. No TTL is used, because TTL can only delete a
+whole DynamoDB item and the movie must remain durable.
 
 Trace lifecycle
 ---------------
@@ -43,10 +45,10 @@ Alternatives considered
 
 #. A conditional movie ``status`` transition was smaller, but did not carry
    ownership or make an SQS redelivery safe.
-#. A status-plus-job-token design avoided another table but mixed business
-   status with lease ownership and recovery mechanics.
-#. A dedicated DynamoDB lease table was selected: it makes ownership, expiry,
-   and the initiating user explicit while keeping movie status durable and
-   visible.
+#. A movie-row lease with a job token, owner, heartbeat, and expiry is
+   selected. It makes SQS redelivery and stale-lock recovery safe without
+   another table, and keeps the movie as the single source of truth.
+#. A dedicated DynamoDB lease table would make ownership distinct, but adds an
+   unnecessary table and lookup for data that belongs to the movie.
 #. FIFO SQS could serialize queue delivery, but cannot protect the pre-queue
    mutation or replace a database concurrency boundary.

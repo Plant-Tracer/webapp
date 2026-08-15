@@ -49,15 +49,14 @@ FRAMES = 'movie_frames'
 COURSES = 'courses'
 COURSE_USERS = 'course_users'
 LOGS = 'logs'
-MOVIE_TRACE_LOCKS = 'movie_trace_locks'
 LOG_ID = 'log_id'
 TRACE_JOB_ID = 'trace_job_id'
-TRACE_LOCK_STATE = 'state'
-TRACE_LOCK_ACQUIRED_AT = 'acquired_at'
-TRACE_LOCK_HEARTBEAT_AT = 'heartbeat_at'
-TRACE_LOCK_EXPIRES_AT = 'expires_at'
-TRACE_LOCK_STARTED_BY_USER_ID = 'started_by_user_id'
-TRACE_LOCK_STARTED_BY_USER_NAME = 'started_by_user_name'
+TRACE_LOCK_STATE = 'tracing_state'
+TRACE_LOCK_ACQUIRED_AT = 'tracing_started_at'
+TRACE_LOCK_HEARTBEAT_AT = 'tracing_heartbeat_at'
+TRACE_LOCK_EXPIRES_AT = 'tracing_expires_at'
+TRACE_LOCK_STARTED_BY_USER_ID = 'tracing_started_by_user_id'
+TRACE_LOCK_STARTED_BY_USER_NAME = 'tracing_started_by_user_name'
 ROOT_USER_ID = 'u0'                # the root user
 
 
@@ -388,8 +387,7 @@ class DDBO:
         self.courses   = self.dynamodb.Table( table_prefix + COURSES )
         self.course_users = self.dynamodb.Table( table_prefix + COURSE_USERS )
         self.logs   = self.dynamodb.Table( table_prefix + LOGS )
-        self.movie_trace_locks = self.dynamodb.Table(table_prefix + MOVIE_TRACE_LOCKS)
-        self.tables    = [self.api_keys, self.users, self.movies, self.movie_frames, self.courses, self.course_users, self.logs, self.movie_trace_locks]
+        self.tables    = [self.api_keys, self.users, self.movies, self.movie_frames, self.courses, self.course_users, self.logs]
 
         # Make sure tables exist
         for table in self.tables:
@@ -534,10 +532,19 @@ class DDBO:
         return entry
 
     def get_active_movie_trace_lock(self, movie_id):
-        """Return the active trace lease, or None when absent or expired."""
-        lock = self.movie_trace_locks.get_item(Key={MOVIE_ID: movie_id}).get("Item")
-        if lock and int(lock[TRACE_LOCK_EXPIRES_AT]) > int(time.time()):
-            return MovieTraceLock.model_validate(lock)
+        """Return the movie's active trace lease, or None when absent or expired."""
+        movie = self.movies.get_item(Key={MOVIE_ID: movie_id}).get("Item")
+        if movie and int(movie.get(TRACE_LOCK_EXPIRES_AT, 0)) > int(time.time()):
+            return MovieTraceLock.model_validate({
+                MOVIE_ID: movie_id,
+                "job_id": movie[TRACE_JOB_ID],
+                "state": movie[TRACE_LOCK_STATE],
+                "acquired_at": movie[TRACE_LOCK_ACQUIRED_AT],
+                "heartbeat_at": movie[TRACE_LOCK_HEARTBEAT_AT],
+                "expires_at": movie[TRACE_LOCK_EXPIRES_AT],
+                "started_by_user_id": movie[TRACE_LOCK_STARTED_BY_USER_ID],
+                "started_by_user_name": movie[TRACE_LOCK_STARTED_BY_USER_NAME],
+            })
         return None
 
     def acquire_movie_trace_lock(self, *, movie, started_by_user_id, started_by_user_name):
@@ -550,20 +557,28 @@ class DDBO:
             started_by_user_name=started_by_user_name,
         )
         try:
-            self.dynamodb.meta.client.transact_write_items(TransactItems=[
-                {"Put": {"TableName": self.movie_trace_locks.name,
-                         "Item": lock.model_dump(),
-                         "ConditionExpression": "attribute_not_exists(#movie_id) OR #expires_at < :now",
-                         "ExpressionAttributeNames": {"#movie_id": MOVIE_ID, "#expires_at": TRACE_LOCK_EXPIRES_AT},
-                         "ExpressionAttributeValues": {":now": now}}},
-                {"Update": {"TableName": self.movies.name, "Key": {MOVIE_ID: movie[MOVIE_ID]},
-                            "UpdateExpression": "SET #status=:status, #last_activity_at=:now REMOVE #failed_at, #failure_summary",
-                            "ExpressionAttributeNames": {"#status": MOVIE_STATUS, "#last_activity_at": LAST_ACTIVITY_AT,
-                                                         "#failed_at": TRACING_FAILED_AT, "#failure_summary": TRACING_FAILURE_SUMMARY},
-                            "ExpressionAttributeValues": {":status": MOVIE_STATE_TRACING, ":now": now}}},
-            ])
+            self.movies.update_item(
+                Key={MOVIE_ID: movie[MOVIE_ID]},
+                UpdateExpression=("SET #job_id=:job_id, #state=:state, #acquired=:now, #heartbeat=:now, "
+                                  "#expires=:expires, #started_by_id=:started_by_id, #started_by_name=:started_by_name, "
+                                  "#status=:status, #last_activity_at=:now REMOVE #failed_at, #failure_summary"),
+                ConditionExpression="attribute_not_exists(#expires) OR #expires < :now",
+                ExpressionAttributeNames={
+                    "#job_id": TRACE_JOB_ID, "#state": TRACE_LOCK_STATE,
+                    "#acquired": TRACE_LOCK_ACQUIRED_AT, "#heartbeat": TRACE_LOCK_HEARTBEAT_AT,
+                    "#expires": TRACE_LOCK_EXPIRES_AT, "#started_by_id": TRACE_LOCK_STARTED_BY_USER_ID,
+                    "#started_by_name": TRACE_LOCK_STARTED_BY_USER_NAME, "#status": MOVIE_STATUS,
+                    "#last_activity_at": LAST_ACTIVITY_AT, "#failed_at": TRACING_FAILED_AT,
+                    "#failure_summary": TRACING_FAILURE_SUMMARY,
+                },
+                ExpressionAttributeValues={
+                    ":job_id": lock.job_id, ":state": lock.state, ":now": now,
+                    ":expires": lock.expires_at, ":started_by_id": lock.started_by_user_id,
+                    ":started_by_name": lock.started_by_user_name, ":status": MOVIE_STATE_TRACING,
+                },
+            )
         except ClientError as exc:
-            if exc.response.get("Error", {}).get("Code") == "TransactionCanceledException":
+            if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
                 raise MovieTracingLocked(movie[MOVIE_ID]) from exc
             raise
         return lock
@@ -572,7 +587,7 @@ class DDBO:
         """Claim one queued lease; duplicate SQS deliveries are harmless no-ops."""
         now = int(time.time())
         try:
-            self.movie_trace_locks.update_item(
+            self.movies.update_item(
                 Key={MOVIE_ID: movie_id},
                 UpdateExpression="SET #state=:running, #heartbeat=:now, #expires=:expires",
                 ConditionExpression="#job_id=:job_id AND #state=:queued AND #expires > :now",
@@ -589,7 +604,7 @@ class DDBO:
 
     def heartbeat_movie_trace_lock(self, *, movie_id, job_id):
         now = int(time.time())
-        self.movie_trace_locks.update_item(
+        self.movies.update_item(
             Key={MOVIE_ID: movie_id},
             UpdateExpression="SET #heartbeat=:now, #expires=:expires",
             ConditionExpression="#job_id=:job_id AND #expires > :now",
@@ -605,17 +620,20 @@ class DDBO:
         update_values = {f":{key}": value for key, value in updates.items()}
         update_names["#last_activity_at"] = LAST_ACTIVITY_AT
         update_values[":last_activity_at"] = now
-        expression = "SET " + ", ".join(f"#{key}=:{key}" for key in updates) + ", #last_activity_at=:last_activity_at"
-        self.dynamodb.meta.client.transact_write_items(TransactItems=[
-            {"ConditionCheck": {"TableName": self.movie_trace_locks.name, "Key": {MOVIE_ID: movie_id},
-                                "ConditionExpression": "#job_id=:job_id", "ExpressionAttributeNames": {"#job_id": TRACE_JOB_ID},
-                                "ExpressionAttributeValues": {":job_id": job_id}}},
-            {"Update": {"TableName": self.movies.name, "Key": {MOVIE_ID: movie_id}, "UpdateExpression": expression,
-                        "ExpressionAttributeNames": update_names, "ExpressionAttributeValues": update_values}},
-            {"Delete": {"TableName": self.movie_trace_locks.name, "Key": {MOVIE_ID: movie_id},
-                        "ConditionExpression": "#job_id=:job_id", "ExpressionAttributeNames": {"#job_id": TRACE_JOB_ID},
-                        "ExpressionAttributeValues": {":job_id": job_id}}},
-        ])
+        update_names["#job_id"] = TRACE_JOB_ID
+        lock_fields = (TRACE_JOB_ID, TRACE_LOCK_STATE, TRACE_LOCK_ACQUIRED_AT,
+                       TRACE_LOCK_HEARTBEAT_AT, TRACE_LOCK_EXPIRES_AT,
+                       TRACE_LOCK_STARTED_BY_USER_ID, TRACE_LOCK_STARTED_BY_USER_NAME)
+        update_names.update({f"#lock_{index}": field for index, field in enumerate(lock_fields)})
+        expression = ("SET " + ", ".join(f"#{key}=:{key}" for key in updates)
+                      + ", #last_activity_at=:last_activity_at REMOVE "
+                      + ", ".join(f"#lock_{index}" for index in range(len(lock_fields))))
+        self.movies.update_item(
+            Key={MOVIE_ID: movie_id}, UpdateExpression=expression,
+            ConditionExpression="#job_id=:job_id",
+            ExpressionAttributeNames=update_names,
+            ExpressionAttributeValues={**update_values, ":job_id": job_id},
+        )
     ### api_key management
 
     def put_api_key_dict(self,api_key_dict):
