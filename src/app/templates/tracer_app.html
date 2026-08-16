@@ -12,7 +12,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <div id='tracer'>
-  <div class='float-movie'>
+  <div class='tracer-movie'>
     <canvas id="canvas-id" > </canvas>
     <form action="javascript:void(0)" >
       <!-- https://en.wikipedia.org/wiki/Media_control_symbols -->
@@ -60,7 +60,7 @@
     </form>
   </div>
   <!-- Control start -->
-  <div class='float-controls'>
+  <div class='tracer-controls'>
     <table class="pure-table pure-table-horizontal pure-table-striped">
       <thead>
         <tr><th>Marker</th>
@@ -137,8 +137,10 @@
       </select>
     </div>
     <div id="result-stats" class="result-stats"></div>
-    <canvas id="apex-xChart" width="400" height="200"></canvas>
-    <canvas id="apex-yChart" width="400" height="200"></canvas>
+    <div class="result-graphs">
+      <canvas id="apex-xChart" width="400" height="200"></canvas>
+      <canvas id="apex-yChart" width="400" height="200"></canvas>
+    </div>
   </div>
   <!-- Control end -->
 </div> <!-- tracer controller -->
