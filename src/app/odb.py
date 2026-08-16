@@ -64,6 +64,22 @@ class MovieTracingLocked(ValueError):
     """The movie has an active tracing lease."""
 
 
+def movie_trace_lock_from_record(movie):
+    """Return an active trace lease represented by an already-fetched movie record."""
+    if movie and int(movie.get(TRACE_LOCK_EXPIRES_AT, 0)) > int(time.time()):
+        return MovieTraceLock.model_validate({
+            MOVIE_ID: movie[MOVIE_ID],
+            "job_id": movie[TRACE_JOB_ID],
+            "state": movie[TRACE_LOCK_STATE],
+            "acquired_at": movie[TRACE_LOCK_ACQUIRED_AT],
+            "heartbeat_at": movie[TRACE_LOCK_HEARTBEAT_AT],
+            "expires_at": movie[TRACE_LOCK_EXPIRES_AT],
+            "started_by_user_id": movie[TRACE_LOCK_STARTED_BY_USER_ID],
+            "started_by_user_name": movie[TRACE_LOCK_STARTED_BY_USER_NAME],
+        })
+    return None
+
+
 def normalize_email(email: str) -> str:
     """Return the canonical email form used for DynamoDB lookup keys."""
     return email.strip().lower()
@@ -534,18 +550,7 @@ class DDBO:
     def get_active_movie_trace_lock(self, movie_id):
         """Return the movie's active trace lease, or None when absent or expired."""
         movie = self.movies.get_item(Key={MOVIE_ID: movie_id}).get("Item")
-        if movie and int(movie.get(TRACE_LOCK_EXPIRES_AT, 0)) > int(time.time()):
-            return MovieTraceLock.model_validate({
-                MOVIE_ID: movie_id,
-                "job_id": movie[TRACE_JOB_ID],
-                "state": movie[TRACE_LOCK_STATE],
-                "acquired_at": movie[TRACE_LOCK_ACQUIRED_AT],
-                "heartbeat_at": movie[TRACE_LOCK_HEARTBEAT_AT],
-                "expires_at": movie[TRACE_LOCK_EXPIRES_AT],
-                "started_by_user_id": movie[TRACE_LOCK_STARTED_BY_USER_ID],
-                "started_by_user_name": movie[TRACE_LOCK_STARTED_BY_USER_NAME],
-            })
-        return None
+        return movie_trace_lock_from_record(movie)
 
     def acquire_movie_trace_lock(self, *, movie, started_by_user_id, started_by_user_name):
         """Atomically obtain a 15-minute lease and expose tracing status."""

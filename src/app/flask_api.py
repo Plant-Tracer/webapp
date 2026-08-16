@@ -83,6 +83,7 @@ def tracing_lock_response(movie_id):
 
 
 @api_bp.patch('/default-course')
+@api_bp.patch('/current-course')
 def api_default_course():
     """Change the signed-in user's profile default to an existing membership."""
     try:
@@ -977,9 +978,8 @@ def api_list_movies():
         user_id=user[USER_ID],
         course_id=context.effective_course_id,
     )
-    ddbo = odb.DDBO()
     for movie in movies:
-        trace_lock = ddbo.get_active_movie_trace_lock(movie[MOVIE_ID])
+        trace_lock = odb.movie_trace_lock_from_record(movie)
         if trace_lock:
             movie[MOVIE_STATUS] = odb.MOVIE_STATE_TRACING
             movie['tracking_lock'] = {

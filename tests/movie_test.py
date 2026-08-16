@@ -800,7 +800,7 @@ def test_set_movie_fpm_rejects_invalid(client, new_movie):
     assert resp.get_json()['message'] == "fpm is required"
 
 
-def test_active_trace_lease_is_visible_and_rejects_movie_writes(client, new_movie):
+def test_active_trace_lease_is_visible_and_rejects_movie_writes(client, new_movie, monkeypatch):
     ddbo = new_movie["ddbo"]
     movie_id = new_movie[MOVIE_ID]
     prepare_tracing_request(
@@ -811,7 +811,13 @@ def test_active_trace_lease_is_visible_and_rejects_movie_writes(client, new_movi
     lock = ddbo.get_active_movie_trace_lock(movie_id)
     assert lock
 
-    listed = get_movie(client, new_movie[API_KEY], movie_id)
+    with monkeypatch.context() as context:
+        context.setattr(
+            odb.DDBO,
+            "get_active_movie_trace_lock",
+            lambda *_args, **_kwargs: pytest.fail("list-movies must use its fetched movie records"),
+        )
+        listed = get_movie(client, new_movie[API_KEY], movie_id)
     metadata_response = client.post('/api/get-movie-metadata', data={
         'api_key': new_movie[API_KEY], 'movie_id': movie_id,
     })
