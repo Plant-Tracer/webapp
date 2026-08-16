@@ -514,6 +514,7 @@ def run_tracing(*, movie_id, frame_start, frame_end=None, job_id=None):
     if job_id is None:
         cleared_frames = clear_movie_tracking_after_frame(
             movie_id=movie_id, frame_number=source_frame_number, frame_end=frame_end_number)
+        ddbo.update_movie(movie_id, {MOVIE_STATUS: odb.MOVIE_STATE_TRACING})
     LOGGER.info("run_tracing movie_id=%s source_frame=%s tracing_frame_start=%s frame_end=%s cleared_frames=%s",
                 movie_id, source_frame_number, tracing_frame_start, frame_end_number, cleared_frames)
 
@@ -568,9 +569,9 @@ def run_tracing(*, movie_id, frame_start, frame_end=None, job_id=None):
                 len(frame_trackpoints),
                 [trackpoint.label for trackpoint in frame_trackpoints],
             )
+            if job_id:
+                ddbo.heartbeat_movie_trace_lock(movie_id=movie_id, job_id=job_id)
             if obj.frame_trackpoints and (frame_end_number is None or obj.frame_number <= frame_end_number):
-                if job_id:
-                    ddbo.heartbeat_movie_trace_lock(movie_id=movie_id, job_id=job_id)
                 frame_trackpoints = odb.flip_trackpoints_y(obj.frame_trackpoints, frame_height)
                 ddbo.update_movie(
                     movie_id,
