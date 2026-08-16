@@ -51,3 +51,21 @@ def api_admin_movie_media(movie_id):
     except ValueError as exc:
         return jsonify({"error": True, "message": str(exc)}), 409
     return jsonify(response.model_dump())
+
+
+@admin_api_bp.get("/movies/<movie_id>/storage-health")
+def api_admin_movie_storage_health(movie_id):
+    """Return read-only S3 object health for one admin-visible movie."""
+    try:
+        viewer_user = get_user_dict()
+        response = admin_service.admin_movie_storage_health(
+            viewer_user=viewer_user,
+            movie_id=movie_id,
+        )
+    except InvalidAPI_Key:
+        return jsonify({"error": True, "message": "Invalid api_key"}), 403
+    except (admin_service.AdminReadDenied, odb.UnauthorizedUser):
+        return jsonify({"error": True, "message": "Admin read access required"}), 403
+    except odb.InvalidMovie_Id:
+        return jsonify({"error": True, "message": "Movie not found"}), 404
+    return jsonify(response.model_dump())

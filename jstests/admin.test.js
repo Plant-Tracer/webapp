@@ -74,8 +74,6 @@ function payload() {
         total_bytes: 2500000, fpm: '60', has_traced_movie: true,
         description: 'Daily bean measurement', fps: '30', width: 640, height: 480,
         rotation: 0, trim_start_frame: 0, trim_end_frame: 120, needs_retracing: false,
-        original_object_state: 'present', traced_object_state: 'missing', zip_object_state: 'not created',
-        pending_upload_age_seconds: null,
         research_use: 1, credit_by_name: 'Ada', attribution_name: 'Ada Lovelace',
       }],
       restart_marker: null,
@@ -232,7 +230,12 @@ describe('admin summary rendering', () => {
     await loadAdminSummary();
 
     expect(document.body.textContent).not.toContain('Movie ID: movie-1');
+    fetch.mockResponseOnce(JSON.stringify({
+      error: false, movie_id: 'movie-1', original_object_state: 'present',
+      traced_object_state: 'missing', zip_object_state: 'not created', pending_upload_age_seconds: null,
+    }));
     document.getElementById('admin-verbose-details').click();
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
     expect(document.body.textContent).toContain('Movie ID: movie-1');
     expect(document.body.textContent).toContain('Description: Daily bean measurement');
     expect(document.body.textContent).toContain('Original object: present');

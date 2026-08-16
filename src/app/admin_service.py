@@ -173,10 +173,6 @@ class AdminMovieSummary(BaseModel):
     total_bytes: int | None = None
     fpm: str | None = None
     has_traced_movie: bool = False
-    original_object_state: StorageObjectState
-    traced_object_state: StorageObjectState
-    zip_object_state: StorageObjectState
-    pending_upload_age_seconds: int | None = None
     description: str = ""
     fps: str | None = None
     width: int | None = None
@@ -197,6 +193,17 @@ class AdminMovieMediaResponse(BaseModel):
     movie_id: str
     play_url: str
     traced_download_url: str | None = None
+
+
+class AdminMovieStorageHealth(BaseModel):
+    """Read-only storage health for one admin-visible movie."""
+
+    error: bool = False
+    movie_id: str
+    original_object_state: StorageObjectState
+    traced_object_state: StorageObjectState
+    zip_object_state: StorageObjectState
+    pending_upload_age_seconds: int | None = None
 
 
 class AdminCoursePage(BaseModel):
@@ -349,13 +356,13 @@ def user_summary(user) -> AdminUserSummary:
 
 
 def object_state(urn) -> StorageObjectState:
-    """Report the state of a derived object without disclosing its URN."""
+    """Report the state of a movie object without disclosing its URN."""
     if not urn:
         return StorageObjectState.NOT_CREATED
     return StorageObjectState.PRESENT if s3_presigned.object_exists(urn) else StorageObjectState.MISSING
 
 
-def movie_summary(movie, *, now=None) -> AdminMovieSummary:
+def movie_summary(movie) -> AdminMovieSummary:
     """Convert a DynamoDB movie item into a privacy-aware admin row."""
     course_id = movie.get(COURSE_ID, "")
     if movie.get(DELETED, 0):
@@ -366,9 +373,6 @@ def movie_summary(movie, *, now=None) -> AdminMovieSummary:
         state = "hidden"
     uploaded_at = movie.get(UPLOADED_AT) or movie.get(DATE_UPLOADED)
     created_at = movie.get(CREATED_AT)
-    pending_upload_age_seconds = None
-    if not uploaded_at and created_at:
-        pending_upload_age_seconds = max(0, int((now or time.time()) - int(created_at)))
     return AdminMovieSummary(
         movie_id=movie[MOVIE_ID],
         title=movie.get(TITLE, ""),
@@ -384,10 +388,6 @@ def movie_summary(movie, *, now=None) -> AdminMovieSummary:
         total_bytes=movie.get(TOTAL_BYTES),
         fpm=movie.get(FPM),
         has_traced_movie=bool(movie.get(MOVIE_TRACED_URN)),
-        original_object_state=object_state(movie.get(MOVIE_DATA_URN)),
-        traced_object_state=object_state(movie.get(MOVIE_TRACED_URN)),
-        zip_object_state=object_state(movie.get(MOVIE_ZIPFILE_URN)),
-        pending_upload_age_seconds=pending_upload_age_seconds,
         description=movie.get(DESCRIPTION) or "",
         fps=movie.get(FPS),
         width=movie.get(WIDTH),
@@ -399,6 +399,28 @@ def movie_summary(movie, *, now=None) -> AdminMovieSummary:
         research_use=movie.get(RESEARCH_USE),
         credit_by_name=movie.get(CREDIT_BY_NAME),
         attribution_name=movie.get(ATTRIBUTION_NAME),
+    )
+
+
+def admin_movie_storage_health(*, viewer_user, movie_id: str,
+                               now=None) -> AdminMovieStorageHealth:
+    """Return storage health for one movie only after an explicit admin request."""
+    access = odb.admin_read_access(viewer_user)
+    if not access.allowed:
+        raise AdminReadDenied(viewer_user.get(USER_ID, "unknown"))
+    movie = odb.can_access_movie(user_id=viewer_user[USER_ID], movie_id=movie_id)
+    created_at = movie.get(CREATED_AT)
+    uploaded_at = movie.get(UPLOADED_AT) or movie.get(DATE_UPLOADED)
+    pending_upload_age_seconds = None
+    if not uploaded_at and created_at:
+        current_time = time.time() if now is None else now
+        pending_upload_age_seconds = max(0, int(current_time - int(created_at)))
+    return AdminMovieStorageHealth(
+        movie_id=movie_id,
+        original_object_state=object_state(movie.get(MOVIE_DATA_URN)),
+        traced_object_state=object_state(movie.get(MOVIE_TRACED_URN)),
+        zip_object_state=object_state(movie.get(MOVIE_ZIPFILE_URN)),
+        pending_upload_age_seconds=pending_upload_age_seconds,
     )
 
 

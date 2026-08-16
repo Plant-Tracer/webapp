@@ -238,6 +238,26 @@ async function fetchMovieMedia(movieId) {
   return payload;
 }
 
+
+async function fetchMovieStorageHealth(movieId) {
+  const response = await fetch(
+    `${API_BASE}api/admin/movies/${encodeURIComponent(movieId)}/storage-health`,
+    { credentials: "same-origin" },
+  );
+  const payload = await response.json();
+  if (!response.ok || payload.error) {
+    throw new Error(payload.message || `Storage health failed with HTTP ${response.status}`);
+  }
+  return payload;
+}
+
+
+async function loadMovieStorageHealth() {
+  await Promise.all(state.movies.filter((movie) => movie.original_object_state === undefined)
+    .map(async (movie) => Object.assign(movie, await fetchMovieStorageHealth(movie.movie_id))));
+  renderTable("movies");
+}
+
 function downloadUrl(url) {
   const link = document.createElement("a");
   link.href = url;
@@ -424,9 +444,16 @@ function bindVerboseDetails() {
     return;
   }
   checkbox.dataset.bound = "true";
-  checkbox.addEventListener("change", () => {
+  checkbox.addEventListener("change", async () => {
     state.verboseDetails = checkbox.checked;
     TABLE_NAMES.forEach(renderTable);
+    if (state.verboseDetails) {
+      try {
+        await loadMovieStorageHealth();
+      } catch (error) {
+        reportAdminError(error);
+      }
+    }
   });
 }
 

@@ -92,10 +92,7 @@ def test_admin_summary_includes_enrollment_memberships_and_movies(client, new_mo
     assert movie["total_bytes"] > 0
     assert movie["description"] == "Description"
     assert movie["needs_retracing"] is False
-    assert movie["original_object_state"] == "present"
-    assert movie["traced_object_state"] == "not created"
-    assert movie["zip_object_state"] == "not created"
-    assert movie["pending_upload_age_seconds"] is None
+    assert "original_object_state" not in movie
     assert "research_use" in movie
 
 
@@ -113,12 +110,16 @@ def test_admin_summary_reports_hidden_movie(client, new_movie):
     assert movie["state"] == "hidden"
 
 
-def test_admin_summary_reports_missing_derived_objects_and_pending_age(client, new_movie):
+def test_admin_movie_storage_health_reports_missing_derived_objects_and_pending_age(client, new_movie):
     ddbo = new_movie["ddbo"]
     ddbo.update_table(ddbo.users, new_movie[USER_ID], {odb.SUPER_ROLE: odb.SUPER_ROLE_SUPERAUDITOR})
     client.set_cookie(apikey.cookie_name(), new_movie[API_KEY])
     movie_id = new_movie[odb.MOVIE_ID]
     movie = ddbo.get_movie(movie_id)
+    ddbo.update_movie(movie_id, {odb.MOVIE_DATA_URN: "not-an-s3-urn"})
+    summary_response = client.get("/api/admin/summary?section=movies")
+    assert summary_response.status_code == 200
+    ddbo.update_movie(movie_id, {odb.MOVIE_DATA_URN: movie[odb.MOVIE_DATA_URN]})
     traced_urn = s3_presigned.traced_movie_urn(movie_data_urn=movie[odb.MOVIE_DATA_URN])
     zip_urn = s3_presigned.analysis_zip_urn(movie_data_urn=movie[odb.MOVIE_DATA_URN])
     ddbo.update_movie(movie_id, {
@@ -126,13 +127,13 @@ def test_admin_summary_reports_missing_derived_objects_and_pending_age(client, n
         odb.MOVIE_ZIPFILE_URN: zip_urn,
     })
 
-    response = client.get("/api/admin/summary?section=movies")
+    response = client.get(f"/api/admin/movies/{movie_id}/storage-health")
 
     assert response.status_code == 200
-    movie_summary = response.json["movies"]["items"][0]
-    assert movie_summary["original_object_state"] == "present"
-    assert movie_summary["traced_object_state"] == "missing"
-    assert movie_summary["zip_object_state"] == "missing"
+    assert response.json["original_object_state"] == "present"
+    assert response.json["traced_object_state"] == "missing"
+    assert response.json["zip_object_state"] == "missing"
+    assert "urn" not in str(response.json)
 
     pending_movie_id = odb.create_new_movie(
         user_id=new_movie[USER_ID],
@@ -141,11 +142,17 @@ def test_admin_summary_reports_missing_derived_objects_and_pending_age(client, n
         description="No S3 object has been uploaded",
     )
     ddbo.update_movie(pending_movie_id, {odb.CREATED_AT: int(time.time()) - 90})
-    pending_response = client.get("/api/admin/summary?section=movies")
-    pending = next(item for item in pending_response.json["movies"]["items"]
-                   if item["movie_id"] == pending_movie_id)
-    assert pending["original_object_state"] == "not created"
-    assert pending["pending_upload_age_seconds"] >= 90
+    pending_response = client.get(f"/api/admin/movies/{pending_movie_id}/storage-health")
+    assert pending_response.json["original_object_state"] == "not created"
+    assert pending_response.json["pending_upload_age_seconds"] >= 90
+
+    pending_movie = ddbo.get_movie(pending_movie_id)
+    assert admin_service.admin_movie_storage_health(
+        viewer_user=ddbo.get_user(new_movie[USER_ID]),
+        movie_id=pending_movie_id,
+        now=0,
+    ).pending_upload_age_seconds == 0
+    assert pending_movie[odb.CREATED_AT] > 0
 
 
 def test_admin_movie_media_returns_fresh_urls(client, new_movie):
