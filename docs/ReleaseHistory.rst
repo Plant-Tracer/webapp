@@ -78,6 +78,7 @@ Release Notes
 Unreleased Summary
 ******************
     * Movies: rename the user-facing ``Unpublished`` state to ``Hidden`` now
+    * Movies: prevent concurrent tracing and make Analyze read-only while a trace is running.
       that movies are published immediately after upload
     * Courses: make the current-course pull-down tab-local, send ``course_id``
       with course-scoped browser requests, and add an explicit **Make default**
@@ -85,6 +86,7 @@ Unreleased Summary
     * Data model: rename the profile's ``primary_course_*`` fields to
       ``default_course_*`` with read compatibility and a dry-run migration tool
     * Upload: prevent duplicate movie-rotation requests while a rotation is being saved
+    * Analyze: prevent concurrent tracing of a movie and keep Analyze read-only while tracing runs
     * Developer: add a Makefile-driven analysis-MP4 CLI that creates a portable
       WebCodecs player bundle for manual cross-browser frame-step verification
     * Deployment: honor ``STACK_NAME`` as a per-stack config selector, pass the

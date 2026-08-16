@@ -1,5 +1,7 @@
 from unittest.mock import patch
 
+import pytest
+
 from resize_app import movie_glue
 from resize_app import tracer
 from resize_app.src.app.odb_movie_data import delete_object
@@ -10,7 +12,7 @@ def test_queue_tracing_uses_local_queue_when_configured(monkeypatch):
     monkeypatch.setenv("TRACING_QUEUE_MODE", "local")
 
     with patch("resize_app.local_queue.enqueue_message") as enqueue_message:
-        result = movie_glue.queue_tracing("test-key", "m123", 7, 20)
+        result = movie_glue.queue_tracing("test-key", "m123", 7, 20, "job-123")
 
     enqueue_message.assert_called_once_with(
         {
@@ -19,9 +21,11 @@ def test_queue_tracing_uses_local_queue_when_configured(monkeypatch):
             "movie_id": "m123",
             "frame_start": 7,
             "frame_end": 20,
+            "job_id": "job-123",
         }
     )
     assert result["error"] is False
+    assert result["message"]["job_id"] == "job-123"
 
 
 def test_prepare_tracing_request_marks_movie_tracing_before_queueing(new_movie):
@@ -41,14 +45,50 @@ def test_prepare_tracing_request_marks_movie_tracing_before_queueing(new_movie):
     )
 
     movie = ddbo.get_movie(movie_id)
-    assert movie[movie_glue.MOVIE_STATUS] == movie_glue.MOVIE_STATE_TRACING
+    assert movie[movie_glue.MOVIE_STATUS] == movie_glue.odb.MOVIE_STATE_TRACING
     assert movie[movie_glue.odb.LAST_ACTIVITY_AT] > 1
-    assert result == {
+    assert result["movie_id"] == movie_id
+    assert result["frame_start"] == 7
+    assert result["frame_end"] == 20
+    assert result["cleared_frames"] == 0
+    assert result["job_id"]
+    lock = ddbo.get_active_movie_trace_lock(movie_id)
+    assert lock and lock.job_id == result["job_id"]
+
+
+def test_prepare_tracing_request_rejects_second_active_lock(new_movie):
+    movie_id = new_movie[movie_glue.odb.MOVIE_ID]
+    kwargs = {
+        "api_key": new_movie[movie_glue.odb.API_KEY],
         "movie_id": movie_id,
-        "frame_start": 7,
-        "frame_end": 20,
-        "cleared_frames": 0,
+        "frame_start": 0,
     }
+    movie_glue.prepare_tracing_request(**kwargs)
+
+    with pytest.raises(movie_glue.odb.MovieTracingLocked):
+        movie_glue.prepare_tracing_request(**kwargs)
+
+
+def test_prepare_tracing_request_replaces_stale_lock(new_movie):
+    ddbo = new_movie["ddbo"]
+    movie_id = new_movie[movie_glue.odb.MOVIE_ID]
+    kwargs = {
+        "api_key": new_movie[movie_glue.odb.API_KEY],
+        "movie_id": movie_id,
+        "frame_start": 0,
+    }
+    first = movie_glue.prepare_tracing_request(**kwargs)
+    ddbo.update_movie(
+        movie_id,
+        {movie_glue.odb.TRACE_LOCK_EXPIRES_AT: 1},
+        touch_activity=False,
+    )
+
+    second = movie_glue.prepare_tracing_request(**kwargs)
+
+    assert second["job_id"] != first["job_id"]
+    lock = ddbo.get_active_movie_trace_lock(movie_id)
+    assert lock and lock.job_id == second["job_id"]
 
 
 def test_run_tracing_passes_frame_end_and_ignores_callback_frames_after_end(new_movie):
@@ -87,6 +127,7 @@ def test_run_tracing_passes_frame_end_and_ignores_callback_frames_after_end(new_
         assert kwargs["frame_start"] == 2
         assert kwargs["frame_end"] == 3
         assert kwargs["movie_traced_frame_range"] == tracer.TracedMovieFrameRange(start=0, end=3)
+        assert ddbo.get_movie(movie_id)[movie_glue.MOVIE_STATUS] == movie_glue.odb.MOVIE_STATE_TRACING
         callback = kwargs["callback"]
         callback(tracer.TracerCallbackArg(
             frame_number=3,

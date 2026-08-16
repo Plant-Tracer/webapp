@@ -14,7 +14,7 @@ import base64
 import requests
 import filetype
 import pytest
-from resize_app.movie_glue import complete_movie_upload
+from resize_app.movie_glue import complete_movie_upload, prepare_tracing_request
 
 from app import odb
 from app import s3_presigned
@@ -798,3 +798,39 @@ def test_set_movie_fpm_rejects_invalid(client, new_movie):
     resp = client.post('/api/set-movie-fpm', data={'api_key': api_key, 'movie_id': movie_id})
     assert resp.status_code == 400
     assert resp.get_json()['message'] == "fpm is required"
+
+
+def test_active_trace_lease_is_visible_and_rejects_movie_writes(client, new_movie, monkeypatch):
+    ddbo = new_movie["ddbo"]
+    movie_id = new_movie[MOVIE_ID]
+    prepare_tracing_request(
+        api_key=new_movie[API_KEY],
+        movie_id=movie_id,
+        frame_start=0,
+    )
+    lock = ddbo.get_active_movie_trace_lock(movie_id)
+    assert lock
+
+    with monkeypatch.context() as context:
+        context.setattr(
+            odb.DDBO,
+            "get_active_movie_trace_lock",
+            lambda *_args, **_kwargs: pytest.fail("movie APIs must use fetched movie records"),
+        )
+        listed = get_movie(client, new_movie[API_KEY], movie_id)
+        metadata_response = client.post('/api/get-movie-metadata', data={
+            'api_key': new_movie[API_KEY], 'movie_id': movie_id,
+        })
+    write_response = client.post('/api/set-movie-fpm', data={
+        'api_key': new_movie[API_KEY], 'movie_id': movie_id, 'fpm': '30',
+    })
+
+    for payload in (listed, metadata_response.get_json()['metadata']):
+        assert payload[odb.MOVIE_STATUS] == odb.MOVIE_STATE_TRACING
+        assert payload['tracking_lock'] == {
+            'active': True,
+            'acquired_at': lock.acquired_at,
+            'started_by_user_name': lock.started_by_user_name,
+        }
+    assert write_response.status_code == 409
+    assert write_response.get_json()['message'] == "This movie is currently being traced and is read-only."

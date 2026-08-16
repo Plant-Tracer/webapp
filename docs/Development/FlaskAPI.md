@@ -467,6 +467,10 @@ Get metadata and optionally per-frame trackpoints for a specific movie.
 
 `frames` is only present when `frame_start` is provided.
 
+While an active trace lease exists, metadata has `status: "tracing"` and a
+`tracking_lock` object with `acquired_at` and `started_by_user_name`. Clients
+use this to present Analyze as read-only.
+
 ---
 
 #### `POST /api/get-movie-trackpoints`
@@ -526,6 +530,9 @@ Write trackpoints for a single frame. Used by the client before requesting re-tr
 **Side effect:** sets `needs_retracing=1` on the movie record. This flag indicates that a previously traced MP4 may now be stale. The client uses it to show the retracing warning when `movie_traced_url` is also present.
 
 The tracer UI disables marker editing and reset actions while a trace request is active in that browser session, and when loaded movie metadata has `status="tracing"`. This prevents normal same-session marker edits while Lambda is tracing, so Lambda does not finish by clearing `needs_retracing` for a traced MP4 computed from an earlier marker state.
+
+Returns HTTP 409 when an active trace lease makes the movie read-only. The same
+rule applies to marker rename, trim, and capture-interval writes.
 
 ---
 

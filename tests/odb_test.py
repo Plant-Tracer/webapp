@@ -43,6 +43,56 @@ def test_update_movie_maintains_last_activity(new_movie):
     assert movie[odb.LAST_ACTIVITY_AT] > 100
 
 
+def test_movie_trace_lease_lifecycle(new_movie):
+    ddbo = new_movie["ddbo"]
+    movie_id = new_movie[MOVIE_ID]
+    movie = ddbo.get_movie(movie_id)
+    lock = ddbo.acquire_movie_trace_lock(
+        movie=movie,
+        started_by_user_id=new_movie[USER_ID],
+        started_by_user_name=ddbo.get_user(new_movie[USER_ID])[odb.USER_NAME],
+    )
+
+    assert ddbo.get_active_movie_trace_lock(movie_id) == lock
+    assert ddbo.claim_movie_trace_lock(movie_id=movie_id, job_id=lock.job_id)
+    assert not ddbo.claim_movie_trace_lock(movie_id=movie_id, job_id=lock.job_id)
+    ddbo.heartbeat_movie_trace_lock(movie_id=movie_id, job_id=lock.job_id)
+    ddbo.finish_movie_trace(
+        movie_id=movie_id,
+        job_id=lock.job_id,
+        updates={odb.MOVIE_STATUS: odb.MOVIE_STATE_TRACING_COMPLETED},
+    )
+
+    assert ddbo.get_active_movie_trace_lock(movie_id) is None
+    assert ddbo.get_movie(movie_id)[odb.MOVIE_STATUS] == odb.MOVIE_STATE_TRACING_COMPLETED
+
+
+def test_movie_trace_lease_rejects_an_active_owner_and_logs_failure(new_movie):
+    ddbo = new_movie["ddbo"]
+    movie = ddbo.get_movie(new_movie[MOVIE_ID])
+    lock = ddbo.acquire_movie_trace_lock(
+        movie=movie,
+        started_by_user_id=new_movie[USER_ID],
+        started_by_user_name=ddbo.get_user(new_movie[USER_ID])[odb.USER_NAME],
+    )
+
+    with pytest.raises(odb.MovieTracingLocked):
+        ddbo.acquire_movie_trace_lock(
+            movie=movie,
+            started_by_user_id=new_movie[USER_ID],
+            started_by_user_name="Other user",
+        )
+    entry = ddbo.put_movie_trace_failure_log(
+        movie=movie,
+        job_id=lock.job_id,
+        error=RuntimeError("tracer stopped"),
+    )
+
+    assert entry.trace_job_id == lock.job_id
+    assert entry.error_type == "RuntimeError"
+    assert entry.error_summary == "tracer stopped"
+
+
 def test_super_roles_have_cross_course_read_but_only_superadmin_can_edit(new_movie):
     ddbo = new_movie["ddbo"]
     admin_id = new_movie["admin_id"]

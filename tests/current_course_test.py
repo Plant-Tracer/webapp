@@ -75,6 +75,15 @@ def test_default_course_requires_authentication(client, new_course):
     assert response.status_code == 403
 
 
+def test_current_course_is_a_compatibility_alias(client, new_course):
+    client.set_cookie(apikey.cookie_name(), new_course[API_KEY])
+
+    response = client.patch("/api/current-course", json={COURSE_ID: new_course[COURSE_ID]})
+
+    assert response.status_code == 200
+    assert response.json["course"][COURSE_ID] == new_course[COURSE_ID]
+
+
 def test_movie_list_without_course_uses_default_profile_course(client, new_movie):
     course_id = additional_course_id()
     odb.create_course(

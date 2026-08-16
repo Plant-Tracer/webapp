@@ -2296,11 +2296,12 @@ describe('TracerController.track_to_end', () => {
     });
 
     // C. Success (2xx) ─────────────────────────────────────────────────────────
-    test('on 200 success: tracking remains true', async () => {
+    test('on 200 success: tracing becomes server-owned and this page read-only', async () => {
         mockFetchResponse(200, { error: false });
         tc.track_to_end();
         await jest.runAllTimersAsync();
-        expect(tc.tracking).toBe(true);
+        expect(tc.tracking).toBe(false);
+        expect(tc.movie_metadata.status).toBe('tracing');
     });
 
     test('on 200 success: no alert is fired', async () => {
@@ -2310,7 +2311,7 @@ describe('TracerController.track_to_end', () => {
         expect(global.alert).not.toHaveBeenCalled();
     });
 
-    test('on 200 success: tracing-dimmed is NOT removed', async () => {
+    test('on 200 success: tracing-dimmed is removed so playback remains available', async () => {
         mockFetchResponse(200, { error: false });
         tc.track_to_end();
         await jest.runAllTimersAsync();
@@ -2318,7 +2319,7 @@ describe('TracerController.track_to_end', () => {
             (_, i) => mock$.mock.results[i].value.removeClass.mock.calls
                 .some(c => c[0] === 'tracing-dimmed')
         );
-        expect(dimmedRemoved).toBe(false);
+        expect(dimmedRemoved).toBe(true);
     });
 
     test('on 200 success: fetch is called exactly once (no retry)', async () => {
