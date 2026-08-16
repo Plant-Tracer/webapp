@@ -92,6 +92,8 @@ Unreleased Summary
       use a TOML-aware Python writer for guided config bootstrapping
     * Analyze: open trimmed movies on their first included frame and keep
       Retrace disabled until marker data changes
+    * Analyze: keep results below the movie and marker controls, with position
+      graphs side-by-side when the viewport is wide enough and stacked otherwise
     * Tracing: keep markers when optical flow temporarily loses them and use
       the loaded analysis-frame height for bottom-left coordinate conversion
     * Operations: restore deployment-isolated S3 EventBridge upload completion,

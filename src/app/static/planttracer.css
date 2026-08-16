@@ -363,14 +363,20 @@ div.mtable td.check {
 
 /* Movie analyzer and demos. */
 
+#tracer {
+  align-items: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 #tracer canvas {
   border: 1px solid black;
   touch-action: none;
 }
 
-.float-movie,
-.float-controls {
-  float: left;
+.tracer-movie,
+.tracer-controls {
   padding: 2px;
 }
 
@@ -441,12 +447,24 @@ div.mtable td.check {
 
 div#analysis-results {
   display: none;
-  float: left;
+  flex: 1 0 100%;
+  min-width: 0;
   padding: 2px;
 }
 
 div#analysis-results canvas {
   display: block;
+}
+
+.result-graphs {
+  display: grid;
+  gap: 0.5rem;
+}
+
+@media screen and (min-width: 54rem) {
+  .result-graphs {
+    grid-template-columns: repeat(2, 25rem);
+  }
 }
 
 #tracer.tracing-dimmed {
@@ -469,10 +487,6 @@ div#analysis-results canvas {
   line-height: 0;
   position: relative;
   text-align: center;
-}
-
-#explain {
-  float: left;
 }
 
 /* Debug page. */
