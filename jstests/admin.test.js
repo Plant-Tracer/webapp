@@ -230,9 +230,17 @@ describe('admin summary rendering', () => {
     await loadAdminSummary();
 
     expect(document.body.textContent).not.toContain('Movie ID: movie-1');
+    fetch.mockResponseOnce(JSON.stringify({
+      error: false, movie_id: 'movie-1', original_object_state: 'present',
+      traced_object_state: 'missing', zip_object_state: 'not created', pending_upload_age_seconds: null,
+    }));
     document.getElementById('admin-verbose-details').click();
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
     expect(document.body.textContent).toContain('Movie ID: movie-1');
     expect(document.body.textContent).toContain('Description: Daily bean measurement');
+    expect(document.body.textContent).toContain('Original object: present');
+    expect(document.body.textContent).toContain('Traced object: missing');
+    expect(document.body.textContent).toContain('ZIP object: not created');
     expect(document.body.textContent).toContain('Administrators: Ada');
     expect(document.body.textContent).toContain('User ID: user-1');
   });
