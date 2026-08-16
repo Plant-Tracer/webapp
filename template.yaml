@@ -4,8 +4,7 @@
 # Creates:
 # - HTTP API custom domain
 # - lambda-web for Flask HTML, Flask /api/*, and /static/*
-# - lambda-resize for /resize-api/* and SQS trace work
-# - SQS queue for long-running traces
+# - lambda-resize for /resize-api/* and EventBridge-pushed video/trace work
 #
 # Durable data is external to this stack:
 # - The movie/frame S3 bucket already exists and must outlive the stack.
@@ -153,6 +152,13 @@ Resources:
                   StringEquals:
                     ses:FromAddress: !FindInMap [StackConstants, Mail, ServerEmail]
 
+  AsyncWorkDLQ:
+    Type: AWS::SQS::Queue
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      MessageRetentionPeriod: 1209600
+
   LambdaResizeExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -166,7 +172,7 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
-        - PolicyName: LambdaResizeS3DdbAndSqsAccess
+        - PolicyName: LambdaResizeS3DdbAndEventsAccess
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
@@ -195,19 +201,12 @@ Resources:
                   - !Sub "arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDBTablePrefix}*/index/*"
               - Effect: Allow
                 Action:
-                  - sqs:DeleteMessage
-                  - sqs:GetQueueAttributes
-                  - sqs:GetQueueUrl
-                  - sqs:ReceiveMessage
+                  - events:PutEvents
+                Resource: !Sub "arn:${AWS::Partition}:events:${AWS::Region}:${AWS::AccountId}:event-bus/default"
+              - Effect: Allow
+                Action:
                   - sqs:SendMessage
-                Resource: !GetAtt TracingQueue.Arn
-
-  TracingQueue:
-    Type: AWS::SQS::Queue
-    DeletionPolicy: Delete
-    UpdateReplacePolicy: Delete
-    Properties:
-      VisibilityTimeout: 900
+                Resource: !GetAtt AsyncWorkDLQ.Arn
 
   LambdaWebFunction:
     Type: AWS::Serverless::Function
@@ -264,6 +263,7 @@ Resources:
 
   LambdaResizeFunction:
     Type: AWS::Serverless::Function
+    DependsOn: AsyncWorkDLQPolicy
     Metadata:
       BuildMethod: python3.12
       BuildProperties:
@@ -277,6 +277,9 @@ Resources:
       Handler: resize_app.main.lambda_handler
       Timeout: 900
       MemorySize: 1024
+      DeadLetterQueue:
+        Type: SQS
+        TargetArn: !GetAtt AsyncWorkDLQ.Arn
       Layers:
         - arn:aws:lambda:us-east-1:017000801446:layer:AWSLambdaPowertoolsPythonV2-Arm64:60
       Environment:
@@ -290,7 +293,6 @@ Resources:
           POWERTOOLS_EVENT_HANDLER_AUTO_JSON_DECIMAL: "true"
           POWERTOOLS_SERVICE_NAME: "planttracer"
           TABLE_PREFIX: !Ref DynamoDBTablePrefix
-          TRACING_QUEUE_URL: !Ref TracingQueue
       Events:
         UploadedMovieCreated:
           Type: EventBridgeRule
@@ -312,8 +314,24 @@ Resources:
               MaximumEventAgeInSeconds: 3600
               MaximumRetryAttempts: 10
             DeadLetterConfig:
-              Type: SQS
-              QueueLogicalId: UploadEventDLQ
+              Arn: !GetAtt AsyncWorkDLQ.Arn
+        AsyncWorkDispatched:
+          Type: EventBridgeRule
+          Properties:
+            RuleName: !Sub "${AWS::StackName}-async-work"
+            Pattern:
+              source:
+                - planttracer.async-work
+              detail-type:
+                - Plant Tracer Async Work
+              detail:
+                stack_name:
+                  - !Ref AWS::StackName
+            RetryPolicy:
+              MaximumEventAgeInSeconds: 3600
+              MaximumRetryAttempts: 10
+            DeadLetterConfig:
+              Arn: !GetAtt AsyncWorkDLQ.Arn
         ResizeApiProxy:
           Type: HttpApi
           Properties:
@@ -323,23 +341,32 @@ Resources:
             PayloadFormatVersion: "2.0"
             Auth:
               Authorizer: NONE
-        TracingQueueEvent:
-          Type: SQS
-          Properties:
-            Queue: !GetAtt TracingQueue.Arn
-            BatchSize: 10
-            FunctionResponseTypes:
-              - ReportBatchItemFailures
+  AsyncWorkDLQPolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref AsyncWorkDLQ
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt AsyncWorkDLQ.Arn
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
 
-  UploadEventDLQAlarm:
+  AsyncWorkDLQAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmDescription: !Sub "${AWS::StackName} has failed S3 upload events"
-      AlarmName: !Sub "${AWS::StackName}-upload-event-dlq-not-empty"
+      AlarmDescription: !Sub "${AWS::StackName} has failed asynchronous movie work"
+      AlarmName: !Sub "${AWS::StackName}-async-work-dlq-not-empty"
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: QueueName
-          Value: !GetAtt UploadEventDLQ.QueueName
+          Value: !GetAtt AsyncWorkDLQ.QueueName
       EvaluationPeriods: 1
       MetricName: ApproximateNumberOfMessagesVisible
       Namespace: AWS/SQS
@@ -367,12 +394,9 @@ Outputs:
   LambdaResizeFunction:
     Description: Plant Tracer video/trace Lambda function name
     Value: !Ref LambdaResizeFunction
-  TracingQueueUrl:
-    Description: SQS queue URL for trace work
-    Value: !Ref TracingQueue
-  UploadEventDLQUrl:
-    Description: Queue containing S3 upload events that exhausted EventBridge retries
-    Value: !Ref UploadEventDLQ
-  UploadEventDLQAlarmName:
-    Description: Alarm raised when an S3 upload event reaches the dead-letter queue
-    Value: !Ref UploadEventDLQAlarm
+  AsyncWorkDLQUrl:
+    Description: Queue containing asynchronous movie work that exhausted retries
+    Value: !Ref AsyncWorkDLQ
+  AsyncWorkDLQAlarmName:
+    Description: Alarm raised when asynchronous movie work reaches the dead-letter queue
+    Value: !Ref AsyncWorkDLQAlarm

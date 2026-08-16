@@ -1,61 +1,34 @@
-"""
-Lambda entry points for tracing: direct invoke (no Flask) and SQS.
-"""
+"""Lambda entry points for local and EventBridge asynchronous movie work."""
 
-import json
 import time
-from typing import Annotated, Literal
 
 from aws_lambda_powertools import Logger
-from aws_lambda_powertools.utilities.data_classes.sqs_event import SQSRecord
-from pydantic import BaseModel, Field, TypeAdapter
 
+from . import async_work
 from . import movie_glue
+from .src.app.constants import storage_deployment_id
 
 LOGGER = Logger(service="planttracer")
-MAX_BATCH_SIZE = 500
-CORS_HEADERS = {
-    "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*",
-}
-
-class TraceJob(BaseModel):
-    """User-requested tracing queue job."""
-
-    job_type: Literal["trace"] = "trace"
-    movie_id: str
-    frame_start: int = 0
-    frame_end: int | None = None
-    job_id: str | None = None
-    api_key: str | None = None
-
-
-class PostUploadJob(BaseModel):
-    """S3-triggered post-upload inspection/resizing job."""
-
-    job_type: Literal["post_upload"]
-    movie_id: str
-
-
-QUEUE_JOB_ADAPTER = TypeAdapter(
-    Annotated[TraceJob | PostUploadJob, Field(discriminator="job_type")]
-)
 
 def process_tracing_message(body: dict):
-    """Process legacy or explicit tracing messages."""
+    """Validate and process one tracing job."""
     if not body.get("movie_id"):
-        raise ValueError("movie_id is required in SQS message")
-    job = TraceJob.model_validate(body)
+        raise ValueError("movie_id is required in tracing work")
+    job = async_work.TraceJob.model_validate(body)
 
     t0 = time.time()
-    LOGGER.info("SQS Start tracing batch: movie_id=%s frame_start=%s frame_end=%s",
+    LOGGER.info("Start tracing work: movie_id=%s frame_start=%s frame_end=%s",
                 job.movie_id, job.frame_start, job.frame_end)
-    kwargs = {"movie_id": job.movie_id, "frame_start": job.frame_start, "frame_end": job.frame_end}
+    kwargs = {
+        "movie_id": job.movie_id,
+        "frame_start": job.frame_start,
+        "frame_end": job.frame_end,
+    }
     if job.job_id is not None:
         kwargs["job_id"] = job.job_id
     movie_glue.run_tracing(**kwargs)
     LOGGER.info(
-        "SQS Completed tracing batch: movie_id=%s frame_start=%s frame_end=%s elapsed_time=%s",
+        "Completed tracing work: movie_id=%s frame_start=%s frame_end=%s elapsed_time=%s",
         job.movie_id,
         job.frame_start,
         job.frame_end,
@@ -64,24 +37,40 @@ def process_tracing_message(body: dict):
 
 
 def process_queue_message(body: dict):
-    """Validate and dispatch one queue job."""
+    """Validate and dispatch one local asynchronous job."""
     payload = dict(body)
-    payload.setdefault(movie_glue.QUEUE_JOB_TYPE, movie_glue.TRACE_JOB)
-    job = QUEUE_JOB_ADAPTER.validate_python(payload)
-    if isinstance(job, PostUploadJob):
+    payload.setdefault("job_type", "trace")
+    job = async_work.JOB_ADAPTER.validate_python(payload)
+    process_job(job)
+
+
+def process_job(job: async_work.TraceJob | async_work.PostUploadJob) -> None:
+    """Process one validated asynchronous job."""
+    if isinstance(job, async_work.PostUploadJob):
         movie_glue.process_uploaded_movie(movie_id=job.movie_id)
         return
     process_tracing_message(job.model_dump())
 
 
-def process_tracing_record(record: SQSRecord):
-    """
-    Process a single SQS message.
-    If this raises an exception, BatchProcessor marks only this record for retry.
-    """
-    try:
-        body = json.loads(record.body or "{}")
-    except json.JSONDecodeError as exc:
-        LOGGER.error("Invalid JSON in SQS body: %s", exc)
-        raise
-    process_queue_message(body)
+def process_async_work_event(raw_event) -> dict:
+    """Validate stack routing and process one custom EventBridge work event."""
+    event = async_work.AsyncWorkEvent.model_validate(raw_event)
+    deployment_id = storage_deployment_id()
+    if event.detail.stack_name != deployment_id:
+        raise ValueError("async work event does not belong to this deployment")
+    LOGGER.info(
+        "Start async work: job_type=%s movie_id=%s",
+        event.detail.job.job_type,
+        event.detail.job.movie_id,
+    )
+    process_job(event.detail.job)
+    LOGGER.info(
+        "Completed async work: job_type=%s movie_id=%s",
+        event.detail.job.job_type,
+        event.detail.job.movie_id,
+    )
+    return {
+        "processed": True,
+        "job_type": event.detail.job.job_type,
+        "movie_id": event.detail.job.movie_id,
+    }

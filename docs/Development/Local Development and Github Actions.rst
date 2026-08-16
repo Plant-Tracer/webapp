@@ -9,8 +9,8 @@ The short version is:
 * Flask remains the local HTML and metadata server.
 * A second local process runs the Lambda HTTP API.
 * DynamoDB Local and MinIO remain the local data stores.
-* Local retracing is asynchronous, but it does **not** require a real SQS
-  service.
+* Local retracing is asynchronous, but it does **not** require EventBridge or a
+  real queue service.
 
 This document is Mac-first. That is the supported local developer workflow for
 now.
@@ -105,15 +105,15 @@ The goal is to keep local behavior as close as possible to deployed Lambda while
 still being easy to run and easy to debug on a Mac.
 
 
-Design Decision: Do Not Require a Real Local SQS Service
+Design Decision: Keep Local Asynchronous Work In Process
 --------------------------------------------------------
 
-For local development we do **not** need a full SQS emulator shared across
-processes.
+For local development we do **not** need an EventBridge or queue emulator
+shared across processes.
 
-Production uses SQS so the HTTP trace request can return quickly while the
-tracking job continues in the background. Locally, we can preserve that
-behavior more simply:
+Production uses stack-scoped EventBridge push events so the HTTP trace request
+can return quickly while the tracking job continues in the background. Locally,
+we preserve that behavior more simply:
 
 * the local Lambda HTTP process accepts ``POST /resize-api/v1/trace-movie``,
 * it queues the work into an in-process local queue,
@@ -410,8 +410,8 @@ Native Python is better for the first local retrace workflow because:
 * it is easier to debug interactively,
 * stdout and stderr are simpler to watch,
 * the current problem is architectural split, not container fidelity,
-* SQS behavior is easier to model with an in-process queue than with a second
-  emulator.
+* asynchronous dispatch is easier to model with an in-process queue than with
+  a second emulator.
 
 If we later add a containerized mode using Finch, it should be an additional
 option, not the only local testing path.

@@ -2,6 +2,19 @@
 
 Three principles govern where logic lives.
 
+The deployed stack has four logical Lambda uses across two functions:
+
+1. ``lambda-web`` serves static application files.
+2. ``lambda-web`` runs Flask for templated HTML and JSON API routes.
+3. ``lambda-resize`` normalizes and resizes uploaded S3 objects.
+4. ``lambda-resize`` traces movies.
+
+HTTP requests invoke lambda-web and the synchronous lambda-resize routes.
+Deployment-filtered S3 and stack-scoped custom EventBridge rules push
+post-upload and tracing work to lambda-resize. No Lambda has an idle-polling
+event-source mapping. The only SQS resource is an unpolled dead-letter queue
+for exhausted asynchronous failures.
+
 ## Frames And Video: lambda-resize
 
 Operations that need full frames or video run in `lambda-resize`.

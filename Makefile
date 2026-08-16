@@ -973,7 +973,7 @@ SAM_LOGS_FUNCTION_OUTPUT ?= LambdaWebFunction
 
 # Last N Lambda CloudWatch log events. Resolves function from Outputs or nested stack (SAM deploys Lambda in child stack).
 # Note: filter-log-events returns oldest-first; we request more than LIMIT then keep only the newest LIMIT so recent
-# activity (e.g. SQS-triggered runs) is included. Request 5x limit so that after tail we have the most recent N.
+# activity (e.g. EventBridge-triggered runs) is included. Request 5x limit so that after tail we have the most recent N.
 sam-logs: sam-config-check
 	@$(SAM_LOGS_RESOLVE); \
 	REQ=$$(( $(SAM_LOGS_LIMIT) * 5 )); \
@@ -1010,20 +1010,20 @@ sam-logs-web-tail:
 sam-logs-resize-tail:
 	$(MAKE) sam-logs-simple SAM_LOGS_FUNCTION_OUTPUT=LambdaResizeFunction SAM_LOGS_TAIL=1
 
-# Lambda log events that mention SQS (SQS-triggered invocations and sqs_handler messages).
-# Use this when sam-logs is dominated by HTTP traffic and you want only tracing-queue activity.
-sqs-logs: SAM_LOGS_FUNCTION_OUTPUT=LambdaResizeFunction
-sqs-logs:
+# Lambda log events for EventBridge-pushed asynchronous movie work.
+# Use this when sam-logs is dominated by HTTP traffic.
+async-work-logs: SAM_LOGS_FUNCTION_OUTPUT=LambdaResizeFunction
+async-work-logs:
 	@$(SAM_LOGS_RESOLVE); \
-	echo "SQS-related log events (past $(SAM_LOGS_MINUTES) min, limit $(SAM_LOGS_LIMIT)) for /aws/lambda/$$FUNC (stack=$(EFFECTIVE_STACK_NAME))..."; \
-	aws logs filter-log-events --log-group-name "/aws/lambda/$$FUNC" --start-time "$$START" --limit $(SAM_LOGS_LIMIT) --filter-pattern "SQS" --output text || true
+	echo "Async-work log events (past $(SAM_LOGS_MINUTES) min, limit $(SAM_LOGS_LIMIT)) for /aws/lambda/$$FUNC (stack=$(EFFECTIVE_STACK_NAME))..."; \
+	aws logs filter-log-events --log-group-name "/aws/lambda/$$FUNC" --start-time "$$START" --limit $(SAM_LOGS_LIMIT) --filter-pattern '"async work"' --output text || true
 
-# Stream Lambda logs, showing only lines that contain SQS.
-sqs-logs-tail: SAM_LOGS_FUNCTION_OUTPUT=LambdaResizeFunction
-sqs-logs-tail:
+# Stream Lambda logs, showing only asynchronous-work lines.
+async-work-logs-tail: SAM_LOGS_FUNCTION_OUTPUT=LambdaResizeFunction
+async-work-logs-tail:
 	@$(SAM_LOGS_RESOLVE); \
-	echo "Tailing SQS-related logs for /aws/lambda/$$FUNC (Ctrl-C to stop)..."; \
-	aws logs tail "/aws/lambda/$$FUNC" --follow --format short --filter-pattern "SQS" || true
+	echo "Tailing async-work logs for /aws/lambda/$$FUNC (Ctrl-C to stop)..."; \
+	aws logs tail "/aws/lambda/$$FUNC" --follow --format short --filter-pattern '"async work"' || true
 
 sam-delete:
 	@echo Deletion will begin in 10 seconds. Press Ctrl-C to cancel.

@@ -82,8 +82,9 @@ Body:
 
 `frame_start` is the edited source frame. Plant Tracer preserves that frame,
 clears stored trackpoints after it through `frame_end` when supplied, marks the
-movie as `tracing`, and queues work. In local mode the work goes to the
-in-process queue; in deployed mode it goes to SQS through `TRACING_QUEUE_URL`.
+movie as `tracing`, and dispatches work. In local mode the work goes to the
+in-process queue; in deployed mode a stack-scoped EventBridge rule pushes the
+custom work event to lambda-resize without idle polling.
 
 ## Local Development
 

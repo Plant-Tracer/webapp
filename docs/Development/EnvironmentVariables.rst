@@ -40,9 +40,10 @@ unset local endpoint overrides.
    S3 endpoint override. Local default: ``http://localhost:9000/``. Do not set
    this for remote AWS mode.
 
-``AWS_ENDPOINT_URL_SQS``
-   Optional SQS endpoint override for lambda-resize if testing against an SQS
-   emulator.
+``AWS_ENDPOINT_URL_EVENTS``
+   Optional EventBridge endpoint override for lambda-resize integration tests.
+   Normal local development uses the in-process queue and does not require an
+   EventBridge emulator.
 
 ``AWS_PROFILE``
    Optional AWS profile for deployed or administrative commands.
@@ -145,14 +146,14 @@ Mail
    Dry-run mail includes login links and API keys in Lambda logs, so use it
    only with test users and test data.
 
-Lambda Queue
-------------
+Lambda Asynchronous Work
+------------------------
 
 ``TRACING_QUEUE_MODE``
    Set to ``local`` to use the in-process local retrace queue.
 
-``TRACING_QUEUE_URL``
-   SQS queue URL used by deployed lambda-resize tracing.
+Deployed lambda-resize work is published to the default EventBridge bus and
+does not require a queue URL environment variable.
 
 Development And Diagnostics
 ---------------------------

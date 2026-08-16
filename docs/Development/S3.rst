@@ -191,9 +191,10 @@ For deployed stacks:
    resize lifecycle timestamps. The browser polls movie metadata before
    requesting the first frame.
 
-EventBridge and SQS delivery are at least once. Conditional movie updates and
-verified durable-object checks make duplicate upload events safe. EventBridge
-retries failed invocations and sends exhausted events to the stack's upload
+EventBridge and asynchronous Lambda delivery are at least once. Conditional
+movie updates and verified durable-object checks make duplicate upload events
+safe. EventBridge pushes post-upload work without an idle-polling queue.
+Exhausted delivery or invocation failures go to the stack's unpolled
 dead-letter queue.
 
 ``POST /resize-api/v1/process-upload`` remains an authenticated local-
