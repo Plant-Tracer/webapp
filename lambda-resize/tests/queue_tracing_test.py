@@ -12,7 +12,7 @@ def test_queue_tracing_uses_local_queue_when_configured(monkeypatch):
     monkeypatch.setenv("TRACING_QUEUE_MODE", "local")
 
     with patch("resize_app.local_queue.enqueue_message") as enqueue_message:
-        result = movie_glue.queue_tracing("test-key", "m123", 7, 20)
+        result = movie_glue.queue_tracing("test-key", "m123", 7, 20, "job-123")
 
     enqueue_message.assert_called_once_with(
         {
@@ -21,9 +21,11 @@ def test_queue_tracing_uses_local_queue_when_configured(monkeypatch):
             "movie_id": "m123",
             "frame_start": 7,
             "frame_end": 20,
+            "job_id": "job-123",
         }
     )
     assert result["error"] is False
+    assert result["message"]["job_id"] == "job-123"
 
 
 def test_prepare_tracing_request_marks_movie_tracing_before_queueing(new_movie):

@@ -143,6 +143,7 @@ def queue_tracing(api_key:str, movie_id:str, frame_start:int, frame_end:int|None
     safe_msg = {"movie_id": movie_id, "frame_start": frame_start}
     if job_id is not None:
         msg["job_id"] = job_id
+        safe_msg["job_id"] = job_id
     if frame_end is not None:
         msg["frame_end"] = int(frame_end)
         safe_msg["frame_end"] = int(frame_end)

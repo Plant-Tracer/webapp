@@ -134,7 +134,7 @@ class Movie(BaseModel):
     status: str | None = None
     tracing_failed_at: int | None = None
     tracing_failure_summary: str | None = None
-    tracing_job_id: str | None = None
+    trace_job_id: str | None = None
     tracing_state: Literal["queued", "running"] | None = None
     tracing_started_at: int | None = None
     tracing_heartbeat_at: int | None = None

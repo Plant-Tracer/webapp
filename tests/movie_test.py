@@ -815,12 +815,12 @@ def test_active_trace_lease_is_visible_and_rejects_movie_writes(client, new_movi
         context.setattr(
             odb.DDBO,
             "get_active_movie_trace_lock",
-            lambda *_args, **_kwargs: pytest.fail("list-movies must use its fetched movie records"),
+            lambda *_args, **_kwargs: pytest.fail("movie APIs must use fetched movie records"),
         )
         listed = get_movie(client, new_movie[API_KEY], movie_id)
-    metadata_response = client.post('/api/get-movie-metadata', data={
-        'api_key': new_movie[API_KEY], 'movie_id': movie_id,
-    })
+        metadata_response = client.post('/api/get-movie-metadata', data={
+            'api_key': new_movie[API_KEY], 'movie_id': movie_id,
+        })
     write_response = client.post('/api/set-movie-fpm', data={
         'api_key': new_movie[API_KEY], 'movie_id': movie_id, 'fpm': '30',
     })

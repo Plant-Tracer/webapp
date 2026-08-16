@@ -1020,7 +1020,7 @@ def api_get_movie_metadata():
 
     movie = odb.can_access_movie(user_id=user_id, movie_id=movie_id)
     movie_metadata = odb.get_movie_metadata(movie_id=movie[MOVIE_ID], get_last_frame_tracked=True)
-    trace_lock = odb.DDBO().get_active_movie_trace_lock(movie_id)
+    trace_lock = odb.movie_trace_lock_from_record(movie)
     if trace_lock:
         movie_metadata[MOVIE_STATUS] = odb.MOVIE_STATE_TRACING
         movie_metadata['tracking_lock'] = {

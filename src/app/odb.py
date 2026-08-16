@@ -549,7 +549,9 @@ class DDBO:
 
     def get_active_movie_trace_lock(self, movie_id):
         """Return the movie's active trace lease, or None when absent or expired."""
-        movie = self.movies.get_item(Key={MOVIE_ID: movie_id}).get("Item")
+        movie = self.movies.get_item(
+            Key={MOVIE_ID: movie_id}, ConsistentRead=True,
+        ).get("Item")
         return movie_trace_lock_from_record(movie)
 
     def acquire_movie_trace_lock(self, *, movie, started_by_user_id, started_by_user_name):
