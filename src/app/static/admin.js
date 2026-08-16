@@ -253,8 +253,16 @@ async function fetchMovieStorageHealth(movieId) {
 
 
 async function loadMovieStorageHealth() {
-  await Promise.all(state.movies.filter((movie) => movie.original_object_state === undefined)
-    .map(async (movie) => Object.assign(movie, await fetchMovieStorageHealth(movie.movie_id))));
+  const movies = state.movies.filter((movie) => movie.original_object_state === undefined);
+  let nextMovie = 0;
+  async function loadNextMovie() {
+    while (nextMovie < movies.length) {
+      const movie = movies[nextMovie];
+      nextMovie += 1;
+      Object.assign(movie, await fetchMovieStorageHealth(movie.movie_id));
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(4, movies.length) }, loadNextMovie));
   renderTable("movies");
 }
 

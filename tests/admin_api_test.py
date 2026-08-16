@@ -119,6 +119,9 @@ def test_admin_movie_storage_health_reports_missing_derived_objects_and_pending_
     ddbo.update_movie(movie_id, {odb.MOVIE_DATA_URN: "not-an-s3-urn"})
     summary_response = client.get("/api/admin/summary?section=movies")
     assert summary_response.status_code == 200
+    malformed_response = client.get(f"/api/admin/movies/{movie_id}/storage-health")
+    assert malformed_response.status_code == 200
+    assert malformed_response.json["original_object_state"] == "missing"
     ddbo.update_movie(movie_id, {odb.MOVIE_DATA_URN: movie[odb.MOVIE_DATA_URN]})
     traced_urn = s3_presigned.traced_movie_urn(movie_data_urn=movie[odb.MOVIE_DATA_URN])
     zip_urn = s3_presigned.analysis_zip_urn(movie_data_urn=movie[odb.MOVIE_DATA_URN])

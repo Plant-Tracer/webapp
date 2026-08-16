@@ -359,7 +359,11 @@ def object_state(urn) -> StorageObjectState:
     """Report the state of a movie object without disclosing its URN."""
     if not urn:
         return StorageObjectState.NOT_CREATED
-    return StorageObjectState.PRESENT if s3_presigned.object_exists(urn) else StorageObjectState.MISSING
+    try:
+        exists = s3_presigned.object_exists(urn)
+    except (AssertionError, RuntimeError, ValueError):
+        return StorageObjectState.MISSING
+    return StorageObjectState.PRESENT if exists else StorageObjectState.MISSING
 
 
 def movie_summary(movie) -> AdminMovieSummary:
