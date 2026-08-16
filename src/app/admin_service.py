@@ -342,7 +342,7 @@ def movie_summary(movie) -> AdminMovieSummary:
     elif movie.get(PUBLISHED, 0):
         state = "published"
     else:
-        state = "unpublished"
+        state = "hidden"
     uploaded_at = movie.get(UPLOADED_AT) or movie.get(DATE_UPLOADED)
     created_at = movie.get(CREATED_AT)
     return AdminMovieSummary(

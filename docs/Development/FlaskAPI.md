@@ -154,7 +154,10 @@ receive HTTP 400.
 }
 ```
 
-The movie list includes published, unpublished, and deleted DynamoDB records.
+The movie list includes published, hidden, and deleted DynamoDB records. The
+API continues to use the ``published`` field: ``1`` is published and ``0`` is hidden.
+The admin summary reports the same states as ``published``, ``hidden``, or
+``deleted``.
 `state` reports that visibility/deletion state; `status` reports processing state.
 The summary deliberately omits object URNs and API keys. The default table view
 stays compact: its `Verbose details` control reveals stable IDs, named course

@@ -37,8 +37,8 @@ describe('list_movies_data', () => {
     global.demo_mode = globalData.demo_mode === 'false';
     global.PLAY_LABEL = globalData.PLAY_LABEL;
     global.PLAY_TRACKED_LABEL = globalData.PLAY_TRACKED_LABEL;
-    global.UNPUBLISH_BUTTON = globalData.UNPUBLISH_BUTTON;
-    global.PUBLISH_BUTTON = globalData.PUBLISH_BUTTON;
+    global.HIDE_BUTTON = globalData.HIDE_BUTTON;
+    global.UNHIDE_BUTTON = globalData.UNHIDE_BUTTON;
     global.DELETE_BUTTON = globalData.DELETE_BUTTON;
     global.UNDELETE_BUTTON = globalData.UNDELETE_BUTTON;
     global.TABLE_HEAD = globalData.TABLE_HEAD;
@@ -323,7 +323,7 @@ describe('list_movies_data', () => {
 
   // Action Button Tests
 
-  test('should display a publish button for unpublished movies (admin)', () => {
+  test('should display an unhide button for hidden movies (admin)', () => {
     global.admin = true; // Set admin privileges
 
     const movies = [
@@ -332,7 +332,7 @@ describe('list_movies_data', () => {
         user_id: 1,
         published: 0,
         deleted: 0,
-        title: 'Unpublished Movie',
+        title: 'Hidden Movie',
         date_uploaded: 1627689600,
         width: 1280,
         height: 720,
@@ -345,11 +345,12 @@ describe('list_movies_data', () => {
 
     list_movies_data(movies);
 
-    const unpublishedHtml = mockElements['#your-unpublished-movies'].innerHTML;
-    expect(unpublishedHtml).toContain('Status: Not published');
+    const hiddenHtml = mockElements['#your-hidden-movies'].innerHTML;
+    expect(hiddenHtml).toContain('Status: Hidden');
+    expect(hiddenHtml).toContain("value='UNHIDE'");
   });
 
-  test('should display an unpublish button for published movies', () => {
+  test('should display a hide button for published movies', () => {
     const movies = [
       {
         movie_id: 1,
@@ -371,6 +372,7 @@ describe('list_movies_data', () => {
 
     const publishedHtml = mockElements['#your-published-movies'].innerHTML;
     expect(publishedHtml).toContain('Status: <b>Published</b>');
+    expect(publishedHtml).toContain("value='HIDE'");
   });
 });
 

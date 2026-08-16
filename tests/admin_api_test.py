@@ -95,6 +95,20 @@ def test_admin_summary_includes_enrollment_memberships_and_movies(client, new_mo
     assert "research_use" in movie
 
 
+def test_admin_summary_reports_hidden_movie(client, new_movie):
+    ddbo = new_movie["ddbo"]
+    ddbo.update_table(ddbo.users, new_movie[USER_ID], {odb.SUPER_ROLE: odb.SUPER_ROLE_SUPERAUDITOR})
+    ddbo.update_movie(new_movie[odb.MOVIE_ID], {odb.PUBLISHED: 0})
+    client.set_cookie(apikey.cookie_name(), new_movie[API_KEY])
+
+    response = client.get("/api/admin/summary")
+
+    assert response.status_code == 200
+    movie = next(item for item in response.json["movies"]["items"]
+                 if item["movie_id"] == new_movie[odb.MOVIE_ID])
+    assert movie["state"] == "hidden"
+
+
 def test_admin_movie_media_returns_fresh_urls(client, new_movie):
     ddbo = new_movie["ddbo"]
     ddbo.update_table(
