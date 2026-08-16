@@ -7,8 +7,8 @@ import { activeCourseId, appendCourseContext } from "./course_context.js";
 
 
 // special buttons
-const PUBLISH_BUTTON='PUBLISH';
-const UNPUBLISH_BUTTON='UNPUBLISH';
+const HIDE_BUTTON='HIDE';
+const UNHIDE_BUTTON='UNHIDE';
 const DELETE_BUTTON='DELETE';
 const UNDELETE_BUTTON='UNDELETE';
 const PLAY_LABEL = 'play';
@@ -698,7 +698,7 @@ function action_button_clicked( e ) {
     sound.play();
   }
   set_property(null, movie_id, property, value);
-  // If we deleted the movie, automatically unpublish it
+  // If we deleted the movie, automatically hide it.
   if (property=='deleted' && value==1){
     set_property(null, movie_id, 'published', 0);
   }
@@ -722,7 +722,7 @@ const dtInstances = {};
 // Phase 3: list shows movie status. Eventually this list should be server-rendered (Jinja2).
 function list_movies_data( movies ) {
   const PUBLISHED = 'published';
-  const UNPUBLISHED = 'unpublished';
+  const HIDDEN = 'hidden';
   const DELETED = 'deleted';
   const COURSE = 'course';
 
@@ -807,10 +807,10 @@ function list_movies_data( movies ) {
       function make_action_button( kind ) {
         let nval = undefined;
         let prop = undefined;
-        if (kind==PUBLISH_BUTTON) {
+        if (kind==UNHIDE_BUTTON) {
           prop = 'published';
           nval = 1;
-        } else if (kind==UNPUBLISH_BUTTON) {
+        } else if (kind==HIDE_BUTTON) {
           prop = 'published';
           nval = 0;
         } else if (kind==DELETE_BUTTON) {
@@ -879,7 +879,7 @@ function list_movies_data( movies ) {
       if (m.deleted) {
         rows += "<i>Deleted</i>";
       } else {
-        rows += m.published ? "<b>Published</b> " : "Not published";
+        rows += m.published ? "<b>Published</b> " : "Hidden";
       }
       if (Number(m.needs_retracing || 0) === 1 && m.movie_traced_url) {
         rows += `<br><span class='retrace-required-message'>${RETRACE_REQUIRED_MESSAGE}</span>`;
@@ -897,13 +897,13 @@ function list_movies_data( movies ) {
           rows += make_action_button( UNDELETE_BUTTON );
         }
       } else {
-        // Do we create an unpublish button?
+        // Do we create a hide button?
         if ((m.published) && ((which==PUBLISHED || which==COURSE)) && (m.user_id==user_id || admin)){
-          rows += make_action_button( UNPUBLISH_BUTTON );
+          rows += make_action_button( HIDE_BUTTON );
         }
-        // Do we create a publish button?
-        if ((m.published==0) && (((which==UNPUBLISHED || which==COURSE) && admin))){
-          rows += make_action_button( PUBLISH_BUTTON );
+        // Do we create an unhide button?
+        if ((m.published==0) && (((which==HIDDEN || which==COURSE) && admin))){
+          rows += make_action_button( UNHIDE_BUTTON );
         }
         // Do we create a delete button? (users can only delete their own movies)
         if (m.user_id == user_id){
@@ -969,8 +969,8 @@ function list_movies_data( movies ) {
   // Create the four tables
   movies_fill_div( '#your-published-movies',
                    PUBLISHED, movies.filter( m => (m.user_id==user_id && m.published==1 && !m.orig_movie)).sort(byNewest));
-  movies_fill_div( '#your-unpublished-movies',
-                   UNPUBLISHED, movies.filter( m => (m.user_id==user_id && m.published==0 && m.deleted==0 && !m.orig_movie)).sort(byNewest));
+  movies_fill_div( '#your-hidden-movies',
+                   HIDDEN, movies.filter( m => (m.user_id==user_id && m.published==0 && m.deleted==0 && !m.orig_movie)).sort(byNewest));
   const requestedCourseViewId = typeof course_view_id === 'undefined' ? null : course_view_id;
   const displayedCourseId = requestedCourseViewId || activeCourseId();
   movies_fill_div( '#course-movies',

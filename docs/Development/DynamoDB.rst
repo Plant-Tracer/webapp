@@ -234,7 +234,7 @@ movies
 One record per created movie, including rows whose direct upload is still
 pending. Key attributes:
 
-``movie_id``, ``title``, ``description``, ``user_id``, ``course_id``, ``published`` (0/1; defaults to 1 on creation),
+``movie_id``, ``title``, ``description``, ``user_id``, ``course_id``, ``published`` (0/1; defaults to 1 on creation; 0 means hidden),
 ``deleted`` (0/1), ``status``, ``total_frames``, ``fps``, ``width``, ``height``,
 ``upload_staging_urn`` (temporary upload S3 URN), ``movie_data_urn`` (durable S3 URN of the MP4), ``movie_zipfile_urn``, ``movie_traced_urn``, ``first_frame_urn``,
 ``last_frame_tracked``, ``research_use`` (0/1/None; None = not yet answered), ``credit_by_name`` (0/1/None; None = not yet answered), ``attribution_name``,
