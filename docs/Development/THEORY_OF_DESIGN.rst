@@ -70,5 +70,5 @@ Faculty/Admin Flow
 ------------------
 
 Course admins can list users in their administered courses, bulk-register users,
-and hide/unhide published course movies. Movie research-use and attribution
+and hide published movies or unhide hidden course movies. Movie research-use and attribution
 choices remain owner-controlled.
