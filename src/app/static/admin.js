@@ -238,6 +238,34 @@ async function fetchMovieMedia(movieId) {
   return payload;
 }
 
+
+async function fetchMovieStorageHealth(movieId) {
+  const response = await fetch(
+    `${API_BASE}api/admin/movies/${encodeURIComponent(movieId)}/storage-health`,
+    { credentials: "same-origin" },
+  );
+  const payload = await response.json();
+  if (!response.ok || payload.error) {
+    throw new Error(payload.message || `Storage health failed with HTTP ${response.status}`);
+  }
+  return payload;
+}
+
+
+async function loadMovieStorageHealth() {
+  const movies = state.movies.filter((movie) => movie.original_object_state === undefined);
+  let nextMovie = 0;
+  async function loadNextMovie() {
+    while (nextMovie < movies.length) {
+      const movie = movies[nextMovie];
+      nextMovie += 1;
+      Object.assign(movie, await fetchMovieStorageHealth(movie.movie_id));
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(4, movies.length) }, loadNextMovie));
+  renderTable("movies");
+}
+
 function downloadUrl(url) {
   const link = document.createElement("a");
   link.href = url;
@@ -335,6 +363,10 @@ function appendMovieRows(movies) {
         ["Dimensions", dimensions], ["FPS", movie.fps], ["FPM", movie.fpm],
         ["Rotation", movie.rotation], ["Trim start", movie.trim_start_frame],
         ["Trim end", movie.trim_end_frame], ["Retrace required", movie.needs_retracing ? "yes" : "no"],
+        ["Original object", movie.original_object_state], ["Traced object", movie.traced_object_state],
+        ["ZIP object", movie.zip_object_state],
+        ["Pending upload age", movie.pending_upload_age_seconds == null
+          ? null : `${movie.pending_upload_age_seconds} seconds`],
         ["Research use", movie.research_use], ["Credit by name", movie.credit_by_name],
         ["Attribution", movie.attribution_name],
       ]), row));
@@ -420,9 +452,16 @@ function bindVerboseDetails() {
     return;
   }
   checkbox.dataset.bound = "true";
-  checkbox.addEventListener("change", () => {
+  checkbox.addEventListener("change", async () => {
     state.verboseDetails = checkbox.checked;
     TABLE_NAMES.forEach(renderTable);
+    if (state.verboseDetails) {
+      try {
+        await loadMovieStorageHealth();
+      } catch (error) {
+        reportAdminError(error);
+      }
+    }
   });
 }
 
