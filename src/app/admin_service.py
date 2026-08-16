@@ -3,6 +3,7 @@
 import base64
 import binascii
 import json
+import time
 from enum import StrEnum
 
 from boto3.dynamodb.conditions import Key
@@ -25,6 +26,7 @@ from .odb import (
     MOVIE_DATA_URN,
     MOVIE_STATUS,
     MOVIE_TRACED_URN,
+    MOVIE_ZIPFILE_URN,
     DEFAULT_COURSE_ID,
     PUBLISHED,
     TITLE,
@@ -87,6 +89,14 @@ class AdminSection(StrEnum):
     COURSES = "courses"
     USERS = "users"
     MOVIES = "movies"
+
+
+class StorageObjectState(StrEnum):
+    """Read-only storage state shown without an object identifier."""
+
+    PRESENT = "present"
+    MISSING = "missing"
+    NOT_CREATED = "not created"
 
 
 class RestartMarker(BaseModel):
@@ -183,6 +193,17 @@ class AdminMovieMediaResponse(BaseModel):
     movie_id: str
     play_url: str
     traced_download_url: str | None = None
+
+
+class AdminMovieStorageHealth(BaseModel):
+    """Read-only storage health for one admin-visible movie."""
+
+    error: bool = False
+    movie_id: str
+    original_object_state: StorageObjectState
+    traced_object_state: StorageObjectState
+    zip_object_state: StorageObjectState
+    pending_upload_age_seconds: int | None = None
 
 
 class AdminCoursePage(BaseModel):
@@ -334,6 +355,17 @@ def user_summary(user) -> AdminUserSummary:
     )
 
 
+def object_state(urn) -> StorageObjectState:
+    """Report the state of a movie object without disclosing its URN."""
+    if not urn:
+        return StorageObjectState.NOT_CREATED
+    try:
+        exists = s3_presigned.object_exists(urn)
+    except (AssertionError, RuntimeError, ValueError):
+        return StorageObjectState.MISSING
+    return StorageObjectState.PRESENT if exists else StorageObjectState.MISSING
+
+
 def movie_summary(movie) -> AdminMovieSummary:
     """Convert a DynamoDB movie item into a privacy-aware admin row."""
     course_id = movie.get(COURSE_ID, "")
@@ -371,6 +403,28 @@ def movie_summary(movie) -> AdminMovieSummary:
         research_use=movie.get(RESEARCH_USE),
         credit_by_name=movie.get(CREDIT_BY_NAME),
         attribution_name=movie.get(ATTRIBUTION_NAME),
+    )
+
+
+def admin_movie_storage_health(*, viewer_user, movie_id: str,
+                               now=None) -> AdminMovieStorageHealth:
+    """Return storage health for one movie only after an explicit admin request."""
+    access = odb.admin_read_access(viewer_user)
+    if not access.allowed:
+        raise AdminReadDenied(viewer_user.get(USER_ID, "unknown"))
+    movie = odb.can_access_movie(user_id=viewer_user[USER_ID], movie_id=movie_id)
+    created_at = movie.get(CREATED_AT)
+    uploaded_at = movie.get(UPLOADED_AT) or movie.get(DATE_UPLOADED)
+    pending_upload_age_seconds = None
+    if not uploaded_at and created_at:
+        current_time = time.time() if now is None else now
+        pending_upload_age_seconds = max(0, int(current_time - int(created_at)))
+    return AdminMovieStorageHealth(
+        movie_id=movie_id,
+        original_object_state=object_state(movie.get(MOVIE_DATA_URN)),
+        traced_object_state=object_state(movie.get(MOVIE_TRACED_URN)),
+        zip_object_state=object_state(movie.get(MOVIE_ZIPFILE_URN)),
+        pending_upload_age_seconds=pending_upload_age_seconds,
     )
 
 
