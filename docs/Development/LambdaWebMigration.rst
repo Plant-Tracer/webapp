@@ -212,6 +212,11 @@ not keep an execution environment continuously warm. Any code that relies on
 unique values, credentials, timestamps, temporary data, or network connections
 from module initialization must tolerate Lambda restore behavior.
 
+SAM publishes a new ``live`` version whenever any ``lambda-web`` property
+changes, including environment parameters. This keeps the aliased SnapStart
+version's configuration synchronized with IAM policies generated from the same
+stack parameters instead of leaving ``live`` on an older environment.
+
 Do not replace SnapStart with a scheduled keepalive invocation. Lambda does not
 guarantee that a later request reuses the periodically invoked execution
 environment, especially during scaling or infrastructure recycling. A

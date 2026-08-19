@@ -100,6 +100,9 @@ Unreleased Summary
     * Deployment: honor ``STACK_NAME`` as a per-stack config selector, pass the
       target to SAM explicitly, synchronize CLI stack and DynamoDB-prefix
       overrides into the selected TOML file, and default the prefix to ``<stack>-``
+    * Deployment: republish the lambda-web ``live`` alias when environment or
+      other function properties change, keeping SnapStart configuration and IAM
+      resource scopes synchronized
     * Operations: restore deployment-isolated S3 EventBridge upload completion,
       post-upload processing, lifecycle logging, retry/DLQ handling, and an
       automated deployed upload/trace workflow
