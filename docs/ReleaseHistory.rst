@@ -98,8 +98,8 @@ Unreleased Summary
     * Developer: run the deployed workflow verifier with an endpoint-only
       ``uv run`` command that discovers deployment identity and uses committed references
     * Deployment: honor ``STACK_NAME`` as a per-stack config selector, pass the
-      target to SAM explicitly, reject stack and DynamoDB-prefix conflicts, and
-      use a TOML-aware Python writer for guided config bootstrapping
+      target to SAM explicitly, synchronize CLI stack and DynamoDB-prefix
+      overrides into the selected TOML file, and default the prefix to ``<stack>-``
     * Operations: restore deployment-isolated S3 EventBridge upload completion,
       post-upload processing, lifecycle logging, retry/DLQ handling, and an
       automated deployed upload/trace workflow

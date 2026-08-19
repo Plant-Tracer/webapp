@@ -73,6 +73,24 @@ def test_bootstrap_config_preserves_existing_values(tmp_path: Path) -> None:
     assert params["parameter_overrides"] == original_overrides
 
 
+def test_bootstrap_config_updates_stack_and_dynamodb_prefix(tmp_path: Path) -> None:
+    config_path = tmp_path / "existing.toml"
+    _write_config(config_path, "prod")
+
+    assert sam_config_writer.bootstrap_config(
+        str(config_path), "slg-dev", "slg-dev")
+
+    assert sam_config_tool.stack_name(str(config_path)) == "slg-dev"
+    assert (
+        sam_config_tool.parameter_override(str(config_path), "DynamoDBTablePrefix")
+        == "slg-dev-"
+    )
+    assert (
+        sam_config_tool.parameter_override(str(config_path), "LogLevel")
+        == "warning with spaces"
+    )
+
+
 def test_make_stack_name_alias_selects_per_stack_config(tmp_path: Path) -> None:
     config_dir = tmp_path / "samconfigs"
     config_dir.mkdir()
@@ -102,7 +120,7 @@ def test_make_stack_name_alias_selects_per_stack_config(tmp_path: Path) -> None:
     assert "DYNAMODB_TABLE_PREFIX=prod-" in result.stdout
 
 
-def test_make_rejects_conflicting_stack_selectors(tmp_path: Path) -> None:
+def test_make_stack_name_overrides_stack_selector(tmp_path: Path) -> None:
     config_path = tmp_path / "slg-dev.toml"
     _write_config(config_path, "slg-dev")
 
@@ -122,33 +140,68 @@ def test_make_rejects_conflicting_stack_selectors(tmp_path: Path) -> None:
         check=False,
     )
 
-    assert result.returncode != 0
-    assert "STACK_NAME=slg-dev conflicts with STACK=prod" in result.stdout
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert sam_config_tool.stack_name(str(config_path)) == "slg-dev"
+    assert (
+        sam_config_tool.parameter_override(str(config_path), "DynamoDBTablePrefix")
+        == "slg-dev-"
+    )
 
 
-def test_make_rejects_conflicting_dynamodb_prefix(tmp_path: Path) -> None:
+def test_make_cli_prefix_updates_sam_config(tmp_path: Path) -> None:
     config_path = tmp_path / "slg-dev.toml"
     _write_config(config_path, "slg-dev")
+    environment = _make_environment()
+    environment[STACK_NAME_ENVIRONMENT_VARIABLE] = "slg-dev"
+    environment[DYNAMODB_PREFIX_ENVIRONMENT_VARIABLE] = "test"
 
     result = subprocess.run(
         [
             "make",
             "--no-print-directory",
             "sam-config-path-check",
-            "STACK_NAME=slg-dev",
-            "DYNAMODB_TABLE_PREFIX=test",
             f"SAM_CONFIG={config_path}",
         ],
         cwd=Path(__file__).parents[1],
-        env=_make_environment(),
+        env=environment,
         capture_output=True,
         text=True,
         check=False,
     )
 
-    assert result.returncode != 0
-    assert "DYNAMODB_TABLE_PREFIX=test" in result.stdout
-    assert "configures prod-" in result.stdout
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (
+        sam_config_tool.parameter_override(str(config_path), "DynamoDBTablePrefix")
+        == "test-"
+    )
+
+
+def test_make_stack_name_overrides_config_and_defaults_prefix(tmp_path: Path) -> None:
+    config_path = tmp_path / "slg-dev.toml"
+    _write_config(config_path, "prod")
+    environment = _make_environment()
+    environment[STACK_NAME_ENVIRONMENT_VARIABLE] = "slg-dev"
+
+    result = subprocess.run(
+        [
+            "make",
+            "--no-print-directory",
+            "sam-config-path-check",
+            f"SAM_CONFIG={config_path}",
+        ],
+        cwd=Path(__file__).parents[1],
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert sam_config_tool.stack_name(str(config_path)) == "slg-dev"
+    assert (
+        sam_config_tool.parameter_override(str(config_path), "DynamoDBTablePrefix")
+        == "slg-dev-"
+    )
 
 
 def test_guided_bootstrap_allows_missing_dynamodb_override(tmp_path: Path) -> None:
