@@ -245,8 +245,11 @@ and the final rendered frame of the traced movie. It does not validate ZIP
 downloads. It then removes the test movie and always revokes the temporary API
 key it creates. The underlying verifier declares its runtime dependencies as
 inline script metadata, and the project exposes it as a command, so
-``uv run deployed_workflow_test --help`` also
+``uv run deployed_workflow_test --endpoint https://prod.planttracer.com/``
 runs in an isolated environment without a pre-populated project virtualenv.
+The command reads the stack name and DynamoDB table prefix from ``/api/ver``
+and defaults to the committed circumnutation movie and reference outputs;
+command-line options remain available to override those defaults.
 Comparing the traced movie's final frame also requires an ``ffmpeg`` executable
 on ``PATH`` or selected explicitly with ``FFMPEG_PATH``.
 

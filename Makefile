@@ -980,13 +980,7 @@ sam-deployed-workflow-test: sam-config-check
 		DYNAMODB_TABLE_PREFIX="$$DDB_PREFIX" PLANTTRACER_S3_BUCKET="$$BUCKET" \
 		PLANTTRACER_STACK_NAME="$(EFFECTIVE_STACK_NAME)" \
 		uv run deployed_workflow_test \
-			--endpoint "https://$(EFFECTIVE_STACK_NAME).planttracer.com/" \
-			--stack-name "$(EFFECTIVE_STACK_NAME)" \
-			--movie "tests/data/2019-07-12 circumnutation.mp4" \
-			--reference-csv "tests/data/2019-07-12 circumnutation_trackpoints.csv" \
-			--reference-xlsx "tests/data/2019-07-12 circumnutation_trackpoints.xlsx" \
-			--reference-traced-movie "tests/data/2019-07-12 circumnutation_traced.mov" \
-			--reference-frame "tests/data/2019-07-12 circumnutation_traced_last_frame.png"
+			--endpoint "https://$(EFFECTIVE_STACK_NAME).planttracer.com/"
 
 # Shared resolution of Lambda function name (FUNC) and start time (START) for log targets.
 # Used by sam-logs, sam-logs-simple, sam-logs-simple-tail.

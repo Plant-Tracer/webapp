@@ -19,6 +19,7 @@ import hashlib
 import io
 import logging
 import math
+import os
 import subprocess
 import tempfile
 import time
@@ -48,6 +49,15 @@ TRACE_MOVIE_PATH = "resize-api/v1/trace-movie"
 TRACKPOINTS_PATH = "api/get-movie-trackpoints"
 XLSX_FORMAT = "xlsx"
 TRACKING_TOLERANCE_PIXELS = 2
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_MOVIE_PATH = PROJECT_ROOT / "tests/data/2019-07-12 circumnutation.mp4"
+DEFAULT_REFERENCE_CSV_PATH = PROJECT_ROOT / "tests/data/2019-07-12 circumnutation_trackpoints.csv"
+DEFAULT_REFERENCE_XLSX_PATH = PROJECT_ROOT / "tests/data/2019-07-12 circumnutation_trackpoints.xlsx"
+DEFAULT_REFERENCE_TRACED_MOVIE_PATH = (
+    PROJECT_ROOT / "tests/data/2019-07-12 circumnutation_traced.mov")
+DEFAULT_REFERENCE_FRAME_PATH = (
+    PROJECT_ROOT / "tests/data/2019-07-12 circumnutation_traced_last_frame.png")
+DYNAMODB_TABLE_PREFIX_ENV = "DYNAMODB_TABLE_PREFIX"
 XLSX_SHEET1 = "xl/worksheets/sheet1.xml"
 XLSX_NAMESPACE = {"s": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
 APEX_X_COLUMN = "Apex x (mm)"
@@ -86,6 +96,13 @@ class ListMoviesResponse(BaseModel):
 
     error: bool
     movies: list[ListedMovie]
+
+
+class DeploymentInfo(BaseModel):
+    """Public deployment identity returned by ``/api/ver``."""
+
+    stack_name: str
+    dynamodb_table_prefix: str = Field(alias=DYNAMODB_TABLE_PREFIX_ENV)
 
 
 class MovieDataResponse(BaseModel):
@@ -277,6 +294,13 @@ def post_api(endpoint, path, *, api_key, movie_id, response_format=None):
     return response
 
 
+def deployment_info(endpoint):
+    """Read the stack identity and DynamoDB prefix from the deployed application."""
+    response = requests.get(f"{endpoint.rstrip('/')}/api/ver", timeout=30)
+    response.raise_for_status()
+    return DeploymentInfo.model_validate(response.json())
+
+
 def run_workflow(*, endpoint, stack_name, movie_path, reference_csv_path, reference_xlsx_path,
                  reference_traced_movie_path, reference_frame_path, timeout):
     """Run the deployed workflow and always revoke its temporary API key."""
@@ -363,27 +387,31 @@ def run_workflow(*, endpoint, stack_name, movie_path, reference_csv_path, refere
         ddbo.api_keys.delete_item(Key={odb.API_KEY: api_key})
 
 
-def parse_args():
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--endpoint", required=True)
-    parser.add_argument("--stack-name", required=True)
-    parser.add_argument("--movie", type=Path, required=True)
-    parser.add_argument("--reference-csv", type=Path, required=True)
-    parser.add_argument("--reference-xlsx", type=Path, required=True)
-    parser.add_argument("--reference-traced-movie", type=Path, required=True)
-    parser.add_argument("--reference-frame", type=Path, required=True)
+    parser.add_argument("--stack-name")
+    parser.add_argument("--movie", type=Path, default=DEFAULT_MOVIE_PATH)
+    parser.add_argument("--reference-csv", type=Path, default=DEFAULT_REFERENCE_CSV_PATH)
+    parser.add_argument("--reference-xlsx", type=Path, default=DEFAULT_REFERENCE_XLSX_PATH)
+    parser.add_argument("--reference-traced-movie", type=Path,
+                        default=DEFAULT_REFERENCE_TRACED_MOVIE_PATH)
+    parser.add_argument("--reference-frame", type=Path, default=DEFAULT_REFERENCE_FRAME_PATH)
     parser.add_argument("--timeout", type=int, default=600)
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def main():
     args = parse_args()
     logging.basicConfig(level=logging.INFO)
+    info = deployment_info(args.endpoint)
+    stack_name = args.stack_name or info.stack_name
+    os.environ.setdefault(DYNAMODB_TABLE_PREFIX_ENV, info.dynamodb_table_prefix)
     for fixture in (args.movie, args.reference_csv, args.reference_xlsx,
                     args.reference_traced_movie, args.reference_frame):
         if not fixture.is_file():
             raise SystemExit(f"test fixture does not exist: {fixture}")
-    run_workflow(endpoint=args.endpoint, stack_name=args.stack_name, movie_path=args.movie,
+    run_workflow(endpoint=args.endpoint, stack_name=stack_name, movie_path=args.movie,
                  reference_csv_path=args.reference_csv, reference_xlsx_path=args.reference_xlsx,
                  reference_traced_movie_path=args.reference_traced_movie,
                  reference_frame_path=args.reference_frame,
