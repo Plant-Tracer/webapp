@@ -227,6 +227,12 @@ adding SnapStart or provisioned concurrency.
 Deploy Version Guard
 --------------------
 
+``make sam-build`` captures the exact ``HEAD`` SHA and stamps it into the
+Lambda-web artifact. It refuses to build or deploy if a full 40-character SHA
+cannot be determined; Lambda runtime code never reads ``.git`` or runs ``git``.
+``/api/ver`` returns that SHA as ``git_commit`` (or ``unavailable`` for a local
+Flask run).
+
 ``make sam-deploy`` and ``make sam-deploy-guided`` read the application version
 from ``pyproject.toml``. Runtime code exposes the same value through
 ``app.constants.__version__`` for existing version-display and API callers. For
@@ -234,7 +240,8 @@ an existing stack, the deploy guard resolves the deployed application URL from
 CloudFormation and fetches ``/api/ver``. If the deployed application reports the
 same version as the local checkout, deploy is refused unless the operator
 explicitly sets ``SAM_DEPLOY_ALLOW_SAME_VERSION=1`` for an intentional
-same-version redeploy.
+same-version redeploy. After deployment, ``make sam-status`` compares the live
+``git_commit`` with the intended local ``HEAD`` and fails if they differ.
 
 The version bump is required because ``lambda-web`` uses SnapStart on published
 Lambda versions. A normal deployment should publish a deliberately new
@@ -430,7 +437,7 @@ Deploy:
 * run ``STACK=<name> make sam-deploy`` for an existing configured stack, or
   ``STACK=<name> make sam-deploy-guided`` for a new stack. ``STACK_NAME`` is an
   equivalent alias;
-* let ``make sam-status`` verify ``/api/ver``,
+* let ``make sam-status`` verify ``/api/ver`` and its ``git_commit``,
   ``/static/planttracer.js``, and ``/resize-api/v1/ping``. The deploy targets
   stamp the built ``lambda-resize`` artifact before ``sam deploy``. The web
   version API response is printed in full, and resize ping should report the
@@ -468,8 +475,9 @@ Manual smoke checks on the non-production stack:
 
 * open ``https://{stack}.planttracer.com/`` and verify the home page and static
   assets load;
-* verify ``/api/ver`` returns ``__version__``, ``sys_version``, and
-  ``stack_name``;
+* verify ``/api/ver`` returns ``__version__``, a 40-character ``git_commit``,
+  ``sys_version``, and ``stack_name``; compare ``git_commit`` with the source
+  commit selected for deployment;
 * verify ``/resize-api/v1/ping`` returns ``{"status": "ok"}``,
   ``app_version``, ``deployed_at``, and ``stack_parameters``;
 * register a test user and confirm the registration email path works;

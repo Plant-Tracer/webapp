@@ -9,6 +9,7 @@ from lambda_web.main import lambda_handler
 from app.constants import (
     STACK_NAME,
     __version__,
+    git_commit,
 )
 from app.paths import STATIC_DIR
 from tests.lambda_web_event import DummyContext, make_http_event
@@ -23,6 +24,7 @@ def test_lambda_web_api_version():
     assert response["headers"]["content-type"].startswith("application/json")
     body = json.loads(response["body"])
     assert body["__version__"] == __version__
+    assert body["git_commit"] == git_commit()
     assert body["sys_version"]
     assert STACK_NAME in body
 
