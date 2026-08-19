@@ -28,7 +28,13 @@ Every commit message should reference a GitHub Issue number (preferred) or PR nu
 - **Automated commits** (Claude, Codex): always include a reference. If no relevant Issue or PR exists, ask the user — and commit without a reference only if the user explicitly approves.
 - **Human commits**: before merging a PR, inspect all commits for missing references. If any are found, leave a PR review comment flagging them for the reviewer before merge.
 
-Every PR body must include `fixes #N` or `refs #N` for each Issue the PR resolves or references. This is the canonical place GitHub uses to auto-close Issues on merge and that release note tooling uses to associate PRs with Issues.
+Every PR body must include an Issue keyword for each related Issue. Use `fixes #N`, `closes #N`, or `resolves #N` when the PR completely implements the Issue, so GitHub automatically closes it when merged into the default branch. Use `refs #N` only when the Issue intentionally remains open; it creates a cross-reference but does not auto-close the Issue. This is the canonical place GitHub uses to auto-close Issues on merge and that release note tooling uses to associate PRs with Issues.
+
+## GitHub Identities
+
+Use `@simsong-codex` for all GitHub activity: commits, pushes, issues, pull requests, comments, reviews, labels, and repository administration. The sole exception is requesting or re-requesting GitHub Copilot review, which must be performed as `@simsong` because that account has the required Copilot entitlement.
+
+For that exception only, switch the active GitHub CLI account to `simsong`, request exactly `copilot-pull-request-reviewer[bot]` for the specified Plant-Tracer pull request, and switch immediately back to `simsong-codex`. Restore `simsong-codex` even if the request fails. Verify the resulting review-request event only after restoring `simsong-codex`; do not perform any other GitHub action while `simsong` is active.
 
 ### Codex commits and Copilot-to-Ready lifecycle
 
