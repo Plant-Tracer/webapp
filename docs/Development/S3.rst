@@ -246,6 +246,8 @@ downloads. It then removes the test movie and always revokes the temporary API
 key it creates. The underlying verifier declares its runtime dependencies as
 inline script metadata, so ``uv run bin/deployed_workflow_test.py --help`` also
 runs in an isolated environment without a pre-populated project virtualenv.
+Comparing the traced movie's final frame also requires an ``ffmpeg`` executable
+on ``PATH`` or selected explicitly with ``FFMPEG_PATH``.
 
 Metadata Stored with Original Movies
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
