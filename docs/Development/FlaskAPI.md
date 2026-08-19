@@ -34,7 +34,7 @@ multiple keys (e.g. after re-sending a login link). Keys are sent as a cookie af
 Most endpoints return JSON with `"error": false` on success or `"error": true`
 plus `"message"` on failure. Exceptions:
 
-- `/api/ver` returns `{"__version__": "...", "sys_version": "...", "stack_name": "...", "DYNAMODB_TABLE_PREFIX": "..."}`.
+- `/api/ver` returns `{"__version__": "...", "git_commit": "...", "sys_version": "...", "stack_name": "...", "DYNAMODB_TABLE_PREFIX": "..."}`.
 - `/api/get-movie-trackpoints` returns CSV by default.
 
 ```text
@@ -719,12 +719,14 @@ filters. Because the database function requires an index filter, prefer
 
 #### `GET|POST /api/ver`
 
-Return the application version. No authentication required.
+Return the application version and the source commit embedded in the Lambda-web
+artifact. No authentication required. `git_commit` is a full 40-character SHA
+for deployed Lambda artifacts; local Flask runs return `unavailable`.
 
 **Response**
 
 ```text
-{ "__version__": "0.9.7.6.2", "sys_version": "3.12.x ...", "stack_name": "prod", "DYNAMODB_TABLE_PREFIX": "prod-" }
+{ "__version__": "0.9.7.6.2", "git_commit": "857d5637ee1949eb5bc883875eee9e7b562cd8f5", "sys_version": "3.12.x ...", "stack_name": "prod", "DYNAMODB_TABLE_PREFIX": "prod-" }
 ```
 
 ---

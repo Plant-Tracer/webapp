@@ -11,6 +11,8 @@ from importlib.metadata import version as installed_package_version
 from pathlib import Path
 import tomllib
 
+from .build_metadata import GIT_COMMIT
+
 PACKAGE_NAME = 'webapp'
 PYPROJECT_FILENAME = 'pyproject.toml'
 PYPROJECT_PROJECT = 'project'
@@ -44,6 +46,13 @@ def application_version():
 
 
 __version__ = application_version()
+
+
+def git_commit():
+    """Return the build-time source commit, or an explicit unavailable value."""
+    if len(GIT_COMMIT) == 40 and all(character in "0123456789abcdef" for character in GIT_COMMIT):
+        return GIT_COMMIT
+    return "unavailable"
 
 # these aren't strictly constants...
 log_level = os.getenv("LOG_LEVEL","INFO").upper()

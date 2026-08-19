@@ -31,7 +31,7 @@ from . import apikey
 from .apikey import get_user_api_key, get_user_dict, in_demo_mode
 from .auth import AuthError,EmailNotInDatabase
 from .constants import (
-    C, E, POST, GET_POST, __version__, logger, log_level, printable80,
+    C, E, POST, GET_POST, __version__, git_commit, logger, log_level, printable80,
     stack_name, storage_deployment_id, STACK_NAME,
 )
 from .odb import (
@@ -1179,6 +1179,7 @@ def api_ver():
     current_app.logger.error("api_ver")
     return {
         '__version__': __version__,
+        'git_commit': git_commit(),
         'sys_version': sys.version,
         STACK_NAME: stack_name(),
         C.DYNAMODB_TABLE_PREFIX: os.environ.get(C.DYNAMODB_TABLE_PREFIX, ''),
