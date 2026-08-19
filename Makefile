@@ -158,7 +158,7 @@ pylint:
 	$(MAKE) vend-lambda-resize
 	$(MAKE) vend-lambda-web
 	poetry run pylint $(PYLINT_OPTS) browser_tests lambda-web/src/lambda_web lambda-web/tests lambda-resize src tests \
-		etc/sam_config_tool.py etc/sam_config_writer.py *.py
+		bin/deployed_workflow_test.py etc/sam_config_tool.py etc/sam_config_writer.py *.py
 
 ## Mypy static analysis
 mypy:
@@ -982,7 +982,11 @@ sam-deployed-workflow-test: sam-config-check
 		poetry run python bin/deployed_workflow_test.py \
 			--endpoint "https://$(EFFECTIVE_STACK_NAME).planttracer.com/" \
 			--stack-name "$(EFFECTIVE_STACK_NAME)" \
-			--movie "tests/data/2019-07-31 plantmovie.mov"
+			--movie "tests/data/2019-07-12 circumnutation.mp4" \
+			--reference-csv "tests/data/2019-07-12 circumnutation_trackpoints.csv" \
+			--reference-xlsx "tests/data/2019-07-12 circumnutation_trackpoints.xlsx" \
+			--reference-traced-movie "tests/data/2019-07-12 circumnutation_traced.mov" \
+			--reference-frame "tests/data/2019-07-12 circumnutation_traced_last_frame.png"
 
 # Shared resolution of Lambda function name (FUNC) and start time (START) for log targets.
 # Used by sam-logs, sam-logs-simple, sam-logs-simple-tail.
