@@ -20,6 +20,7 @@ class TraceJob(BaseModel):
     movie_id: str
     frame_start: int = 0
     frame_end: int | None = None
+    job_id: str | None = None
 
 
 class PostUploadJob(BaseModel):

@@ -34,6 +34,7 @@ def test_publish_job_emits_stack_scoped_pydantic_event(monkeypatch):
         movie_id="m123",
         frame_start=7,
         frame_end=20,
+        job_id="job-123",
     ))
 
     assert client.entries is not None
@@ -49,6 +50,7 @@ def test_publish_job_emits_stack_scoped_pydantic_event(monkeypatch):
             "movie_id": "m123",
             "frame_start": 7,
             "frame_end": 20,
+            "job_id": "job-123",
         },
     }
 
