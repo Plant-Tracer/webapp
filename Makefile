@@ -979,7 +979,7 @@ sam-deployed-workflow-test: sam-config-check
 	env -u AWS_ENDPOINT_URL_DYNAMODB -u AWS_ENDPOINT_URL_S3 \
 		DYNAMODB_TABLE_PREFIX="$$DDB_PREFIX" PLANTTRACER_S3_BUCKET="$$BUCKET" \
 		PLANTTRACER_STACK_NAME="$(EFFECTIVE_STACK_NAME)" \
-		uv run bin/deployed_workflow_test.py \
+		uv run deployed_workflow_test \
 			--endpoint "https://$(EFFECTIVE_STACK_NAME).planttracer.com/" \
 			--stack-name "$(EFFECTIVE_STACK_NAME)" \
 			--movie "tests/data/2019-07-12 circumnutation.mp4" \
