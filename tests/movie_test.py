@@ -834,3 +834,36 @@ def test_active_trace_lease_is_visible_and_rejects_movie_writes(client, new_movi
         }
     assert write_response.status_code == 409
     assert write_response.get_json()['message'] == "This movie is currently being traced and is read-only."
+
+
+def test_analysis_lease_makes_second_browser_view_only_and_releases_on_exit(client, new_movie):
+    api_key = new_movie[API_KEY]
+    movie_id = new_movie[MOVIE_ID]
+    first = client.post('/api/acquire-movie-analysis-lease', data={
+        'api_key': api_key, 'movie_id': movie_id,
+    }).get_json()
+    second = client.post('/api/acquire-movie-analysis-lease', data={
+        'api_key': api_key, 'movie_id': movie_id,
+    }).get_json()
+    metadata = client.post('/api/get-movie-metadata', data={
+        'api_key': api_key, 'movie_id': movie_id,
+    }).get_json()['metadata']
+    blocked = client.post('/api/set-movie-fpm', data={
+        'api_key': api_key, 'movie_id': movie_id, 'fpm': '30',
+    })
+    written = client.post('/api/set-movie-fpm', data={
+        'api_key': api_key, 'movie_id': movie_id, 'fpm': '30',
+        odb.ANALYSIS_LEASE_ID: first['lease_id'],
+    })
+    released = client.post('/api/release-movie-analysis-lease', data={
+        'api_key': api_key, 'movie_id': movie_id,
+        odb.ANALYSIS_LEASE_ID: first['lease_id'],
+    }).get_json()
+
+    assert first['analysis_lock']['owned'] is True
+    assert second['lease_id'] is None
+    assert second['analysis_lock']['active'] is True
+    assert metadata['analysis_lock']['owned'] is False
+    assert blocked.status_code == 409
+    assert written.status_code == 200
+    assert released['released'] is True

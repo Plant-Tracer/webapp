@@ -93,6 +93,42 @@ def test_movie_trace_lease_rejects_an_active_owner_and_logs_failure(new_movie):
     assert entry.error_summary == "tracer stopped"
 
 
+def test_movie_analysis_lease_blocks_other_browsers_and_transfers_to_tracing(new_movie):
+    ddbo = new_movie["ddbo"]
+    movie = ddbo.get_movie(new_movie[MOVIE_ID])
+    lock = ddbo.acquire_movie_analysis_lock(
+        movie=movie,
+        started_by_user_id=new_movie[USER_ID],
+        started_by_user_name=ddbo.get_user(new_movie[USER_ID])[odb.USER_NAME],
+    )
+
+    with pytest.raises(odb.MovieAnalysisLocked):
+        ddbo.acquire_movie_analysis_lock(
+            movie=movie,
+            started_by_user_id=new_movie[USER_ID],
+            started_by_user_name="Other browser",
+        )
+    assert ddbo.heartbeat_movie_analysis_lock(
+        movie_id=movie[MOVIE_ID], lease_id=lock.lease_id, user_id=new_movie[USER_ID],
+    )
+    with pytest.raises(odb.MovieTracingLocked):
+        ddbo.acquire_movie_trace_lock(
+            movie=movie,
+            started_by_user_id=new_movie[USER_ID],
+            started_by_user_name="Owner",
+        )
+
+    trace_lock = ddbo.acquire_movie_trace_lock(
+        movie=movie,
+        started_by_user_id=new_movie[USER_ID],
+        started_by_user_name="Owner",
+        analysis_lease_id=lock.lease_id,
+    )
+
+    assert ddbo.get_active_movie_analysis_lock(movie[MOVIE_ID]) is None
+    assert ddbo.get_active_movie_trace_lock(movie[MOVIE_ID]) == trace_lock
+
+
 def test_super_roles_have_cross_course_read_but_only_superadmin_can_edit(new_movie):
     ddbo = new_movie["ddbo"]
     admin_id = new_movie["admin_id"]

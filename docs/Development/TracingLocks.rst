@@ -9,6 +9,22 @@ when the expiry is older than 15 minutes, it is ignored and the next trace
 request atomically replaces it. No TTL is used, because TTL can only delete a
 whole DynamoDB item and the movie must remain durable.
 
+Analyze leases
+--------------
+
+Opening Analyze immediately acquires a separate, renewable 15-minute analysis
+lease on that same movie row. The normal browser can edit; a later browser is
+explicitly view-only and sees the existing holder's name and start time. The
+holder releases its lease when leaving the page, while a heartbeat and expiry
+recover from crashes or lost connectivity. Flask requires the opaque lease ID
+on marker, trim, and capture-interval writes, so client-side disabled controls
+cannot bypass ownership.
+
+Starting a trace atomically replaces the initiating browser's analysis lease
+with the tracing lease. A trace cannot begin while another browser owns the
+analysis lease, and an old page's release request cannot remove a tracing
+lease or a newer browser's lease.
+
 Trace lifecycle
 ---------------
 

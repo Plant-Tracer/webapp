@@ -39,6 +39,55 @@ const TRIM_START_FRAME = 'trim_start_frame';
 const TRIM_END_FRAME = 'trim_end_frame';
 const MOVIE_TRACED_URL = 'movie_traced_url';
 const NEEDS_RETRACING = 'needs_retracing';
+const ANALYSIS_LEASE_ID = 'analysis_lease_id';
+const ANALYSIS_LEASE_HEARTBEAT_MSEC = 5 * 60 * 1000;
+
+let analysisLease = null;
+
+function stop_analysis_lease() {
+    if (analysisLease) {
+        clearInterval(analysisLease.heartbeat);
+        analysisLease = null;
+    }
+}
+
+function start_analysis_lease(movieId, apiKey, leaseId) {
+    stop_analysis_lease();
+    if (!leaseId) {
+        return;
+    }
+    const leaseParams = () => ({
+        api_key: apiKey, course_id: activeCourseId(), movie_id: movieId,
+        [ANALYSIS_LEASE_ID]: leaseId,
+    });
+    const heartbeat = window.setInterval(() => {
+        $.post(`${API_BASE}api/heartbeat-movie-analysis-lease`, leaseParams())
+            .done((response) => {
+                if (!response.active) {
+                    stop_analysis_lease();
+                    window.location.reload();
+                }
+            })
+            .fail(() => {
+                stop_analysis_lease();
+                window.location.reload();
+            });
+    }, ANALYSIS_LEASE_HEARTBEAT_MSEC);
+    analysisLease = {heartbeat, release: () => {
+        const url = `${API_BASE}api/release-movie-analysis-lease`;
+        if (navigator.sendBeacon) {
+            navigator.sendBeacon(url, new URLSearchParams(leaseParams()));
+            return;
+        }
+        $.post(url, leaseParams());
+    }};
+    $(window).off('pagehide.analysis-lease').on('pagehide.analysis-lease', () => {
+        if (analysisLease) {
+            analysisLease.release();
+            stop_analysis_lease();
+        }
+    });
+}
 
 var cell_id_counter = 0;
 
@@ -212,6 +261,8 @@ class TracerController extends MovieController {
         this.tracking = false;  // are we tracking a movie?
         this.resetting_tracing = false;
         this.movie_metadata = movie_metadata;
+        this.analysis_lease_id = movie_metadata[ANALYSIS_LEASE_ID];
+        this.analysis_read_only = Boolean(movie_metadata.analysis_read_only);
         this.api_key = api_key;
         this.movie_id = movie_metadata.movie_id;
         this.movie_rotation = (movie_metadata.rotation == null) ? 0 : movie_metadata.rotation;
@@ -351,6 +402,7 @@ class TracerController extends MovieController {
             course_id: activeCourseId(),
             movie_id: this.movie_id,
             fpm: this.fpm_input.val(),
+            ...this.analysisLeaseParams(),
         };
         $.post(`${API_BASE}api/set-movie-fpm`, params)
             .done((data) => {
@@ -395,7 +447,11 @@ class TracerController extends MovieController {
     }
 
     editingLocked() {
-        return this.tracking || this.resetting_tracing || this.movieStatusIsTracing();
+        return this.analysis_read_only || this.tracking || this.resetting_tracing || this.movieStatusIsTracing();
+    }
+
+    analysisLeaseParams() {
+        return this.analysis_lease_id ? {[ANALYSIS_LEASE_ID]: this.analysis_lease_id} : {};
     }
 
     isCurrentFrameEditable() {
@@ -633,6 +689,7 @@ class TracerController extends MovieController {
             api_key: this.api_key,
             course_id: activeCourseId(),
             movie_id: this.movie_id,
+            ...this.analysisLeaseParams(),
         };
         params[prop] = frameNumber;
         $.post(`${API_BASE}api/set-movie-trim`, params)
@@ -1189,7 +1246,8 @@ class TracerController extends MovieController {
                 course_id: activeCourseId(),
                 movie_id: this.movie_id,
                 old_label: oldName,
-                new_label: newName
+                new_label: newName,
+                ...this.analysisLeaseParams(),
             })
                 .done((data) => {
                     if (data.error) {
@@ -1280,7 +1338,8 @@ class TracerController extends MovieController {
                 course_id    : activeCourseId(),
                 movie_id     : this.movie_id,
                 frame_number : update.frame_number,
-                trackpoints  : JSON.stringify(update.markers)
+                trackpoints  : JSON.stringify(update.markers),
+                ...this.analysisLeaseParams(),
             };
             $.post(`${API_BASE}api/put-frame-trackpoints`, params)
                 .done((data) => {
@@ -1370,7 +1429,8 @@ class TracerController extends MovieController {
             course_id    : activeCourseId(),
             movie_id     : this.movie_id,
             frame_number : frameNumber,
-            trackpoints  : JSON.stringify(markers) // markers as a JSON string because we do POST as a form, not as REST
+            trackpoints  : JSON.stringify(markers), // markers as a JSON string because we do POST as a form, not as REST
+            ...this.analysisLeaseParams(),
         };
         $.post(`${API_BASE}api/put-frame-trackpoints`, put_frame_markers_params )
             .done( (data) => {
@@ -1419,7 +1479,8 @@ class TracerController extends MovieController {
         const requestBody = {
             course_id: activeCourseId(),
             movie_id: this.movie_id,
-            frame_start: this.frame_number
+            frame_start: this.frame_number,
+            ...this.analysisLeaseParams(),
         };
         const frameEnd = this.traceEndFrameForRequest();
         if (frameEnd !== null) {
@@ -1442,6 +1503,7 @@ class TracerController extends MovieController {
                 .then((res) => res.json().then((data) => ({ status: res.status, data })).catch(() => ({ status: res.status, data: null })))
                 .then(({ status, data }) => {
                     if (status >= 200 && status < 300 && !(data && data.error)) {
+                        stop_analysis_lease();
                         self.tracking = false;
                         self.movie_metadata.status = TRACING_FLAG;
                         $(self.div_selector).removeClass('tracing-dimmed');
@@ -2252,17 +2314,26 @@ function trace_movie(div_controller, movie_id, api_key) {
         frame_start: 0,
         frame_count: MAX_FRAMES
     };
-    $.post(`${API_BASE}api/get-movie-metadata`, params ).done( (resp) => {
+    function load_analyze(leaseResponse) {
+        const leaseId = leaseResponse.lease_id;
+        params[ANALYSIS_LEASE_ID] = leaseId || '';
+        $.post(`${API_BASE}api/get-movie-metadata`, params ).done( (resp) => {
         if (resp.error==true) {
             alert(resp.message);
             return;
         }
+        resp.metadata[ANALYSIS_LEASE_ID] = leaseId;
+        resp.metadata.analysis_read_only = !leaseId;
         const width = resp.metadata.width;
         const height = resp.metadata.height;
         if (width != null && height != null && width > 0 && height > 0) {
             $(div_controller + ' #canvas-id').prop('width', width).prop('height', height);
         }
         const traceLock = resp.metadata.tracking_lock;
+        const analysisLock = leaseResponse.analysis_lock;
+        const analysisMessage = analysisLock && !leaseId
+            ? `Analysis is open in another browser — started ${new Date(analysisLock.acquired_at * 1000).toLocaleString()} by ${analysisLock.started_by_user_name}. This page is view-only.`
+            : leaseResponse.message;
         const tracingMessage = traceLock
             ? `Tracing in progress — started ${new Date(traceLock.acquired_at * 1000).toLocaleString()} by ${traceLock.started_by_user_name}. This page is read-only; leave and click Analyze again later.`
             : null;
@@ -2270,8 +2341,8 @@ function trace_movie(div_controller, movie_id, api_key) {
             // No zip yet: show frame 0 only. User places markers and clicks "Trace movie".
             const frame0 = `${LAMBDA_API_BASE}resize-api/v1/first-frame?api_key=${api_key}&movie_id=${movie_id}&course_id=${encodeURIComponent(activeCourseId() || '')}`;
             trace_movie_one_frame(movie_id, div_controller, resp.metadata, frame0, resp.frames, api_key);
-            if (tracingMessage) {
-                $('#status-big').text(tracingMessage);
+            if (tracingMessage || analysisMessage) {
+                $('#status-big').text(tracingMessage || analysisMessage);
             } else if (demo_mode) {
                 $('#status-big').html(MOVIE_READY_FOR_TRACING_MESSAGE);
             } else {
@@ -2280,8 +2351,8 @@ function trace_movie(div_controller, movie_id, api_key) {
             return;
         }
         const showResults = is_movie_tracked(resp.metadata);
-        if (tracingMessage) {
-            $('#status-big').text(tracingMessage);
+        if (tracingMessage || analysisMessage) {
+            $('#status-big').text(tracingMessage || analysisMessage);
         } else if (demo_mode) {
             $('#status-big').html(showResults ? MOVIE_IS_TRACED_MESSAGE : MOVIE_READY_FOR_TRACING_MESSAGE);
         } else {
@@ -2290,6 +2361,21 @@ function trace_movie(div_controller, movie_id, api_key) {
         }
         const movie_zipfile_url = resp.metadata.movie_zipfile_url;
         trace_movie_frames(div_controller, resp.metadata, movie_zipfile_url, resp.frames, api_key, showResults);
+        });
+    }
+    if (demo_mode) {
+        load_analyze({lease_id: null});
+        return;
+    }
+    $.post(`${API_BASE}api/acquire-movie-analysis-lease`, {
+        api_key: api_key,
+        course_id: activeCourseId(),
+        movie_id: movie_id,
+    }).done((response) => {
+        start_analysis_lease(movie_id, api_key, response.lease_id);
+        load_analyze(response);
+    }).fail((response) => {
+        alert(response.responseJSON?.message || 'Unable to open Analyze.');
     });
 }
 

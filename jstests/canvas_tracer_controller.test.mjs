@@ -1995,10 +1995,19 @@ describe('trace_movie', () => {
     }
 
     /**
-     * Configure mockPost so the done() callback fires synchronously with `resp`,
-     * letting us test trace_movie's behaviour without real async I/O.
+     * Configure lease acquisition then metadata loading synchronously, letting us
+     * test trace_movie's behaviour without real async I/O.
      */
     function mockApiResponse(resp) {
+        if (!global.demo_mode) {
+            mockPost.mockReturnValueOnce({
+                done: jest.fn().mockImplementation(cb => {
+                    cb({ error: false, lease_id: 'analysis-lease-123' });
+                    return { fail: jest.fn().mockReturnThis() };
+                }),
+                fail: jest.fn().mockReturnThis(),
+            });
+        }
         mockPost.mockReturnValueOnce({
             done: jest.fn().mockImplementation(cb => {
                 cb(resp);
@@ -2015,6 +2024,16 @@ describe('trace_movie', () => {
         expect(mockPost).toHaveBeenCalledWith(
             expect.stringContaining('get-movie-metadata'),
             expect.objectContaining({ movie_id: 'movie-123', api_key: 'my-api-key' })
+        );
+    });
+
+    test('acquires an analysis lease before loading metadata', () => {
+        mockApiResponse(makeResp());
+        trace_movie('div#tracer', 'movie-123', 'my-api-key');
+        expect(mockPost).toHaveBeenNthCalledWith(
+            1,
+            expect.stringContaining('acquire-movie-analysis-lease'),
+            expect.objectContaining({ movie_id: 'movie-123', api_key: 'my-api-key' }),
         );
     });
 

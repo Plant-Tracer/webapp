@@ -300,7 +300,8 @@ def complete_uploaded_object(*, movie_id: str, staging_urn: str, event_id: str,
     )
 
 
-def prepare_tracing_request(*, api_key: str, movie_id: str, frame_start: int, frame_end: int|None=None) -> dict:
+def prepare_tracing_request(*, api_key: str, movie_id: str, frame_start: int,
+                            frame_end: int|None=None, analysis_lease_id=None) -> dict:
     """Validate access and mark the movie as retracing before queueing work.
 
     This closes the UI race where the browser polls before the worker has had
@@ -315,7 +316,8 @@ def prepare_tracing_request(*, api_key: str, movie_id: str, frame_start: int, fr
     frame_end_number = None if frame_end is None else int(frame_end)
     lock = ddbo.acquire_movie_trace_lock(
         movie=movie, started_by_user_id=user_id,
-        started_by_user_name=ddbo.get_user(user_id)[USER_NAME])
+        started_by_user_name=ddbo.get_user(user_id)[USER_NAME],
+        analysis_lease_id=analysis_lease_id)
     cleared_frames = clear_movie_tracking_after_frame(
         movie_id=movie_id,
         frame_number=source_frame_number,

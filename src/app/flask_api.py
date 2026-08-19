@@ -82,6 +82,25 @@ def tracing_lock_response(movie_id):
     return None
 
 
+def analysis_lock_payload(lock, lease_id=None):
+    """Return safe analysis-lock metadata without exposing its bearer token."""
+    return {
+        'active': lock is not None,
+        'owned': bool(lock and lock.lease_id == lease_id),
+        'acquired_at': lock.acquired_at if lock else None,
+        'started_by_user_name': lock.started_by_user_name if lock else None,
+    }
+
+
+def analysis_lock_response(movie):
+    """Reject Analyze writes unless this browser holds the active lease."""
+    lock = odb.movie_analysis_lock_from_record(movie)
+    if lock and lock.lease_id != get(odb.ANALYSIS_LEASE_ID):
+        return jsonify({C.API_KEY_ERROR: True,
+                        C.API_KEY_MESSAGE: "This movie is being analyzed in another browser and is view-only."}), 409
+    return None
+
+
 @api_bp.patch('/default-course')
 @api_bp.patch('/current-course')
 def api_default_course():
@@ -1020,15 +1039,6 @@ def api_get_movie_metadata():
 
     movie = odb.can_access_movie(user_id=user_id, movie_id=movie_id)
     movie_metadata = odb.get_movie_metadata(movie_id=movie[MOVIE_ID], get_last_frame_tracked=True)
-    trace_lock = odb.movie_trace_lock_from_record(movie)
-    if trace_lock:
-        movie_metadata[MOVIE_STATUS] = odb.MOVIE_STATE_TRACING
-        movie_metadata['tracking_lock'] = {
-            'active': True,
-            'acquired_at': trace_lock.acquired_at,
-            'started_by_user_name': trace_lock.started_by_user_name,
-        }
-
     # If status TRACKING_COMPLETED_FLAG and the user has requested to get all trackpoints,
     # then get all the trackpoints.
     tracking_completed = movie_metadata.get(MOVIE_STATUS, '') == MOVIE_STATE_TRACING_COMPLETED
@@ -1051,6 +1061,19 @@ def api_get_movie_metadata():
     # Return only stored metadata; do not generate or write metadata here.
     # Width/height are set when the first frame is served (Lambda get-frame) or by Lambda (rotate-and-zip).
     movie_metadata = odb.movie_metadata_with_trim_defaults(movie_metadata)
+    trace_lock = odb.movie_trace_lock_from_record(movie)
+    if trace_lock:
+        movie_metadata[MOVIE_STATUS] = odb.MOVIE_STATE_TRACING
+        movie_metadata['tracking_lock'] = {
+            'active': True,
+            'acquired_at': trace_lock.acquired_at,
+            'started_by_user_name': trace_lock.started_by_user_name,
+        }
+    analysis_lock = odb.movie_analysis_lock_from_record(movie)
+    if analysis_lock:
+        movie_metadata['analysis_lock'] = analysis_lock_payload(
+            analysis_lock, get(odb.ANALYSIS_LEASE_ID),
+        )
 
     # For any of these URNs, create URLs
     for urn_name in [MOVIE_DATA_URN, MOVIE_ZIPFILE_URN, MOVIE_TRACED_URN]:
@@ -1078,6 +1101,63 @@ def api_get_movie_metadata():
     logger.debug("get_movie_metadata returns keys %s and %d frames total length %d bytes",
                  list(ret.keys()),len(ret.get('frames',[])),len(ret))
     return jsonify(ret)
+
+
+@api_bp.route('/acquire-movie-analysis-lease', methods=POST)
+def api_acquire_movie_analysis_lease():
+    """Acquire the exclusive Analyze lease, or report that this browser is view-only."""
+    user_id = get_user_id(allow_demo=False)
+    movie_id = get_movie_id()
+    movie = odb.can_access_movie(user_id=user_id, movie_id=movie_id)
+    try:
+        movie = odb.can_edit_movie(user_id=user_id, movie_id=movie_id)
+    except UnauthorizedUser:
+        return jsonify({C.API_KEY_ERROR: False, 'lease_id': None,
+                        C.API_KEY_MESSAGE: "You do not have permission to edit this movie."})
+    ddbo = odb.DDBO()
+    try:
+        lock = ddbo.acquire_movie_analysis_lock(
+            movie=movie, started_by_user_id=user_id,
+            started_by_user_name=ddbo.get_user(user_id)[odb.USER_NAME],
+        )
+        return jsonify({C.API_KEY_ERROR: False, 'lease_id': lock.lease_id,
+                        'analysis_lock': analysis_lock_payload(lock, lock.lease_id)})
+    except odb.MovieAnalysisLocked:
+        current = ddbo.get_movie(movie_id)
+        lock = odb.movie_analysis_lock_from_record(current)
+        if lock:
+            return jsonify({C.API_KEY_ERROR: False, 'lease_id': None,
+                            'analysis_lock': analysis_lock_payload(lock)})
+        return jsonify({C.API_KEY_ERROR: False, 'lease_id': None,
+                        C.API_KEY_MESSAGE: "This movie is currently being traced and is view-only."})
+
+
+@api_bp.route('/heartbeat-movie-analysis-lease', methods=POST)
+def api_heartbeat_movie_analysis_lease():
+    """Renew the browser's Analyze lease."""
+    user_id = get_user_id(allow_demo=False)
+    movie_id = get_movie_id()
+    lease_id = get(odb.ANALYSIS_LEASE_ID)
+    if not lease_id:
+        return jsonify({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: "analysis lease is required"}), 400
+    active = odb.DDBO().heartbeat_movie_analysis_lock(
+        movie_id=movie_id, lease_id=lease_id, user_id=user_id,
+    )
+    return jsonify({C.API_KEY_ERROR: not active, 'active': active})
+
+
+@api_bp.route('/release-movie-analysis-lease', methods=POST)
+def api_release_movie_analysis_lease():
+    """Release the caller's Analyze lease when it leaves the page."""
+    user_id = get_user_id(allow_demo=False)
+    movie_id = get_movie_id()
+    lease_id = get(odb.ANALYSIS_LEASE_ID)
+    if not lease_id:
+        return jsonify({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: "analysis lease is required"}), 400
+    released = odb.DDBO().release_movie_analysis_lock(
+        movie_id=movie_id, lease_id=lease_id, user_id=user_id,
+    )
+    return jsonify({C.API_KEY_ERROR: False, 'released': released})
 
 
 @api_bp.route('/get-movie-trackpoints',methods=GET_POST)
@@ -1108,6 +1188,8 @@ def api_set_movie_trim():
     movie = odb.can_edit_movie(user_id=get_user_id(allow_demo=False), movie_id=movie_id)
     if response := tracing_lock_response(movie[MOVIE_ID]):
         return response
+    if response := analysis_lock_response(movie):
+        return response
     trim_start_frame = get_int(TRIM_START_FRAME)
     trim_end_frame = get_int(TRIM_END_FRAME)
     if (trim_start_frame is None) == (trim_end_frame is None):
@@ -1132,6 +1214,8 @@ def api_set_movie_fpm():
     movie_id = get_movie_id()
     movie = odb.can_edit_movie(user_id=user_id, movie_id=movie_id)
     if response := tracing_lock_response(movie[MOVIE_ID]):
+        return response
+    if response := analysis_lock_response(movie):
         return response
     try:
         fpm = odb.normalize_fpm(request.values.get('fpm'))
@@ -1232,6 +1316,8 @@ def api_put_frame_trackpoints():
     movie = odb.can_edit_movie(user_id=user_id, movie_id=movie_id)
     if response := tracing_lock_response(movie[MOVIE_ID]):
         return response
+    if response := analysis_lock_response(movie):
+        return response
     if log_level=='DEBUG':
         logger.debug("put_frame_analysis. user_id=%s movie_id=%s frame_number=%s",user_id,movie[MOVIE_ID],frame_number)
         for tp in trackpoints:
@@ -1251,6 +1337,8 @@ def api_rename_marker():
     movie_id = get_movie_id()
     movie = odb.can_edit_movie(user_id=user_id, movie_id=movie_id)
     if response := tracing_lock_response(movie[MOVIE_ID]):
+        return response
+    if response := analysis_lock_response(movie):
         return response
     try:
         rename_result = odb.rename_movie_marker(
