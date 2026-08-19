@@ -43,16 +43,15 @@ def test_publish_job_emits_stack_scoped_pydantic_event(monkeypatch):
     assert entry["EventBusName"] == "default"
     assert entry["Source"] == async_work.EVENT_SOURCE
     assert entry["DetailType"] == async_work.EVENT_DETAIL_TYPE
-    assert json.loads(entry["Detail"]) == {
-        "stack_name": "test-stack",
-        "job": {
-            "job_type": "trace",
-            "movie_id": "m123",
-            "frame_start": 7,
-            "frame_end": 20,
-            "job_id": "job-123",
-        },
-    }
+    assert json.loads(entry["Detail"]) == async_work.AsyncWorkDetail(
+        stack_name="test-stack",
+        job=async_work.TraceJob(
+            movie_id="m123",
+            frame_start=7,
+            frame_end=20,
+            job_id="job-123",
+        ),
+    ).model_dump(mode="json")
 
 
 def test_publish_job_rejects_partial_eventbridge_failure(monkeypatch):
