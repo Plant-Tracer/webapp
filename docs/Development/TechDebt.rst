@@ -140,7 +140,8 @@ Long Term
 
 * Define a durable processing state machine.
   Impact: high; clarifies upload, ready, tracing, completed, failed, stale-lock,
-  and retry behavior across Flask, Lambda, SQS/local queue, and UI polling.
+  and retry behavior across Flask, Lambda, EventBridge/local work, and UI
+  polling.
   Files: 15-25.
 
 * Rework authentication/session security.

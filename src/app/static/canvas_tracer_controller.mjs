@@ -339,6 +339,9 @@ class TracerController extends MovieController {
 
     // POST the capture interval (frames/minute) and refresh graphs/results. No retrace needed.
     set_fpm() {
+        if (this.editingLocked()) {
+            return;
+        }
         if (demo_mode) {
             $('#demo-popup').fadeIn(300);
             return;
@@ -1439,7 +1442,13 @@ class TracerController extends MovieController {
                 .then((res) => res.json().then((data) => ({ status: res.status, data })).catch(() => ({ status: res.status, data: null })))
                 .then(({ status, data }) => {
                     if (status >= 200 && status < 300 && !(data && data.error)) {
-                        self.poll_for_track_end();
+                        self.tracking = false;
+                        self.movie_metadata.status = TRACING_FLAG;
+                        $(self.div_selector).removeClass('tracing-dimmed');
+                        self.set_movie_control_buttons();
+                        self.refreshFrameEditState();
+                        self.tracking_status.text('Tracing has started. Leave this page and click Analyze again later.');
+                        $('#status-big').text('Tracing in progress. Leave this page and click Analyze again later.');
                         return;
                     }
                     const msg = (data && data.message) ? data.message : `Tracing request failed (${status}).`;
@@ -2211,8 +2220,8 @@ function graph_data(cc, frames) {
 
 /* Main function called when HTML page loads.
  * Gets metadata for the movie and traced frames. If no zip yet, shows frame 0 only (no polling).
- * User places markers and clicks "Trace movie"; we then poll only for tracing to complete,
- * then load the zip once (wait up to 5s if needed) and stop polling.
+ * User places markers and clicks "Trace movie". Tracing is asynchronous; users reopen
+ * Analyze after it completes rather than polling for completion from this page.
  */
 function trace_movie(div_controller, movie_id, api_key) {
 
@@ -2253,11 +2262,17 @@ function trace_movie(div_controller, movie_id, api_key) {
         if (width != null && height != null && width > 0 && height > 0) {
             $(div_controller + ' #canvas-id').prop('width', width).prop('height', height);
         }
+        const traceLock = resp.metadata.tracking_lock;
+        const tracingMessage = traceLock
+            ? `Tracing in progress — started ${new Date(traceLock.acquired_at * 1000).toLocaleString()} by ${traceLock.started_by_user_name}. This page is read-only; leave and click Analyze again later.`
+            : null;
         if (!resp.metadata.movie_zipfile_url) {
             // No zip yet: show frame 0 only. User places markers and clicks "Trace movie".
             const frame0 = `${LAMBDA_API_BASE}resize-api/v1/first-frame?api_key=${api_key}&movie_id=${movie_id}&course_id=${encodeURIComponent(activeCourseId() || '')}`;
             trace_movie_one_frame(movie_id, div_controller, resp.metadata, frame0, resp.frames, api_key);
-            if (demo_mode) {
+            if (tracingMessage) {
+                $('#status-big').text(tracingMessage);
+            } else if (demo_mode) {
                 $('#status-big').html(MOVIE_READY_FOR_TRACING_MESSAGE);
             } else {
                 $('#status-big').html(PLACE_MARKERS_TRACE_START_MESSAGE);
@@ -2265,7 +2280,9 @@ function trace_movie(div_controller, movie_id, api_key) {
             return;
         }
         const showResults = is_movie_tracked(resp.metadata);
-        if (demo_mode) {
+        if (tracingMessage) {
+            $('#status-big').text(tracingMessage);
+        } else if (demo_mode) {
             $('#status-big').html(showResults ? MOVIE_IS_TRACED_MESSAGE : MOVIE_READY_FOR_TRACING_MESSAGE);
         } else {
           $('#status-big').html(showResults ? MOVIE_IS_TRACED_RETRACE_AS_NEEDED_MESSAGE

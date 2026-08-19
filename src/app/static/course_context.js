@@ -13,6 +13,19 @@ function validCourseId(courseId) {
   return Boolean(courseId) && choices().some((course) => course.course_id === courseId);
 }
 
+function serverCourseViewId() {
+  if (typeof course_view_id === "undefined") {
+    return null;
+  }
+  return course_view_id || null;
+}
+
+function authorizedCourseId(courseId) {
+  return Boolean(courseId) && (
+    courseId === serverCourseViewId() || validCourseId(courseId)
+  );
+}
+
 function urlCourseId() {
   if (typeof window === "undefined") {
     return null;
@@ -22,12 +35,13 @@ function urlCourseId() {
 
 export function activeCourseId() {
   const candidates = [
+    serverCourseViewId(),
     urlCourseId(),
     sessionStorage.getItem(ACTIVE_COURSE_STORAGE_KEY),
     typeof user_default_course_id === "undefined" ? null : user_default_course_id,
     choices()[0]?.course_id,
   ];
-  return candidates.find(validCourseId) || null;
+  return candidates.find(authorizedCourseId) || null;
 }
 
 export function storeActiveCourse(courseId) {

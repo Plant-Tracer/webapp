@@ -77,6 +77,12 @@ Release Notes
 
 Unreleased Summary
 ******************
+    * Operations: replace five continuously polling SQS event-source mappings
+      with stack-scoped EventBridge push events for post-upload and tracing
+      work; retain an unpolled failure DLQ and SnapStart for lambda-web
+    * Movies: rename the user-facing ``Unpublished`` state to ``Hidden`` now
+      that movies are published immediately after upload
+    * Movies: prevent concurrent tracing and make Analyze read-only while a trace is running
     * Courses: make the current-course pull-down tab-local, send ``course_id``
       with course-scoped browser requests, and add an explicit **Make default**
       action
@@ -85,6 +91,8 @@ Unreleased Summary
     * Security: serve the MP4 demuxer locally, integrity-protect the remaining
       pinned demo dependencies, bound WebCodecs frame retention, and avoid
       automatically contacting the demo movie host
+    * Upload: prevent duplicate movie-rotation requests while a rotation is being saved
+    * Analyze: prevent concurrent tracing of a movie and keep Analyze read-only while tracing runs
     * Developer: add a Makefile-driven analysis-MP4 CLI that creates a portable
       WebCodecs player bundle for manual cross-browser frame-step verification
     * Deployment: honor ``STACK_NAME`` as a per-stack config selector, pass the
@@ -96,6 +104,8 @@ Unreleased Summary
     * Developer: centralize runtime S3 object-key templates and formatting helpers while preserving legacy movie URNs
     * Analyze: open trimmed movies on their first included frame and keep
       Retrace disabled until marker data changes
+    * Analyze: keep results below the movie and marker controls, with position
+      graphs side-by-side when the viewport is wide enough and stacked otherwise
     * Tracing: keep markers when optical flow temporarily loses them and use
       the loaded analysis-frame height for bottom-left coordinate conversion
     * Operations: restore deployment-isolated S3 EventBridge upload completion,

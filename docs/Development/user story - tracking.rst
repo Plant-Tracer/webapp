@@ -37,7 +37,8 @@ Track Movie
 
 3. lambda-resize validates access, preserves the edited source frame, clears
    later trackpoints, marks the movie ``tracing``, and queues tracking.
-4. Local mode uses the in-process local queue. Deployed mode uses SQS.
+4. Local mode uses the in-process local queue. Deployed mode publishes a
+   stack-scoped EventBridge event that is pushed to lambda-resize.
 5. Worker writes trackpoints, frame ZIP, traced MP4, and final movie status.
 6. Browser polls ``POST /api/get-movie-metadata`` until status is
    ``tracing completed``.

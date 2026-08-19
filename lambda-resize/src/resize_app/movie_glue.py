@@ -4,13 +4,11 @@ Routines for providing access to the movies for the lambda
 """
 
 import os
-import json
 import time
 from typing import NamedTuple
 from pathlib import Path
 import tempfile
 
-import boto3
 from aws_lambda_powertools import Logger
 from botocore.exceptions import ClientError
 from pydantic import BaseModel
@@ -41,8 +39,8 @@ from .src.app.odb import (
     MOVIE_STATE_READY,
     MOVIE_STATE_PROCESSING,
     MOVIE_STATE_UPLOADING,
-    MOVIE_STATE_TRACING,
     MOVIE_STATE_TRACING_COMPLETED,
+    MOVIE_STATE_TRACING_FAILED,
     TOTAL_BYTES,
     TOTAL_FRAMES,
     UPLOADED_AT,
@@ -55,9 +53,11 @@ from .src.app.odb import (
     WIDTH,
     HEIGHT,
     FPS,
-    USER_ID
+    USER_ID,
+    USER_NAME,
 )
 
+from . import async_work
 from . import local_queue
 from . import mpeg_jpeg_zip
 from . import tracer
@@ -85,21 +85,10 @@ class UploadCompletion(BaseModel):
     total_bytes: int
 
 
-POST_UPLOAD_JOB = "post_upload"
-TRACE_JOB = "trace"
-QUEUE_JOB_TYPE = "job_type"
 S3_BUCKET = "Bucket"
 S3_KEY = "Key"
 S3_COPY_SOURCE = "CopySource"
 S3_CONTENT_LENGTH = "ContentLength"
-
-
-def sqs_client():
-    return boto3.client(
-        "sqs",
-        region_name=os.environ.get("AWS_REGION"),
-        endpoint_url=os.environ.get("AWS_ENDPOINT_URL_SQS"),
-    )
 
 
 def validate_movie_access(*, api_key=None, movie_id=None, require_edit=False):
@@ -131,53 +120,46 @@ def validate_movie_access(*, api_key=None, movie_id=None, require_edit=False):
         raise ValueError("movie_id is invalid") from e
     return ddbo, user_id, movie
 
-def queue_tracing(api_key:str, movie_id:str, frame_start:int, frame_end:int|None=None):
-    """Send a tracing request through SQS or the local debug queue."""
-    msg = {
-        QUEUE_JOB_TYPE: TRACE_JOB,
-        "api_key": api_key,
-        "movie_id": movie_id,
-        "frame_start": frame_start,
-    }
+def queue_tracing(_api_key:str, movie_id:str, frame_start:int, frame_end:int|None=None,
+                  job_id:str|None=None):
+    """Dispatch tracing through EventBridge or the local debug queue."""
+    job = async_work.TraceJob(
+        movie_id=movie_id,
+        frame_start=frame_start,
+        frame_end=frame_end,
+        job_id=job_id,
+    )
     safe_msg = {"movie_id": movie_id, "frame_start": frame_start}
+    if job_id is not None:
+        safe_msg["job_id"] = job_id
     if frame_end is not None:
-        msg["frame_end"] = int(frame_end)
         safe_msg["frame_end"] = int(frame_end)
     queue_mode = (os.environ.get("TRACING_QUEUE_MODE")
                   or os.environ.get("TRACKING_QUEUE_MODE", "")).strip().lower()
     if queue_mode == "local":
         LOGGER.info("Enqueuing follow-up local batch: %s", safe_msg)
-        local_queue.enqueue_message(msg)
+        local_queue.enqueue_message(job.model_dump())
         return {"error": False, "message": safe_msg}
-    queue_url = (os.environ.get("TRACING_QUEUE_URL")
-                 or os.environ.get("TRACKING_QUEUE_URL", "")).strip()
-    if not queue_url:
-        LOGGER.error("TRACING_QUEUE_URL not configured for follow-up batch")
-        raise RuntimeError("TRACING_QUEUE_URL not configured for follow-up batch")
-    LOGGER.info("Enqueuing follow-up SQS batch: %s", safe_msg)
-    sqs_client().send_message(QueueUrl=queue_url, MessageBody=json.dumps(msg))
+    LOGGER.info("Publishing follow-up EventBridge work: %s", safe_msg)
+    async_work.publish_job(job)
     return {"error":False, "message": safe_msg}
 
 
 def queue_post_upload(movie_id: str):
-    """Queue post-upload movie inspection/resizing work."""
-    message = {QUEUE_JOB_TYPE: POST_UPLOAD_JOB, "movie_id": movie_id}
+    """Dispatch post-upload inspection through EventBridge or local work."""
+    job = async_work.PostUploadJob(movie_id=movie_id)
     queue_mode = (os.environ.get("TRACING_QUEUE_MODE")
                   or os.environ.get("TRACKING_QUEUE_MODE", "")).strip().lower()
     if queue_mode == "local":
         if local_queue.worker_running():
-            local_queue.enqueue_message(message)
+            local_queue.enqueue_message(job.model_dump())
         else:
             process_uploaded_movie(movie_id=movie_id)
         return
     if not queue_mode and os.environ.get(C.AWS_REGION) == "local":
         process_uploaded_movie(movie_id=movie_id)
         return
-    queue_url = (os.environ.get("TRACING_QUEUE_URL")
-                 or os.environ.get("TRACKING_QUEUE_URL", "")).strip()
-    if not queue_url:
-        raise RuntimeError("TRACING_QUEUE_URL not configured for post-upload work")
-    sqs_client().send_message(QueueUrl=queue_url, MessageBody=json.dumps(message))
+    async_work.publish_job(job)
 
 
 def _head_object(*, bucket, key):
@@ -324,19 +306,21 @@ def prepare_tracing_request(*, api_key: str, movie_id: str, frame_start: int, fr
     This closes the UI race where the browser polls before the worker has had
     a chance to flip the movie state away from ``tracing completed``.
     """
-    ddbo, _user_id, _movie = validate_movie_access(
+    ddbo, user_id, movie = validate_movie_access(
         api_key=api_key,
         movie_id=movie_id,
         require_edit=True,
     )
     source_frame_number = int(frame_start)
     frame_end_number = None if frame_end is None else int(frame_end)
+    lock = ddbo.acquire_movie_trace_lock(
+        movie=movie, started_by_user_id=user_id,
+        started_by_user_name=ddbo.get_user(user_id)[USER_NAME])
     cleared_frames = clear_movie_tracking_after_frame(
         movie_id=movie_id,
         frame_number=source_frame_number,
         frame_end=frame_end_number,
     )
-    ddbo.update_movie(movie_id, {MOVIE_STATUS: MOVIE_STATE_TRACING})
     LOGGER.info(
         "Prepared tracing request: movie_id=%s source_frame=%s frame_end=%s cleared_frames=%s",
         movie_id,
@@ -344,7 +328,10 @@ def prepare_tracing_request(*, api_key: str, movie_id: str, frame_start: int, fr
         frame_end_number,
         cleared_frames,
     )
-    ret = {"movie_id": movie_id, "frame_start": source_frame_number, "cleared_frames": cleared_frames}
+    ddbo.put_movie_log(event_type="movie.tracing.started", movie=movie, ipaddr="lambda-resize",
+                        event_id=lock.job_id)
+    ret = {"movie_id": movie_id, "frame_start": source_frame_number, "cleared_frames": cleared_frames,
+           "job_id": lock.job_id}
     if frame_end_number is not None:
         ret["frame_end"] = frame_end_number
     return ret
@@ -488,24 +475,26 @@ def analysis_frame_height_from_movie(*, movie_url: str, rotation: int) -> int:
     return height
 
 
-def run_tracing(*, movie_id, frame_start, frame_end=None):
+def run_tracing(*, movie_id, frame_start, frame_end=None, job_id=None):
     """Run tracing pipeline and create both zipfile and tracked mp4.
 
     ``frame_start`` is the frame the user edited and wants to retrace from.
     That frame remains the source of truth; tracing resumes at ``frame_start + 1``.
     """
     ddbo = DDBO()
+    if job_id and not ddbo.claim_movie_trace_lock(movie_id=movie_id, job_id=job_id):
+        LOGGER.info("Skipping duplicate trace job movie_id=%s job_id=%s", movie_id, job_id)
+        return False
     source_frame_number = int(frame_start)
     tracing_frame_start = first_frame_to_track(source_frame_number=source_frame_number)
     frame_end_number = None if frame_end is None else int(frame_end)
-    cleared_frames = clear_movie_tracking_after_frame(
-        movie_id=movie_id,
-        frame_number=source_frame_number,
-        frame_end=frame_end_number,
-    )
+    cleared_frames = 0
+    if job_id is None:
+        cleared_frames = clear_movie_tracking_after_frame(
+            movie_id=movie_id, frame_number=source_frame_number, frame_end=frame_end_number)
+        ddbo.update_movie(movie_id, {MOVIE_STATUS: odb.MOVIE_STATE_TRACING})
     LOGGER.info("run_tracing movie_id=%s source_frame=%s tracing_frame_start=%s frame_end=%s cleared_frames=%s",
                 movie_id, source_frame_number, tracing_frame_start, frame_end_number, cleared_frames)
-    ddbo.update_movie(movie_id, {MOVIE_STATUS: MOVIE_STATE_TRACING})
 
     movie_record = get_movie_metadata(movie_id=movie_id)
     movie_urn = movie_record.get(MOVIE_DATA_URN)
@@ -558,6 +547,8 @@ def run_tracing(*, movie_id, frame_start, frame_end=None):
                 len(frame_trackpoints),
                 [trackpoint.label for trackpoint in frame_trackpoints],
             )
+            if job_id:
+                ddbo.heartbeat_movie_trace_lock(movie_id=movie_id, job_id=job_id)
             if obj.frame_trackpoints and (frame_end_number is None or obj.frame_number <= frame_end_number):
                 frame_trackpoints = odb.flip_trackpoints_y(obj.frame_trackpoints, frame_height)
                 ddbo.update_movie(
@@ -601,11 +592,33 @@ def run_tracing(*, movie_id, frame_start, frame_end=None):
 
         # Update the database
         # note: should we update width, height and fps?
-        ddbo.update_movie(movie_id, {TOTAL_FRAMES:total_frames,
-                                     MOVIE_STATUS: MOVIE_STATE_TRACING_COMPLETED,
-                                     NEEDS_RETRACING: 0,
-                                     MOVIE_TRACED_URN: movie_traced_urn,
-                                     MOVIE_ZIPFILE_URN: movie_zipfile_urn})
+        updates = {TOTAL_FRAMES: total_frames, MOVIE_STATUS: MOVIE_STATE_TRACING_COMPLETED,
+                   NEEDS_RETRACING: 0, MOVIE_TRACED_URN: movie_traced_urn,
+                   MOVIE_ZIPFILE_URN: movie_zipfile_urn}
+        if job_id:
+            ddbo.finish_movie_trace(movie_id=movie_id, job_id=job_id, updates=updates)
+        else:
+            ddbo.update_movie(movie_id, updates)
+        completed_movie = ddbo.get_movie(movie_id)
+        ddbo.put_movie_log(event_type="movie.tracing.completed", movie=completed_movie,
+                            ipaddr="lambda-resize", event_id=job_id)
+        return True
+
+    except Exception as exc:
+        LOGGER.exception("Tracing failed movie_id=%s job_id=%s", movie_id, job_id)
+        failed_movie = ddbo.get_movie(movie_id)
+        updates = {MOVIE_STATUS: MOVIE_STATE_TRACING_FAILED,
+                   odb.TRACING_FAILED_AT: int(time.time()),
+                   odb.TRACING_FAILURE_SUMMARY: f"{type(exc).__name__}: {exc}"[:500]}
+        if job_id:
+            try:
+                ddbo.finish_movie_trace(movie_id=movie_id, job_id=job_id, updates=updates)
+            except ClientError:
+                LOGGER.exception("Failed to record tracing failure movie_id=%s job_id=%s", movie_id, job_id)
+        else:
+            ddbo.update_movie(movie_id, updates)
+        ddbo.put_movie_trace_failure_log(movie=failed_movie, job_id=job_id, error=exc)
+        raise
 
     finally:
         if movie_zipfile_path and movie_zipfile_path.exists():

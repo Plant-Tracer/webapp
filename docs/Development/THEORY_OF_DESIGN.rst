@@ -63,12 +63,12 @@ Movie List Flow
 
 ``/list`` is currently rendered as a page that loads movie data from
 ``POST /api/list-movies`` and builds tables in JavaScript. It separates a
-user's published, unpublished, deleted, and course-visible movies. This page is
+user's published, hidden, deleted, and course-visible movies. This page is
 a known candidate for future server-side rendering or a componentized frontend.
 
 Faculty/Admin Flow
 ------------------
 
 Course admins can list users in their administered courses, bulk-register users,
-and publish/unpublish visible course movies. Movie research-use and attribution
+and hide published movies or unhide hidden course movies. Movie research-use and attribution
 choices remain owner-controlled.

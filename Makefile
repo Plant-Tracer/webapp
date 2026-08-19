@@ -58,6 +58,7 @@ LOCAL_TEST_REQ := .venv/pyvenv.cfg bin/DynamoDBLocal.jar bin/minio bin/mailpit
 # files used by lambda
 VEND_FILES := src/app/odb.py \
               src/app/schema.py \
+              src/app/build_metadata.py \
               src/app/constants.py \
               src/app/mp4_metadata_lib.py \
               src/app/paths.py \
@@ -656,7 +657,7 @@ lambda-web-check: lambda-web-lint
 	$(MAKE) vend-lambda-web
 	PYTHONPATH=.:src:lambda-web/src poetry run pytest lambda-web/tests -q --cov=lambda-web/src/lambda_web --cov-report=term -o junit_family=legacy --log-cli-level=$(LOG_LEVEL)
 
-.PHONY: lambda-resize/src/requirements.txt lambda-web/src/requirements.txt template-lint sam-config-show sam-config-path-check sam-config-check sam-config-guided-bootstrap sam-version-check sam-deploy-version-check stamp-sam-deploy-metadata sam-status
+.PHONY: lambda-resize/src/requirements.txt lambda-web/src/requirements.txt template-lint sam-config-show sam-config-path-check sam-config-check sam-config-guided-bootstrap sam-version-check sam-source-commit-check stamp-lambda-web-source-commit lambda-web-source-commit-check sam-deploy-version-check stamp-sam-deploy-metadata sam-status
 lambda-resize/src/requirements.txt:
 	poetry export --with lambda --without dev --without vm --format=requirements.txt --output lambda-resize/src/requirements.txt --without-hashes
 
@@ -768,6 +769,7 @@ sam-build: $(REQ)
 	$(MAKE) lambda-web/src/requirements.txt
 	$(MAKE) lambda-resize/src/requirements.txt
 	$(MAKE) vend-lambda-web
+	$(MAKE) stamp-lambda-web-source-commit
 	$(MAKE) vend-lambda-resize
 	poetry run pylint $(PYLINT_OPTS) lambda-web/src/lambda_web
 	poetry run pylint $(PYLINT_OPTS) lambda-resize/src
@@ -816,7 +818,29 @@ sam-version-check:
 	fi
 	@echo "Application version check passed for version $(APP_VERSION)."
 
-sam-deploy-version-check: sam-config-check sam-version-check
+sam-source-commit-check:
+	@SOURCE_COMMIT=$$(git rev-parse --verify HEAD 2>/dev/null || true); \
+	if ! printf '%s\n' "$$SOURCE_COMMIT" | grep -Eq '^[0-9a-f]{40}$$'; then \
+		echo "Refusing to build or deploy: could not determine a full source commit SHA."; \
+		exit 1; \
+	fi; \
+	echo "Source commit check passed for $$SOURCE_COMMIT."
+
+stamp-lambda-web-source-commit: sam-source-commit-check
+	@METADATA_FILE="lambda-web/src/app/build_metadata.py"; \
+	if [ ! -f "$$METADATA_FILE" ]; then \
+		echo "Refusing to stamp source commit: $$METADATA_FILE is missing."; \
+		echo "Run make vend-lambda-web first."; \
+		exit 1; \
+	fi; \
+	SOURCE_COMMIT=$$(git rev-parse --verify HEAD); \
+	printf '"""Build-time metadata for this Lambda artifact."""\n\nGIT_COMMIT = "%s"\n' "$$SOURCE_COMMIT" > "$$METADATA_FILE"; \
+	echo "Stamped $$METADATA_FILE with git_commit=$$SOURCE_COMMIT."
+
+lambda-web-source-commit-check: vend-lambda-web stamp-lambda-web-source-commit
+	@PYTHONPATH=lambda-web/src poetry run python -c 'from app.constants import git_commit; assert len(git_commit()) == 40, git_commit()'
+
+sam-deploy-version-check: sam-config-check sam-version-check sam-source-commit-check
 	@if [ -z "$(EFFECTIVE_STACK_NAME)" ]; then \
 		echo "Refusing to deploy: stack_name is not set in $(SAM_CONFIG)."; \
 		exit 1; \
@@ -929,13 +953,21 @@ s3-eventbridge-enable:
 
 # After deploy: verify Lambda URLs. Use curl -s (no -f) so we capture and show body on 4xx/5xx.
 # Simplified by Simson
-sam-status: sam-config-check
+sam-status: sam-config-check sam-source-commit-check
 	@echo "Checking Lambda status...";\
 	APP_URL="https://$(EFFECTIVE_STACK_NAME).planttracer.com/"; \
 	echo APP_URL=$$APP_URL; \
 	BASE_URL="$${APP_URL%/}"; \
 	VERSION_URL="$$BASE_URL/api/ver"; \
-	curl -f -s -w "\n%{http_code}\n" --max-time 10 "$$VERSION_URL"
+	VERSION_BODY=$$(curl -f -s --max-time 10 "$$VERSION_URL"); \
+	DEPLOYED_COMMIT=$$(printf '%s' "$$VERSION_BODY" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("git_commit", ""))'); \
+	EXPECTED_COMMIT=$$(git rev-parse --verify HEAD); \
+	if [ "$$DEPLOYED_COMMIT" != "$$EXPECTED_COMMIT" ]; then \
+		echo "Deployed source commit mismatch: expected=$$EXPECTED_COMMIT actual=$${DEPLOYED_COMMIT:-unavailable}."; \
+		exit 1; \
+	fi; \
+	echo "Deployment source commit verified: $$DEPLOYED_COMMIT."; \
+	printf '%s\n200\n' "$$VERSION_BODY"
 
 sam-deployed-workflow-test: sam-config-check
 	@DDB_PREFIX=$$(aws cloudformation describe-stacks --stack-name "$(EFFECTIVE_STACK_NAME)" --query 'Stacks[0].Parameters[?ParameterKey==`DynamoDBTablePrefix`].ParameterValue | [0]' --output text); \
@@ -973,7 +1005,7 @@ SAM_LOGS_FUNCTION_OUTPUT ?= LambdaWebFunction
 
 # Last N Lambda CloudWatch log events. Resolves function from Outputs or nested stack (SAM deploys Lambda in child stack).
 # Note: filter-log-events returns oldest-first; we request more than LIMIT then keep only the newest LIMIT so recent
-# activity (e.g. SQS-triggered runs) is included. Request 5x limit so that after tail we have the most recent N.
+# activity (e.g. EventBridge-triggered runs) is included. Request 5x limit so that after tail we have the most recent N.
 sam-logs: sam-config-check
 	@$(SAM_LOGS_RESOLVE); \
 	REQ=$$(( $(SAM_LOGS_LIMIT) * 5 )); \
@@ -1010,20 +1042,20 @@ sam-logs-web-tail:
 sam-logs-resize-tail:
 	$(MAKE) sam-logs-simple SAM_LOGS_FUNCTION_OUTPUT=LambdaResizeFunction SAM_LOGS_TAIL=1
 
-# Lambda log events that mention SQS (SQS-triggered invocations and sqs_handler messages).
-# Use this when sam-logs is dominated by HTTP traffic and you want only tracing-queue activity.
-sqs-logs: SAM_LOGS_FUNCTION_OUTPUT=LambdaResizeFunction
-sqs-logs:
+# Lambda log events for EventBridge-pushed asynchronous movie work.
+# Use this when sam-logs is dominated by HTTP traffic.
+async-work-logs: SAM_LOGS_FUNCTION_OUTPUT=LambdaResizeFunction
+async-work-logs:
 	@$(SAM_LOGS_RESOLVE); \
-	echo "SQS-related log events (past $(SAM_LOGS_MINUTES) min, limit $(SAM_LOGS_LIMIT)) for /aws/lambda/$$FUNC (stack=$(EFFECTIVE_STACK_NAME))..."; \
-	aws logs filter-log-events --log-group-name "/aws/lambda/$$FUNC" --start-time "$$START" --limit $(SAM_LOGS_LIMIT) --filter-pattern "SQS" --output text || true
+	echo "Async-work log events (past $(SAM_LOGS_MINUTES) min, limit $(SAM_LOGS_LIMIT)) for /aws/lambda/$$FUNC (stack=$(EFFECTIVE_STACK_NAME))..."; \
+	aws logs filter-log-events --log-group-name "/aws/lambda/$$FUNC" --start-time "$$START" --limit $(SAM_LOGS_LIMIT) --filter-pattern '"async work"' --output text || true
 
-# Stream Lambda logs, showing only lines that contain SQS.
-sqs-logs-tail: SAM_LOGS_FUNCTION_OUTPUT=LambdaResizeFunction
-sqs-logs-tail:
+# Stream Lambda logs, showing only asynchronous-work lines.
+async-work-logs-tail: SAM_LOGS_FUNCTION_OUTPUT=LambdaResizeFunction
+async-work-logs-tail:
 	@$(SAM_LOGS_RESOLVE); \
-	echo "Tailing SQS-related logs for /aws/lambda/$$FUNC (Ctrl-C to stop)..."; \
-	aws logs tail "/aws/lambda/$$FUNC" --follow --format short --filter-pattern "SQS" || true
+	echo "Tailing async-work logs for /aws/lambda/$$FUNC (Ctrl-C to stop)..."; \
+	aws logs tail "/aws/lambda/$$FUNC" --follow --format short --filter-pattern '"async work"' || true
 
 sam-delete:
 	@echo Deletion will begin in 10 seconds. Press Ctrl-C to cancel.

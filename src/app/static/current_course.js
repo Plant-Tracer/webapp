@@ -54,7 +54,10 @@ export function initCurrentCourse() {
   const select = document.getElementById("current-course-select");
   if (select) {
     const courseId = activeCourseId();
-    if (courseId) {
+    const courseIsSelectable = Array.from(select.options).some(
+      (option) => option.value === courseId,
+    );
+    if (courseId && courseIsSelectable) {
       select.value = courseId;
       select.dataset.currentCourseId = courseId;
       const label = document.getElementById("current-course-name");

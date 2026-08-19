@@ -47,7 +47,7 @@ Uploading Movies (optional)
 Tracking the Uploaded Movie
 ---------------------------
 - Once the file is uploaded, the page shows a first frame of your movie and a "Next steps" section. Click **Analyze** to go to the Analyze page. (The **Track the uploaded movie** link goes to the same place.)
-- There's an opportunity to rotate the movie 90° clockwise as many times as necessary to orient the movie properly if it's not. Note that once you proceed to the Analyze page, you won't be able to rotate the movie anymore.
+- There's an opportunity to rotate the movie 90° clockwise as many times as necessary to orient the movie properly if it's not. The rotation control is disabled while each rotation is saved. Note that once you proceed to the Analyze page, you won't be able to rotate the movie anymore.
 
 .. image:: tutorial_images/track_uploaded_movie.png
    :alt: Post-upload confirmation page showing the movie's first frame and a Next Steps section with Analyze and Track the uploaded movie links

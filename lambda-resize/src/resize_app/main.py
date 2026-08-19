@@ -1,5 +1,5 @@
 """
-Lambda HTTP API and SQS entry point. Parses the event and delegates to API handlers.
+Lambda HTTP API and EventBridge entry point. Parses events and delegates to handlers.
 API's primary function:
 - resize, rotate, trace, and code an MP3 of the movie.
 - Creates a ZIP of the tracing with the rotated frames.
@@ -26,12 +26,8 @@ from typing import Any, Dict
 from aws_lambda_powertools import Logger
 from aws_lambda_powertools.event_handler import APIGatewayHttpResolver, CORSConfig, Response
 from aws_lambda_powertools.utilities.typing import LambdaContext
-from aws_lambda_powertools.utilities.batch import (
-    BatchProcessor,
-    EventType,
-    process_partial_response,
-)
 
+from . import async_work
 from . import movie_glue
 from . import mpeg_jpeg_zip
 from . import lambda_tracing_handler
@@ -234,13 +230,16 @@ def handle_post_actions():
     frame_end = body.get("frame_end")
     LOGGER.info("trace-movie. movie_id=%s", movie_id)
     try:
-        movie_glue.prepare_tracing_request(
+        prepared = movie_glue.prepare_tracing_request(
             api_key=api_key,
             movie_id=movie_id,
             frame_start=frame_start,
             frame_end=frame_end,
         )
-        return movie_glue.queue_tracing(api_key, movie_id, frame_start, frame_end)
+        return movie_glue.queue_tracing(api_key, movie_id, frame_start, frame_end, prepared["job_id"])
+    except movie_glue.odb.MovieTracingLocked:
+        return Response(status_code=409, content_type="application/json",
+                        body=json.dumps({"error": True, "message": "This movie is already being traced"}))
     except ValueError as e:
         LOGGER.exception("trace-movie rejected: %s", e)
         return Response(status_code=403, body=str(e.args))
@@ -248,13 +247,10 @@ def handle_post_actions():
 
 @LOGGER.inject_lambda_context(log_event=False)
 def lambda_handler(event: Dict[str, Any], context: LambdaContext) -> Dict[str, Any]:
-    """Unified Lambda entrypoint: dispatch EventBridge, SQS, or HTTP events."""
+    """Unified Lambda entrypoint: dispatch EventBridge work or HTTP events."""
     if isinstance(event, dict) and event.get("source") == "aws.s3":
         return upload_event.process_upload_event(event).model_dump()
-    if isinstance(event, dict) and "Records" in event:
-        # Route to SQS handler for partial batch processing
-        return process_partial_response( event=event, context=context,
-                                         processor=BatchProcessor(event_type=EventType.SQS),
-                                         record_handler=lambda_tracing_handler.process_tracing_record)
+    if isinstance(event, dict) and event.get("source") == async_work.EVENT_SOURCE:
+        return lambda_tracing_handler.process_async_work_event(event)
     # Powertools resolves HTTP events natively
     return app.resolve(event, context)

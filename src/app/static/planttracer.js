@@ -7,8 +7,8 @@ import { activeCourseId, appendCourseContext } from "./course_context.js";
 
 
 // special buttons
-const PUBLISH_BUTTON='PUBLISH';
-const UNPUBLISH_BUTTON='UNPUBLISH';
+const HIDE_BUTTON='HIDE';
+const UNHIDE_BUTTON='UNHIDE';
 const DELETE_BUTTON='DELETE';
 const UNDELETE_BUTTON='UNDELETE';
 const PLAY_LABEL = 'play';
@@ -428,67 +428,100 @@ async function _get_movie_metadata(movie_id){
 
 
 //
-// Rotate: debounce multiple clicks (~1s), then send one request with total rotation_steps (1–3).
-// Server rotates that many 90° steps and builds the zip in the background.
-const ROTATE_DEBOUNCE_MS = 1000;
-let rotate_pending = 0;
-let rotate_debounce_timer = null;
-
 function rotate_movie() {
   const linkEl = $('#rotate_movie_link').get(0);
   if (!linkEl || linkEl.classList.contains('rotate-pending')) {
     return;
   }
-  rotate_pending += 90;
-  $('#rotate_status').text(rotate_pending);
-  if (rotate_debounce_timer) {
-    clearTimeout(rotate_debounce_timer);
-  }
-  rotate_debounce_timer = setTimeout(() => apply_rotation_and_zip(), ROTATE_DEBOUNCE_MS);
+  linkEl.classList.add('rotate-pending');
+  linkEl.setAttribute('aria-disabled', 'true');
+  return apply_rotation_and_zip().finally(() => {
+    linkEl.classList.remove('rotate-pending');
+    linkEl.removeAttribute('aria-disabled');
+  });
 }
 
 let current_rotation = 0;
 
 async function apply_rotation_and_zip() {
-    const movie_id = window.movie_id;
-    const previewImg = $('#image-preview').get(0);
-    const rotateStatus = $('#rotate_status');
+  const movie_id = window.movie_id;
+  const previewImg = $('#image-preview').get(0);
+  const rotateStatus = $('#rotate_status');
+  const previousRotation = current_rotation;
 
-    // 1. Update Visuals
-    current_rotation = (current_rotation + 90) % 360;
+  const restorePersistedRotation = () => {
+    current_rotation = previousRotation;
     previewImg.style.transform = `rotate(${current_rotation}deg)`;
-    rotateStatus.text(' … Saving rotation…');
+  };
 
-    // 2. Point 'Analyze' directly to the analysis page
-    $('#process_movie_link').attr('href', `/analyze?movie_id=${movie_id}`);
+  // 1. Update Visuals
+  current_rotation = (current_rotation + 90) % 360;
+  previewImg.style.transform = `rotate(${current_rotation}deg)`;
+  rotateStatus.text(' … Saving rotation…');
 
-// 3. Update the backend via /rotate-movie
-    try {
-        const formData = new FormData();
-        appendCourseContext(formData);
-        formData.append('api_key', api_key);
-        formData.append('movie_id', movie_id);   // Matches get_movie_id() [cite: 355]
-        formData.append('rotation', String(current_rotation)); // Matches get_int("rotation")
+  // 2. Point 'Analyze' directly to the analysis page
+  $('#process_movie_link').attr('href', `/analyze?movie_id=${movie_id}`);
 
-        const r = await fetch(`${API_BASE}api/rotate-movie`, {
-            method: 'POST',
-            body: formData
-        });
+  // 3. Update the backend via /rotate-movie
+  try {
+    const formData = new FormData();
+    appendCourseContext(formData);
+    formData.append('api_key', api_key);
+    formData.append('movie_id', movie_id);
+    formData.append('rotation', String(current_rotation));
 
-        const resp = await r.json();
-        if (resp.error) {
-            rotateStatus.text(' Error: ' + resp.message);
-        } else {
-            rotateStatus.text(' (Rotation saved)');
-        }
-    } catch (e) {
-        rotateStatus.text(' Network error updating rotation.');
-        console.error("Rotation sync failed:", e);
+    const r = await fetch(`${API_BASE}api/rotate-movie`, {
+      method: 'POST',
+      body: formData
+    });
+
+    const resp = await r.json();
+    if (resp.error) {
+      restorePersistedRotation();
+      rotateStatus.text(' Error: ' + resp.message);
+    } else {
+      rotateStatus.text(' (Rotation saved)');
     }
+  } catch (e) {
+    restorePersistedRotation();
+    rotateStatus.text(' Network error updating rotation.');
+    console.error("Rotation sync failed:", e);
+  }
 }
 
-function purge_movie() {
-  console.log("purge_movie()");
+async function purge_movie() {
+  const movieId = window.movie_id;
+  const deleteLink = $('#delete_movie_link');
+  if (!movieId) {
+    $('#upload_message').text('No uploaded movie is available to delete.');
+    return;
+  }
+
+  deleteLink.addClass('disabled').attr('aria-disabled', 'true');
+  const formData = new FormData();
+  formData.append('api_key', api_key);
+  formData.append('movie_id', movieId);
+  try {
+    const response = await fetch(`${API_BASE}api/delete-movie`, {
+      method: 'POST',
+      body: formData
+    });
+    const result = await response.json();
+    if (!response.ok || result.error) {
+      throw new Error(result.message || 'The movie could not be deleted.');
+    }
+  } catch (error) {
+    $('#upload_message').text(`Unable to delete movie: ${error.message || String(error)}`);
+    deleteLink.removeClass('disabled').removeAttr('aria-disabled');
+    return;
+  }
+
+  window.movie_id = null;
+  $('#upload-preview').hide();
+  $('#upload-form-title').text('Upload a new movie');
+  $('#upload-instructions').show();
+  $('#upload-movie-form').show();
+  $('#upload_message').text('Movie deleted. You can upload another movie.');
 }
 
 function upload_ready_function() {
@@ -696,7 +729,7 @@ function action_button_clicked( e ) {
     sound.play();
   }
   set_property(null, movie_id, property, value);
-  // If we deleted the movie, automatically unpublish it
+  // If we deleted the movie, automatically hide it.
   if (property=='deleted' && value==1){
     set_property(null, movie_id, 'published', 0);
   }
@@ -720,7 +753,7 @@ const dtInstances = {};
 // Phase 3: list shows movie status. Eventually this list should be server-rendered (Jinja2).
 function list_movies_data( movies ) {
   const PUBLISHED = 'published';
-  const UNPUBLISHED = 'unpublished';
+  const HIDDEN = 'hidden';
   const DELETED = 'deleted';
   const COURSE = 'course';
 
@@ -805,10 +838,10 @@ function list_movies_data( movies ) {
       function make_action_button( kind ) {
         let nval = undefined;
         let prop = undefined;
-        if (kind==PUBLISH_BUTTON) {
+        if (kind==UNHIDE_BUTTON) {
           prop = 'published';
           nval = 1;
-        } else if (kind==UNPUBLISH_BUTTON) {
+        } else if (kind==HIDE_BUTTON) {
           prop = 'published';
           nval = 0;
         } else if (kind==DELETE_BUTTON) {
@@ -877,7 +910,7 @@ function list_movies_data( movies ) {
       if (m.deleted) {
         rows += "<i>Deleted</i>";
       } else {
-        rows += m.published ? "<b>Published</b> " : "Not published";
+        rows += m.published ? "<b>Published</b> " : "Hidden";
       }
       if (Number(m.needs_retracing || 0) === 1 && m.movie_traced_url) {
         rows += `<br><span class='retrace-required-message'>${RETRACE_REQUIRED_MESSAGE}</span>`;
@@ -895,13 +928,13 @@ function list_movies_data( movies ) {
           rows += make_action_button( UNDELETE_BUTTON );
         }
       } else {
-        // Do we create an unpublish button?
+        // Do we create a hide button?
         if ((m.published) && ((which==PUBLISHED || which==COURSE)) && (m.user_id==user_id || admin)){
-          rows += make_action_button( UNPUBLISH_BUTTON );
+          rows += make_action_button( HIDE_BUTTON );
         }
-        // Do we create a publish button?
-        if ((m.published==0) && (((which==UNPUBLISHED || which==COURSE) && admin))){
-          rows += make_action_button( PUBLISH_BUTTON );
+        // Do we create an unhide button?
+        if ((m.published==0) && (((which==HIDDEN || which==COURSE) && admin))){
+          rows += make_action_button( UNHIDE_BUTTON );
         }
         // Do we create a delete button? (users can only delete their own movies)
         if (m.user_id == user_id){
@@ -967,8 +1000,8 @@ function list_movies_data( movies ) {
   // Create the four tables
   movies_fill_div( '#your-published-movies',
                    PUBLISHED, movies.filter( m => (m.user_id==user_id && m.published==1 && !m.orig_movie)).sort(byNewest));
-  movies_fill_div( '#your-unpublished-movies',
-                   UNPUBLISHED, movies.filter( m => (m.user_id==user_id && m.published==0 && m.deleted==0 && !m.orig_movie)).sort(byNewest));
+  movies_fill_div( '#your-hidden-movies',
+                   HIDDEN, movies.filter( m => (m.user_id==user_id && m.published==0 && m.deleted==0 && !m.orig_movie)).sort(byNewest));
   const requestedCourseViewId = typeof course_view_id === 'undefined' ? null : course_view_id;
   const displayedCourseId = requestedCourseViewId || activeCourseId();
   movies_fill_div( '#course-movies',
@@ -1122,6 +1155,7 @@ if (typeof module != 'undefined'){
     purge_movie,
     register_func,
     resend_func,
+    rotate_movie,
     hide_clicked,
     play_clicked,
     research_metadata_changed,

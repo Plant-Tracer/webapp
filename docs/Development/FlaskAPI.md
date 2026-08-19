@@ -34,7 +34,7 @@ multiple keys (e.g. after re-sending a login link). Keys are sent as a cookie af
 Most endpoints return JSON with `"error": false` on success or `"error": true`
 plus `"message"` on failure. Exceptions:
 
-- `/api/ver` returns `{"__version__": "...", "sys_version": "...", "stack_name": "...", "DYNAMODB_TABLE_PREFIX": "..."}`.
+- `/api/ver` returns `{"__version__": "...", "git_commit": "...", "sys_version": "...", "stack_name": "...", "DYNAMODB_TABLE_PREFIX": "..."}`.
 - `/api/get-movie-trackpoints` returns CSV by default.
 
 ```text
@@ -135,7 +135,18 @@ receive HTTP 400.
         "total_frames": 1441,
         "total_bytes": 12500000,
         "fpm": "60",
-        "has_traced_movie": true
+        "has_traced_movie": true,
+        "description": "Daily bean measurement",
+        "fps": "30",
+        "width": 640,
+        "height": 480,
+        "rotation": 0,
+        "trim_start_frame": 0,
+        "trim_end_frame": 1440,
+        "needs_retracing": false,
+        "research_use": 1,
+        "credit_by_name": "Alice",
+        "attribution_name": "Alice"
       }
     ],
     "restart_marker": null
@@ -143,12 +154,21 @@ receive HTTP 400.
 }
 ```
 
-The movie list includes published, unpublished, and deleted DynamoDB records.
+The movie list includes published, hidden, and deleted DynamoDB records. The
+API continues to use the ``published`` field: ``1`` is published and ``0`` is hidden.
+The admin summary reports the same states as ``published``, ``hidden``, or
+``deleted``.
 `state` reports that visibility/deletion state; `status` reports processing state.
-The summary deliberately omits object URNs, descriptions, API keys, and research
-metadata. Course enrollment counts are read consistently from the `course_users`
-table. User memberships and movies carry `course_id`; the admin page joins those
-IDs to the separately downloaded course names after all bounded pages arrive.
+The summary deliberately omits object URNs and API keys. The default table view
+stays compact: its `Verbose details` control reveals stable IDs, named course
+administrators, and movie metadata including description, dimensions, trimming,
+rotation, retrace state, and research attribution. ``GET /api/admin/movies/<movie_id>/storage-health``
+loads the verbose-only per-object storage health and pending-upload age on demand.
+Storage health reports only ``present``, ``missing``, or ``not created`` and never
+exposes raw S3 URIs. Course enrollment counts are
+read consistently from the `course_users` table. User memberships and movies
+carry `course_id`; the admin page joins those IDs to the separately downloaded
+course names after all bounded pages arrive.
 The same browser-side join derives each course's first upload and latest movie
 activity and each user's latest movie activity. A course's displayed creation
 date uses `created_at`, falling back to its first movie upload for legacy rows.
@@ -447,6 +467,10 @@ Get metadata and optionally per-frame trackpoints for a specific movie.
 
 `frames` is only present when `frame_start` is provided.
 
+While an active trace lease exists, metadata has `status: "tracing"` and a
+`tracking_lock` object with `acquired_at` and `started_by_user_name`. Clients
+use this to present Analyze as read-only.
+
 ---
 
 #### `POST /api/get-movie-trackpoints`
@@ -506,6 +530,9 @@ Write trackpoints for a single frame. Used by the client before requesting re-tr
 **Side effect:** sets `needs_retracing=1` on the movie record. This flag indicates that a previously traced MP4 may now be stale. The client uses it to show the retracing warning when `movie_traced_url` is also present.
 
 The tracer UI disables marker editing and reset actions while a trace request is active in that browser session, and when loaded movie metadata has `status="tracing"`. This prevents normal same-session marker edits while Lambda is tracing, so Lambda does not finish by clearing `needs_retracing` for a traced MP4 computed from an earlier marker state.
+
+Returns HTTP 409 when an active trace lease makes the movie read-only. The same
+rule applies to marker rename, trim, and capture-interval writes.
 
 ---
 
@@ -692,12 +719,14 @@ filters. Because the database function requires an index filter, prefer
 
 #### `GET|POST /api/ver`
 
-Return the application version. No authentication required.
+Return the application version and the source commit embedded in the Lambda-web
+artifact. No authentication required. `git_commit` is a full 40-character SHA
+for deployed Lambda artifacts; local Flask runs return `unavailable`.
 
 **Response**
 
 ```text
-{ "__version__": "0.9.7.6.2", "sys_version": "3.12.x ...", "stack_name": "prod", "DYNAMODB_TABLE_PREFIX": "prod-" }
+{ "__version__": "0.9.7.6.2", "git_commit": "857d5637ee1949eb5bc883875eee9e7b562cd8f5", "sys_version": "3.12.x ...", "stack_name": "prod", "DYNAMODB_TABLE_PREFIX": "prod-" }
 ```
 
 ---

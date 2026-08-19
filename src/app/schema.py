@@ -35,8 +35,8 @@ class User(BaseModel):
     created: int
     enabled: Annotated[int, Field(ge=0, le=1)]
     admin_for_courses: List[str]
-    default_course_id: str
-    default_course_name: str
+    default_course_id: str | None
+    default_course_name: str | None
     courses: List[str]
     super_role: Literal["none", "superauditor", "superadmin"] = "none"
 
@@ -132,6 +132,15 @@ class Movie(BaseModel):
     user_name: str
     course_id: str
     status: str | None = None
+    tracing_failed_at: int | None = None
+    tracing_failure_summary: str | None = None
+    trace_job_id: str | None = None
+    tracing_state: Literal["queued", "running"] | None = None
+    tracing_started_at: int | None = None
+    tracing_heartbeat_at: int | None = None
+    tracing_expires_at: int | None = None
+    tracing_started_by_user_id: str | None = None
+    tracing_started_by_user_name: str | None = None
 
     published: Annotated[int, Field(ge=0, le=1)]
     deleted: Annotated[int, Field(ge=0, le=1)]
@@ -256,6 +265,22 @@ class LogEntry(BaseModel):
     sequencer: str | None = None
     total_bytes: Annotated[int | None, Field(ge=0)] = None
     elapsed_seconds: Annotated[Decimal | None, Field(ge=0)] = None
+    trace_job_id: str | None = None
+    error_type: str | None = None
+    error_summary: str | None = None
+
+
+class MovieTraceLock(BaseModel):
+    """Exclusive, renewable lease for one movie tracing job."""
+
+    movie_id: str
+    job_id: str
+    state: Literal["queued", "running"]
+    acquired_at: Annotated[int, Field(ge=0)]
+    heartbeat_at: Annotated[int, Field(ge=0)]
+    expires_at: Annotated[int, Field(ge=0)]
+    started_by_user_id: str
+    started_by_user_name: str
 
 
 # Function to validate a single prop and value using the Movie schema

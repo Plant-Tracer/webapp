@@ -28,6 +28,7 @@ from .schema import (
     AdminCourse,
     Movie,
     LogEntry,
+    MovieTraceLock,
     Trackpoint,
     RenameMarkerRequest,
     validate_movie_field,
@@ -49,7 +50,34 @@ COURSES = 'courses'
 COURSE_USERS = 'course_users'
 LOGS = 'logs'
 LOG_ID = 'log_id'
+TRACE_JOB_ID = 'trace_job_id'
+TRACE_LOCK_STATE = 'tracing_state'
+TRACE_LOCK_ACQUIRED_AT = 'tracing_started_at'
+TRACE_LOCK_HEARTBEAT_AT = 'tracing_heartbeat_at'
+TRACE_LOCK_EXPIRES_AT = 'tracing_expires_at'
+TRACE_LOCK_STARTED_BY_USER_ID = 'tracing_started_by_user_id'
+TRACE_LOCK_STARTED_BY_USER_NAME = 'tracing_started_by_user_name'
 ROOT_USER_ID = 'u0'                # the root user
+
+
+class MovieTracingLocked(ValueError):
+    """The movie has an active tracing lease."""
+
+
+def movie_trace_lock_from_record(movie):
+    """Return an active trace lease represented by an already-fetched movie record."""
+    if movie and int(movie.get(TRACE_LOCK_EXPIRES_AT, 0)) > int(time.time()):
+        return MovieTraceLock.model_validate({
+            MOVIE_ID: movie[MOVIE_ID],
+            "job_id": movie[TRACE_JOB_ID],
+            "state": movie[TRACE_LOCK_STATE],
+            "acquired_at": movie[TRACE_LOCK_ACQUIRED_AT],
+            "heartbeat_at": movie[TRACE_LOCK_HEARTBEAT_AT],
+            "expires_at": movie[TRACE_LOCK_EXPIRES_AT],
+            "started_by_user_id": movie[TRACE_LOCK_STARTED_BY_USER_ID],
+            "started_by_user_name": movie[TRACE_LOCK_STARTED_BY_USER_NAME],
+        })
+    return None
 
 
 def normalize_email(email: str) -> str:
@@ -155,6 +183,9 @@ MOVIE_STATE_PROCESSING = 'processing'
 MOVIE_STATE_READY      = 'ready'
 MOVIE_STATE_TRACING   = 'tracing'
 MOVIE_STATE_TRACING_COMPLETED    = 'tracing completed'
+MOVIE_STATE_TRACING_FAILED = 'tracing failed'
+TRACING_FAILED_AT = 'tracing_failed_at'
+TRACING_FAILURE_SUMMARY = 'tracing_failure_summary'
 MOVIE_STATE_UPDATED_AT = 'status_updated_at'
 
 USER_ID = 'user_id'
@@ -505,6 +536,111 @@ class DDBO:
                 raise
         return entry
 
+    def put_movie_trace_failure_log(self, *, movie, job_id, error):
+        """Persist a safe tracing failure audit record; detailed tracebacks stay in CloudWatch."""
+        entry = LogEntry(
+            log_id=f"{int(time.time() * 1000)}-{uuid.uuid4()}", ipaddr="lambda-resize",
+            user_id=movie[USER_ID], course_id=movie[COURSE_ID], time_t=int(time.time()),
+            event_type="movie.tracing.failed", movie_id=movie[MOVIE_ID], trace_job_id=job_id,
+            error_type=type(error).__name__, error_summary=str(error)[:500],
+        )
+        self.logs.put_item(Item=entry.model_dump(exclude_none=True))
+        return entry
+
+    def get_active_movie_trace_lock(self, movie_id):
+        """Return the movie's active trace lease, or None when absent or expired."""
+        movie = self.movies.get_item(
+            Key={MOVIE_ID: movie_id}, ConsistentRead=True,
+        ).get("Item")
+        return movie_trace_lock_from_record(movie)
+
+    def acquire_movie_trace_lock(self, *, movie, started_by_user_id, started_by_user_name):
+        """Atomically obtain a 15-minute lease and expose tracing status."""
+        now = int(time.time())
+        lock = MovieTraceLock(
+            movie_id=movie[MOVIE_ID], job_id=uuid.uuid4().hex, state="queued",
+            acquired_at=now, heartbeat_at=now, expires_at=now + 15 * 60,
+            started_by_user_id=started_by_user_id,
+            started_by_user_name=started_by_user_name,
+        )
+        try:
+            self.movies.update_item(
+                Key={MOVIE_ID: movie[MOVIE_ID]},
+                UpdateExpression=("SET #job_id=:job_id, #state=:state, #acquired=:now, #heartbeat=:now, "
+                                  "#expires=:expires, #started_by_id=:started_by_id, #started_by_name=:started_by_name, "
+                                  "#status=:status, #last_activity_at=:now REMOVE #failed_at, #failure_summary"),
+                ConditionExpression="attribute_not_exists(#expires) OR #expires < :now",
+                ExpressionAttributeNames={
+                    "#job_id": TRACE_JOB_ID, "#state": TRACE_LOCK_STATE,
+                    "#acquired": TRACE_LOCK_ACQUIRED_AT, "#heartbeat": TRACE_LOCK_HEARTBEAT_AT,
+                    "#expires": TRACE_LOCK_EXPIRES_AT, "#started_by_id": TRACE_LOCK_STARTED_BY_USER_ID,
+                    "#started_by_name": TRACE_LOCK_STARTED_BY_USER_NAME, "#status": MOVIE_STATUS,
+                    "#last_activity_at": LAST_ACTIVITY_AT, "#failed_at": TRACING_FAILED_AT,
+                    "#failure_summary": TRACING_FAILURE_SUMMARY,
+                },
+                ExpressionAttributeValues={
+                    ":job_id": lock.job_id, ":state": lock.state, ":now": now,
+                    ":expires": lock.expires_at, ":started_by_id": lock.started_by_user_id,
+                    ":started_by_name": lock.started_by_user_name, ":status": MOVIE_STATE_TRACING,
+                },
+            )
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+                raise MovieTracingLocked(movie[MOVIE_ID]) from exc
+            raise
+        return lock
+
+    def claim_movie_trace_lock(self, *, movie_id, job_id):
+        """Claim one queued lease; duplicate SQS deliveries are harmless no-ops."""
+        now = int(time.time())
+        try:
+            self.movies.update_item(
+                Key={MOVIE_ID: movie_id},
+                UpdateExpression="SET #state=:running, #heartbeat=:now, #expires=:expires",
+                ConditionExpression="#job_id=:job_id AND #state=:queued AND #expires > :now",
+                ExpressionAttributeNames={"#job_id": TRACE_JOB_ID, "#state": TRACE_LOCK_STATE,
+                                          "#heartbeat": TRACE_LOCK_HEARTBEAT_AT, "#expires": TRACE_LOCK_EXPIRES_AT},
+                ExpressionAttributeValues={":job_id": job_id, ":queued": "queued", ":running": "running",
+                                           ":now": now, ":expires": now + 15 * 60},
+            )
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+                return False
+            raise
+        return True
+
+    def heartbeat_movie_trace_lock(self, *, movie_id, job_id):
+        now = int(time.time())
+        self.movies.update_item(
+            Key={MOVIE_ID: movie_id},
+            UpdateExpression="SET #heartbeat=:now, #expires=:expires",
+            ConditionExpression="#job_id=:job_id AND #expires > :now",
+            ExpressionAttributeNames={"#job_id": TRACE_JOB_ID, "#heartbeat": TRACE_LOCK_HEARTBEAT_AT,
+                                      "#expires": TRACE_LOCK_EXPIRES_AT},
+            ExpressionAttributeValues={":job_id": job_id, ":now": now, ":expires": now + 15 * 60},
+        )
+
+    def finish_movie_trace(self, *, movie_id, job_id, updates):
+        """Publish a terminal state only while this worker owns the lease."""
+        now = int(time.time())
+        update_names = {f"#{key}": key for key in updates}
+        update_values = {f":{key}": value for key, value in updates.items()}
+        update_names["#last_activity_at"] = LAST_ACTIVITY_AT
+        update_values[":last_activity_at"] = now
+        update_names["#job_id"] = TRACE_JOB_ID
+        lock_fields = (TRACE_JOB_ID, TRACE_LOCK_STATE, TRACE_LOCK_ACQUIRED_AT,
+                       TRACE_LOCK_HEARTBEAT_AT, TRACE_LOCK_EXPIRES_AT,
+                       TRACE_LOCK_STARTED_BY_USER_ID, TRACE_LOCK_STARTED_BY_USER_NAME)
+        update_names.update({f"#lock_{index}": field for index, field in enumerate(lock_fields)})
+        expression = ("SET " + ", ".join(f"#{key}=:{key}" for key in updates)
+                      + ", #last_activity_at=:last_activity_at REMOVE "
+                      + ", ".join(f"#lock_{index}" for index in range(len(lock_fields))))
+        self.movies.update_item(
+            Key={MOVIE_ID: movie_id}, UpdateExpression=expression,
+            ConditionExpression="#job_id=:job_id",
+            ExpressionAttributeNames=update_names,
+            ExpressionAttributeValues={**update_values, ":job_id": job_id},
+        )
     ### api_key management
 
     def put_api_key_dict(self,api_key_dict):
@@ -2565,7 +2701,7 @@ SET_MOVIE_METADATA = {
     # the user can delete or undelete movies; the admin can only delete them
     DELETED: 'update movies set deleted=%s where id=%s and (@is_owner or (@is_admin and deleted=0))',
 
-    # the admin can publish or unpublish movies; the user can only unpublish them
+    # admins can publish or hide movies; owners can only hide their own movies
     PUBLISHED: 'update movies set published=%s where id=%s and (@is_admin or (@is_owner and published!=0))',
 
     # Preview rotation (0–3); applied when tracking (rotate/scale then save as processed movie).

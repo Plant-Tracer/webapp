@@ -1,8 +1,8 @@
 # lambda-resize
 
 `lambda-resize` is the Plant Tracer video/frame/tracing service. It handles HTTP,
-SQS, and S3 Object Created EventBridge invocations and can also run locally
-through `make run-local-lambda-debug`.
+S3 Object Created events, and custom asynchronous-work events from EventBridge.
+It can also run locally through `make run-local-lambda-debug`.
 
 ## HTTP Routes
 
@@ -30,12 +30,15 @@ through `make run-local-lambda-debug`.
   Local MinIO compatibility adapter for the upload-completion service used by
   the deployed EventBridge handler. Production browsers do not call this route.
 
-## Queue Modes
+## Asynchronous Work
 
 - Local: `TRACING_QUEUE_MODE=local` sends retrace work to an in-process queue
   drained by the local debug process.
-- Deployed: `TRACING_QUEUE_URL` points to SQS. SQS events are handled by the
-  same Lambda entry point. The queue carries retrace and post-upload jobs.
+- Deployed: lambda-resize publishes stack-scoped custom events to EventBridge.
+  A rule for that stack pushes retrace and post-upload jobs back to the same
+  Lambda. There is no SQS event-source mapping and therefore no idle polling.
+- Failed asynchronous invocations go to an unpolled 14-day SQS dead-letter
+  queue and raise the stack's dead-letter alarm.
 
 ## Upload Events
 
