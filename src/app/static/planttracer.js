@@ -489,8 +489,39 @@ async function apply_rotation_and_zip() {
   }
 }
 
-function purge_movie() {
-  console.log("purge_movie()");
+async function purge_movie() {
+  const movieId = window.movie_id;
+  const deleteLink = $('#delete_movie_link');
+  if (!movieId) {
+    $('#upload_message').text('No uploaded movie is available to delete.');
+    return;
+  }
+
+  deleteLink.addClass('disabled').attr('aria-disabled', 'true');
+  const formData = new FormData();
+  formData.append('api_key', api_key);
+  formData.append('movie_id', movieId);
+  try {
+    const response = await fetch(`${API_BASE}api/delete-movie`, {
+      method: 'POST',
+      body: formData
+    });
+    const result = await response.json();
+    if (!response.ok || result.error) {
+      throw new Error(result.message || 'The movie could not be deleted.');
+    }
+  } catch (error) {
+    $('#upload_message').text(`Unable to delete movie: ${error.message || String(error)}`);
+    deleteLink.removeClass('disabled').removeAttr('aria-disabled');
+    return;
+  }
+
+  window.movie_id = null;
+  $('#upload-preview').hide();
+  $('#upload-form-title').text('Upload a new movie');
+  $('#upload-instructions').show();
+  $('#upload-movie-form').show();
+  $('#upload_message').text('Movie deleted. You can upload another movie.');
 }
 
 function upload_ready_function() {
