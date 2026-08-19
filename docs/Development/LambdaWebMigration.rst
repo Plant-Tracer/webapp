@@ -443,10 +443,14 @@ Deploy:
   version API response is printed in full, and resize ping should report the
   application version and UTC deployment timestamp;
 * let the deploy target run ``make sam-deployed-workflow-test``. It creates or
-  reuses a stack-specific test course/user, creates a movie, uploads a real
-  test video through ``uploads/{stack}/``, waits for EventBridge/post-upload
-  processing, writes a starting trackpoint, requests a short trace, verifies
-  completion, and removes its movie artifacts;
+  reuses a stack-specific test course/user, uploads the circumnutation fixture
+  through ``uploads/{stack}/``, verifies the movie appears in the deployed
+  movie list, waits for EventBridge/post-upload processing, and downloads the
+  original movie. It traces all frames from committed reference starting
+  markers, verifies the initial and final Apex positions within two pixels,
+  validates CSV and XLSX exports, and compares the downloaded traced movie's
+  final frame to its committed rendering reference. It then removes its movie
+  artifacts;
 * inspect recent logs with ``make sam-logs-web`` and ``make sam-logs-resize``
   if any smoke check reports a failure.
 

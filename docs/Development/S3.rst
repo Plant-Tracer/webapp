@@ -228,6 +228,27 @@ Updating an S3 notification configuration replaces the complete configuration.
 queue, and Lambda destinations, adds ``EventBridgeConfiguration``, then reads
 the bucket again to verify the change.
 
+Deployed Workflow Verification
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+After deploying a stack, authenticate with ``aws sso login`` and run:
+
+.. code-block:: console
+
+   AWS_PROFILE=planttracer-admin AWS_REGION=us-east-1 \
+     make sam-deployed-workflow-test
+
+The target uploads the circumnutation fixture through the deployed presigned
+POST, verifies S3-to-EventBridge processing, deployed movie listing, original
+movie download, calibrated start/end tracking positions, CSV and XLSX exports,
+and the final rendered frame of the traced movie. It does not validate ZIP
+downloads. It then removes the test movie and always revokes the temporary API
+key it creates. The underlying verifier declares its runtime dependencies as
+inline script metadata, so ``uv run bin/deployed_workflow_test.py --help`` also
+runs in an isolated environment without a pre-populated project virtualenv.
+Comparing the traced movie's final frame also requires an ``ffmpeg`` executable
+on ``PATH`` or selected explicitly with ``FFMPEG_PATH``.
+
 Metadata Stored with Original Movies
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

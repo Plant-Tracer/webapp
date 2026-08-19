@@ -95,6 +95,8 @@ Unreleased Summary
     * Analyze: prevent concurrent tracing of a movie and keep Analyze read-only while tracing runs
     * Developer: add a Makefile-driven analysis-MP4 CLI that creates a portable
       WebCodecs player bundle for manual cross-browser frame-step verification
+    * Developer: make the deployed workflow verifier directly runnable with
+      ``uv run`` without relying on a pre-populated Poetry environment
     * Deployment: honor ``STACK_NAME`` as a per-stack config selector, pass the
       target to SAM explicitly, reject stack and DynamoDB-prefix conflicts, and
       use a TOML-aware Python writer for guided config bootstrapping
