@@ -243,7 +243,9 @@ POST, verifies S3-to-EventBridge processing, deployed movie listing, original
 movie download, calibrated start/end tracking positions, CSV and XLSX exports,
 and the final rendered frame of the traced movie. It does not validate ZIP
 downloads. It then removes the test movie and always revokes the temporary API
-key it creates.
+key it creates. The underlying verifier declares its runtime dependencies as
+inline script metadata, so ``uv run bin/deployed_workflow_test.py --help`` also
+runs in an isolated environment without a pre-populated project virtualenv.
 
 Metadata Stored with Original Movies
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

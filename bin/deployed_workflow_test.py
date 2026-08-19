@@ -1,4 +1,16 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.12,<3.13"
+# dependencies = [
+#   "boto3>=1.42.72,<2",
+#   "pillow>=11,<12",
+#   "pydantic>=2,<3",
+#   "requests>=2.32.4,<3",
+#   "webapp",
+# ]
+# [tool.uv.sources]
+# webapp = { path = "..", editable = true }
+# ///
 """Exercise deployed upload, listing, tracing, and downloads against references."""
 
 import argparse
