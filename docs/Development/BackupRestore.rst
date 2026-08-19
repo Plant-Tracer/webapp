@@ -285,9 +285,9 @@ Regenerating ZIP Artifacts
 
 Restore should provide an option to regenerate ZIP files after movie records
 and MP4 objects are restored. Regeneration must use the same local/deployed
-processing path used elsewhere in the project: Lambda through HTTP/SQS or the
-local Lambda bridge. The restore path should not invent a separate video
-processing implementation.
+processing path used elsewhere in the project: Lambda through HTTP/EventBridge
+or the local Lambda bridge. The restore path should not invent a separate
+video processing implementation.
 
 When ``--regenerate-zips`` is present, restore should enqueue regeneration work,
 poll until completion, and print status to stderr once per second using ``\r``

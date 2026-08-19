@@ -1,9 +1,10 @@
 from unittest.mock import patch
 
 import pytest
-
+from resize_app import async_work
 from resize_app import movie_glue
 from resize_app import tracer
+from resize_app.src.app.constants import C
 from resize_app.src.app.odb_movie_data import delete_object
 from resize_app.src.app.schema import Trackpoint
 
@@ -17,7 +18,6 @@ def test_queue_tracing_uses_local_queue_when_configured(monkeypatch):
     enqueue_message.assert_called_once_with(
         {
             "job_type": "trace",
-            "api_key": "test-key",
             "movie_id": "m123",
             "frame_start": 7,
             "frame_end": 20,
@@ -26,6 +26,37 @@ def test_queue_tracing_uses_local_queue_when_configured(monkeypatch):
     )
     assert result["error"] is False
     assert result["message"]["job_id"] == "job-123"
+
+
+def test_queue_tracing_publishes_eventbridge_work(monkeypatch):
+    monkeypatch.delenv("TRACING_QUEUE_MODE", raising=False)
+    monkeypatch.delenv("TRACKING_QUEUE_MODE", raising=False)
+
+    with patch("resize_app.async_work.publish_job") as publish_job:
+        result = movie_glue.queue_tracing("test-key", "m123", 7, 20)
+
+    publish_job.assert_called_once_with(async_work.TraceJob(
+        movie_id="m123",
+        frame_start=7,
+        frame_end=20,
+    ))
+    assert result == {
+        "error": False,
+        "message": {"movie_id": "m123", "frame_start": 7, "frame_end": 20},
+    }
+
+
+def test_queue_post_upload_publishes_eventbridge_work(monkeypatch):
+    monkeypatch.delenv("TRACING_QUEUE_MODE", raising=False)
+    monkeypatch.delenv("TRACKING_QUEUE_MODE", raising=False)
+    monkeypatch.setenv(C.AWS_REGION, "us-east-1")
+
+    with patch("resize_app.async_work.publish_job") as publish_job:
+        movie_glue.queue_post_upload("m123")
+
+    publish_job.assert_called_once_with(
+        async_work.PostUploadJob(movie_id="m123")
+    )
 
 
 def test_prepare_tracing_request_marks_movie_tracing_before_queueing(new_movie):

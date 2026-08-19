@@ -25,8 +25,9 @@ The stack has two application Lambda functions:
 
 ``lambda-resize``
     Remains the vision/video/tracing function. It serves ``/resize-api/*``
-    routes and consumes SQS trace work. It should not become the general web
-    application Lambda.
+    routes and receives stack-scoped EventBridge work for post-upload
+    normalization and tracing. It should not become the general web
+    application Lambda, and it has no idle-polling event-source mapping.
 
 The public application should use one HTTPS front door. Separate Lambda
 functions do not require separate product domain names. HTTP API route
@@ -211,6 +212,14 @@ not keep an execution environment continuously warm. Any code that relies on
 unique values, credentials, timestamps, temporary data, or network connections
 from module initialization must tolerate Lambda restore behavior.
 
+Do not replace SnapStart with a scheduled keepalive invocation. Lambda does not
+guarantee that a later request reuses the periodically invoked execution
+environment, especially during scaling or infrastructure recycling. A
+two-minute schedule would add 21,600 invocations in a 30-day month without
+providing a fast-start guarantee. SnapStart remains the explicit cold-start
+control for lambda-web; SQS polling is neither a keepalive nor a cold-start
+feature.
+
 ``lambda-resize`` does not use SnapStart in the initial migration. The resize
 function has different runtime characteristics and should be measured before
 adding SnapStart or provisioned concurrency.
@@ -282,7 +291,8 @@ Implementation Steps
    functions on one HTTP API.
 4. Remove VM parameters, resources, outputs, and VM-only deployment workflow
    hooks from the Lambda-only SAM path.
-5. Preserve ``lambda-resize`` SQS trace processing and ``/resize-api/*`` routes.
+5. Preserve ``lambda-resize`` asynchronous trace processing and
+   ``/resize-api/*`` routes without an idle-polling event-source mapping.
 6. Preserve static file serving through Flask/``lambda-web``.
 7. Update deployment and smoke targets so they name the web and resize Lambda
    functions separately.
@@ -300,8 +310,8 @@ Before PR #1113 is ready to merge, validate at least:
   ``/prod/api/ver``. Do not use root-level ``/ping`` or ``/sping`` for API
   Gateway custom-domain checks because AWS reserves those paths for service
   health checks;
-* ``lambda-resize`` still serves ``/resize-api/v1/ping`` and keeps SQS trace
-  event handling;
+* ``lambda-resize`` still serves ``/resize-api/v1/ping`` and handles
+  stack-scoped EventBridge trace events;
 * SAM template validation/linting passes;
 * a deployed or SAM-local smoke path confirms route separation between
   ``lambda-web`` and ``lambda-resize``;
@@ -470,8 +480,8 @@ Manual smoke checks on the non-production stack:
   stack's EventBridge rule and completed its short trace;
 * open the analysis page, load the first frame, save at least one marker
   change, and start tracing;
-* confirm the trace job reaches SQS/``lambda-resize`` and produces expected
-  artifacts or a clear user-visible status;
+* confirm the trace job reaches ``lambda-resize`` through EventBridge and
+  produces expected artifacts or a clear user-visible status;
 * verify audit/admin pages still render for an admin user.
 
 Do not treat a new stack hostname as ready for users until it passes the smoke

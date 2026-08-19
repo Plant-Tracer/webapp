@@ -31,8 +31,9 @@ Upload
    the user to Analyze.
 
 The upload-completed, resize-started, and resize-completed transitions are
-written to the DynamoDB ``logs`` table. EventBridge/SQS delivery is at least
-once; conditional updates make repeated upload events safe.
+written to the DynamoDB ``logs`` table. EventBridge and asynchronous Lambda
+delivery are at least once; conditional updates make repeated upload events
+safe.
 
 Rows that never reach step 6 remain visibly pending in the admin movie table.
 Their ``created_at`` timestamp supports a future two-hour pending-upload
@@ -84,7 +85,9 @@ Retracing
 4. lambda-resize clears trackpoints after frame ``N``, marks the movie as
    ``tracing``, and queues the work.
 5. In local mode, ``TRACING_QUEUE_MODE=local`` sends work to the in-process
-   queue. In deployed mode, ``TRACING_QUEUE_URL`` sends work to SQS.
+   queue. In deployed mode, lambda-resize publishes a stack-scoped custom
+   EventBridge event; the matching rule pushes it back to lambda-resize.
+   There is no deployed work-queue poller.
 6. The worker traces from frame ``N + 1`` through optional ``frame_end``, writes trackpoints to DynamoDB,
    writes a ZIP and traced movie to S3/MinIO, and marks status as
    ``tracing completed``.

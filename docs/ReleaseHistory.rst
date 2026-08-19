@@ -77,6 +77,9 @@ Release Notes
 
 Unreleased Summary
 ******************
+    * Operations: replace five continuously polling SQS event-source mappings
+      with stack-scoped EventBridge push events for post-upload and tracing
+      work; retain an unpolled failure DLQ and SnapStart for lambda-web
     * Movies: rename the user-facing ``Unpublished`` state to ``Hidden`` now
     * Movies: prevent concurrent tracing and make Analyze read-only while a trace is running.
       that movies are published immediately after upload

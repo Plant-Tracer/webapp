@@ -4,13 +4,11 @@ Routines for providing access to the movies for the lambda
 """
 
 import os
-import json
 import time
 from typing import NamedTuple
 from pathlib import Path
 import tempfile
 
-import boto3
 from aws_lambda_powertools import Logger
 from botocore.exceptions import ClientError
 from pydantic import BaseModel
@@ -59,6 +57,7 @@ from .src.app.odb import (
     USER_NAME,
 )
 
+from . import async_work
 from . import local_queue
 from . import mpeg_jpeg_zip
 from . import tracer
@@ -86,21 +85,10 @@ class UploadCompletion(BaseModel):
     total_bytes: int
 
 
-POST_UPLOAD_JOB = "post_upload"
-TRACE_JOB = "trace"
-QUEUE_JOB_TYPE = "job_type"
 S3_BUCKET = "Bucket"
 S3_KEY = "Key"
 S3_COPY_SOURCE = "CopySource"
 S3_CONTENT_LENGTH = "ContentLength"
-
-
-def sqs_client():
-    return boto3.client(
-        "sqs",
-        region_name=os.environ.get("AWS_REGION"),
-        endpoint_url=os.environ.get("AWS_ENDPOINT_URL_SQS"),
-    )
 
 
 def validate_movie_access(*, api_key=None, movie_id=None, require_edit=False):
@@ -132,56 +120,46 @@ def validate_movie_access(*, api_key=None, movie_id=None, require_edit=False):
         raise ValueError("movie_id is invalid") from e
     return ddbo, user_id, movie
 
-def queue_tracing(api_key:str, movie_id:str, frame_start:int, frame_end:int|None=None, job_id:str|None=None):
-    """Send a tracing request through SQS or the local debug queue."""
-    msg = {
-        QUEUE_JOB_TYPE: TRACE_JOB,
-        "api_key": api_key,
-        "movie_id": movie_id,
-        "frame_start": frame_start,
-    }
+def queue_tracing(_api_key:str, movie_id:str, frame_start:int, frame_end:int|None=None,
+                  job_id:str|None=None):
+    """Dispatch tracing through EventBridge or the local debug queue."""
+    job = async_work.TraceJob(
+        movie_id=movie_id,
+        frame_start=frame_start,
+        frame_end=frame_end,
+        job_id=job_id,
+    )
     safe_msg = {"movie_id": movie_id, "frame_start": frame_start}
     if job_id is not None:
-        msg["job_id"] = job_id
         safe_msg["job_id"] = job_id
     if frame_end is not None:
-        msg["frame_end"] = int(frame_end)
         safe_msg["frame_end"] = int(frame_end)
     queue_mode = (os.environ.get("TRACING_QUEUE_MODE")
                   or os.environ.get("TRACKING_QUEUE_MODE", "")).strip().lower()
     if queue_mode == "local":
         LOGGER.info("Enqueuing follow-up local batch: %s", safe_msg)
-        local_queue.enqueue_message(msg)
+        local_queue.enqueue_message(job.model_dump())
         return {"error": False, "message": safe_msg}
-    queue_url = (os.environ.get("TRACING_QUEUE_URL")
-                 or os.environ.get("TRACKING_QUEUE_URL", "")).strip()
-    if not queue_url:
-        LOGGER.error("TRACING_QUEUE_URL not configured for follow-up batch")
-        raise RuntimeError("TRACING_QUEUE_URL not configured for follow-up batch")
-    LOGGER.info("Enqueuing follow-up SQS batch: %s", safe_msg)
-    sqs_client().send_message(QueueUrl=queue_url, MessageBody=json.dumps(msg))
+    LOGGER.info("Publishing follow-up EventBridge work: %s", safe_msg)
+    async_work.publish_job(job)
     return {"error":False, "message": safe_msg}
 
 
 def queue_post_upload(movie_id: str):
-    """Queue post-upload movie inspection/resizing work."""
-    message = {QUEUE_JOB_TYPE: POST_UPLOAD_JOB, "movie_id": movie_id}
+    """Dispatch post-upload inspection through EventBridge or local work."""
+    job = async_work.PostUploadJob(movie_id=movie_id)
     queue_mode = (os.environ.get("TRACING_QUEUE_MODE")
                   or os.environ.get("TRACKING_QUEUE_MODE", "")).strip().lower()
     if queue_mode == "local":
         if local_queue.worker_running():
-            local_queue.enqueue_message(message)
+            local_queue.enqueue_message(job.model_dump())
         else:
             process_uploaded_movie(movie_id=movie_id)
         return
     if not queue_mode and os.environ.get(C.AWS_REGION) == "local":
         process_uploaded_movie(movie_id=movie_id)
         return
-    queue_url = (os.environ.get("TRACING_QUEUE_URL")
-                 or os.environ.get("TRACKING_QUEUE_URL", "")).strip()
-    if not queue_url:
-        raise RuntimeError("TRACING_QUEUE_URL not configured for post-upload work")
-    sqs_client().send_message(QueueUrl=queue_url, MessageBody=json.dumps(message))
+    async_work.publish_job(job)
 
 
 def _head_object(*, bucket, key):

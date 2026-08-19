@@ -11,7 +11,7 @@ move often.
 | User default course | High | Course-aware APIs resolve a valid explicit `course_id`, then `default_course_id`, then a membership; return a setup error if none exists. |
 | Movie access | High | Direct movie access checks must match movie-list visibility: owner, admin, or published course-visible movie. |
 | Movie artifact URNs | Medium | `movie_data_urn`, `movie_zipfile_urn`, and `movie_traced_urn` are absent during parts of upload/tracing. Use `.get()` or typed optional fields. |
-| Lambda queue messages | Medium | Local/SQS messages are dicts with `api_key`, `movie_id`, and `frame_start`. A Pydantic message model would make retries safer. |
+| Lambda asynchronous work | Low | Local and EventBridge jobs use discriminated Pydantic trace/post-upload models; the external EventBridge envelope remains a dictionary at the handler boundary. |
 | Boto3 responses | Low | DynamoDB/S3 response shapes are external dict contracts. Use `.get()` for optional fields such as `Items`, `LastEvaluatedKey`, `Errors`, and `Deleted`. |
 
 ## Current Model Boundary
@@ -39,7 +39,7 @@ Short term:
 
 Medium term:
 
-- Add Pydantic request/response models for Flask API and Lambda queue payloads.
+- Add Pydantic request/response models for remaining Flask API payloads.
 - Convert high-risk return paths (`get_user`, `get_movie`, movie metadata) to
   typed DTOs or Pydantic models.
 - Keep DynamoDB adapter code responsible for converting Decimal and absent
