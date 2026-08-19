@@ -195,6 +195,7 @@ def assert_position(actual, expected, *, scale, frame_number):
         actual_x, actual_y = actual.apex_x / scale, actual.apex_y / scale
     else:
         actual_x, actual_y = actual.x, actual.y
+    actual_x, actual_y = float(actual_x), float(actual_y)
     if abs(actual_x - expected_x) > TRACKING_TOLERANCE_PIXELS:
         raise AssertionError(f"frame {frame_number} Apex x={actual_x}, expected {expected_x} +/- "
                              f"{TRACKING_TOLERANCE_PIXELS} pixels")
