@@ -78,10 +78,15 @@ describe('audit log page', () => {
     ]);
 
     const search = document.getElementById('audit-search');
-    search.value = 'bert';
-    search.dispatchEvent(new Event('input'));
-
-    expect(auditRows()).toEqual([['Movie traced', 'Bert', '5']]);
+    [
+      ['bert', ['Movie traced', 'Bert', '5']],
+      ['uploaded', ['Movie uploaded', 'Ada', '2']],
+      ['5', ['Movie traced', 'Bert', '5']],
+    ].forEach(([searchText, expectedRow]) => {
+      search.value = searchText;
+      search.dispatchEvent(new Event('input'));
+      expect(auditRows()).toEqual([expectedRow]);
+    });
   });
 
   test('sorts numeric and text values in both directions, keeping missing values last', async () => {
