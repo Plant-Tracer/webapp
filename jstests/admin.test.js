@@ -272,6 +272,79 @@ describe('admin summary rendering', () => {
     expect(name.readOnly).toBe(false);
   });
 
+  test('submits a new course and refreshes the admin summary', async () => {
+    const adminPayload = payload();
+    adminPayload.viewer.super_role = 'superadmin';
+    fetch.mockResponseOnce(JSON.stringify(adminPayload));
+    const dialog = document.getElementById('admin-course-dialog');
+    dialog.showModal = jest.fn();
+    dialog.close = jest.fn();
+
+    await loadAdminSummary();
+    document.getElementById('admin-new-course').click();
+    expect(dialog.showModal).toHaveBeenCalledTimes(1);
+    document.getElementById('admin-course-name').value = 'Botany';
+    document.getElementById('admin-course-id').value = 'BOT-3';
+    document.getElementById('admin-course-admin-email').value = 'new@example.test';
+    document.getElementById('admin-course-admin-name').value = 'New Administrator';
+    fetch.mockResponseOnce(JSON.stringify({
+      error: false, email_sent: true, message: 'Course created and administrator email sent',
+    }), { status: 201 });
+    fetch.mockResponseOnce(JSON.stringify(adminPayload));
+
+    document.getElementById('admin-course-form').dispatchEvent(new Event('submit', {
+      bubbles: true,
+      cancelable: true,
+    }));
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
+
+    const request = fetch.mock.calls[1];
+    expect(request[0]).toBe('/api/admin/courses');
+    expect(request[1].method).toBe('POST');
+    expect(JSON.parse(request[1].body)).toEqual({
+      course_name: 'Botany',
+      course_id: 'BOT-3',
+      admin_email: 'new@example.test',
+      admin_name: 'New Administrator',
+    });
+    expect(dialog.close).toHaveBeenCalledTimes(1);
+    expect(document.getElementById('admin-status').textContent)
+      .toBe('Course created and administrator email sent');
+    expect(document.getElementById('admin-status').className).toBe('admin-success');
+  });
+
+  test('keeps the course dialog open when creation fails', async () => {
+    const adminPayload = payload();
+    adminPayload.viewer.super_role = 'superadmin';
+    fetch.mockResponseOnce(JSON.stringify(adminPayload));
+    const dialog = document.getElementById('admin-course-dialog');
+    dialog.showModal = jest.fn();
+    dialog.close = jest.fn();
+
+    await loadAdminSummary();
+    document.getElementById('admin-course-name').value = 'Conflicting course';
+    document.getElementById('admin-course-id').value = 'BIO-1';
+    document.getElementById('admin-course-admin-email').value = 'ada@example.test';
+    document.getElementById('admin-course-admin-name').value = 'Ada';
+    fetch.mockResponseOnce(JSON.stringify({
+      error: true,
+      message: 'Course ID conflicts with an existing course name',
+    }), { status: 409 });
+
+    document.getElementById('admin-course-form').dispatchEvent(new Event('submit', {
+      bubbles: true,
+      cancelable: true,
+    }));
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
+
+    expect(dialog.close).not.toHaveBeenCalled();
+    expect(document.getElementById('admin-course-form-status').textContent)
+      .toBe('Course ID conflicts with an existing course name');
+    expect(document.getElementById('admin-course-form-status').className).toBe('admin-error');
+    expect(document.getElementById('admin-course-submit').disabled).toBe(false);
+  });
+
   test('keeps IDs and operational metadata hidden until verbose details is selected', async () => {
     fetch.mockResponseOnce(JSON.stringify(payload()));
 
