@@ -141,6 +141,12 @@ class Movie(BaseModel):
     tracing_expires_at: int | None = None
     tracing_started_by_user_id: str | None = None
     tracing_started_by_user_name: str | None = None
+    analysis_lease_id: str | None = None
+    analysis_started_at: int | None = None
+    analysis_heartbeat_at: int | None = None
+    analysis_expires_at: int | None = None
+    analysis_started_by_user_id: str | None = None
+    analysis_started_by_user_name: str | None = None
 
     published: Annotated[int, Field(ge=0, le=1)]
     deleted: Annotated[int, Field(ge=0, le=1)]
@@ -277,6 +283,18 @@ class MovieTraceLock(BaseModel):
     movie_id: str
     job_id: str
     state: Literal["queued", "running"]
+    acquired_at: Annotated[int, Field(ge=0)]
+    heartbeat_at: Annotated[int, Field(ge=0)]
+    expires_at: Annotated[int, Field(ge=0)]
+    started_by_user_id: str
+    started_by_user_name: str
+
+
+class MovieAnalysisLock(BaseModel):
+    """Exclusive, renewable lease for one browser's Analyze session."""
+
+    movie_id: str
+    lease_id: str
     acquired_at: Annotated[int, Field(ge=0)]
     heartbeat_at: Annotated[int, Field(ge=0)]
     expires_at: Annotated[int, Field(ge=0)]

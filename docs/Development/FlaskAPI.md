@@ -541,6 +541,23 @@ While an active trace lease exists, metadata has `status: "tracing"` and a
 `tracking_lock` object with `acquired_at` and `started_by_user_name`. Clients
 use this to present Analyze as read-only.
 
+An active browser analysis lease adds `analysis_lock` with `active`, `owned`,
+`acquired_at`, and `started_by_user_name`. `owned` is true only when the
+request includes the holder's `analysis_lease_id`.
+
+---
+
+#### `POST /api/acquire-movie-analysis-lease`
+
+Acquire Analyze's movie-row lease immediately on page entry. The successful
+holder receives an opaque `lease_id`. When another browser already holds the
+lease, this still returns HTTP 200 with `lease_id: null` and an `analysis_lock`
+object so the caller can display Analyze as view-only.
+
+`POST /api/heartbeat-movie-analysis-lease` renews the holder's lease, and
+`POST /api/release-movie-analysis-lease` releases it on page exit. Both require
+`api_key`, `movie_id`, and `analysis_lease_id`.
+
 ---
 
 #### `POST /api/get-movie-trackpoints`
@@ -601,8 +618,10 @@ Write trackpoints for a single frame. Used by the client before requesting re-tr
 
 The tracer UI disables marker editing and reset actions while a trace request is active in that browser session, and when loaded movie metadata has `status="tracing"`. This prevents normal same-session marker edits while Lambda is tracing, so Lambda does not finish by clearing `needs_retracing` for a traced MP4 computed from an earlier marker state.
 
-Returns HTTP 409 when an active trace lease makes the movie read-only. The same
-rule applies to marker rename, trim, and capture-interval writes.
+Returns HTTP 409 when an active trace lease makes the movie read-only, or when
+another browser owns the active analysis lease. The same rule applies to marker
+rename, trim, and capture-interval writes; the owning browser includes its
+`analysis_lease_id` with those requests.
 
 ---
 
