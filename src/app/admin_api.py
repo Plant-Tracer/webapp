@@ -59,6 +59,11 @@ def api_admin_create_course():
                     "message": "Administrator account is disabled",
                 }), 409
             admin_name = existing_user[odb.USER_NAME]
+            if not admin_name.strip():
+                return jsonify({
+                    "error": True,
+                    "message": "Administrator account has no name",
+                }), 409
         except odb.InvalidUser_Email:
             admin_name = change.admin_name
 

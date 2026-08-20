@@ -420,6 +420,37 @@ def test_admin_course_create_rejects_disabled_administrator(client, new_course):
         ddbo.update_table(ddbo.users, admin[odb.USER_ID], {odb.ENABLED: 1})
 
 
+def test_admin_course_create_rejects_existing_administrator_without_name(client, new_course):
+    ddbo = new_course["ddbo"]
+    ddbo.update_table(
+        ddbo.users,
+        new_course[USER_ID],
+        {odb.SUPER_ROLE: odb.SUPER_ROLE_SUPERADMIN},
+    )
+    admin = odb.get_user_email(new_course[ADMIN_EMAIL])
+    original_name = admin[odb.USER_NAME]
+    course_id = f"NamelessAdmin-{uuid.uuid4()}"
+    client.set_cookie(apikey.cookie_name(), new_course[API_KEY])
+    ddbo.update_table(ddbo.users, admin[odb.USER_ID], {odb.USER_NAME: ""})
+    try:
+        response = client.post("/api/admin/courses", json={
+            "course_id": course_id,
+            "course_name": "Nameless administrator",
+            "admin_email": new_course[ADMIN_EMAIL],
+            "admin_name": "Submitted Name",
+        })
+
+        assert response.status_code == 409
+        assert response.json == {
+            "error": True,
+            "message": "Administrator account has no name",
+        }
+        with pytest.raises(odb.InvalidCourse_Id):
+            odb.lookup_course_by_id(course_id=course_id)
+    finally:
+        ddbo.update_table(ddbo.users, admin[odb.USER_ID], {odb.USER_NAME: original_name})
+
+
 def test_admin_course_create_survives_mail_transport_failure(client, new_course,
                                                               monkeypatch):
     ddbo = new_course["ddbo"]

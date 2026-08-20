@@ -215,10 +215,11 @@ ordinary users receive HTTP 403.
 
 The server normalizes the email address. If it belongs to a registered user,
 the stored `user_name` is authoritative and the submitted `admin_name` is
-ignored. A disabled registered account is rejected with HTTP 409 and is not
-offered by the administrator selector. Otherwise, both administrator email and
-name are used to create the administrator account. The server generates the
-course registration key and uses the configured default maximum enrollment.
+ignored. A disabled registered account or a legacy account without a stored
+name is rejected with HTTP 409; disabled administrators are not offered by the
+selector. Otherwise, both administrator email and name are used to create the
+administrator account. The server generates the course registration key and
+uses the configured default maximum enrollment.
 
 A new course returns HTTP 201. Retrying the same course ID, name, and
 administrator is idempotent and returns HTTP 200; reusing an ID with a

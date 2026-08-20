@@ -1598,7 +1598,7 @@ def delete_course(*,course_id):
 
 def add_course_admin(*, admin_id, course_id):
     """Promotes the user to be an administrator and makes them an administrator of a specific course.
-    :param email: email address of the administrator
+    :param admin_id: user ID of the administrator
     :param course_id: - if specified, use this course_id
     :returns {'user_id':admin_id, 'admin_id':admin_id, 'course_id':course_id }
     """
@@ -1620,6 +1620,7 @@ def add_course_admin(*, admin_id, course_id):
 
     ddbo.update_table(ddbo.courses, course_id,
                       { ADMINS_FOR_COURSE:list(set(course[ ADMINS_FOR_COURSE ] + [admin_id]))})
+    ddbo.course_users.put_item(Item={COURSE_ID:course_id, USER_ID:admin_id})
 
     return { USER_ID :admin_id, 'admin_id':admin_id, COURSE_ID :course_id}
 
@@ -1668,6 +1669,7 @@ def remove_course_admin(*, course_id, admin_id):
 
     except ValueError:
         logger.warning("course admin remove fail: admin %s from course %s",admin_id,course_id)
+    ddbo.course_users.delete_item(Key={COURSE_ID:course_id, USER_ID:admin_id})
 
 
 def check_course_admin(*, user_id, course_id):

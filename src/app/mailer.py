@@ -81,11 +81,20 @@ def get_smtp_config():
         return get_aws_secret_for_arn(os.environ[C.SMTPCONFIG_ARN])
 
     if C.SMTPCONFIG_JSON in os.environ:
-        cp = configparser.ConfigParser()
-        cp.add_section('smtp')
-        for (k, v) in json.loads(os.environ[C.SMTPCONFIG_JSON]).items():
-            cp.set('smtp', k, v)
-        return cp['smtp']
+        try:
+            config = json.loads(os.environ[C.SMTPCONFIG_JSON])
+            if not isinstance(config, dict):
+                raise TypeError("SMTP configuration must be a JSON object")
+            cp = configparser.ConfigParser()
+            cp.add_section('smtp')
+            for key, value in config.items():
+                cp.set('smtp', key, value)
+            smtp_config = cp['smtp']
+            if SMTP_HOST not in smtp_config:
+                raise KeyError(f"missing SMTP setting: {SMTP_HOST}")
+            return smtp_config
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+            raise InvalidMailerConfiguration(str(exc)) from exc
 
     if C.PLANTTRACER_CREDENTIALS not in os.environ:
         return None

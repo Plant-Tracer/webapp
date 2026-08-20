@@ -522,8 +522,14 @@ async function submitCourseCreate(form) {
       throw new Error(payload.message || `Course creation failed with HTTP ${response.status}`);
     }
     document.getElementById("admin-course-dialog").close();
-    await loadAdminSummary();
     const status = document.getElementById("admin-status");
+    try {
+      await loadAdminSummary();
+    } catch (refreshError) {
+      status.className = "admin-warning";
+      status.textContent = `${payload.message}. Admin list refresh failed: ${refreshError.message}`;
+      return;
+    }
     status.className = payload.email_sent ? "admin-success" : "admin-warning";
     status.textContent = payload.message;
   } catch (error) {

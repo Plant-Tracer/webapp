@@ -354,6 +354,35 @@ describe('admin summary rendering', () => {
     expect(document.getElementById('admin-course-form-status').className).toBe('');
   });
 
+  test('reports a refresh failure visibly after creating a course', async () => {
+    const adminPayload = payload();
+    adminPayload.viewer.super_role = 'superadmin';
+    fetch.mockResponseOnce(JSON.stringify(adminPayload));
+    const dialog = document.getElementById('admin-course-dialog');
+    dialog.showModal = jest.fn();
+    dialog.close = jest.fn();
+
+    await loadAdminSummary();
+    document.getElementById('admin-course-admin-email').value = 'new@example.test';
+    fetch.mockResponseOnce(JSON.stringify({
+      error: false, email_sent: true, message: 'Course created and administrator email sent',
+    }), { status: 201 });
+    fetch.mockRejectOnce(new Error('network unavailable'));
+
+    document.getElementById('admin-course-form').dispatchEvent(new Event('submit', {
+      bubbles: true,
+      cancelable: true,
+    }));
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
+
+    expect(dialog.close).toHaveBeenCalledTimes(1);
+    expect(document.getElementById('admin-status').className).toBe('admin-warning');
+    expect(document.getElementById('admin-status').textContent)
+      .toBe('Course created and administrator email sent. Admin list refresh failed: network unavailable');
+    expect(document.getElementById('admin-course-form-status').className).toBe('');
+  });
+
   test('keeps IDs and operational metadata hidden until verbose details is selected', async () => {
     fetch.mockResponseOnce(JSON.stringify(payload()));
 

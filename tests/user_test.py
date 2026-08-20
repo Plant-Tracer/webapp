@@ -210,6 +210,7 @@ def test_create_course_with_existing_admin_is_idempotent(new_course):
     assert result.course.course_name == course_name
     assert result.admin_user.email == cfg[ADMIN_EMAIL]
     assert odb.check_course_admin(user_id=result.admin_user.user_id, course_id=course_id)
+    assert result.admin_user.user_id in odb.course_enrollments(course_id)
 
     retry = course_management.create_course_with_admin(
         course_id=course_id,
