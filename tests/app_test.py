@@ -186,3 +186,6 @@ def test_templates(client,new_course):
                 assert resp.status_code!=200 # should be an error
             else:
                 validate_html( url, resp.text, include_text = include_text, exclude_text = exclude_text )
+                if with_api_key and url == '/list':
+                    assert ('<a class="pure-button pure-button-primary" href="upload">'
+                            'upload a new movie</a>') in resp.text

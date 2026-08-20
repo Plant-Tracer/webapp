@@ -214,7 +214,6 @@ describe('list_movies_data', () => {
     // Check that empty movies show the right message
     const publishedHtml = mockElements['#your-published-movies'].innerHTML;
     expect(publishedHtml).toContain("No movies");
-    expect(publishedHtml).toContain('<a href="/upload">Click here to upload a movie</a>');
   });
 
   test('should correctly classify and display course movies', () => {
@@ -245,27 +244,15 @@ describe('list_movies_data', () => {
     expect(courseHtml).toContain('pure-table');
   });
 
-  test('should display a link to upload movies for non-demo users', () => {
+  test('should not duplicate the page-level upload action in movie sections', () => {
     const movies = [];
     global.demo_mode = false;
     list_movies_data(movies);
     expect(document.querySelector).toHaveBeenCalledTimes(4);
 
-    const publishedHtml = mockElements['#your-published-movies'].innerHTML;
-    expect(publishedHtml).toContain('No movies');
-    expect(publishedHtml).toContain('<a href="/upload">Click here to upload a movie</a>');
-  });
-
-  test('should not display upload link for demo users', () => {
-    const movies = [];
-
-    global.demo_mode = true;
-
-    list_movies_data(movies);
-    expect(document.querySelector).toHaveBeenCalledTimes(4);
-
-    const publishedHtml = mockElements['#your-published-movies'].innerHTML;
-    expect(publishedHtml).not.toContain('Click here to upload a movie');
+    Object.values(mockElements).forEach((element) => {
+      expect(element.innerHTML).not.toContain('/upload');
+    });
   });
 
   // DataTables initialisation tests
