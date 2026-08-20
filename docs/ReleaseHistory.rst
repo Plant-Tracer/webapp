@@ -77,6 +77,8 @@ Release Notes
 
 Unreleased Summary
 ******************
+    * Movies: show one prominent upload button on the movie list instead of
+      repeating upload links after each movie section
     * Operations: replace five continuously polling SQS event-source mappings
       with stack-scoped EventBridge push events for post-upload and tracing
       work; retain an unpolled failure DLQ and SnapStart for lambda-web

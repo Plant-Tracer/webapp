@@ -964,10 +964,6 @@ function list_movies_data( movies ) {
 
     h += "</tbody>";
     h += "</table>";
-    // Offer to upload movies if not in demo mode (outside the table so DataTables doesn't count it).
-    if (!demo_mode) {
-      h += '<p><a href="/upload">Click here to upload a movie</a></p>';
-    }
     const divElement = document.querySelector(divSelector);
     if (divElement) {
       divElement.innerHTML = h;
