@@ -122,7 +122,8 @@ One record per registered user.
      - Cross-course admin role: ``none``, ``superauditor`` for read-only admin access,
        or ``superadmin`` for read/write admin access. Legacy ``super_auditor`` and
        ``super_admin`` values are normalized at read time; rows without the field are
-       treated as ``none``.
+       treated as ``none``. Course administrators with ``none`` receive an Admin-panel
+       view scoped by ``admin_for_courses``; no super-role user must exist first.
    * - ``default_course_id``
      - String
      - Profile default used only when a request has no valid course context

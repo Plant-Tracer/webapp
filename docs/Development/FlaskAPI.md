@@ -55,9 +55,13 @@ and is intentionally read-only.
 
 **Authorization**
 
-- `superadmin` and `superauditor` users may read this endpoint.
-- Course admins without an explicit super role and regular users receive HTTP
-  403. Operators bootstrap the first `superadmin` with `dbutil add-superadmin`.
+- `superadmin` and `superauditor` users receive the cross-course view.
+- Course administrators receive a view limited to courses they administer,
+  users enrolled in those courses, and movies assigned to those courses. A
+  visible user's memberships and default course are also limited to that
+  administered-course scope.
+- Regular users receive HTTP 403. Course-admin access does not depend on a
+  `superadmin` or `superauditor` existing.
 
 **Query parameters**
 
@@ -81,7 +85,9 @@ receive HTTP 400.
     "user_id": "u...",
     "user_name": "Course Admin",
     "email": "teacher@example.edu",
-    "super_role": "superauditor"
+    "super_role": "none",
+    "all_courses": false,
+    "course_ids": ["PlantTracer 101"]
   },
   "counts": { "courses": 1, "users": 2, "movies": 3 },
   "courses": {
@@ -154,6 +160,12 @@ receive HTTP 400.
 }
 ```
 
+For a course administrator, `viewer.all_courses` is `false`,
+`viewer.course_ids` contains the administered course IDs, and all three counts
+and result lists describe only that scope. Restart markers remain opaque and
+table-bound for global readers; for course administrators they page the
+corresponding scoped result set.
+
 The movie list includes published, hidden, and deleted DynamoDB records. The
 API continues to use the ``published`` field: ``1`` is published and ``0`` is hidden.
 The admin summary reports the same states as ``published``, ``hidden``, or
@@ -190,7 +202,9 @@ course. Movie rows use a visible `⋮` menu for play, traced download, and—for
 
 Return fresh five-minute signed URLs for the original movie and, when present,
 the traced movie. The response does not expose stored S3 URNs. Both
-`superauditor` and `superadmin` may use this authenticated, read-only endpoint.
+`superauditor` and `superadmin` may use this authenticated, read-only endpoint
+for any movie. Course administrators may use it only for movies in courses they
+administer; ordinary membership in another course is not sufficient.
 
 ```json
 {

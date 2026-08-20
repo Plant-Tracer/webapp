@@ -268,6 +268,8 @@ class AdminReadAccess(BaseModel):
 
     allowed: bool
     super_role: str = SUPER_ROLE_NONE
+    all_courses: bool = False
+    course_ids: tuple[str, ...] = ()
 
 ################################################################
 ## Errors
@@ -1652,11 +1654,16 @@ def user_has_super_read(user):
 
 
 def admin_read_access(user) -> AdminReadAccess:
-    """Return whether a user with an explicit super role can read /admin."""
+    """Resolve global or administered-course read access to ``/admin``."""
     super_role = normalize_super_role(user)
     if super_role in SUPER_READ_ROLES:
-        return AdminReadAccess(allowed=True, super_role=super_role)
-    return AdminReadAccess(allowed=False, super_role=super_role)
+        return AdminReadAccess(allowed=True, super_role=super_role, all_courses=True)
+    course_ids = tuple(sorted(set(user.get(ADMIN_FOR_COURSES, []))))
+    return AdminReadAccess(
+        allowed=bool(course_ids),
+        super_role=super_role,
+        course_ids=course_ids,
+    )
 
 
 #########################
@@ -1798,10 +1805,9 @@ def remaining_course_registrations(*,course_key):
     enrolled = course_enrollments(course_id)
     return course['max_enrollment'] - len(enrolled)
 
-def course_enrollments(course_id):
-    """Return a list of all those enrolled in the course (including staff)
-    Gets all the movie frames"""
-    ddbo = DDBO()
+def course_enrollments(course_id, *, ddbo=None):
+    """Return all course enrollment IDs, optionally reusing a database wrapper."""
+    ddbo = ddbo or DDBO()
     user_ids = []
     last_evaluated_key = None
 
