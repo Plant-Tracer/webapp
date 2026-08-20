@@ -113,6 +113,8 @@ class AdminViewer(BaseModel):
     user_name: str
     email: str
     super_role: str
+    all_courses: bool
+    course_ids: list[str]
 
 
 class AdminCounts(BaseModel):
@@ -297,6 +299,23 @@ def scan_table_page(table, *, key_name: str, limit: int, restart_marker: str | N
     )
 
 
+def page_items(items, *, key_name: str, limit: int, restart_marker: str | None):
+    """Page an in-memory, access-scoped result using a stable item key."""
+    exclusive_start_key = decode_restart_marker(restart_marker, key_name=key_name)
+    start_value = exclusive_start_key[key_name] if exclusive_start_key else None
+    sorted_items = sorted(items, key=lambda item: item[key_name])
+    if start_value is not None:
+        sorted_items = [item for item in sorted_items if item[key_name] > start_value]
+    page = sorted_items[:limit]
+    next_marker = None
+    if len(sorted_items) > limit:
+        next_marker = encode_restart_marker(
+            {key_name: page[-1][key_name]},
+            key_name=key_name,
+        )
+    return page, next_marker
+
+
 def table_item_count(table) -> int:
     """Return DynamoDB's table item count without scanning the table."""
     table.load()
@@ -334,24 +353,65 @@ def course_summary(course, *, enrollment_count: int) -> AdminCourseSummary:
     )
 
 
-def user_summary(user) -> AdminUserSummary:
+def user_summary(user, *, visible_course_ids=None) -> AdminUserSummary:
     """Convert a DynamoDB user item into an admin summary row."""
-    admin_courses = set(user.get(ADMIN_FOR_COURSES, []))
+    visible_courses = set(user.get(odb.COURSES, []))
+    if visible_course_ids is not None:
+        visible_courses.intersection_update(visible_course_ids)
+    admin_courses = set(user.get(ADMIN_FOR_COURSES, [])).intersection(visible_courses)
     courses = [
         AdminUserCourseSummary(
             course_id=course_id,
             is_admin=course_id in admin_courses,
         )
-        for course_id in user.get(odb.COURSES, [])
+        for course_id in visible_courses
     ]
+    default_course_id = odb.normalize_user_default_course(user).get(DEFAULT_COURSE_ID, "")
+    if visible_course_ids is not None and default_course_id not in visible_courses:
+        default_course_id = ""
     return AdminUserSummary(
         user_id=user[USER_ID],
         user_name=user.get(USER_NAME, ""),
         email=user.get(EMAIL, ""),
-        default_course_id=odb.normalize_user_default_course(user).get(DEFAULT_COURSE_ID, ""),
+        default_course_id=default_course_id,
         super_role=odb.normalize_super_role(user),
         courses=sorted(courses, key=lambda course: course.course_id),
         created_at=user.get(CREATED),
+    )
+
+
+def scoped_admin_items(ddbo, course_ids):
+    """Return courses, enrolled users, and movies for administered courses."""
+    courses = []
+    user_ids = set()
+    movies_by_id = {}
+    for course_id in course_ids:
+        try:
+            courses.append(ddbo.get_course(course_id))
+        except odb.InvalidCourse_Id:
+            continue
+        user_ids.update(odb.course_enrollments(course_id, ddbo=ddbo))
+        for movie in ddbo.get_movies_for_course_id(course_id):
+            movies_by_id[movie[MOVIE_ID]] = movie
+    users = []
+    for user_id in user_ids:
+        try:
+            users.append(ddbo.get_user(user_id))
+        except odb.InvalidUser_Id:
+            continue
+    return courses, users, list(movies_by_id.values())
+
+
+def admin_visible_movie(*, viewer_user, movie_id: str):
+    """Return a movie only when it is inside the viewer's admin scope."""
+    access = odb.admin_read_access(viewer_user)
+    if not access.allowed:
+        raise AdminReadDenied(viewer_user.get(USER_ID, "unknown"))
+    movie = DDBO().get_movie(movie_id)
+    if access.all_courses or movie.get(COURSE_ID) in access.course_ids:
+        return movie
+    raise odb.UnauthorizedUser(
+        f"user {viewer_user.get(USER_ID, 'unknown')} attempted to administer movie {movie_id}"
     )
 
 
@@ -409,10 +469,7 @@ def movie_summary(movie) -> AdminMovieSummary:
 def admin_movie_storage_health(*, viewer_user, movie_id: str,
                                now=None) -> AdminMovieStorageHealth:
     """Return storage health for one movie only after an explicit admin request."""
-    access = odb.admin_read_access(viewer_user)
-    if not access.allowed:
-        raise AdminReadDenied(viewer_user.get(USER_ID, "unknown"))
-    movie = odb.can_access_movie(user_id=viewer_user[USER_ID], movie_id=movie_id)
+    movie = admin_visible_movie(viewer_user=viewer_user, movie_id=movie_id)
     created_at = movie.get(CREATED_AT)
     uploaded_at = movie.get(UPLOADED_AT) or movie.get(DATE_UPLOADED)
     pending_upload_age_seconds = None
@@ -430,10 +487,7 @@ def admin_movie_storage_health(*, viewer_user, movie_id: str,
 
 def admin_movie_media(*, viewer_user, movie_id: str) -> AdminMovieMediaResponse:
     """Return short-lived media URLs without exposing stored S3 URNs."""
-    access = odb.admin_read_access(viewer_user)
-    if not access.allowed:
-        raise AdminReadDenied(viewer_user.get(USER_ID, "unknown"))
-    movie = odb.can_access_movie(user_id=viewer_user[USER_ID], movie_id=movie_id)
+    movie = admin_visible_movie(viewer_user=viewer_user, movie_id=movie_id)
     if not (movie.get(UPLOADED_AT) or movie.get(DATE_UPLOADED)):
         raise ValueError("Movie has not been uploaded")
     movie_urn = (movie.get(MOVIE_DATA_URN) or "").strip()
@@ -467,36 +521,57 @@ def admin_summary(*, viewer_user, course_marker=None, user_marker=None,
     ddbo = DDBO()
     page_limit = bounded_limit(limit)
     selected_section = admin_section(section)
-    course_items, next_course_marker = (scan_table_page(
-        ddbo.courses,
-        key_name=COURSE_ID,
-        limit=page_limit,
-        restart_marker=course_marker,
-    ) if selected_section in (AdminSection.ALL, AdminSection.COURSES) else ([], None))
-    user_items, next_user_marker = (scan_table_page(
-        ddbo.users,
-        key_name=USER_ID,
-        limit=page_limit,
-        restart_marker=user_marker,
-    ) if selected_section in (AdminSection.ALL, AdminSection.USERS) else ([], None))
-    movie_items, next_movie_marker = (scan_table_page(
-        ddbo.movies,
-        key_name=MOVIE_ID,
-        limit=page_limit,
-        restart_marker=movie_marker,
-    ) if selected_section in (AdminSection.ALL, AdminSection.MOVIES) else ([], None))
+    visible_course_ids = None
+    if access.all_courses:
+        counts = AdminCounts(
+            courses=table_item_count(ddbo.courses),
+            users=table_item_count(ddbo.users),
+            movies=table_item_count(ddbo.movies),
+        )
+        course_items, next_course_marker = (scan_table_page(
+            ddbo.courses, key_name=COURSE_ID, limit=page_limit,
+            restart_marker=course_marker,
+        ) if selected_section in (AdminSection.ALL, AdminSection.COURSES) else ([], None))
+        user_items, next_user_marker = (scan_table_page(
+            ddbo.users, key_name=USER_ID, limit=page_limit,
+            restart_marker=user_marker,
+        ) if selected_section in (AdminSection.ALL, AdminSection.USERS) else ([], None))
+        movie_items, next_movie_marker = (scan_table_page(
+            ddbo.movies, key_name=MOVIE_ID, limit=page_limit,
+            restart_marker=movie_marker,
+        ) if selected_section in (AdminSection.ALL, AdminSection.MOVIES) else ([], None))
+    else:
+        visible_course_ids = set(access.course_ids)
+        scoped_courses, scoped_users, scoped_movies = scoped_admin_items(
+            ddbo, access.course_ids,
+        )
+        counts = AdminCounts(
+            courses=len(scoped_courses),
+            users=len(scoped_users),
+            movies=len(scoped_movies),
+        )
+        course_items, next_course_marker = (page_items(
+            scoped_courses, key_name=COURSE_ID, limit=page_limit,
+            restart_marker=course_marker,
+        ) if selected_section in (AdminSection.ALL, AdminSection.COURSES) else ([], None))
+        user_items, next_user_marker = (page_items(
+            scoped_users, key_name=USER_ID, limit=page_limit,
+            restart_marker=user_marker,
+        ) if selected_section in (AdminSection.ALL, AdminSection.USERS) else ([], None))
+        movie_items, next_movie_marker = (page_items(
+            scoped_movies, key_name=MOVIE_ID, limit=page_limit,
+            restart_marker=movie_marker,
+        ) if selected_section in (AdminSection.ALL, AdminSection.MOVIES) else ([], None))
     return AdminSummaryResponse(
         viewer=AdminViewer(
             user_id=viewer_user[USER_ID],
             user_name=viewer_user.get(USER_NAME, ""),
             email=viewer_user.get(EMAIL, ""),
             super_role=access.super_role,
+            all_courses=access.all_courses,
+            course_ids=list(access.course_ids),
         ),
-        counts=AdminCounts(
-            courses=table_item_count(ddbo.courses),
-            users=table_item_count(ddbo.users),
-            movies=table_item_count(ddbo.movies),
-        ),
+        counts=counts,
         courses=AdminCoursePage(
             items=[
                 course_summary(
@@ -508,7 +583,10 @@ def admin_summary(*, viewer_user, course_marker=None, user_marker=None,
             restart_marker=next_course_marker,
         ),
         users=AdminUserPage(
-            items=[user_summary(user) for user in user_items],
+            items=[
+                user_summary(user, visible_course_ids=visible_course_ids)
+                for user in user_items
+            ],
             restart_marker=next_user_marker,
         ),
         movies=AdminMoviePage(

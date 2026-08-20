@@ -7,7 +7,7 @@ import pytest
 from app import admin_service, apikey, odb, s3_presigned
 from app.odb import API_KEY, USER_ID
 
-from .constants import ADMIN_EMAIL, MOVIE_TITLE
+from .constants import ADMIN_EMAIL, MOVIE_TITLE, USER_EMAIL
 
 
 def test_admin_summary_denies_regular_user(client, new_course):
@@ -19,14 +19,113 @@ def test_admin_summary_denies_regular_user(client, new_course):
     assert response.json["error"] is True
 
 
-def test_admin_summary_denies_course_admin_without_super_role(client, new_course):
+def test_admin_summary_allows_course_admin_without_super_role(client, new_course):
     admin_api_key = odb.make_new_api_key(email=new_course[ADMIN_EMAIL])
     client.set_cookie(apikey.cookie_name(), admin_api_key)
 
     response = client.get("/api/admin/summary?limit=1")
 
-    assert response.status_code == 403
-    assert response.json["error"] is True
+    assert response.status_code == 200
+    assert response.json["viewer"] == {
+        "all_courses": False,
+        "course_ids": [new_course[odb.COURSE_ID]],
+        "email": new_course[ADMIN_EMAIL],
+        "super_role": odb.SUPER_ROLE_NONE,
+        "user_id": odb.get_user_email(new_course[ADMIN_EMAIL])[odb.USER_ID],
+        "user_name": "Course Admin",
+    }
+    assert response.json["counts"] == {"courses": 1, "users": 2, "movies": 0}
+
+
+def test_course_admin_summary_and_movie_endpoints_exclude_other_courses(client, new_course):
+    other_course_id = f"Other {uuid.uuid4()}"
+    other_course_key = f"other-{uuid.uuid4()}"
+    other_user_email = f"other-{uuid.uuid4()}@example.test"
+    admin_user = odb.get_user_email(new_course[ADMIN_EMAIL])
+    other_user_id = None
+    course_created = False
+    try:
+        odb.create_course(
+            course_id=other_course_id,
+            course_name="Other course",
+            course_key=other_course_key,
+        )
+        course_created = True
+        odb.register_email(
+            email=new_course[ADMIN_EMAIL],
+            user_name="Course Admin",
+            course_id=other_course_id,
+        )
+        odb.register_email(
+            email=new_course[USER_EMAIL],
+            user_name="Course User",
+            course_id=other_course_id,
+        )
+        other_user_id = odb.register_email(
+            email=other_user_email,
+            user_name="Other Course User",
+            course_id=other_course_id,
+        )[odb.USER_ID]
+        administered_movie_id = odb.create_new_movie(
+            user_id=new_course[odb.USER_ID],
+            course_id=new_course[odb.COURSE_ID],
+            title="Administered course movie",
+            description="Visible to its course administrator",
+        )
+        other_movie_id = odb.create_new_movie(
+            user_id=other_user_id,
+            course_id=other_course_id,
+            title="Other course movie",
+            description="Not visible to the other course administrator",
+        )
+        admin_api_key = odb.make_new_api_key(email=new_course[ADMIN_EMAIL])
+        client.set_cookie(apikey.cookie_name(), admin_api_key)
+
+        response = client.get("/api/admin/summary?limit=100")
+
+        assert response.status_code == 200
+        payload = response.json
+        assert payload["counts"] == {"courses": 1, "users": 2, "movies": 1}
+        assert {item["course_id"] for item in payload["courses"]["items"]} == {
+            new_course[odb.COURSE_ID]
+        }
+        assert {item["user_id"] for item in payload["users"]["items"]} == {
+            new_course[odb.USER_ID], admin_user[odb.USER_ID]
+        }
+        visible_user = next(
+            item for item in payload["users"]["items"]
+            if item["user_id"] == new_course[odb.USER_ID]
+        )
+        assert visible_user["courses"] == [{
+            "course_id": new_course[odb.COURSE_ID],
+            "is_admin": False,
+        }]
+        assert visible_user["default_course_id"] == ""
+        assert {item["movie_id"] for item in payload["movies"]["items"]} == {
+            administered_movie_id
+        }
+
+        visible_media_response = client.get(
+            f"/api/admin/movies/{administered_movie_id}/media"
+        )
+        visible_health_response = client.get(
+            f"/api/admin/movies/{administered_movie_id}/storage-health"
+        )
+        media_response = client.get(f"/api/admin/movies/{other_movie_id}/media")
+        health_response = client.get(
+            f"/api/admin/movies/{other_movie_id}/storage-health"
+        )
+        assert visible_media_response.status_code == 409
+        assert visible_health_response.status_code == 200
+        assert media_response.status_code == 403
+        assert health_response.status_code == 403
+    finally:
+        if other_user_id is not None:
+            odb.delete_user(user_id=other_user_id, purge_movies=True)
+        if course_created:
+            for user_id in (new_course[odb.USER_ID], admin_user[odb.USER_ID]):
+                odb.unregister_from_course(course_id=other_course_id, user_id=user_id)
+            odb.delete_course(course_id=other_course_id)
 
 
 def test_admin_summary_allows_superauditor(client, new_course):
@@ -186,7 +285,7 @@ def test_admin_movie_media_returns_fresh_urls(client, new_movie):
     assert disposition == f'attachment; filename="{new_movie[odb.MOVIE_ID]}-traced.mp4"'
 
 
-def test_admin_movie_media_requires_super_role(client, new_movie):
+def test_admin_movie_media_requires_admin_access(client, new_movie):
     response = client.get(f"/api/admin/movies/{new_movie[odb.MOVIE_ID]}/media")
     assert response.status_code == 403
     assert response.json == {"error": True, "message": "Invalid api_key"}
@@ -323,10 +422,11 @@ def test_admin_page_loads_for_superauditor(client, new_course):
     assert "Admin" in response.text
 
 
-def test_admin_page_denies_course_admin_without_super_role(client, new_course):
+def test_admin_page_loads_for_course_admin_without_super_role(client, new_course):
     admin_api_key = odb.make_new_api_key(email=new_course[ADMIN_EMAIL])
     client.set_cookie(apikey.cookie_name(), admin_api_key)
 
     response = client.get("/admin")
 
-    assert response.status_code == 403
+    assert response.status_code == 200
+    assert "admin.js" in response.text
