@@ -1,5 +1,7 @@
 const {
   loadAdminSummary,
+  populateExistingCourseAdmins,
+  syncCourseAdminName,
   state,
 } = require('admin');
 
@@ -10,6 +12,19 @@ function adminDocument() {
     <span id="admin-user-count"></span>
     <span id="admin-movie-count"></span>
     <label><input id="admin-verbose-details" type="checkbox"></label>
+    <button id="admin-new-course" type="button" hidden>New course</button>
+    <dialog id="admin-course-dialog">
+      <form id="admin-course-form">
+        <input id="admin-course-name" name="course_name">
+        <input id="admin-course-id" name="course_id">
+        <input id="admin-course-admin-email" name="admin_email" list="admin-existing-course-admins">
+        <datalist id="admin-existing-course-admins"></datalist>
+        <input id="admin-course-admin-name" name="admin_name">
+        <p id="admin-course-form-status"></p>
+        <button id="admin-course-cancel" type="button">Cancel</button>
+        <button id="admin-course-submit" type="submit">Create course</button>
+      </form>
+    </dialog>
     <table data-resizable-table>
       <thead><tr>
         <th><button class="admin-sort" data-table="courses" data-key="course_name">
@@ -124,6 +139,7 @@ describe('admin summary rendering', () => {
     expect(movieRow.querySelector('.admin-actions-menu').textContent).toContain('Download traced');
     expect(movieRow.querySelector('.admin-actions-menu').textContent).not.toContain('Analyze');
     expect(document.querySelectorAll('.admin-resize-handle')).toHaveLength(3);
+    expect(document.getElementById('admin-new-course').hidden).toBe(true);
     const courseLink = document.querySelector('#admin-course-rows a');
     expect(courseLink.href).toContain('/list?course_id=BIO-1');
     expect(courseLink.target).toBe('_blank');
@@ -222,6 +238,38 @@ describe('admin summary rendering', () => {
     const movieRow = document.querySelector('#admin-movie-rows tr');
     expect(movieRow.querySelector('td a').href).toContain('/analyze?movie_id=movie-1');
     expect(movieRow.querySelector('.admin-actions-menu').textContent).toContain('Analyze');
+  });
+
+  test('shows course creation only to superadmins and offers only existing admins', async () => {
+    const adminPayload = payload();
+    adminPayload.viewer.super_role = 'superadmin';
+    adminPayload.users.items.push({
+      user_id: 'user-2', user_name: 'Grace', email: 'grace@example.test',
+      default_course_id: 'BIO-1', super_role: 'none', created_at: 1700000001,
+      last_movie_activity_at: null, courses: [{ course_id: 'BIO-1', is_admin: false }],
+    });
+    fetch.mockResponseOnce(JSON.stringify(adminPayload));
+
+    await loadAdminSummary();
+    populateExistingCourseAdmins();
+
+    expect(document.getElementById('admin-new-course').hidden).toBe(false);
+    const options = [...document.querySelectorAll('#admin-existing-course-admins option')];
+    expect(options.map((option) => option.value)).toEqual(['ada@example.test']);
+    const email = document.getElementById('admin-course-admin-email');
+    const name = document.getElementById('admin-course-admin-name');
+    email.value = 'ADA@example.test';
+    syncCourseAdminName();
+    expect(name.value).toBe('Ada');
+    expect(name.readOnly).toBe(true);
+    email.value = 'grace@example.test';
+    syncCourseAdminName();
+    expect(name.value).toBe('Grace');
+    expect(name.readOnly).toBe(true);
+    email.value = 'new@example.test';
+    syncCourseAdminName();
+    expect(name.value).toBe('');
+    expect(name.readOnly).toBe(false);
   });
 
   test('keeps IDs and operational metadata hidden until verbose details is selected', async () => {

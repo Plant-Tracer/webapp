@@ -104,6 +104,16 @@ The operator-facing administrator list is built by
 ``app.course_management.list_admins`` so future web administration pages can
 reuse the same read model.
 
+A ``superadmin`` can also create a course from the Admin page's ``New course``
+dialog. The administrator email field accepts a typed address and offers a
+pull-down containing only existing course administrators. When the typed email
+matches any registered user, the dialog fills the stored administrator name
+and makes it read-only; a new email leaves the always-visible name field
+editable. ``superauditor`` and course-administrator views do not show the
+button, and the API independently rejects their requests. Successful creation
+assigns the administrator, records the acting superadmin in the audit log, and
+sends the administrator a course setup/login email.
+
 Operators can list all registered users with ``make user-list``. The target
 runs ``poetry run dbutil user-list`` and prints each user's display name, email
 address, ``user_id``, enabled flag, default course, course memberships,

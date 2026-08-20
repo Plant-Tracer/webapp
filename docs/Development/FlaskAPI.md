@@ -198,6 +198,60 @@ Admin table columns have visible drag/keyboard resize handles. Course links open
 course. Movie rows use a visible `⋮` menu for play, traced download, and—for
 `superadmin` only—Analyze.
 
+#### `POST /api/admin/courses`
+
+Create a course and assign its initial course administrator. Only a
+`superadmin` may call this endpoint; `superauditor`, course-administrator, and
+ordinary users receive HTTP 403.
+
+```json
+{
+  "course_id": "BIO101",
+  "course_name": "Plant Biology",
+  "admin_email": "teacher@example.edu",
+  "admin_name": "Course Teacher"
+}
+```
+
+The server normalizes the email address. If it belongs to a registered user,
+the stored `user_name` is authoritative and the submitted `admin_name` is
+ignored. Otherwise, both administrator email and name are used to create the
+administrator account. The server generates the course registration key and
+uses the configured default maximum enrollment.
+
+A new course returns HTTP 201. Retrying the same course ID, name, and
+administrator is idempotent and returns HTTP 200; reusing an ID with a
+different name returns HTTP 409. Invalid fields return HTTP 400 without
+creating a course. Successful database changes write a `course.created` or
+`course.admin.assigned` audit event attributed to the acting superadmin.
+
+The endpoint emails the administrator a course setup/login link. Database
+success is not rolled back if mail delivery subsequently fails; in that case
+`email_sent` is `false` and `message` reports that the course was created or
+updated but the email was not sent.
+
+```json
+{
+  "error": false,
+  "course": {
+    "course_id": "BIO101",
+    "course_name": "Plant Biology",
+    "course_key": "6e908735",
+    "admins_for_course": ["u..."],
+    "max_enrollment": 100,
+    "created_at": 1784800000
+  },
+  "administrator": {
+    "user_id": "u...",
+    "email": "teacher@example.edu",
+    "user_name": "Course Teacher"
+  },
+  "created": true,
+  "email_sent": true,
+  "message": "Course created and administrator email sent"
+}
+```
+
 #### `GET /api/admin/movies/{movie_id}/media`
 
 Return fresh five-minute signed URLs for the original movie and, when present,

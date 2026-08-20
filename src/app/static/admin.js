@@ -465,6 +465,98 @@ function bindVerboseDetails() {
   });
 }
 
+function existingUserForEmail(email) {
+  const normalized = email.trim().toLocaleLowerCase();
+  return state.users.find((user) => user.email.toLocaleLowerCase() === normalized) || null;
+}
+
+function populateExistingCourseAdmins() {
+  const choices = document.getElementById("admin-existing-course-admins");
+  if (!choices) {
+    return;
+  }
+  choices.replaceChildren();
+  state.users
+    .filter((user) => user.courses.some((course) => course.is_admin))
+    .sort((left, right) => compareValues(left.user_name || left.email, right.user_name || right.email))
+    .forEach((user) => {
+      const option = document.createElement("option");
+      option.value = user.email;
+      option.label = user.user_name;
+      choices.append(option);
+    });
+}
+
+function syncCourseAdminName() {
+  const email = document.getElementById("admin-course-admin-email");
+  const name = document.getElementById("admin-course-admin-name");
+  if (!email || !name) {
+    return;
+  }
+  const existingUser = existingUserForEmail(email.value);
+  const wasReadOnly = name.readOnly;
+  name.readOnly = existingUser !== null;
+  if (existingUser) {
+    name.value = existingUser.user_name;
+  } else if (wasReadOnly) {
+    name.value = "";
+  }
+}
+
+async function submitCourseCreate(form) {
+  const submit = document.getElementById("admin-course-submit");
+  const formStatus = document.getElementById("admin-course-form-status");
+  const fields = new FormData(form);
+  submit.disabled = true;
+  formStatus.className = "";
+  formStatus.textContent = "Creating course...";
+  try {
+    const response = await fetch(`${API_BASE}api/admin/courses`, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(Object.fromEntries(fields.entries())),
+    });
+    const payload = await response.json();
+    if (!response.ok || payload.error) {
+      throw new Error(payload.message || `Course creation failed with HTTP ${response.status}`);
+    }
+    document.getElementById("admin-course-dialog").close();
+    await loadAdminSummary();
+    const status = document.getElementById("admin-status");
+    status.className = payload.email_sent ? "admin-success" : "admin-warning";
+    status.textContent = payload.message;
+  } catch (error) {
+    formStatus.className = "admin-error";
+    formStatus.textContent = error.message;
+  } finally {
+    submit.disabled = false;
+  }
+}
+
+function bindCourseCreate() {
+  const button = document.getElementById("admin-new-course");
+  const dialog = document.getElementById("admin-course-dialog");
+  const form = document.getElementById("admin-course-form");
+  if (!button || !dialog || !form || button.dataset.bound) {
+    return;
+  }
+  button.dataset.bound = "true";
+  button.addEventListener("click", () => {
+    form.reset();
+    document.getElementById("admin-course-admin-name").readOnly = false;
+    document.getElementById("admin-course-form-status").textContent = "";
+    populateExistingCourseAdmins();
+    dialog.showModal();
+  });
+  document.getElementById("admin-course-cancel").addEventListener("click", () => dialog.close());
+  document.getElementById("admin-course-admin-email").addEventListener("input", syncCourseAdminName);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    await submitCourseCreate(form);
+  });
+}
+
 function initializeColumnWidths(table) {
   const headers = table.querySelectorAll("thead th");
   let columns = table.querySelectorAll("col");
@@ -640,6 +732,7 @@ async function loadAdminSummary() {
   bindSortButtons();
   bindVerboseDetails();
   bindResizableTables();
+  bindCourseCreate();
   const status = document.getElementById("admin-status");
   status.className = "";
   status.textContent = "Loading all admin records...";
@@ -656,6 +749,10 @@ async function loadAdminSummary() {
   ));
   enrichCourseNames();
   TABLE_NAMES.forEach(renderTable);
+  const newCourse = document.getElementById("admin-new-course");
+  if (newCourse) {
+    newCourse.hidden = state.viewerRole !== "superadmin";
+  }
   const accessLabel = state.viewerRole === "superauditor" ? "Read-only" : "Administrative";
   status.textContent = `${accessLabel} access as ${payload.viewer.user_name}. Loaded all records.`;
 }
@@ -665,6 +762,8 @@ export {
   appendMovieRows,
   appendUserRows,
   changeSort,
+  populateExistingCourseAdmins,
+  syncCourseAdminName,
   loadAdminSummary,
   sortedRows,
   state,

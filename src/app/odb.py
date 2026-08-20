@@ -538,6 +538,22 @@ class DDBO:
                 raise
         return entry
 
+    def put_admin_log(self, *, event_type, actor_user_id, target_user_id,
+                      course_id, ipaddr):
+        """Persist an administrative course event attributed to its actor."""
+        entry = LogEntry(
+            log_id=f"{int(time.time() * 1000)}-{uuid.uuid4()}",
+            ipaddr=ipaddr or "unknown",
+            user_id=actor_user_id,
+            course_id=course_id,
+            time_t=int(time.time()),
+            event_type=event_type,
+            movie_id="",
+            target_user_id=target_user_id,
+        )
+        self.logs.put_item(Item=entry.model_dump(exclude_none=True))
+        return entry
+
     def put_movie_trace_failure_log(self, *, movie, job_id, error):
         """Persist a safe tracing failure audit record; detailed tracebacks stay in CloudWatch."""
         entry = LogEntry(

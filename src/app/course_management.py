@@ -177,6 +177,21 @@ def admin_create_for_courses(*, admin_email, admin_name, course_ids,
     return AdminCreateResult(admin_user=admin_user, added_courses=added_courses, api_key=api_key)
 
 
+def send_course_created_notification(*, course, admin_user, planttracer_endpoint):
+    """Email one course administrator a setup link for a created course."""
+    api_key = odb.get_first_api_key_for_user(admin_user.user_id)
+    if api_key is None:
+        api_key = odb.make_new_api_key(email=admin_user.email)
+    mailer.send_course_created_email(
+        to_addr=admin_user.email,
+        course_name=course.course_name or course.course_id,
+        course_id=course.course_id,
+        planttracer_endpoint=planttracer_endpoint,
+        api_key=api_key,
+    )
+    return api_key
+
+
 def create_course_with_admin(*, course_id, course_name, admin_email, admin_name,
                              max_enrollment=C.DEFAULT_MAX_ENROLLMENT,
                              planttracer_endpoint=None, send_email=True):
@@ -206,14 +221,22 @@ def create_course_with_admin(*, course_id, course_name, admin_email, admin_name,
         admin_email=admin_email,
         admin_name=admin_name,
         course_ids=[course_id],
-        planttracer_endpoint=planttracer_endpoint,
-        send_email=send_email,
+        send_email=False,
     )
     course = Course(**odb.lookup_course_by_id(course_id=course_id))
+    api_key = None
+    if send_email:
+        if not planttracer_endpoint:
+            raise ValueError("planttracer_endpoint is required when send_email=True")
+        api_key = send_course_created_notification(
+            course=course,
+            admin_user=admin_result.admin_user,
+            planttracer_endpoint=planttracer_endpoint,
+        )
     return CourseCreateResult(
         course=course,
         admin_user=admin_result.admin_user,
-        api_key=admin_result.api_key,
+        api_key=api_key,
         created=created,
     )
 

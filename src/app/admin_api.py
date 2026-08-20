@@ -1,9 +1,14 @@
-"""Read-only admin API routes."""
+"""Admin API routes."""
+
+import smtplib
 
 from flask import Blueprint, jsonify, request
+from pydantic import ValidationError
+from validate_email_address import validate_email
 
-from . import admin_service, odb
+from . import admin_service, course_management, mailer, odb
 from .apikey import get_user_dict
+from .constants import logger
 from .odb import InvalidAPI_Key
 
 admin_api_bp = Blueprint("admin_api", __name__)
@@ -31,6 +36,77 @@ def api_admin_summary():
     except admin_service.InvalidAdminSection as exc:
         return jsonify({"error": True, "message": str(exc)}), 400
     return jsonify(response.model_dump())
+
+
+@admin_api_bp.post("/courses")
+def api_admin_create_course():
+    """Create a course and its initial administrator as a superadmin."""
+    try:
+        viewer_user = get_user_dict()
+        if odb.normalize_super_role(viewer_user) != odb.SUPER_ROLE_SUPERADMIN:
+            return jsonify({"error": True, "message": "Superadmin access required"}), 403
+        change = admin_service.AdminCourseCreateRequest.model_validate(
+            request.get_json(silent=True) or {}
+        )
+        admin_email = odb.normalize_email(change.admin_email)
+        if not validate_email(admin_email, check_mx=False):
+            return jsonify({"error": True, "message": "Administrator email is invalid"}), 400
+        try:
+            existing_user = odb.get_user_email(admin_email)
+            admin_name = existing_user[odb.USER_NAME]
+        except odb.InvalidUser_Email:
+            admin_name = change.admin_name
+
+        result = course_management.create_course_with_admin(
+            course_id=change.course_id,
+            course_name=change.course_name,
+            admin_email=admin_email,
+            admin_name=admin_name,
+            send_email=False,
+        )
+        odb.DDBO().put_admin_log(
+            event_type="course.created" if result.created else "course.admin.assigned",
+            actor_user_id=viewer_user[odb.USER_ID],
+            target_user_id=result.admin_user.user_id,
+            course_id=result.course.course_id,
+            ipaddr=request.remote_addr,
+        )
+    except InvalidAPI_Key:
+        return jsonify({"error": True, "message": "Invalid api_key"}), 403
+    except ValidationError as exc:
+        return jsonify({"error": True, "message": str(exc)}), 400
+    except odb.ExistingCourse_Id as exc:
+        return jsonify({"error": True, "message": str(exc)}), 409
+    except ValueError as exc:
+        return jsonify({"error": True, "message": str(exc)}), 409
+
+    email_sent = True
+    message = "Course created and administrator email sent"
+    try:
+        course_management.send_course_created_notification(
+            course=result.course,
+            admin_user=result.admin_user,
+            planttracer_endpoint=request.url_root,
+        )
+    except (mailer.InvalidMailerConfiguration, mailer.NoMailerConfiguration,
+            smtplib.SMTPException) as exc:
+        logger.warning("course %s created but administrator email failed: %s",
+                       result.course.course_id, exc)
+        email_sent = False
+        message = "Course created, but the administrator email could not be sent"
+
+    response = admin_service.AdminCourseCreateResponse(
+        course=result.course,
+        administrator=admin_service.AdminCourseAdministrator(
+            user_id=result.admin_user.user_id,
+            email=result.admin_user.email,
+            user_name=result.admin_user.user_name,
+        ),
+        created=result.created,
+        email_sent=email_sent,
+        message=message if result.created else message.replace("created", "updated", 1),
+    )
+    return jsonify(response.model_dump()), 201 if result.created else 200
 
 
 @admin_api_bp.get("/movies/<movie_id>/media")

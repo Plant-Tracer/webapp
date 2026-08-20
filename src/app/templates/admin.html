@@ -23,7 +23,39 @@
   </section>
 
   <section class="admin-section">
-    <h2>Courses</h2>
+    <div class="admin-section-heading">
+      <h2>Courses</h2>
+      <button id="admin-new-course" class="pure-button pure-button-primary" type="button" hidden>
+        New course
+      </button>
+    </div>
+    <dialog id="admin-course-dialog" aria-labelledby="admin-course-dialog-title">
+      <form id="admin-course-form">
+        <h2 id="admin-course-dialog-title">New course</h2>
+        <label for="admin-course-name">Course name</label>
+        <input id="admin-course-name" name="course_name" type="text" required maxlength="200">
+
+        <label for="admin-course-id">Course ID</label>
+        <input id="admin-course-id" name="course_id" type="text" required maxlength="200">
+
+        <label for="admin-course-admin-email">Course administrator email</label>
+        <input id="admin-course-admin-email" name="admin_email" type="email" required
+               maxlength="320" list="admin-existing-course-admins" autocomplete="email">
+        <datalist id="admin-existing-course-admins"></datalist>
+
+        <label for="admin-course-admin-name">Course administrator name</label>
+        <input id="admin-course-admin-name" name="admin_name" type="text" required
+               maxlength="200" autocomplete="name">
+
+        <p id="admin-course-form-status" role="status"></p>
+        <div class="admin-dialog-actions">
+          <button id="admin-course-cancel" class="pure-button" type="button">Cancel</button>
+          <button id="admin-course-submit" class="pure-button pure-button-primary" type="submit">
+            Create course
+          </button>
+        </div>
+      </form>
+    </dialog>
     <div class="admin-table-scroll">
     <table class="pure-table pure-table-striped" data-resizable-table>
       <colgroup><col><col><col><col><col><col><col></colgroup>

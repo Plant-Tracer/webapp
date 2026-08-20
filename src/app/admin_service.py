@@ -5,9 +5,10 @@ import binascii
 import json
 import time
 from enum import StrEnum
+from typing import Annotated
 
 from boto3.dynamodb.conditions import Key
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from . import odb, s3_presigned
 from .constants import C
@@ -50,6 +51,7 @@ from .odb import (
     USER_NAME,
     DDBO,
 )
+from .schema import Course
 
 EXCLUSIVE_START_KEY = "ExclusiveStartKey"
 ITEMS = "Items"
@@ -123,6 +125,40 @@ class AdminCounts(BaseModel):
     courses: int
     users: int
     movies: int
+
+
+class AdminCourseCreateRequest(BaseModel):
+    """Validated fields submitted by the superadmin course dialog."""
+
+    course_id: Annotated[str, Field(min_length=1, max_length=200)]
+    course_name: Annotated[str, Field(min_length=1, max_length=200)]
+    admin_email: Annotated[str, Field(min_length=3, max_length=320)]
+    admin_name: Annotated[str, Field(min_length=1, max_length=200)]
+
+    @field_validator("course_id", "course_name", "admin_email", "admin_name", mode="before")
+    @classmethod
+    def strip_text(cls, value):
+        """Reject fields that contain only whitespace."""
+        return value.strip() if isinstance(value, str) else value
+
+
+class AdminCourseAdministrator(BaseModel):
+    """Administrator identity returned without credentials or memberships."""
+
+    user_id: str
+    email: str
+    user_name: str
+
+
+class AdminCourseCreateResponse(BaseModel):
+    """Safe result returned after an admin course-creation request."""
+
+    error: bool = False
+    course: Course
+    administrator: AdminCourseAdministrator
+    created: bool
+    email_sent: bool
+    message: str
 
 
 class AdminCourseSummary(BaseModel):
