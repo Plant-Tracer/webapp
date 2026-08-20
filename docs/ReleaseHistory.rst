@@ -77,6 +77,8 @@ Release Notes
 
 Unreleased Summary
 ******************
+    * Movies: show one prominent upload button on the movie list instead of
+      repeating upload links after each movie section
     * Operations: replace five continuously polling SQS event-source mappings
       with stack-scoped EventBridge push events for post-upload and tracing
       work; retain an unpolled failure DLQ and SnapStart for lambda-web
@@ -94,6 +96,8 @@ Unreleased Summary
       automatically contacting the demo movie host
     * Upload: prevent duplicate movie-rotation requests while a rotation is being saved
     * Analyze: prevent concurrent tracing of a movie and keep Analyze read-only while tracing runs
+    * Analyze: restore live tracing-frame progress and completion updates while
+      reminding users that they may leave the page and reopen Analyze later
     * Developer: add a Makefile-driven analysis-MP4 CLI that creates a portable
       WebCodecs player bundle for manual cross-browser frame-step verification
     * Developer: run the deployed workflow verifier with an endpoint-only

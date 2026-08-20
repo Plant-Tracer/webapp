@@ -195,6 +195,7 @@ def assert_position(actual, expected, *, scale, frame_number):
         actual_x, actual_y = actual.apex_x / scale, actual.apex_y / scale
     else:
         actual_x, actual_y = actual.x, actual.y
+    actual_x, actual_y = float(actual_x), float(actual_y)
     if abs(actual_x - expected_x) > TRACKING_TOLERANCE_PIXELS:
         raise AssertionError(f"frame {frame_number} Apex x={actual_x}, expected {expected_x} +/- "
                              f"{TRACKING_TOLERANCE_PIXELS} pixels")
@@ -307,13 +308,14 @@ def run_workflow(*, endpoint, stack_name, movie_path, reference_csv_path, refere
     ddbo = odb.DDBO()
     course_id, _user_id, api_key = ensure_test_identity(stack_name=stack_name)
     movie_id = None
+    movie_title = f"deployment test {int(time.time())}"
     try:
         expected_start, expected_end = reference_trackpoints(reference_csv_path)
         scale = reference_scale(expected_start)
         assert_final_frame(reference_traced_movie_path.read_bytes(), reference_frame_path)
         movie_bytes = movie_path.read_bytes()
         response = requests.post(f"{endpoint.rstrip('/')}/{NEW_MOVIE_PATH}", data={
-            API_KEY_FIELD: api_key, "title": f"deployment test {int(time.time())}",
+            API_KEY_FIELD: api_key, "title": movie_title,
             "description": "automated post-deploy EventBridge workflow test",
             "movie_data_sha256": hashlib.sha256(movie_bytes).hexdigest(),
             "movie_data_length": len(movie_bytes), "fpm": "30"}, timeout=30)
@@ -322,6 +324,8 @@ def run_workflow(*, endpoint, stack_name, movie_path, reference_csv_path, refere
         if created.error or created.upload_completion_mode != "eventbridge":
             raise RuntimeError("deployed new-movie did not select EventBridge completion")
         movie_id = created.movie_id
+        logging.info("created workflow movie movie_id=%s course=%s title=%r; "
+                     "the test will delete it during cleanup", movie_id, course_id, movie_title)
         upload = requests.post(created.presigned_post.url, data=created.presigned_post.fields,
                                files={"file": (movie_path.name, movie_bytes, "video/mp4")}, timeout=timeout)
         upload.raise_for_status()
@@ -329,6 +333,9 @@ def run_workflow(*, endpoint, stack_name, movie_path, reference_csv_path, refere
                                          timeout=timeout, phase="upload processing")
         if uploaded_movie.get(odb.MOVIE_STATUS) != odb.MOVIE_STATE_READY:
             raise RuntimeError(f"movie {movie_id} is not ready after upload processing")
+        logging.info("uploaded movie movie_id=%s object=%s bytes=%s status=%s", movie_id,
+                     uploaded_movie.get(odb.MOVIE_DATA_URN), len(movie_bytes),
+                     uploaded_movie.get(odb.MOVIE_STATUS))
         listed = ListMoviesResponse.model_validate(
             post_api(endpoint, LIST_MOVIES_PATH, api_key=api_key, movie_id=movie_id).json())
         if listed.error or movie_id not in {movie.movie_id for movie in listed.movies}:
@@ -341,15 +348,21 @@ def run_workflow(*, endpoint, stack_name, movie_path, reference_csv_path, refere
         original_download.raise_for_status()
         if hashlib.sha256(original_download.content).digest() != hashlib.sha256(movie_bytes).digest():
             raise AssertionError("downloaded original movie differs from the uploaded fixture")
+        logging.info("downloaded and validated original movie movie_id=%s bytes=%s", movie_id,
+                     len(original_download.content))
         odb.put_frame_trackpoints(movie_id=movie_id, frame_number=0,
                                   trackpoints=reference_seed_trackpoints(expected_start))
         traced = requests.post(f"{endpoint.rstrip('/')}/{TRACE_MOVIE_PATH}", headers={"x-api-key": api_key},
                                json={MOVIE_ID_FIELD: movie_id, "frame_start": 0,
                                      "frame_end": expected_end.frame_number}, timeout=30)
         traced.raise_for_status()
-        wait_for_movie(ddbo, movie_id,
-                       lambda movie: movie.get(odb.MOVIE_STATUS) == odb.MOVIE_STATE_TRACING_COMPLETED,
-                       timeout=timeout, phase="tracing")
+        traced_movie_record = wait_for_movie(
+            ddbo, movie_id,
+            lambda movie: movie.get(odb.MOVIE_STATUS) == odb.MOVIE_STATE_TRACING_COMPLETED,
+            timeout=timeout, phase="tracing")
+        logging.info("traced movie movie_id=%s object=%s status=%s", movie_id,
+                     traced_movie_record.get(odb.MOVIE_TRACED_URN),
+                     traced_movie_record.get(odb.MOVIE_STATUS))
         trackpoints = TrackpointResponse.model_validate(post_api(
             endpoint, TRACKPOINTS_PATH, api_key=api_key, movie_id=movie_id,
             response_format=JSON_FORMAT).json())
@@ -371,6 +384,9 @@ def run_workflow(*, endpoint, stack_name, movie_path, reference_csv_path, refere
                                 export_name="reference XLSX")
         if xlsx_rows[0] != reference_xlsx_rows[0]:
             raise AssertionError("downloaded XLSX headers differ from the reference XLSX")
+        logging.info("validated trackpoints movie_id=%s apex_points=%s frames=%s-%s "
+                     "formats=json,csv,xlsx", movie_id, len(apexes),
+                     expected_start.frame_number, expected_end.frame_number)
         traced_listing = ListMoviesResponse.model_validate(
             post_api(endpoint, LIST_MOVIES_PATH, api_key=api_key, movie_id=movie_id).json())
         traced_movie = next(movie for movie in traced_listing.movies if movie.movie_id == movie_id)
@@ -379,11 +395,21 @@ def run_workflow(*, endpoint, stack_name, movie_path, reference_csv_path, refere
         traced_download = requests.get(traced_movie.movie_traced_url, timeout=timeout)
         traced_download.raise_for_status()
         assert_final_frame(traced_download.content, reference_frame_path)
+        logging.info("downloaded and validated traced movie movie_id=%s bytes=%s", movie_id,
+                     len(traced_download.content))
         logging.info("deployed workflow passed for stack=%s course=%s", stack_name, course_id)
     finally:
         if movie_id:
+            movie = ddbo.get_movie(movie_id)
+            original_urn = movie.get(odb.MOVIE_DATA_URN)
+            traced_urn = movie.get(odb.MOVIE_TRACED_URN)
+            logging.info("deleting workflow movie movie_id=%s original=%s traced=%s", movie_id,
+                         original_urn, traced_urn)
             odb_movie_data.purge_movie(movie_id=movie_id)
+            if traced_urn:
+                odb_movie_data.delete_object(traced_urn)
             ddbo.batch_delete_movie_ids([movie_id])
+            logging.info("deleted workflow movie movie_id=%s from storage and database", movie_id)
         ddbo.api_keys.delete_item(Key={odb.API_KEY: api_key})
 
 

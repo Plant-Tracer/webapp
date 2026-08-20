@@ -175,6 +175,8 @@ def test_templates(client,new_course):
             include_text = None
             exclude_text = None
             if with_api_key is True and url=='/list':
+                include_text = ('<a class="pure-button pure-button-primary" href="upload">'
+                                'upload a new movie</a>')
                 exclude_text = 'user_demo = true;'
             if with_api_key:
                 client.set_cookie( apikey.cookie_name(), api_key)

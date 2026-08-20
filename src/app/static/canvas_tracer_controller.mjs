@@ -32,6 +32,7 @@ const MAX_FRAMES = 10000;
 const STATUS_POLL_MSEC = 500;
 const MAX_ZIP_WAIT_MS = 10000;
 const STATUS_POLL_MAX_ERRORS = 5;
+const TRACING_MAY_LEAVE_MESSAGE = 'You may leave this page and click Analyze again later.';
 const TRACE_MOVIE_RETRY_DELAY_MS = 5000; // if trace movie fails
 const TRACKPOINT_ORIGIN_BOTTOM_LEFT = 'bottom-left';
 const TRACKING_START_TIMEOUT_MS = 15000;
@@ -1504,13 +1505,12 @@ class TracerController extends MovieController {
                 .then(({ status, data }) => {
                     if (status >= 200 && status < 300 && !(data && data.error)) {
                         stop_analysis_lease();
-                        self.tracking = false;
                         self.movie_metadata.status = TRACING_FLAG;
-                        $(self.div_selector).removeClass('tracing-dimmed');
-                        self.set_movie_control_buttons();
                         self.refreshFrameEditState();
-                        self.tracking_status.text('Tracing has started. Leave this page and click Analyze again later.');
-                        $('#status-big').text('Tracing in progress. Leave this page and click Analyze again later.');
+                        const statusText = `Tracing has started — ${TRACING_MAY_LEAVE_MESSAGE}`;
+                        self.tracking_status.text(statusText);
+                        $('#status-big').text(statusText);
+                        self.poll_for_track_end();
                         return;
                     }
                     const msg = (data && data.message) ? data.message : `Tracing request failed (${status}).`;
@@ -1701,13 +1701,15 @@ class TracerController extends MovieController {
                         return;
                     }
                     const last = data.metadata.last_frame_tracked;
+                    let statusText;
                     if (last != null) {
-                        let statusText = `Tracing frame ${last}`;
-                        self.tracking_status.text(statusText);
-                        $('#status-big').text(statusText);
+                        statusText = `Tracing frame ${last}`;
                     } else {
-                        self.tracking_status.text(data.metadata.status || TRACING_STARTING_MESSAGE);
+                        statusText = data.metadata.status || TRACING_STARTING_MESSAGE;
                     }
+                    statusText = `${statusText} — ${TRACING_MAY_LEAVE_MESSAGE}`;
+                    self.tracking_status.text(statusText);
+                    $('#status-big').text(statusText);
                     self.timeout = setTimeout(() => { self.poll_for_track_end(); }, STATUS_POLL_MSEC);
                     return;
                 }
@@ -2282,8 +2284,8 @@ function graph_data(cc, frames) {
 
 /* Main function called when HTML page loads.
  * Gets metadata for the movie and traced frames. If no zip yet, shows frame 0 only (no polling).
- * User places markers and clicks "Trace movie". Tracing is asynchronous; users reopen
- * Analyze after it completes rather than polling for completion from this page.
+ * User places markers and clicks "Trace movie"; we then poll only for tracing to complete,
+ * then load the zip once (wait up to 10s if needed) and stop polling.
  */
 function trace_movie(div_controller, movie_id, api_key) {
 
