@@ -58,8 +58,8 @@ def api_admin_create_course():
                     "error": True,
                     "message": "Administrator account is disabled",
                 }), 409
-            admin_name = existing_user[odb.USER_NAME]
-            if not admin_name.strip():
+            admin_name = existing_user.get(odb.USER_NAME)
+            if not isinstance(admin_name, str) or not admin_name.strip():
                 return jsonify({
                     "error": True,
                     "message": "Administrator account has no name",
@@ -90,7 +90,7 @@ def api_admin_create_course():
             "error": True,
             "message": "Course identifier or registration key is already in use",
         }), 409
-    except ValueError:
+    except course_management.CourseNameConflict:
         return jsonify({
             "error": True,
             "message": "Course ID conflicts with an existing course name",

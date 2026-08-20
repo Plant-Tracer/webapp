@@ -55,6 +55,10 @@ class CourseMembershipRequired(ValueError):
     """Raised when a user selects a course they are not enrolled in."""
 
 
+class CourseNameConflict(ValueError):
+    """Raised when an existing course ID has a different course name."""
+
+
 def generate_course_key():
     """Return a short registration key for a newly created course."""
     return uuid.uuid4().hex[:8]
@@ -200,13 +204,17 @@ def create_course_with_admin(*, course_id, course_name, admin_email, admin_name,
         raise ValueError("course_id is required")
     if not course_name:
         raise ValueError("course_name is required")
+    if not admin_email:
+        raise ValueError("admin_email is required")
+    if not admin_name:
+        raise ValueError("admin_name is required")
     if send_email and not planttracer_endpoint:
         raise ValueError("planttracer_endpoint is required when send_email=True")
     created = False
     try:
         course_dict = odb.lookup_course_by_id(course_id=course_id)
         if course_dict.get(COURSE_NAME) != course_name:
-            raise ValueError(
+            raise CourseNameConflict(
                 f"course {course_id} already exists as {course_dict.get(COURSE_NAME)!r}, "
                 f"not {course_name!r}"
             )

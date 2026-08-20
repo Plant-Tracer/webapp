@@ -420,7 +420,9 @@ def test_admin_course_create_rejects_disabled_administrator(client, new_course):
         ddbo.update_table(ddbo.users, admin[odb.USER_ID], {odb.ENABLED: 1})
 
 
-def test_admin_course_create_rejects_existing_administrator_without_name(client, new_course):
+@pytest.mark.parametrize("stored_name", ["", None])
+def test_admin_course_create_rejects_existing_administrator_without_name(client, new_course,
+                                                                          stored_name):
     ddbo = new_course["ddbo"]
     ddbo.update_table(
         ddbo.users,
@@ -431,7 +433,7 @@ def test_admin_course_create_rejects_existing_administrator_without_name(client,
     original_name = admin[odb.USER_NAME]
     course_id = f"NamelessAdmin-{uuid.uuid4()}"
     client.set_cookie(apikey.cookie_name(), new_course[API_KEY])
-    ddbo.update_table(ddbo.users, admin[odb.USER_ID], {odb.USER_NAME: ""})
+    ddbo.update_table(ddbo.users, admin[odb.USER_ID], {odb.USER_NAME: stored_name})
     try:
         response = client.post("/api/admin/courses", json={
             "course_id": course_id,

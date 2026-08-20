@@ -246,6 +246,29 @@ def test_create_course_with_admin_validates_email_endpoint_before_writes(new_cou
         odb.lookup_course_by_id(course_id=course_id)
 
 
+@pytest.mark.parametrize(("admin_email", "admin_name", "message"), [
+    ("", "Course Admin", "admin_email is required"),
+    (None, "", "admin_name is required"),
+])
+def test_create_course_with_admin_validates_administrator_before_writes(
+        new_course, admin_email, admin_name, message):
+    cfg = copy.copy(new_course)
+    course_id = "InvalidAdmin-" + str(uuid.uuid4())[0:8]
+    email = cfg[ADMIN_EMAIL] if admin_email is None else admin_email
+
+    with pytest.raises(ValueError, match=message):
+        course_management.create_course_with_admin(
+            course_id=course_id,
+            course_name="Invalid Administrator Test",
+            admin_email=email,
+            admin_name=admin_name,
+            send_email=False,
+        )
+
+    with pytest.raises(odb.InvalidCourse_Id):
+        odb.lookup_course_by_id(course_id=course_id)
+
+
 def test_list_admins_tolerates_null_course_name(new_course):
     cfg = copy.copy(new_course)
     ddbo = DDBO()

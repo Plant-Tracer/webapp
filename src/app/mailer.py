@@ -92,6 +92,8 @@ def get_smtp_config():
             smtp_config = cp['smtp']
             if SMTP_HOST not in smtp_config:
                 raise KeyError(f"missing SMTP setting: {SMTP_HOST}")
+            if bool(smtp_config.get(SMTP_USERNAME)) != bool(smtp_config.get(SMTP_PASSWORD)):
+                raise KeyError("SMTP username and password must be configured together")
             return smtp_config
         except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
             raise InvalidMailerConfiguration(str(exc)) from exc
