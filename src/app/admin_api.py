@@ -95,7 +95,7 @@ def api_admin_create_course():
             planttracer_endpoint=request.url_root,
         )
     except (mailer.InvalidMailerConfiguration, mailer.NoMailerConfiguration,
-            smtplib.SMTPException) as exc:
+            smtplib.SMTPException, OSError) as exc:
         logger.warning("course %s created but administrator email failed: %s",
                        result.course.course_id, exc)
         email_sent = False

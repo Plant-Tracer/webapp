@@ -200,6 +200,8 @@ def create_course_with_admin(*, course_id, course_name, admin_email, admin_name,
         raise ValueError("course_id is required")
     if not course_name:
         raise ValueError("course_name is required")
+    if send_email and not planttracer_endpoint:
+        raise ValueError("planttracer_endpoint is required when send_email=True")
     created = False
     try:
         course_dict = odb.lookup_course_by_id(course_id=course_id)
@@ -226,8 +228,6 @@ def create_course_with_admin(*, course_id, course_name, admin_email, admin_name,
     course = Course(**odb.lookup_course_by_id(course_id=course_id))
     api_key = None
     if send_email:
-        if not planttracer_endpoint:
-            raise ValueError("planttracer_endpoint is required when send_email=True")
         api_key = send_course_created_notification(
             course=course,
             admin_user=admin_result.admin_user,

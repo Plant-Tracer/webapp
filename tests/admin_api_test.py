@@ -389,6 +389,47 @@ def test_admin_course_create_survives_invalid_mailer_configuration(client, new_c
             pass
 
 
+def test_admin_course_create_survives_mail_transport_failure(client, new_course,
+                                                              monkeypatch):
+    ddbo = new_course["ddbo"]
+    ddbo.update_table(
+        ddbo.users,
+        new_course[USER_ID],
+        {odb.SUPER_ROLE: odb.SUPER_ROLE_SUPERADMIN},
+    )
+    client.set_cookie(apikey.cookie_name(), new_course[API_KEY])
+    course_id = f"TransportFailure-{uuid.uuid4()}"
+
+    def raise_transport_failure(**_kwargs):
+        raise OSError("deliberate transport failure")
+
+    monkeypatch.setattr(
+        course_management,
+        "send_course_created_notification",
+        raise_transport_failure,
+    )
+    admin = odb.get_user_email(new_course[ADMIN_EMAIL])
+    try:
+        response = client.post("/api/admin/courses", json={
+            "course_id": course_id,
+            "course_name": "Transport failure course",
+            "admin_email": new_course[ADMIN_EMAIL],
+            "admin_name": "Course Admin",
+        })
+
+        assert response.status_code == 201
+        assert response.json["created"] is True
+        assert response.json["email_sent"] is False
+        course = odb.lookup_course_by_id(course_id=course_id)
+        assert admin[odb.USER_ID] in course[odb.ADMINS_FOR_COURSE]
+    finally:
+        try:
+            odb.remove_course_admin(course_id=course_id, admin_id=admin[odb.USER_ID])
+            odb.delete_course(course_id=course_id)
+        except odb.InvalidCourse_Id:
+            pass
+
+
 def test_admin_summary_includes_enrollment_memberships_and_movies(client, new_movie):
     ddbo = new_movie["ddbo"]
     ddbo.update_table(ddbo.users, new_movie[USER_ID], {odb.SUPER_ROLE: odb.SUPER_ROLE_SUPERAUDITOR})

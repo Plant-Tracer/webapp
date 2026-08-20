@@ -5,6 +5,8 @@ Test the various functions in the database involving user creation.
 import uuid
 import copy
 
+import pytest
+
 from app import course_management
 from app import odb
 from app import odbmaint
@@ -225,6 +227,22 @@ def test_create_course_with_existing_admin_is_idempotent(new_course):
 
     odb.remove_course_admin(course_id=course_id, admin_id=result.admin_user.user_id)
     odb.delete_course(course_id=course_id)
+
+
+def test_create_course_with_admin_validates_email_endpoint_before_writes(new_course):
+    cfg = copy.copy(new_course)
+    course_id = "MissingEndpoint-" + str(uuid.uuid4())[0:8]
+
+    with pytest.raises(ValueError, match="planttracer_endpoint is required"):
+        course_management.create_course_with_admin(
+            course_id=course_id,
+            course_name="Missing Endpoint Test",
+            admin_email=cfg[ADMIN_EMAIL],
+            admin_name="Course Admin",
+        )
+
+    with pytest.raises(odb.InvalidCourse_Id):
+        odb.lookup_course_by_id(course_id=course_id)
 
 
 def test_list_admins_tolerates_null_course_name(new_course):
