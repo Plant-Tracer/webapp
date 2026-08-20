@@ -84,6 +84,8 @@ A course administrator can:
 * manage the course they administer;
 * register students for that course;
 * receive course setup/login email through the configured Plant Tracer sender.
+* open the Admin panel with courses, users, and movies limited to the courses
+  they administer.
 
 Course administrators should be created or updated through ``dbutil`` and
 operator Makefile targets. They should not be configured as SAM stack
@@ -141,9 +143,11 @@ both pass the last-superadmin check. The CLI reconciles that singleton from the
 users table before each mutation so older databases are initialized on first
 use. Users can be
 ``superadmin`` or ``superauditor``, but not both, because ``super_role`` is a
-single enum field. Only users with an explicit super role can read ``/admin``;
-course-admin status alone does not grant cross-course access. Use
-``dbutil add-superadmin`` to bootstrap the first global administrator.
+single enum field. Course-admin status grants Admin-panel access only for
+administered courses; it never grants cross-course access. This scoped access
+works whether or not a ``superadmin`` or ``superauditor`` exists. Use
+``dbutil add-superadmin`` to bootstrap the first global administrator when a
+global view is required.
 
 Operators can create courses with ``make course-create``. The target runs
 ``poetry run dbutil create-course --send-email``. In an interactive terminal it asks

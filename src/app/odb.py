@@ -242,6 +242,8 @@ class AdminReadAccess(BaseModel):
 
     allowed: bool
     super_role: str = SUPER_ROLE_NONE
+    all_courses: bool = False
+    course_ids: tuple[str, ...] = ()
 
 ################################################################
 ## Errors
@@ -1524,11 +1526,16 @@ def user_has_super_read(user):
 
 
 def admin_read_access(user) -> AdminReadAccess:
-    """Return whether a user with an explicit super role can read /admin."""
+    """Resolve global or administered-course read access to ``/admin``."""
     super_role = normalize_super_role(user)
     if super_role in SUPER_READ_ROLES:
-        return AdminReadAccess(allowed=True, super_role=super_role)
-    return AdminReadAccess(allowed=False, super_role=super_role)
+        return AdminReadAccess(allowed=True, super_role=super_role, all_courses=True)
+    course_ids = tuple(sorted(set(user.get(ADMIN_FOR_COURSES, []))))
+    return AdminReadAccess(
+        allowed=bool(course_ids),
+        super_role=super_role,
+        course_ids=course_ids,
+    )
 
 
 #########################
