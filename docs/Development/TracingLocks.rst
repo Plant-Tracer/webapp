@@ -27,8 +27,10 @@ Movie-list and movie-metadata responses include an active lock's start time
 and initiating user's display name. Analyze is read-only while the lock is
 active: viewing, playback, and downloads remain available, while marker,
 trim, retrace, and capture-interval writes are disabled in the browser and
-rejected by the Flask API. Analyze does not poll for tracing completion; the
-user reopens Analyze later.
+rejected by the Flask API. The active Analyze page polls movie metadata,
+displays frame progress, and loads the results when tracing completes. The
+progress message also tells the user that it is safe to leave the page and
+reopen Analyze later.
 
 Audit and diagnostics
 ---------------------

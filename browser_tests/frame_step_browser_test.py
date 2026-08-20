@@ -68,3 +68,12 @@ def test_single_frame_stepping_recovers_forward_then_reverse_order(chrome_driver
         assert matches_color(sample, frame_colors[frame_index]), (
             f"expected frame {frame_index + 1} {frame_colors[frame_index]}, got {sample}"
         )
+
+
+@pytest.mark.selenium
+def test_external_movie_url_requires_explicit_load(chrome_driver, frame_step_server):
+    """Opening the public demo must not automatically contact an external movie host."""
+    external_url = quote("https://example.invalid/plant.mp4", safe="")
+    chrome_driver.get(f"{frame_step_server}/mp4player-demo3.html?src={external_url}")
+
+    assert wait_for_decoded_frames(chrome_driver) == "Click Load URL or choose a local MP4 file."

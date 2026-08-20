@@ -8,8 +8,8 @@
 # Environment variables:
 # PLANTTRACER_CREDENTIALS - the config.ini file that includes [smtp] and [imap] configuration the your production system
 #
-# Example deploy:
-# aws sso login && DYNAMODB_TABLE_PREFIX=prod STACK=demo make sam-build sam-deploy-guided
+# Example deploy (defaults DynamoDBTablePrefix to slg-dev-):
+# aws sso login && STACK_NAME=slg-dev make sam-build sam-deploy
 
 SHELL := /bin/bash
 PYLINT_THRESHOLD := 10.0
@@ -36,7 +36,11 @@ LOCAL_LAMBDA_WAIT_SECONDS ?= 30
 # alias because it is also the CloudFormation/SAM term shown during deployment.
 STACK_NAME_INPUT := $(if $(filter environment command line,$(origin STACK_NAME)),$(strip $(STACK_NAME)),)
 DYNAMODB_TABLE_PREFIX_INPUT := $(if $(filter environment command line,$(origin DYNAMODB_TABLE_PREFIX)),$(strip $(DYNAMODB_TABLE_PREFIX)),)
-STACK ?= $(STACK_NAME_INPUT)
+ifneq ($(STACK_NAME_INPUT),)
+override STACK := $(STACK_NAME_INPUT)
+else
+STACK ?=
+endif
 SAM_CONFIG_DIR ?= samconfigs
 SAM_CONFIG ?= $(if $(STACK),$(SAM_CONFIG_DIR)/$(STACK).toml,samconfig.toml)
 SAM_BUILD_DIR=.aws-sam/build
@@ -84,9 +88,11 @@ endif
 
 export PYLINTHOME ?= $(CURDIR)/.pylint.d
 
+ifeq ($(AWS_REGION),local)
 ifeq ($(DYNAMODB_TABLE_PREFIX),)
     $(info DYNAMODB_TABLE_PREFIX not set. Defaulting to demo-)
     export DYNAMODB_TABLE_PREFIX=demo-
+endif
 endif
 
 .PHONY: dist distclean
@@ -158,7 +164,7 @@ pylint:
 	$(MAKE) vend-lambda-resize
 	$(MAKE) vend-lambda-web
 	poetry run pylint $(PYLINT_OPTS) browser_tests lambda-web/src/lambda_web lambda-web/tests lambda-resize src tests \
-		etc/sam_config_tool.py etc/sam_config_writer.py *.py
+		bin/deployed_workflow_test.py etc/sam_config_tool.py etc/sam_config_writer.py *.py
 
 ## Mypy static analysis
 mypy:
@@ -657,7 +663,7 @@ lambda-web-check: lambda-web-lint
 	$(MAKE) vend-lambda-web
 	PYTHONPATH=.:src:lambda-web/src poetry run pytest lambda-web/tests -q --cov=lambda-web/src/lambda_web --cov-report=term -o junit_family=legacy --log-cli-level=$(LOG_LEVEL)
 
-.PHONY: lambda-resize/src/requirements.txt lambda-web/src/requirements.txt template-lint sam-config-show sam-config-path-check sam-config-check sam-config-guided-bootstrap sam-version-check sam-source-commit-check stamp-lambda-web-source-commit lambda-web-source-commit-check sam-deploy-version-check stamp-sam-deploy-metadata sam-status
+.PHONY: lambda-resize/src/requirements.txt lambda-web/src/requirements.txt template-lint sam-config-show sam-config-path-safety-check sam-config-sync sam-config-path-check sam-config-check sam-config-guided-bootstrap sam-version-check sam-source-commit-check stamp-lambda-web-source-commit lambda-web-source-commit-check sam-deploy-version-check stamp-sam-deploy-metadata sam-status
 lambda-resize/src/requirements.txt:
 	poetry export --with lambda --without dev --without vm --format=requirements.txt --output lambda-resize/src/requirements.txt --without-hashes
 
@@ -669,45 +675,22 @@ template-lint: .venv/pyvenv.cfg
 	@echo cfn-lint requires a valid AWS_REGION so we use us-east-1
 	AWS_REGION=us-east-1 poetry run cfn-lint template.yaml
 
-sam-config-show:
+sam-config-show: sam-config-sync
 	@echo "SAM_CONFIG=$(SAM_CONFIG)"
 	@echo "STACK_NAME=$(EFFECTIVE_STACK_NAME)"
 	@echo "CONFIG_STACK_NAME=$(SAM_CONFIG_STACK_NAME)"
 	@echo "DYNAMODB_TABLE_PREFIX=$(SAM_CONFIG_DYNAMODB_TABLE_PREFIX)"
 
-sam-config-path-check:
+sam-config-path-safety-check:
 	@if [ -n "$(stack)" ] && [ -z "$(STACK)" ]; then \
 		echo "Refusing to use SAM: found lowercase stack=$(stack), but this Makefile expects STACK=<name> or STACK_NAME=<name>."; \
 		echo "Make variables are case-sensitive; rerun with STACK=$(stack)."; \
-		exit 1; \
-	fi
-	@if [ -n "$(STACK_NAME_INPUT)" ] && [ -n "$(STACK)" ] && [ "$(STACK_NAME_INPUT)" != "$(STACK)" ]; then \
-		echo "Refusing to use SAM: STACK_NAME=$(STACK_NAME_INPUT) conflicts with STACK=$(STACK)."; \
-		echo "Set only one target name, or give both variables the same value."; \
 		exit 1; \
 	fi
 	@if [ -z "$(SAM_CONFIG)" ]; then \
 		echo "Refusing to use SAM: SAM_CONFIG is not set."; \
 		echo "Pass STACK=<name> or STACK_NAME=<name> to use $(SAM_CONFIG_DIR)/<name>.toml, or pass SAM_CONFIG=<path>."; \
 		exit 1; \
-	fi
-	@if [ -n "$(EFFECTIVE_STACK_NAME)" ] && [ -n "$(SAM_CONFIG_STACK_NAME)" ] && [ "$(SAM_CONFIG_STACK_NAME)" != "$(EFFECTIVE_STACK_NAME)" ]; then \
-		echo "Refusing to use SAM: target stack=$(EFFECTIVE_STACK_NAME) but $(SAM_CONFIG) has stack_name=$(SAM_CONFIG_STACK_NAME)."; \
-		echo "Use the matching STACK value, fix $(SAM_CONFIG), or unset STACK and pass the intended SAM_CONFIG explicitly."; \
-		exit 1; \
-	fi
-	@if [ -n "$(DYNAMODB_TABLE_PREFIX_INPUT)" ] && [ -f "$(SAM_CONFIG)" ]; then \
-		REQUESTED_PREFIX="$(DYNAMODB_TABLE_PREFIX_INPUT)"; \
-		CONFIG_PREFIX="$(SAM_CONFIG_DYNAMODB_TABLE_PREFIX)"; \
-		if [ -z "$$CONFIG_PREFIX" ] && [ "$(SAM_CONFIG_ALLOW_MISSING_DDB_PREFIX)" != "1" ]; then \
-			echo "Refusing to use SAM: $(SAM_CONFIG) has no DynamoDBTablePrefix override."; \
-			exit 1; \
-		fi; \
-		if [ -n "$$CONFIG_PREFIX" ] && [ "$${REQUESTED_PREFIX%-}" != "$${CONFIG_PREFIX%-}" ]; then \
-			echo "Refusing to use SAM: DYNAMODB_TABLE_PREFIX=$$REQUESTED_PREFIX but $(SAM_CONFIG) configures $$CONFIG_PREFIX."; \
-			echo "Update the selected per-stack TOML config before deploying."; \
-			exit 1; \
-		fi; \
 	fi
 	@if git ls-files --error-unmatch "$(SAM_CONFIG)" >/dev/null 2>&1; then \
 		echo "Refusing to use SAM: $(SAM_CONFIG) is tracked by git."; \
@@ -723,6 +706,29 @@ sam-config-path-check:
 		fi ;; \
 	esac
 
+sam-config-sync: sam-config-path-safety-check
+	@if [ -n "$(EFFECTIVE_STACK_NAME)" ]; then \
+		PREFIX="$(DYNAMODB_TABLE_PREFIX_INPUT)"; \
+		if [ -z "$$PREFIX" ]; then PREFIX="$(EFFECTIVE_STACK_NAME)-"; fi; \
+		poetry run python etc/sam_config_writer.py --samconfig "$(SAM_CONFIG)" \
+			--stack-name "$(EFFECTIVE_STACK_NAME)" --dynamodb-table-prefix "$$PREFIX"; \
+	fi
+
+sam-config-path-check: sam-config-sync
+	@if [ -n "$(EFFECTIVE_STACK_NAME)" ] && [ -n "$(SAM_CONFIG_STACK_NAME)" ] && [ "$(SAM_CONFIG_STACK_NAME)" != "$(EFFECTIVE_STACK_NAME)" ]; then \
+		echo "Refusing to use SAM: target stack=$(EFFECTIVE_STACK_NAME) but $(SAM_CONFIG) has stack_name=$(SAM_CONFIG_STACK_NAME)."; \
+		exit 1; \
+	fi
+	@if [ -n "$(EFFECTIVE_STACK_NAME)" ]; then \
+		REQUESTED_PREFIX="$(DYNAMODB_TABLE_PREFIX_INPUT)"; \
+		if [ -z "$$REQUESTED_PREFIX" ]; then REQUESTED_PREFIX="$(EFFECTIVE_STACK_NAME)-"; fi; \
+		CONFIG_PREFIX="$(SAM_CONFIG_DYNAMODB_TABLE_PREFIX)"; \
+		if [ "$${REQUESTED_PREFIX%-}" != "$${CONFIG_PREFIX%-}" ]; then \
+			echo "Refusing to use SAM: synchronized DYNAMODB_TABLE_PREFIX=$$REQUESTED_PREFIX but $(SAM_CONFIG) configures $$CONFIG_PREFIX."; \
+			exit 1; \
+		fi; \
+	fi
+
 sam-config-check: sam-config-path-check
 	@if [ ! -f "$(SAM_CONFIG)" ]; then \
 		echo "Refusing to use SAM: $(SAM_CONFIG) does not exist."; \
@@ -730,9 +736,7 @@ sam-config-check: sam-config-path-check
 		exit 1; \
 	fi
 
-sam-config-guided-bootstrap: SAM_CONFIG_ALLOW_MISSING_DDB_PREFIX=1
 sam-config-guided-bootstrap: sam-config-path-check
-	poetry run python etc/sam_config_writer.py --samconfig "$(SAM_CONFIG)" $(if $(EFFECTIVE_STACK_NAME),--stack-name "$(EFFECTIVE_STACK_NAME)",)
 
 stamp-sam-deploy-metadata: sam-version-check
 	@if [ ! -d "$(SAM_BUILD_DIR)/LambdaResizeFunction/resize_app" ]; then \
@@ -979,10 +983,8 @@ sam-deployed-workflow-test: sam-config-check
 	env -u AWS_ENDPOINT_URL_DYNAMODB -u AWS_ENDPOINT_URL_S3 \
 		DYNAMODB_TABLE_PREFIX="$$DDB_PREFIX" PLANTTRACER_S3_BUCKET="$$BUCKET" \
 		PLANTTRACER_STACK_NAME="$(EFFECTIVE_STACK_NAME)" \
-		poetry run python bin/deployed_workflow_test.py \
-			--endpoint "https://$(EFFECTIVE_STACK_NAME).planttracer.com/" \
-			--stack-name "$(EFFECTIVE_STACK_NAME)" \
-			--movie "tests/data/2019-07-31 plantmovie.mov"
+		uv run deployed_workflow_test \
+			--endpoint "https://$(EFFECTIVE_STACK_NAME).planttracer.com/"
 
 # Shared resolution of Lambda function name (FUNC) and start time (START) for log targets.
 # Used by sam-logs, sam-logs-simple, sam-logs-simple-tail.

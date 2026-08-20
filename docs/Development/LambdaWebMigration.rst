@@ -212,6 +212,11 @@ not keep an execution environment continuously warm. Any code that relies on
 unique values, credentials, timestamps, temporary data, or network connections
 from module initialization must tolerate Lambda restore behavior.
 
+SAM publishes a new ``live`` version whenever any ``lambda-web`` property
+changes, including environment parameters. This keeps the aliased SnapStart
+version's configuration synchronized with IAM policies generated from the same
+stack parameters instead of leaving ``live`` on an older environment.
+
 Do not replace SnapStart with a scheduled keepalive invocation. Lambda does not
 guarantee that a later request reuses the periodically invoked execution
 environment, especially during scaling or infrastructure recycling. A
@@ -360,20 +365,20 @@ Use one visible, ignored SAM config file per stack. For example:
 
    STACK=dev-stack make sam-deploy
    STACK=alice-test make sam-deploy
-   STACK_NAME=slg-dev DYNAMODB_TABLE_PREFIX=prod make sam-deploy
+   STACK_NAME=slg-dev make sam-deploy
 
 ``STACK`` and ``STACK_NAME`` must be uppercase. GNU Make variables are
 case-sensitive, so ``stack=prod`` is not the same variable and is rejected by
-the SAM config guard. If both supported variables are supplied, they must
-match.
+the SAM config guard. If both supported variables are supplied,
+``STACK_NAME`` takes precedence.
 
-Normal deployment does not rewrite the selected TOML file. The Makefile reads
-it with a TOML parser, verifies that its ``stack_name`` matches the requested
-target, and passes SAM's ``--stack-name`` option explicitly. If
-``DYNAMODB_TABLE_PREFIX`` is also supplied, the Makefile verifies it against
-the config's ``DynamoDBTablePrefix`` override (ignoring one conventional
-trailing hyphen) and refuses a mismatch. Other deployment parameters continue
-to come from the per-stack TOML file.
+Before deployment, the Makefile synchronizes the selected TOML file with the
+operator's stack selection and passes SAM's ``--stack-name`` option explicitly.
+An explicit ``STACK_NAME`` or ``STACK`` replaces a stale ``stack_name`` in the
+file. An explicit ``DYNAMODB_TABLE_PREFIX`` replaces its
+``DynamoDBTablePrefix`` override; when it is omitted, the prefix defaults to
+``<stack>-``. Other deployment parameters continue to come from the per-stack
+TOML file.
 
 ``sam deploy --guided`` can also create the selected stack config:
 
@@ -386,14 +391,14 @@ minimal ignored config file before invoking SAM because the SAM CLI requires
 the ``--config-file`` path to be readable even in guided mode. A Python TOML
 writer creates or updates this bootstrap file so TOML quoting and existing
 values are preserved. When a stack selector is set, the bootstrap config
-includes ``stack_name`` so the normal deploy-version guard can still run before
-the guided deployment.
+includes ``stack_name`` and the stack-derived DynamoDB prefix so the normal
+deploy-version guard can still run before the guided deployment.
 
 For a stack named ``app``, the selected config is ``samconfigs/app.toml`` and
 the template creates ``https://app.planttracer.com/`` when ``BaseDomain`` is
 ``planttracer.com``. The hostname comes from ``AWS::StackName`` and
 ``BaseDomain`` in ``template.yaml``. The Makefile passes ``--stack-name app``
-during both normal and guided deploys and refuses an existing
+during both normal and guided deploys and updates an existing
 ``samconfigs/app.toml`` whose ``stack_name`` is not ``app``.
 
 The Makefile still accepts ``SAM_CONFIG=<path>`` as an explicit escape hatch.
@@ -422,8 +427,8 @@ Preflight:
 
 * confirm ``git status`` is clean and the branch has no unpushed commits;
 * confirm ``pyproject.toml`` has the intended version;
-* confirm ``STACK`` or ``STACK_NAME`` names the intended stack and the selected
-  ``samconfigs/<stack>.toml`` has the intended table prefix;
+* confirm ``STACK`` or ``STACK_NAME`` names the intended stack; the Makefile
+  defaults its table prefix to ``<stack>-`` unless explicitly overridden;
 * confirm the S3 movie bucket and DynamoDB table prefix are the intended test
   resources;
 * if the stack operator cannot send SES mail as the configured ``SERVER_EMAIL``,
@@ -443,10 +448,14 @@ Deploy:
   version API response is printed in full, and resize ping should report the
   application version and UTC deployment timestamp;
 * let the deploy target run ``make sam-deployed-workflow-test``. It creates or
-  reuses a stack-specific test course/user, creates a movie, uploads a real
-  test video through ``uploads/{stack}/``, waits for EventBridge/post-upload
-  processing, writes a starting trackpoint, requests a short trace, verifies
-  completion, and removes its movie artifacts;
+  reuses a stack-specific test course/user, uploads the circumnutation fixture
+  through ``uploads/{stack}/``, verifies the movie appears in the deployed
+  movie list, waits for EventBridge/post-upload processing, and downloads the
+  original movie. It traces all frames from committed reference starting
+  markers, verifies the initial and final Apex positions within two pixels,
+  validates CSV and XLSX exports, and compares the downloaded traced movie's
+  final frame to its committed rendering reference. It then removes its movie
+  artifacts;
 * inspect recent logs with ``make sam-logs-web`` and ``make sam-logs-resize``
   if any smoke check reports a failure.
 

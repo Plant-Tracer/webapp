@@ -10,6 +10,8 @@ Required
 
 ``DYNAMODB_TABLE_PREFIX``
    Prefix added to every DynamoDB table name. Local defaults use ``demo-``.
+   SAM deployment defaults this to ``<stack>-`` and persists the value in the
+   selected per-stack TOML file; an explicit value overrides that default.
 
 ``PLANTTRACER_S3_BUCKET``
    Existing S3 bucket name. Do not include ``s3://``. For local MinIO the

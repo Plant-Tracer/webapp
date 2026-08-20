@@ -1,6 +1,6 @@
 [project]
 name = "webapp"
-version = "0.9.9.0c"
+version = "0.9.9.2a"
 description = "PlantTracer webapp"
 readme = "README.md"
 license = "GPL-3.0-or-later"
@@ -17,6 +17,7 @@ sqs_cli = "sqs_cli:main"
 planttracer-local-trace = "app.local_trace_cli:main"
 dbutil = "dbutil:main"
 dbbackup = "dbbackup:main"
+deployed_workflow_test = "deployed_workflow_test:main"
 
 [tool.poetry]
 packages = [
@@ -25,11 +26,16 @@ packages = [
     { include = "dbutil.py", from = "src" },
     { include = "dbbackup.py", from = "src" },
     { include = "sqs_cli.py", from = "lambda-resize/src" },
+    { include = "deployed_workflow_test.py", from = "bin" },
 ]
 
 [tool.poetry.dependencies]
 python = ">=3.12,<3.13"
 apig-wsgi = "^2.20.0"
+boto3 = "^1.42.72"
+Pillow = "^11.0.0"
+pydantic = "*"
+requests = ">=2.32.4,<3.0.0"
 
 [tool.poetry.requires-plugins]
 poetry-plugin-export = ">=1.8"

@@ -18,8 +18,24 @@ def test_project_root_contains_bundle_assets():
     """The bundle builder finds the player and its local MP4 demuxer."""
     root = analysis_mp4.project_root()
 
-    assert (root / "src/app/static/mp4player-demo3.html").is_file()
-    assert (root / "node_modules/mp4box/dist/mp4box.all.js").is_file()
+    player = root / "src/app/static/mp4player-demo3.html"
+    vendored_library = root / "src/app/static/mp4box.all.js"
+    installed_library = root / "node_modules/mp4box/dist/mp4box.all.js"
+
+    assert player.is_file()
+    installed_text = installed_library.read_text(encoding="utf-8")
+    normalized_installed_text = "\n".join(line.rstrip() for line in installed_text.splitlines()) + "\n"
+    assert vendored_library.read_text(encoding="utf-8") == normalized_installed_text
+
+
+def test_require_file_validates_bundle_assets(tmp_path):
+    """Required bundle assets return unchanged and report an actionable missing-file error."""
+    asset = tmp_path / "asset.js"
+    asset.write_text("export {};\n", encoding="utf-8")
+
+    assert analysis_mp4.require_file(asset, missing_message="missing asset") == asset
+    with pytest.raises(FileNotFoundError, match="missing asset"):
+        analysis_mp4.require_file(tmp_path / "missing.js", missing_message="missing asset")
 
 
 def ffmpeg_description(path: Path) -> str:
@@ -52,6 +68,7 @@ def test_cli_uses_shared_encoder_and_creates_portable_bundle(tmp_path, capsys):
     assert (output_dir / "analysis-mp4.json").is_file()
     assert "source_scaled.mp4" in result_text
     assert "cdn.jsdelivr.net" not in (output_dir / "index.html").read_text(encoding="utf-8")
+    assert "./mp4box.all.js" in (output_dir / "index.html").read_text(encoding="utf-8")
     assert "./source_scaled.mp4" in (output_dir / "index.html").read_text(encoding="utf-8")
 
     metadata = analysis_mp4.AnalysisMp4Result.model_validate_json(

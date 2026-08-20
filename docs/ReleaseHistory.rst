@@ -81,20 +81,34 @@ Unreleased Summary
       with stack-scoped EventBridge push events for post-upload and tracing
       work; retain an unpolled failure DLQ and SnapStart for lambda-web
     * Movies: rename the user-facing ``Unpublished`` state to ``Hidden`` now
-    * Movies: prevent concurrent tracing and make Analyze read-only while a trace is running.
       that movies are published immediately after upload
+    * Movies: prevent concurrent tracing and make Analyze read-only while a trace is running
     * Courses: make the current-course pull-down tab-local, send ``course_id``
       with course-scoped browser requests, and add an explicit **Make default**
       action
     * Data model: rename the profile's ``primary_course_*`` fields to
       ``default_course_*`` with read compatibility and a dry-run migration tool
+    * Security: serve the MP4 demuxer locally, integrity-protect the remaining
+      pinned demo dependencies, bound WebCodecs frame retention, and avoid
+      automatically contacting the demo movie host
     * Upload: prevent duplicate movie-rotation requests while a rotation is being saved
     * Analyze: prevent concurrent tracing of a movie and keep Analyze read-only while tracing runs
+    * Analyze: restore live tracing-frame progress and completion updates while
+      reminding users that they may leave the page and reopen Analyze later
     * Developer: add a Makefile-driven analysis-MP4 CLI that creates a portable
       WebCodecs player bundle for manual cross-browser frame-step verification
+    * Developer: run the deployed workflow verifier with an endpoint-only
+      ``uv run`` command that discovers deployment identity and uses committed references
     * Deployment: honor ``STACK_NAME`` as a per-stack config selector, pass the
-      target to SAM explicitly, reject stack and DynamoDB-prefix conflicts, and
-      use a TOML-aware Python writer for guided config bootstrapping
+      target to SAM explicitly, synchronize CLI stack and DynamoDB-prefix
+      overrides into the selected TOML file, and default the prefix to ``<stack>-``
+    * Deployment: republish the lambda-web ``live`` alias when environment or
+      other function properties change, keeping SnapStart configuration and IAM
+      resource scopes synchronized
+    * Operations: restore deployment-isolated S3 EventBridge upload completion,
+      post-upload processing, lifecycle logging, retry/DLQ handling, and an
+      automated deployed upload/trace workflow
+    * Developer: centralize runtime S3 object-key templates and formatting helpers while preserving legacy movie URNs
     * Analyze: open trimmed movies on their first included frame and keep
       Retrace disabled until marker data changes
     * Analyze: keep results below the movie and marker controls, with position

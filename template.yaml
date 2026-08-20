@@ -222,6 +222,7 @@ Resources:
       CodeUri: lambda-web/src/
       Handler: lambda_web.main.lambda_handler
       AutoPublishAlias: live
+      AutoPublishAliasAllProperties: true
       SnapStart:
         ApplyOn: PublishedVersions
       Timeout: 30
