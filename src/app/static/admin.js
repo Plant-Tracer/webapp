@@ -466,8 +466,8 @@ function bindVerboseDetails() {
 }
 
 function existingUserForEmail(email) {
-  const normalized = email.trim().toLocaleLowerCase();
-  return state.users.find((user) => user.email.toLocaleLowerCase() === normalized) || null;
+  const normalized = email.trim().toLowerCase();
+  return state.users.find((user) => user.email.toLowerCase() === normalized) || null;
 }
 
 function populateExistingCourseAdmins() {
@@ -477,7 +477,7 @@ function populateExistingCourseAdmins() {
   }
   choices.replaceChildren();
   state.users
-    .filter((user) => user.courses.some((course) => course.is_admin))
+    .filter((user) => user.enabled && user.courses.some((course) => course.is_admin))
     .sort((left, right) => compareValues(left.user_name || left.email, right.user_name || right.email))
     .forEach((user) => {
       const option = document.createElement("option");
@@ -545,7 +545,9 @@ function bindCourseCreate() {
   button.addEventListener("click", () => {
     form.reset();
     document.getElementById("admin-course-admin-name").readOnly = false;
-    document.getElementById("admin-course-form-status").textContent = "";
+    const formStatus = document.getElementById("admin-course-form-status");
+    formStatus.className = "";
+    formStatus.textContent = "";
     populateExistingCourseAdmins();
     dialog.showModal();
   });

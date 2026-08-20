@@ -187,6 +187,7 @@ class AdminUserSummary(BaseModel):
     user_id: str
     user_name: str
     email: str
+    enabled: bool
     default_course_id: str | None
     super_role: str
     courses: list[AdminUserCourseSummary]
@@ -409,6 +410,7 @@ def user_summary(user, *, visible_course_ids=None) -> AdminUserSummary:
         user_id=user[USER_ID],
         user_name=user.get(USER_NAME, ""),
         email=user.get(EMAIL, ""),
+        enabled=bool(user.get(odb.ENABLED, 0)),
         default_course_id=default_course_id,
         super_role=odb.normalize_super_role(user),
         courses=sorted(courses, key=lambda course: course.course_id),

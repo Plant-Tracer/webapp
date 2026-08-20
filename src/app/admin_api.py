@@ -53,6 +53,11 @@ def api_admin_create_course():
             return jsonify({"error": True, "message": "Administrator email is invalid"}), 400
         try:
             existing_user = odb.get_user_email(admin_email)
+            if not existing_user.get(odb.ENABLED):
+                return jsonify({
+                    "error": True,
+                    "message": "Administrator account is disabled",
+                }), 409
             admin_name = existing_user[odb.USER_NAME]
         except odb.InvalidUser_Email:
             admin_name = change.admin_name
@@ -92,7 +97,7 @@ def api_admin_create_course():
         course_management.send_course_created_notification(
             course=result.course,
             admin_user=result.admin_user,
-            planttracer_endpoint=request.url_root,
+            planttracer_endpoint=request.url_root.rstrip("/"),
         )
     except (mailer.InvalidMailerConfiguration, mailer.NoMailerConfiguration,
             smtplib.SMTPException, OSError) as exc:

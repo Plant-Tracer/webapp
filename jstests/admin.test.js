@@ -73,7 +73,7 @@ function payload() {
     users: {
       items: [{
         user_id: 'user-1', user_name: 'Ada', email: 'ada@example.test', default_course_id: 'BIO-1',
-        super_role: 'none', created_at: 1700000000, last_movie_activity_at: null,
+        enabled: true, super_role: 'none', created_at: 1700000000, last_movie_activity_at: null,
         courses: [
           { course_id: 'BIO-1', is_admin: true },
           { course_id: 'CHEM-2', is_admin: false },
@@ -245,8 +245,13 @@ describe('admin summary rendering', () => {
     adminPayload.viewer.super_role = 'superadmin';
     adminPayload.users.items.push({
       user_id: 'user-2', user_name: 'Grace', email: 'grace@example.test',
-      default_course_id: 'BIO-1', super_role: 'none', created_at: 1700000001,
+      enabled: true, default_course_id: 'BIO-1', super_role: 'none', created_at: 1700000001,
       last_movie_activity_at: null, courses: [{ course_id: 'BIO-1', is_admin: false }],
+    });
+    adminPayload.users.items.push({
+      user_id: 'user-3', user_name: 'Disabled Admin', email: 'disabled@example.test',
+      enabled: false, default_course_id: 'BIO-1', super_role: 'none', created_at: 1700000002,
+      last_movie_activity_at: null, courses: [{ course_id: 'BIO-1', is_admin: true }],
     });
     fetch.mockResponseOnce(JSON.stringify(adminPayload));
 
@@ -343,6 +348,10 @@ describe('admin summary rendering', () => {
       .toBe('Course ID conflicts with an existing course name');
     expect(document.getElementById('admin-course-form-status').className).toBe('admin-error');
     expect(document.getElementById('admin-course-submit').disabled).toBe(false);
+
+    document.getElementById('admin-new-course').click();
+    expect(document.getElementById('admin-course-form-status').textContent).toBe('');
+    expect(document.getElementById('admin-course-form-status').className).toBe('');
   });
 
   test('keeps IDs and operational metadata hidden until verbose details is selected', async () => {

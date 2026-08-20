@@ -357,6 +357,7 @@ def test_admin_course_create_survives_invalid_mailer_configuration(client, new_c
     course_id = f"MailerFailure-{uuid.uuid4()}"
 
     def raise_invalid_mailer_configuration(**_kwargs):
+        assert _kwargs["planttracer_endpoint"] == "http://localhost"
         raise mailer.InvalidMailerConfiguration("deliberate test failure")
 
     monkeypatch.setattr(
@@ -387,6 +388,36 @@ def test_admin_course_create_survives_invalid_mailer_configuration(client, new_c
             odb.delete_course(course_id=course_id)
         except odb.InvalidCourse_Id:
             pass
+
+
+def test_admin_course_create_rejects_disabled_administrator(client, new_course):
+    ddbo = new_course["ddbo"]
+    ddbo.update_table(
+        ddbo.users,
+        new_course[USER_ID],
+        {odb.SUPER_ROLE: odb.SUPER_ROLE_SUPERADMIN},
+    )
+    admin = odb.get_user_email(new_course[ADMIN_EMAIL])
+    course_id = f"DisabledAdmin-{uuid.uuid4()}"
+    client.set_cookie(apikey.cookie_name(), new_course[API_KEY])
+    ddbo.update_table(ddbo.users, admin[odb.USER_ID], {odb.ENABLED: 0})
+    try:
+        response = client.post("/api/admin/courses", json={
+            "course_id": course_id,
+            "course_name": "Disabled administrator",
+            "admin_email": new_course[ADMIN_EMAIL],
+            "admin_name": "Course Admin",
+        })
+
+        assert response.status_code == 409
+        assert response.json == {
+            "error": True,
+            "message": "Administrator account is disabled",
+        }
+        with pytest.raises(odb.InvalidCourse_Id):
+            odb.lookup_course_by_id(course_id=course_id)
+    finally:
+        ddbo.update_table(ddbo.users, admin[odb.USER_ID], {odb.ENABLED: 1})
 
 
 def test_admin_course_create_survives_mail_transport_failure(client, new_course,
