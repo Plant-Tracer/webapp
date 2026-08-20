@@ -175,6 +175,8 @@ def test_templates(client,new_course):
             include_text = None
             exclude_text = None
             if with_api_key is True and url=='/list':
+                include_text = ('<a class="pure-button pure-button-primary" href="upload">'
+                                'upload a new movie</a>')
                 exclude_text = 'user_demo = true;'
             if with_api_key:
                 client.set_cookie( apikey.cookie_name(), api_key)
@@ -186,6 +188,3 @@ def test_templates(client,new_course):
                 assert resp.status_code!=200 # should be an error
             else:
                 validate_html( url, resp.text, include_text = include_text, exclude_text = exclude_text )
-                if with_api_key and url == '/list':
-                    assert ('<a class="pure-button pure-button-primary" href="upload">'
-                            'upload a new movie</a>') in resp.text

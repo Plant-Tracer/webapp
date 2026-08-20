@@ -251,7 +251,7 @@ describe('list_movies_data', () => {
     expect(document.querySelector).toHaveBeenCalledTimes(4);
 
     Object.values(mockElements).forEach((element) => {
-      expect(element.innerHTML).not.toContain('/upload');
+      expect(element.innerHTML).not.toMatch(/href=["']\/?upload["']/);
     });
   });
 
