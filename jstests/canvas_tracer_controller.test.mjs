@@ -2180,6 +2180,7 @@ describe('TracerController.track_to_end', () => {
         global.fetch = jest.fn();
         global.alert = jest.fn();
         tc = new TracerController('div#tracer', makeMovieMetadata({ total_frames: 20 }), 'test-api-key');
+        jest.spyOn(tc, 'poll_for_track_end').mockImplementation(() => {});
         // Wipe constructor side-effects so assertions only cover track_to_end()
         jest.clearAllMocks();
     });
@@ -2296,12 +2297,16 @@ describe('TracerController.track_to_end', () => {
     });
 
     // C. Success (2xx) ─────────────────────────────────────────────────────────
-    test('on 200 success: tracing becomes server-owned and this page read-only', async () => {
+    test('on 200 success: tracking remains true and completion polling starts', async () => {
         mockFetchResponse(200, { error: false });
         tc.track_to_end();
         await jest.runAllTimersAsync();
-        expect(tc.tracking).toBe(false);
+        expect(tc.tracking).toBe(true);
         expect(tc.movie_metadata.status).toBe('tracing');
+        expect(tc.poll_for_track_end).toHaveBeenCalledTimes(1);
+        expect(tc.tracking_status.text).toHaveBeenCalledWith(
+            expect.stringContaining('You may leave this page and click Analyze again later.')
+        );
     });
 
     test('on 200 success: no alert is fired', async () => {
@@ -2311,7 +2316,7 @@ describe('TracerController.track_to_end', () => {
         expect(global.alert).not.toHaveBeenCalled();
     });
 
-    test('on 200 success: tracing-dimmed is removed so playback remains available', async () => {
+    test('on 200 success: tracing remains dimmed and read-only while polling', async () => {
         mockFetchResponse(200, { error: false });
         tc.track_to_end();
         await jest.runAllTimersAsync();
@@ -2319,7 +2324,7 @@ describe('TracerController.track_to_end', () => {
             (_, i) => mock$.mock.results[i].value.removeClass.mock.calls
                 .some(c => c[0] === 'tracing-dimmed')
         );
-        expect(dimmedRemoved).toBe(true);
+        expect(dimmedRemoved).toBe(false);
     });
 
     test('on 200 success: fetch is called exactly once (no retry)', async () => {
@@ -3223,20 +3228,27 @@ describe('TracerController.poll_for_track_end', () => {
     test('done: in-progress with last_frame_tracked → updates status and schedules next poll', () => {
         fireDone({ error: false, metadata: { status: 'tracing', last_frame_tracked: 5 } });
         tc.poll_for_track_end();
-        expect(tc.tracking_status.text).toHaveBeenCalledWith('Tracing frame 5');
+        const statusText = 'Tracing frame 5 — You may leave this page and click Analyze again later.';
+        expect(tc.tracking_status.text).toHaveBeenCalledWith(statusText);
+        const statusIndex = mock$.mock.calls.findLastIndex(args => args[0] === '#status-big');
+        expect(mock$.mock.results[statusIndex].value.text).toHaveBeenCalledWith(statusText);
         expect(tc.timeout).toBeDefined();
     });
 
     test('done: in-progress with no last_frame_tracked → shows metadata.status', () => {
         fireDone({ error: false, metadata: { status: 'Initialising', last_frame_tracked: null } });
         tc.poll_for_track_end();
-        expect(tc.tracking_status.text).toHaveBeenCalledWith('Initialising');
+        expect(tc.tracking_status.text).toHaveBeenCalledWith(
+            'Initialising — You may leave this page and click Analyze again later.'
+        );
     });
 
     test('done: in-progress with no status or last shows starting fallback', () => {
         fireDone({ error: false, metadata: { last_frame_tracked: null } });
         tc.poll_for_track_end();
-        expect(tc.tracking_status.text).toHaveBeenCalledWith(TRACING_STARTING_MESSAGE);
+        expect(tc.tracking_status.text).toHaveBeenCalledWith(
+            `${TRACING_STARTING_MESSAGE} — You may leave this page and click Analyze again later.`
+        );
     });
 
     test('done: no progress beyond source frame after deadline → alerts backend lambda unresponsive', () => {
@@ -3254,7 +3266,9 @@ describe('TracerController.poll_for_track_end', () => {
         fireDone({ error: false, metadata: { status: 'tracing', last_frame_tracked: 1 } });
         tc.poll_for_track_end();
         expect(global.alert).not.toHaveBeenCalledWith(BACKEND_LAMBDA_UNRESPONSIVE_MESSAGE);
-        expect(tc.tracking_status.text).toHaveBeenCalledWith('Tracing frame 1');
+        expect(tc.tracking_status.text).toHaveBeenCalledWith(
+            'Tracing frame 1 — You may leave this page and click Analyze again later.'
+        );
     });
 
     test('done: error response → increments poll_error_count', () => {

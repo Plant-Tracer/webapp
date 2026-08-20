@@ -93,6 +93,8 @@ Unreleased Summary
       automatically contacting the demo movie host
     * Upload: prevent duplicate movie-rotation requests while a rotation is being saved
     * Analyze: prevent concurrent tracing of a movie and keep Analyze read-only while tracing runs
+    * Analyze: restore live tracing-frame progress and completion updates while
+      reminding users that they may leave the page and reopen Analyze later
     * Developer: add a Makefile-driven analysis-MP4 CLI that creates a portable
       WebCodecs player bundle for manual cross-browser frame-step verification
     * Developer: run the deployed workflow verifier with an endpoint-only
