@@ -28,6 +28,7 @@ from .schema import (
     AdminCourse,
     Movie,
     LogEntry,
+    MovieAnalysisLock,
     MovieTraceLock,
     Trackpoint,
     RenameMarkerRequest,
@@ -57,11 +58,21 @@ TRACE_LOCK_HEARTBEAT_AT = 'tracing_heartbeat_at'
 TRACE_LOCK_EXPIRES_AT = 'tracing_expires_at'
 TRACE_LOCK_STARTED_BY_USER_ID = 'tracing_started_by_user_id'
 TRACE_LOCK_STARTED_BY_USER_NAME = 'tracing_started_by_user_name'
+ANALYSIS_LEASE_ID = 'analysis_lease_id'
+ANALYSIS_LOCK_ACQUIRED_AT = 'analysis_started_at'
+ANALYSIS_LOCK_HEARTBEAT_AT = 'analysis_heartbeat_at'
+ANALYSIS_LOCK_EXPIRES_AT = 'analysis_expires_at'
+ANALYSIS_LOCK_STARTED_BY_USER_ID = 'analysis_started_by_user_id'
+ANALYSIS_LOCK_STARTED_BY_USER_NAME = 'analysis_started_by_user_name'
 ROOT_USER_ID = 'u0'                # the root user
 
 
 class MovieTracingLocked(ValueError):
     """The movie has an active tracing lease."""
+
+
+class MovieAnalysisLocked(ValueError):
+    """The movie has an active analysis lease."""
 
 
 def movie_trace_lock_from_record(movie):
@@ -76,6 +87,21 @@ def movie_trace_lock_from_record(movie):
             "expires_at": movie[TRACE_LOCK_EXPIRES_AT],
             "started_by_user_id": movie[TRACE_LOCK_STARTED_BY_USER_ID],
             "started_by_user_name": movie[TRACE_LOCK_STARTED_BY_USER_NAME],
+        })
+    return None
+
+
+def movie_analysis_lock_from_record(movie):
+    """Return an active analysis lease represented by an already-fetched movie record."""
+    if movie and int(movie.get(ANALYSIS_LOCK_EXPIRES_AT, 0)) > int(time.time()):
+        return MovieAnalysisLock.model_validate({
+            MOVIE_ID: movie[MOVIE_ID],
+            "lease_id": movie[ANALYSIS_LEASE_ID],
+            "acquired_at": movie[ANALYSIS_LOCK_ACQUIRED_AT],
+            "heartbeat_at": movie[ANALYSIS_LOCK_HEARTBEAT_AT],
+            "expires_at": movie[ANALYSIS_LOCK_EXPIRES_AT],
+            "started_by_user_id": movie[ANALYSIS_LOCK_STARTED_BY_USER_ID],
+            "started_by_user_name": movie[ANALYSIS_LOCK_STARTED_BY_USER_NAME],
         })
     return None
 
@@ -556,7 +582,99 @@ class DDBO:
         ).get("Item")
         return movie_trace_lock_from_record(movie)
 
-    def acquire_movie_trace_lock(self, *, movie, started_by_user_id, started_by_user_name):
+    def get_active_movie_analysis_lock(self, movie_id):
+        """Return the movie's active analysis lease, or None when absent or expired."""
+        movie = self.movies.get_item(
+            Key={MOVIE_ID: movie_id}, ConsistentRead=True,
+        ).get("Item")
+        return movie_analysis_lock_from_record(movie)
+
+    def acquire_movie_analysis_lock(self, *, movie, started_by_user_id, started_by_user_name):
+        """Atomically obtain a 15-minute browser Analyze lease."""
+        now = int(time.time())
+        lock = MovieAnalysisLock(
+            movie_id=movie[MOVIE_ID], lease_id=uuid.uuid4().hex,
+            acquired_at=now, heartbeat_at=now, expires_at=now + 15 * 60,
+            started_by_user_id=started_by_user_id,
+            started_by_user_name=started_by_user_name,
+        )
+        try:
+            self.movies.update_item(
+                Key={MOVIE_ID: movie[MOVIE_ID]},
+                UpdateExpression=("SET #lease_id=:lease_id, #acquired=:now, #heartbeat=:now, "
+                                  "#expires=:expires, #started_by_id=:started_by_id, "
+                                  "#started_by_name=:started_by_name"),
+                ConditionExpression=("(attribute_not_exists(#analysis_expires) OR #analysis_expires < :now) "
+                                     "AND (attribute_not_exists(#trace_expires) OR #trace_expires < :now)"),
+                ExpressionAttributeNames={
+                    "#lease_id": ANALYSIS_LEASE_ID, "#acquired": ANALYSIS_LOCK_ACQUIRED_AT,
+                    "#heartbeat": ANALYSIS_LOCK_HEARTBEAT_AT, "#analysis_expires": ANALYSIS_LOCK_EXPIRES_AT,
+                    "#expires": ANALYSIS_LOCK_EXPIRES_AT,
+                    "#started_by_id": ANALYSIS_LOCK_STARTED_BY_USER_ID,
+                    "#started_by_name": ANALYSIS_LOCK_STARTED_BY_USER_NAME,
+                    "#trace_expires": TRACE_LOCK_EXPIRES_AT,
+                },
+                ExpressionAttributeValues={
+                    ":lease_id": lock.lease_id, ":now": now, ":expires": lock.expires_at,
+                    ":started_by_id": lock.started_by_user_id,
+                    ":started_by_name": lock.started_by_user_name,
+                },
+            )
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+                raise MovieAnalysisLocked(movie[MOVIE_ID]) from exc
+            raise
+        return lock
+
+    def heartbeat_movie_analysis_lock(self, *, movie_id, lease_id, user_id):
+        """Renew the caller's analysis lease, returning False after loss or expiry."""
+        now = int(time.time())
+        try:
+            self.movies.update_item(
+                Key={MOVIE_ID: movie_id},
+                UpdateExpression="SET #heartbeat=:now, #expires=:expires",
+                ConditionExpression=("#lease_id=:lease_id AND #user_id=:user_id "
+                                     "AND #expires > :now"),
+                ExpressionAttributeNames={
+                    "#lease_id": ANALYSIS_LEASE_ID, "#user_id": ANALYSIS_LOCK_STARTED_BY_USER_ID,
+                    "#heartbeat": ANALYSIS_LOCK_HEARTBEAT_AT, "#expires": ANALYSIS_LOCK_EXPIRES_AT,
+                },
+                ExpressionAttributeValues={
+                    ":lease_id": lease_id, ":user_id": user_id, ":now": now,
+                    ":expires": now + 15 * 60,
+                },
+            )
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+                return False
+            raise
+        return True
+
+    def release_movie_analysis_lock(self, *, movie_id, lease_id, user_id):
+        """Remove only the caller's analysis lease, never a newer owner's lease."""
+        lock_fields = (ANALYSIS_LEASE_ID, ANALYSIS_LOCK_ACQUIRED_AT,
+                       ANALYSIS_LOCK_HEARTBEAT_AT, ANALYSIS_LOCK_EXPIRES_AT,
+                       ANALYSIS_LOCK_STARTED_BY_USER_ID, ANALYSIS_LOCK_STARTED_BY_USER_NAME)
+        try:
+            self.movies.update_item(
+                Key={MOVIE_ID: movie_id},
+                UpdateExpression="REMOVE " + ", ".join(f"#lock_{index}" for index in range(len(lock_fields))),
+                ConditionExpression="#lease_id=:lease_id AND #user_id=:user_id",
+                ExpressionAttributeNames={
+                    "#lease_id": ANALYSIS_LEASE_ID,
+                    "#user_id": ANALYSIS_LOCK_STARTED_BY_USER_ID,
+                    **{f"#lock_{index}": field for index, field in enumerate(lock_fields)},
+                },
+                ExpressionAttributeValues={":lease_id": lease_id, ":user_id": user_id},
+            )
+        except ClientError as exc:
+            if exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException":
+                return False
+            raise
+        return True
+
+    def acquire_movie_trace_lock(self, *, movie, started_by_user_id, started_by_user_name,
+                                 analysis_lease_id=None):
         """Atomically obtain a 15-minute lease and expose tracing status."""
         now = int(time.time())
         lock = MovieTraceLock(
@@ -570,8 +688,12 @@ class DDBO:
                 Key={MOVIE_ID: movie[MOVIE_ID]},
                 UpdateExpression=("SET #job_id=:job_id, #state=:state, #acquired=:now, #heartbeat=:now, "
                                   "#expires=:expires, #started_by_id=:started_by_id, #started_by_name=:started_by_name, "
-                                  "#status=:status, #last_activity_at=:now REMOVE #failed_at, #failure_summary"),
-                ConditionExpression="attribute_not_exists(#expires) OR #expires < :now",
+                                  "#status=:status, #last_activity_at=:now REMOVE #failed_at, #failure_summary, "
+                                  "#analysis_id, #analysis_acquired, #analysis_heartbeat, #analysis_expires, "
+                                  "#analysis_started_by_id, #analysis_started_by_name"),
+                ConditionExpression=("(attribute_not_exists(#expires) OR #expires < :now) AND "
+                                     "(attribute_not_exists(#analysis_expires) OR #analysis_expires < :now "
+                                     "OR #analysis_id=:analysis_id)"),
                 ExpressionAttributeNames={
                     "#job_id": TRACE_JOB_ID, "#state": TRACE_LOCK_STATE,
                     "#acquired": TRACE_LOCK_ACQUIRED_AT, "#heartbeat": TRACE_LOCK_HEARTBEAT_AT,
@@ -579,11 +701,17 @@ class DDBO:
                     "#started_by_name": TRACE_LOCK_STARTED_BY_USER_NAME, "#status": MOVIE_STATUS,
                     "#last_activity_at": LAST_ACTIVITY_AT, "#failed_at": TRACING_FAILED_AT,
                     "#failure_summary": TRACING_FAILURE_SUMMARY,
+                    "#analysis_id": ANALYSIS_LEASE_ID, "#analysis_acquired": ANALYSIS_LOCK_ACQUIRED_AT,
+                    "#analysis_heartbeat": ANALYSIS_LOCK_HEARTBEAT_AT,
+                    "#analysis_expires": ANALYSIS_LOCK_EXPIRES_AT,
+                    "#analysis_started_by_id": ANALYSIS_LOCK_STARTED_BY_USER_ID,
+                    "#analysis_started_by_name": ANALYSIS_LOCK_STARTED_BY_USER_NAME,
                 },
                 ExpressionAttributeValues={
                     ":job_id": lock.job_id, ":state": lock.state, ":now": now,
                     ":expires": lock.expires_at, ":started_by_id": lock.started_by_user_id,
                     ":started_by_name": lock.started_by_user_name, ":status": MOVIE_STATE_TRACING,
+                    ":analysis_id": analysis_lease_id or "",
                 },
             )
         except ClientError as exc:

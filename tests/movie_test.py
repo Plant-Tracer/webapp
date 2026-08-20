@@ -834,3 +834,155 @@ def test_active_trace_lease_is_visible_and_rejects_movie_writes(client, new_movi
         }
     assert write_response.status_code == 409
     assert write_response.get_json()['message'] == "This movie is currently being traced and is read-only."
+
+
+def test_analysis_lease_makes_second_browser_view_only_and_releases_on_exit(client, new_movie):
+    api_key = new_movie[API_KEY]
+    movie_id = new_movie[MOVIE_ID]
+    first = client.post('/api/acquire-movie-analysis-lease', data={
+        'api_key': api_key, 'movie_id': movie_id,
+    }).get_json()
+    second = client.post('/api/acquire-movie-analysis-lease', data={
+        'api_key': api_key, 'movie_id': movie_id,
+    }).get_json()
+    metadata = client.post('/api/get-movie-metadata', data={
+        'api_key': api_key, 'movie_id': movie_id,
+    }).get_json()['metadata']
+    blocked = client.post('/api/set-movie-fpm', data={
+        'api_key': api_key, 'movie_id': movie_id, 'fpm': '30',
+    })
+    written = client.post('/api/set-movie-fpm', data={
+        'api_key': api_key, 'movie_id': movie_id, 'fpm': '30',
+        odb.ANALYSIS_LEASE_ID: first['lease_id'],
+    })
+    released = client.post('/api/release-movie-analysis-lease', data={
+        'api_key': api_key, 'movie_id': movie_id,
+        odb.ANALYSIS_LEASE_ID: first['lease_id'],
+    }).get_json()
+
+    assert first['analysis_lock']['owned'] is True
+    assert second['lease_id'] is None
+    assert second['analysis_lock']['active'] is True
+    assert metadata['analysis_lock']['owned'] is False
+    assert blocked.status_code == 409
+    assert written.status_code == 200
+    assert released['released'] is True
+
+
+def test_analysis_lease_endpoints_validate_renew_and_release(client, new_movie):
+    request_data = {
+        'api_key': new_movie[API_KEY],
+        'movie_id': new_movie[MOVIE_ID],
+    }
+    missing_heartbeat = client.post(
+        '/api/heartbeat-movie-analysis-lease', data=request_data)
+    missing_release = client.post(
+        '/api/release-movie-analysis-lease', data=request_data)
+    acquired = client.post(
+        '/api/acquire-movie-analysis-lease', data=request_data).get_json()
+
+    active = client.post('/api/heartbeat-movie-analysis-lease', data={
+        **request_data, odb.ANALYSIS_LEASE_ID: acquired['lease_id'],
+    }).get_json()
+    inactive = client.post('/api/heartbeat-movie-analysis-lease', data={
+        **request_data, odb.ANALYSIS_LEASE_ID: 'wrong-lease',
+    }).get_json()
+    not_released = client.post('/api/release-movie-analysis-lease', data={
+        **request_data, odb.ANALYSIS_LEASE_ID: 'wrong-lease',
+    }).get_json()
+    released = client.post('/api/release-movie-analysis-lease', data={
+        **request_data, odb.ANALYSIS_LEASE_ID: acquired['lease_id'],
+    }).get_json()
+
+    for response in (missing_heartbeat, missing_release):
+        assert response.status_code == 400
+        assert response.get_json()['message'] == "analysis lease is required"
+    assert active == {'active': True, 'error': False}
+    assert inactive == {'active': False, 'error': True}
+    assert not_released == {'error': False, 'released': False}
+    assert released == {'error': False, 'released': True}
+
+
+def test_analysis_lease_acquire_reports_read_only_causes(client, new_movie):
+    ddbo = new_movie['ddbo']
+    admin_id = new_movie['admin_id']
+    admin = ddbo.get_user(admin_id)
+    original_courses = list(admin[odb.COURSES])
+    original_admin_courses = list(admin[odb.ADMIN_FOR_COURSES])
+    admin_api_key = odb.make_new_api_key(email=new_movie[ADMIN_EMAIL])
+    try:
+        ddbo.update_table(ddbo.users, admin_id, {
+            odb.COURSES: [],
+            odb.ADMIN_FOR_COURSES: [],
+            odb.SUPER_ROLE: odb.SUPER_ROLE_SUPERAUDITOR,
+        })
+        unauthorized = client.post('/api/acquire-movie-analysis-lease', data={
+            'api_key': admin_api_key,
+            'movie_id': new_movie[MOVIE_ID],
+        }).get_json()
+    finally:
+        ddbo.update_table(ddbo.users, admin_id, {
+            odb.COURSES: original_courses,
+            odb.ADMIN_FOR_COURSES: original_admin_courses,
+            odb.SUPER_ROLE: odb.SUPER_ROLE_NONE,
+        })
+
+    prepare_tracing_request(
+        api_key=new_movie[API_KEY],
+        movie_id=new_movie[MOVIE_ID],
+        frame_start=0,
+    )
+    tracing = client.post('/api/acquire-movie-analysis-lease', data={
+        'api_key': new_movie[API_KEY],
+        'movie_id': new_movie[MOVIE_ID],
+    }).get_json()
+
+    assert unauthorized == {
+        'error': False,
+        'lease_id': None,
+        'message': "You do not have permission to edit this movie.",
+    }
+    assert tracing == {
+        'error': False,
+        'lease_id': None,
+        'message': "This movie is currently being traced and is view-only.",
+    }
+
+
+def test_movie_writes_reject_trace_and_foreign_analysis_leases(client, new_movie):
+    request_data = {
+        'api_key': new_movie[API_KEY],
+        'movie_id': new_movie[MOVIE_ID],
+    }
+    writes = (
+        ('/api/set-movie-trim', {odb.TRIM_START_FRAME: '0'}),
+        ('/api/put-frame-trackpoints', {
+            'frame_number': '0', 'trackpoints': '[]',
+        }),
+        ('/api/rename-marker', {
+            'old_label': 'Apex', 'new_label': 'Tip',
+        }),
+    )
+    acquired = client.post(
+        '/api/acquire-movie-analysis-lease', data=request_data).get_json()
+    for endpoint, data in writes:
+        response = client.post(endpoint, data={**request_data, **data})
+        assert response.status_code == 409
+        assert response.get_json()['message'] == (
+            "This movie is being analyzed in another browser and is view-only."
+        )
+    client.post('/api/release-movie-analysis-lease', data={
+        **request_data, odb.ANALYSIS_LEASE_ID: acquired['lease_id'],
+    })
+
+    prepare_tracing_request(
+        api_key=new_movie[API_KEY],
+        movie_id=new_movie[MOVIE_ID],
+        frame_start=0,
+    )
+    for endpoint, data in writes:
+        response = client.post(endpoint, data={**request_data, **data})
+        assert response.status_code == 409
+        assert response.get_json()['message'] == (
+            "This movie is currently being traced and is read-only."
+        )
