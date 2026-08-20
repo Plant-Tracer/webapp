@@ -231,16 +231,10 @@ def handle_post_actions():
     analysis_lease_id = body.get("analysis_lease_id")
     LOGGER.info("trace-movie. movie_id=%s", movie_id)
     try:
-        if analysis_lease_id:
-            prepared = movie_glue.prepare_tracing_request(
-                api_key=api_key, movie_id=movie_id, frame_start=frame_start,
-                frame_end=frame_end, analysis_lease_id=analysis_lease_id,
-            )
-        else:
-            prepared = movie_glue.prepare_tracing_request(
-                api_key=api_key, movie_id=movie_id, frame_start=frame_start,
-                frame_end=frame_end,
-            )
+        prepared = movie_glue.prepare_tracing_request(
+            api_key=api_key, movie_id=movie_id, frame_start=frame_start,
+            frame_end=frame_end, analysis_lease_id=analysis_lease_id,
+        )
         return movie_glue.queue_tracing(api_key, movie_id, frame_start, frame_end, prepared["job_id"])
     except movie_glue.odb.MovieTracingLocked:
         return Response(status_code=409, content_type="application/json",

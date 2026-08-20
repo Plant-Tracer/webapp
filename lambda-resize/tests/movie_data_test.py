@@ -205,7 +205,8 @@ def test_trace_movie_requires_body_and_movie_id():
 def test_trace_movie_queues_with_optional_frame_end():
     event = make_post_event(
         "/resize-api/v1/trace-movie",
-        {"movie_id": "m123", "frame_start": 7, "frame_end": 20},
+        {"movie_id": "m123", "frame_start": 7, "frame_end": 20,
+         "analysis_lease_id": "lease-123"},
         {"x-api-key": "test-key"},
     )
     with patch("resize_app.main.movie_glue.prepare_tracing_request", return_value={"job_id": "j1"}) as prepare, \
@@ -213,7 +214,9 @@ def test_trace_movie_queues_with_optional_frame_end():
         response = lambda_handler(event, DummyContext())
 
     assert response["statusCode"] == 200
-    prepare.assert_called_once_with(api_key="test-key", movie_id="m123", frame_start=7, frame_end=20)
+    prepare.assert_called_once_with(
+        api_key="test-key", movie_id="m123", frame_start=7, frame_end=20,
+        analysis_lease_id="lease-123")
     queue.assert_called_once_with("test-key", "m123", 7, 20, "j1")
     assert json.loads(response["body"]) == {"error": False, "message": "queued"}
 

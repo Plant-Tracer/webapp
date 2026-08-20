@@ -301,7 +301,8 @@ def complete_uploaded_object(*, movie_id: str, staging_urn: str, event_id: str,
 
 
 def prepare_tracing_request(*, api_key: str, movie_id: str, frame_start: int,
-                            frame_end: int|None=None, analysis_lease_id=None) -> dict:
+                            frame_end: int|None=None,
+                            analysis_lease_id: str|None=None) -> dict:
     """Validate access and mark the movie as retracing before queueing work.
 
     This closes the UI race where the browser polls before the worker has had
