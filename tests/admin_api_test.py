@@ -179,6 +179,12 @@ def test_superadmin_creates_course_with_existing_admin_and_audit(client, new_cou
         assert admin[odb.USER_NAME] == "Course Admin"
         assert admin[odb.USER_ID] in course[odb.ADMINS_FOR_COURSE]
         logs = ddbo.logs.scan()["Items"]
+        matching_logs = [
+            log for log in logs
+            if log["course_id"] == course_id
+            and log["user_id"] == new_course[USER_ID]
+            and log["target_user_id"] == admin[odb.USER_ID]
+        ]
         assert any(
             log["course_id"] == course_id
             and log["event_type"] == "course.created"
@@ -186,6 +192,23 @@ def test_superadmin_creates_course_with_existing_admin_and_audit(client, new_cou
             and log["target_user_id"] == admin[odb.USER_ID]
             for log in logs
         )
+
+        retry = client.post("/api/admin/courses", json={
+            "course_id": course_id,
+            "course_name": "Created from admin page",
+            "admin_email": new_course[ADMIN_EMAIL],
+            "admin_name": "Course Admin",
+        })
+
+        assert retry.status_code == 200
+        assert retry.json["created"] is False
+        retry_logs = [
+            log for log in ddbo.logs.scan()["Items"]
+            if log["course_id"] == course_id
+            and log["user_id"] == new_course[USER_ID]
+            and log["target_user_id"] == admin[odb.USER_ID]
+        ]
+        assert len(retry_logs) == len(matching_logs)
     finally:
         try:
             odb.remove_course_admin(course_id=course_id, admin_id=admin[odb.USER_ID])

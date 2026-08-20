@@ -477,7 +477,8 @@ function populateExistingCourseAdmins() {
   }
   choices.replaceChildren();
   state.users
-    .filter((user) => user.enabled && user.courses.some((course) => course.is_admin))
+    .filter((user) => user.enabled && user.user_name?.trim()
+      && user.courses.some((course) => course.is_admin))
     .sort((left, right) => compareValues(left.user_name || left.email, right.user_name || right.email))
     .forEach((user) => {
       const option = document.createElement("option");

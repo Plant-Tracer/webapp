@@ -253,6 +253,11 @@ describe('admin summary rendering', () => {
       enabled: false, default_course_id: 'BIO-1', super_role: 'none', created_at: 1700000002,
       last_movie_activity_at: null, courses: [{ course_id: 'BIO-1', is_admin: true }],
     });
+    adminPayload.users.items.push({
+      user_id: 'user-4', user_name: ' ', email: 'nameless@example.test',
+      enabled: true, default_course_id: 'BIO-1', super_role: 'none', created_at: 1700000003,
+      last_movie_activity_at: null, courses: [{ course_id: 'BIO-1', is_admin: true }],
+    });
     fetch.mockResponseOnce(JSON.stringify(adminPayload));
 
     await loadAdminSummary();

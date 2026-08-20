@@ -88,7 +88,9 @@ def get_smtp_config():
             cp = configparser.ConfigParser()
             cp.add_section('smtp')
             for key, value in config.items():
-                cp.set('smtp', key, value)
+                if not isinstance(value, (str, int, float, bool)):
+                    raise TypeError(f"invalid SMTP setting: {key}")
+                cp.set('smtp', key, str(value))
             smtp_config = cp['smtp']
             if SMTP_HOST not in smtp_config:
                 raise KeyError(f"missing SMTP setting: {SMTP_HOST}")

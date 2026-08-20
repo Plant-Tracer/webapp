@@ -169,7 +169,7 @@ def admin_create_for_courses(*, admin_email, admin_name, course_ids,
     if send_email:
         api_key = odb.get_first_api_key_for_user(admin_user.user_id)
         if api_key is None:
-            api_key = odb.make_new_api_key(email=admin_email)
+            api_key = odb.make_new_api_key_for_user_id(user_id=admin_user.user_id)
         for course in added_courses:
             mailer.send_course_created_email(
                 to_addr=admin_email,
@@ -185,7 +185,7 @@ def send_course_created_notification(*, course, admin_user, planttracer_endpoint
     """Email one course administrator a setup link for a created course."""
     api_key = odb.get_first_api_key_for_user(admin_user.user_id)
     if api_key is None:
-        api_key = odb.make_new_api_key(email=admin_user.email)
+        api_key = odb.make_new_api_key_for_user_id(user_id=admin_user.user_id)
     mailer.send_course_created_email(
         to_addr=admin_user.email,
         course_name=course.course_name or course.course_id,
@@ -204,9 +204,9 @@ def create_course_with_admin(*, course_id, course_name, admin_email, admin_name,
         raise ValueError("course_id is required")
     if not course_name:
         raise ValueError("course_name is required")
-    if not admin_email:
+    if not isinstance(admin_email, str) or not admin_email.strip():
         raise ValueError("admin_email is required")
-    if not admin_name:
+    if not isinstance(admin_name, str) or not admin_name.strip():
         raise ValueError("admin_name is required")
     if send_email and not planttracer_endpoint:
         raise ValueError("planttracer_endpoint is required when send_email=True")

@@ -51,6 +51,7 @@ def api_admin_create_course():
         admin_email = odb.normalize_email(change.admin_email)
         if not validate_email(admin_email, check_mx=False):
             return jsonify({"error": True, "message": "Administrator email is invalid"}), 400
+        admin_already_assigned = False
         try:
             existing_user = odb.get_user_email(admin_email)
             if not existing_user.get(odb.ENABLED):
@@ -64,6 +65,9 @@ def api_admin_create_course():
                     "error": True,
                     "message": "Administrator account has no name",
                 }), 409
+            admin_already_assigned = change.course_id in existing_user.get(
+                odb.ADMIN_FOR_COURSES, []
+            )
         except odb.InvalidUser_Email:
             admin_name = change.admin_name
 
@@ -74,13 +78,14 @@ def api_admin_create_course():
             admin_name=admin_name,
             send_email=False,
         )
-        odb.DDBO().put_admin_log(
-            event_type="course.created" if result.created else "course.admin.assigned",
-            actor_user_id=viewer_user[odb.USER_ID],
-            target_user_id=result.admin_user.user_id,
-            course_id=result.course.course_id,
-            ipaddr=request.remote_addr,
-        )
+        if result.created or not admin_already_assigned:
+            odb.DDBO().put_admin_log(
+                event_type="course.created" if result.created else "course.admin.assigned",
+                actor_user_id=viewer_user[odb.USER_ID],
+                target_user_id=result.admin_user.user_id,
+                course_id=result.course.course_id,
+                ipaddr=request.remote_addr,
+            )
     except InvalidAPI_Key:
         return jsonify({"error": True, "message": "Invalid api_key"}), 403
     except ValidationError:

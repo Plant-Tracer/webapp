@@ -16,6 +16,17 @@ def test_get_smtp_config_normalizes_invalid_json_configuration(monkeypatch, conf
         mailer.get_smtp_config()
 
 
+def test_get_smtp_config_accepts_numeric_json_port(monkeypatch):
+    monkeypatch.setenv(
+        C.SMTPCONFIG_JSON,
+        '{"SMTP_HOST": "localhost", "SMTP_PORT": 1025}',
+    )
+
+    config = mailer.get_smtp_config()
+
+    assert config[mailer.SMTP_PORT] == "1025"
+
+
 def test_server_from_header_defaults(monkeypatch):
     monkeypatch.delenv(C.SERVER_EMAIL, raising=False)
     monkeypatch.delenv(C.SERVER_EMAIL_NAME, raising=False)

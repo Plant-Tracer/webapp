@@ -804,15 +804,15 @@ class DDBO:
             raise ValueError(self.api_keys.name) from e
 
     def get_first_api_key_for_user(self, user_id):
-        """Return one api_key for the user, or None if they have none."""
+        """Return one enabled api_key for the user, or None if they have none."""
         response = self.api_keys.query(
             IndexName='user_id_idx',
             KeyConditionExpression=Key(USER_ID).eq(user_id),
-            ProjectionExpression=API_KEY,
-            Limit=1,
+            ProjectionExpression=f'{API_KEY}, {ENABLED}',
         )
         items = response.get('Items', [])
-        return items[0][API_KEY] if items else None
+        enabled_items = [item for item in items if item.get(ENABLED) == 1]
+        return enabled_items[0][API_KEY] if enabled_items else None
 
     def get_user_login_times(self, user_id):
         """Return (first_used_at, last_used_at) for a user by aggregating across all their api_keys.
@@ -1643,7 +1643,7 @@ def get_user_email(email):
 
 
 def get_first_api_key_for_user(user_id):
-    """Return one api_key for the user, or None if they have none."""
+    """Return one enabled api_key for the user, or None if they have none."""
     return DDBO().get_first_api_key_for_user(user_id)
 
 
