@@ -1105,6 +1105,24 @@ class DDBO:
         # delete the course
         self.courses.delete_item(Key = { COURSE_ID :course_id})
 
+        last_evaluated_key = None
+        while True:
+            query_kwargs = {
+                'KeyConditionExpression': Key(COURSE_ID).eq(course_id),
+                'ProjectionExpression': USER_ID,
+            }
+            if last_evaluated_key:
+                query_kwargs['ExclusiveStartKey'] = last_evaluated_key
+            response = self.course_users.query(**query_kwargs)
+            for enrollment in response.get('Items', []):
+                self.course_users.delete_item(Key={
+                    COURSE_ID: course_id,
+                    USER_ID: enrollment[USER_ID],
+                })
+            last_evaluated_key = response.get('LastEvaluatedKey')
+            if not last_evaluated_key:
+                break
+
         logger.warning("scan the users and remove the course from every user that has it.")
         logger.warning("eliminate this scan by having the courses track their users.")
         last_evaluated_key = None
@@ -1114,17 +1132,20 @@ class DDBO:
                 scan_kwargs['ExclusiveStartKey'] = last_evaluated_key
             response = self.users.scan(**scan_kwargs)
             for user in response.get('Items'):
-                courses = user[ COURSES ]
+                courses = user.get(COURSES, [])
+                admin_for_courses = user.get(ADMIN_FOR_COURSES, [])
+                updates = {}
                 if course_id in courses:
                     courses.remove(course_id)
-                    self.update_table(
-                        self.users,
-                        user[USER_ID],
-                        {
-                            COURSES: courses,
-                            **repaired_default_course_updates(self, user, courses),
-                        },
-                    )
+                    updates.update({
+                        COURSES: courses,
+                        **repaired_default_course_updates(self, user, courses),
+                    })
+                if course_id in admin_for_courses:
+                    admin_for_courses.remove(course_id)
+                    updates[ADMIN_FOR_COURSES] = admin_for_courses
+                if updates:
+                    self.update_table(self.users, user[USER_ID], updates)
             last_evaluated_key = response.get('LastEvaluatedKey')
             if not last_evaluated_key:
                 break
