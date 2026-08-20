@@ -73,12 +73,18 @@ def api_admin_create_course():
         )
     except InvalidAPI_Key:
         return jsonify({"error": True, "message": "Invalid api_key"}), 403
-    except ValidationError as exc:
-        return jsonify({"error": True, "message": str(exc)}), 400
-    except odb.ExistingCourse_Id as exc:
-        return jsonify({"error": True, "message": str(exc)}), 409
-    except ValueError as exc:
-        return jsonify({"error": True, "message": str(exc)}), 409
+    except ValidationError:
+        return jsonify({"error": True, "message": "Invalid course creation request"}), 400
+    except odb.ExistingCourse_Id:
+        return jsonify({
+            "error": True,
+            "message": "Course identifier or registration key is already in use",
+        }), 409
+    except ValueError:
+        return jsonify({
+            "error": True,
+            "message": "Course ID conflicts with an existing course name",
+        }), 409
 
     email_sent = True
     message = "Course created and administrator email sent"

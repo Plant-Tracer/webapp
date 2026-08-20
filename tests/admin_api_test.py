@@ -267,8 +267,33 @@ def test_admin_course_create_rejects_conflicting_course_id(client, new_course):
     })
 
     assert response.status_code == 409
+    assert response.json == {
+        "error": True,
+        "message": "Course ID conflicts with an existing course name",
+    }
     course = odb.lookup_course_by_id(course_id=new_course[odb.COURSE_ID])
     assert course[odb.COURSE_NAME] == new_course[odb.COURSE_NAME]
+
+
+def test_admin_course_create_returns_safe_validation_error(client, new_course):
+    ddbo = new_course["ddbo"]
+    ddbo.update_table(
+        ddbo.users,
+        new_course[USER_ID],
+        {odb.SUPER_ROLE: odb.SUPER_ROLE_SUPERADMIN},
+    )
+    client.set_cookie(apikey.cookie_name(), new_course[API_KEY])
+
+    response = client.post("/api/admin/courses", json={
+        "course_id": "",
+        "course_name": "Missing fields",
+    })
+
+    assert response.status_code == 400
+    assert response.json == {
+        "error": True,
+        "message": "Invalid course creation request",
+    }
 
 
 def test_admin_summary_includes_enrollment_memberships_and_movies(client, new_movie):
