@@ -1677,10 +1677,9 @@ def remaining_course_registrations(*,course_key):
     enrolled = course_enrollments(course_id)
     return course['max_enrollment'] - len(enrolled)
 
-def course_enrollments(course_id):
-    """Return a list of all those enrolled in the course (including staff)
-    Gets all the movie frames"""
-    ddbo = DDBO()
+def course_enrollments(course_id, *, ddbo=None):
+    """Return all course enrollment IDs, optionally reusing a database wrapper."""
+    ddbo = ddbo or DDBO()
     user_ids = []
     last_evaluated_key = None
 

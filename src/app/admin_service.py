@@ -390,7 +390,7 @@ def scoped_admin_items(ddbo, course_ids):
             courses.append(ddbo.get_course(course_id))
         except odb.InvalidCourse_Id:
             continue
-        user_ids.update(odb.course_enrollments(course_id))
+        user_ids.update(odb.course_enrollments(course_id, ddbo=ddbo))
         for movie in ddbo.get_movies_for_course_id(course_id):
             movies_by_id[movie[MOVIE_ID]] = movie
     users = []
