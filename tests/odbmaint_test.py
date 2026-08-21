@@ -65,5 +65,10 @@ def test_create_tables_reports_creation_progress(local_ddb, monkeypatch):
             assert f"[{table_number}/8] Creating {full_name}..." in messages
             assert f"[{table_number}/8] Waiting for {full_name} to become ACTIVE..." in messages
             assert f"[{table_number}/8] Ready: {full_name}" in messages
+
+        messages.clear()
+        odbmaint.create_tables(ignore_table_exists=True, status=messages.append)
+        for table_number, table_name in enumerate(table_names, start=1):
+            assert f"[{table_number}/8] Already exists: {prefix + table_name}" in messages
     finally:
         odbmaint.drop_tables(silent_warnings=True)

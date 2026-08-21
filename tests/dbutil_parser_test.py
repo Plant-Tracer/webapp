@@ -27,6 +27,16 @@ def fake_dynamodb_resource():
     return object()
 
 
+def test_create_db_prints_table_progress(local_ddb, capsys):
+    del local_ddb
+
+    dbutil.create_db()
+
+    output = capsys.readouterr().out
+    assert "Creating 8 DynamoDB tables" in output
+    assert "[8/8] Already exists:" in output
+
+
 def test_dbutil_commands_do_not_use_option_prefix():
     args = parse_args(
         "create-course",

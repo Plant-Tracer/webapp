@@ -9,6 +9,9 @@ These tests ensure that:
 import pathlib
 import sys
 
+from botocore.stub import Stubber
+
+from app import s3_presigned
 from app.s3_presigned import CORS_CONFIGURATION
 
 
@@ -39,3 +42,16 @@ def test_s3_cors_configuration_is_fully_open():
     methods = rule.get("AllowedMethods") or []
     for required in ("GET", "PUT", "POST", "DELETE"):
         assert required in methods, f"S3 CORS must allow {required}"
+
+
+def test_configure_bucket_cors_applies_the_canonical_policy(monkeypatch):
+    client = s3_presigned.s3_client()
+    with Stubber(client) as stubber:
+        stubber.add_response(
+            "put_bucket_cors",
+            {},
+            {"Bucket": "test-bucket", "CORSConfiguration": CORS_CONFIGURATION},
+        )
+        monkeypatch.setattr(s3_presigned, "s3_client", lambda: client)
+
+        s3_presigned.configure_bucket_cors("test-bucket")
