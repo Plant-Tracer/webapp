@@ -1,7 +1,7 @@
 """
-Lambda HTTP API and EventBridge entry point. Parses events and delegates to handlers.
+Lambda entry point for two invocation modes: EventBridge asynchronous work and HTTP.
 API's primary function:
-- resize, rotate, trace, and code an MP3 of the movie.
+- resize, rotate, trace, and encode an MP4 of the movie.
 - Creates a ZIP of the tracing with the rotated frames.
 - Renders into the frames.
 - Uses all the final frames to make a new mp4 that is also uploaded.
@@ -50,6 +50,7 @@ PING_PATH = "path"
 PING_STATUS = "status"
 PING_TIME = "time"
 UNKNOWN_DEPLOYED_AT = "unknown"
+EVENTBRIDGE_SOURCES = frozenset(("aws.s3", async_work.EVENT_SOURCE))
 
 # Permissive CORS automatically applied to all routes
 cors_config = CORSConfig(
@@ -213,7 +214,7 @@ def handle_post_actions():
     invalidates later stored annotations and resumes tracing at the next frame.
     """
 
-    api_key = app.current_event.get_header_value(name="x-api-key")
+    api_key = app.current_event.headers.get("x-api-key")
     if not api_key:
         return Response(status_code=401, body="x-api-key header must be provided")
 
@@ -244,12 +245,16 @@ def handle_post_actions():
         return Response(status_code=403, body=str(e.args))
 
 
+def process_eventbridge_event(event: Dict[str, Any]) -> Dict[str, Any]:
+    """Dispatch one recognized EventBridge event to its typed adapter."""
+    if event.get("source") == "aws.s3":
+        return upload_event.process_upload_event(event).model_dump()
+    return lambda_tracing_handler.process_async_work_event(event)
+
+
 @LOGGER.inject_lambda_context(log_event=False)
 def lambda_handler(event: Dict[str, Any], context: LambdaContext) -> Dict[str, Any]:
-    """Unified Lambda entrypoint: dispatch EventBridge work or HTTP events."""
-    if isinstance(event, dict) and event.get("source") == "aws.s3":
-        return upload_event.process_upload_event(event).model_dump()
-    if isinstance(event, dict) and event.get("source") == async_work.EVENT_SOURCE:
-        return lambda_tracing_handler.process_async_work_event(event)
-    # Powertools resolves HTTP events natively
+    """Dispatch one EventBridge asynchronous event or HTTP API request."""
+    if isinstance(event, dict) and event.get("source") in EVENTBRIDGE_SOURCES:
+        return process_eventbridge_event(event)
     return app.resolve(event, context)

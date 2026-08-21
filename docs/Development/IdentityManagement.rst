@@ -87,10 +87,10 @@ A course administrator can:
 * open the Admin panel with courses, users, and movies limited to the courses
   they administer.
 
-Course administrators should be created or updated through ``dbutil`` and
-operator Makefile targets. They should not be configured as SAM stack
-parameters because courses and users live in DynamoDB, and DynamoDB data now
-outlives individual lambda-only stacks.
+Course administrators can be created or updated by a ``superadmin`` in the
+Admin panel or through ``dbutil`` and operator Makefile targets. They should not
+be configured as SAM stack parameters because courses and users live in
+DynamoDB, and DynamoDB data outlives individual lambda-only stacks.
 
 Operators can list current course administrators with ``make admin-list``. The
 target runs ``poetry run dbutil admin-list`` against the selected AWS/DynamoDB
@@ -101,8 +101,8 @@ development defaults still use DynamoDB Local and the ``demo-`` prefix. If the
 prefix is missing, ``dbutil`` prints ``poetry run dbutil list-prefixes`` output
 so the operator can select an available ``DYNAMODB_TABLE_PREFIX``.
 The operator-facing administrator list is built by
-``app.course_management.list_admins`` so future web administration pages can
-reuse the same read model.
+``app.course_management.list_admins``. The Admin panel uses its own
+access-scoped read model so course administrators cannot see other courses.
 
 A ``superadmin`` can also create a course from the Admin page's ``New course``
 dialog. The administrator email field accepts a typed address and offers a
@@ -166,9 +166,8 @@ administrators are listed first so the operator can select one; pressing Enter
 creates a new administrator from the prompted email/name. Non-interactive
 automation can pass ``COURSE_CREATE_FLAGS``, for example
 ``COURSE_CREATE_FLAGS="--course_id BIO101 --course_name 'Plant Biology 101' --admin_email teacher@example.edu --admin_name 'Teacher Name' --planttracer_endpoint https://example.planttracer.com"``.
-The reusable course/admin creation logic is in ``app.course_management`` so that
-future web administration pages can call the same operation without shelling out
-to ``dbutil``.
+The reusable course/admin creation logic is in ``app.course_management`` and is
+shared by ``dbutil`` and the Admin panel without shelling out.
 If the course already exists with the same name, the command treats that as an
 operator retry and ensures the selected administrator relationship and email
 step. If the existing course name differs, the command fails rather than

@@ -113,7 +113,7 @@ def test_eventbridge_upload_moves_object_processes_metadata_and_logs(
         key=pending.staging_key,
         size=len(pending.movie_data),
     )
-    local_queue.start_worker(processor=lambda_tracing_handler.process_queue_message)
+    local_queue.start_worker(processor=lambda_tracing_handler.process_local_queue_message)
     try:
         completed = upload_event.process_upload_event(event)
         assert completed.total_bytes == len(pending.movie_data)

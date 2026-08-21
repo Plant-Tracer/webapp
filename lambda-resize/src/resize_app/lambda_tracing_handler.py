@@ -1,4 +1,4 @@
-"""Lambda entry points for local and EventBridge asynchronous movie work."""
+"""Handlers for local and EventBridge asynchronous movie work."""
 
 import time
 
@@ -14,7 +14,11 @@ def process_tracing_message(body: dict):
     """Validate and process one tracing job."""
     if not body.get("movie_id"):
         raise ValueError("movie_id is required in tracing work")
-    job = async_work.TraceJob.model_validate(body)
+    process_tracing_job(async_work.TraceJob.model_validate(body))
+
+
+def process_tracing_job(job: async_work.TraceJob) -> None:
+    """Process one validated tracing job."""
 
     t0 = time.time()
     LOGGER.info("Start tracing work: movie_id=%s frame_start=%s frame_end=%s",
@@ -36,7 +40,7 @@ def process_tracing_message(body: dict):
     )
 
 
-def process_queue_message(body: dict):
+def process_local_queue_message(body: dict):
     """Validate and dispatch one local asynchronous job."""
     payload = dict(body)
     payload.setdefault("job_type", "trace")
@@ -49,7 +53,7 @@ def process_job(job: async_work.TraceJob | async_work.PostUploadJob) -> None:
     if isinstance(job, async_work.PostUploadJob):
         movie_glue.process_uploaded_movie(movie_id=job.movie_id)
         return
-    process_tracing_message(job.model_dump())
+    process_tracing_job(job)
 
 
 def process_async_work_event(raw_event) -> dict:

@@ -153,6 +153,8 @@ Resources:
                     ses:FromAddress: !FindInMap [StackConstants, Mail, ServerEmail]
 
   AsyncWorkDLQ:
+    # Failure storage only. Do not attach an SQS event source mapping: deployed
+    # asynchronous work is pushed to Lambda by EventBridge without idle polling.
     Type: AWS::SQS::Queue
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete

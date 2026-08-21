@@ -318,7 +318,7 @@ debug-dev-api:
 tracer-debug:
 	@echo just test the tracer...
 	/bin/rm -f outfile.mp4
-	poetry run python lambda-resize/src/sqs_cli.py tracer --infile="tests/data/2019-07-12 circumnutation.mp4" --movie_traced=outfile.mp4
+	poetry run python lambda-resize/src/lambda_resize_cli.py tracer --infile="tests/data/2019-07-12 circumnutation.mp4" --movie-traced=outfile.mp4
 	open outfile.mp4
 
 .PHONY: start-local-services stop-local-services wipe-local delete-local make-local-demo ensure-local-lambda-debug run-local-lambda-debug run-local-debug run-local-demo-debug debut-dev-api tracer-debug
