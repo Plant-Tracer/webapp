@@ -153,7 +153,8 @@ def api_resize_movie_data():
 @app.post("/resize-api/v1/process-upload")
 def api_process_upload():
     """Verify a completed direct-to-S3 upload and mark the movie ready."""
-    api_key = app.current_event.headers.get("x-api-key")
+    api_key = next((value for name, value in app.current_event.headers.items()
+                    if name.lower() == "x-api-key"), None)
     if not api_key:
         return Response(status_code=401, body="x-api-key header must be provided")
     body = app.current_event.json_body
