@@ -36,6 +36,7 @@ from app import odb, odb_movie_data, s3_presigned
 from app.constants import C
 from app.paths import ffmpeg_path
 from app.schema import Trackpoint
+from etc.s3_upload_trigger import configure_bucket_eventbridge
 
 
 API_KEY_FIELD = "api_key"
@@ -352,8 +353,9 @@ def _deployment_config(endpoint):
     return DeploymentConfigCheck.model_validate(response.json())
 
 
-def validate_deployment_config(endpoint, *, bucket=None, cors_configurer=None):
-    """Repair S3 CORS when possible, then fail on any remaining data-store problem."""
+def validate_deployment_config(endpoint, *, bucket=None, cors_configurer=None,
+                               eventbridge_configurer=None):
+    """Repair bucket integration when possible, then fail on other data-store problems."""
     check = _deployment_config(endpoint)
     if not check.cors_ok and bucket:
         configure_cors = cors_configurer or s3_presigned.configure_bucket_cors
@@ -376,6 +378,11 @@ def validate_deployment_config(endpoint, *, bucket=None, cors_configurer=None):
         failures.append(f"S3 region: {check.bucket_region_message}")
     if failures:
         raise RuntimeError("deployment configuration is not ready: " + "; ".join(failures))
+    if bucket:
+        configure_events = eventbridge_configurer or configure_bucket_eventbridge
+        changed = configure_events(bucket)
+        logging.info("S3 EventBridge delivery %s for bucket=%s",
+                     "enabled and verified" if changed else "already enabled", bucket)
 
 
 def run_workflow(*, endpoint, stack_name, movie_path, reference_csv_path, reference_xlsx_path,
@@ -478,10 +485,13 @@ def run_workflow(*, endpoint, stack_name, movie_path, reference_csv_path, refere
         if movie_id:
             movie = ddbo.get_movie(movie_id)
             original_urn = movie.get(odb.MOVIE_DATA_URN)
+            staging_urn = movie.get(odb.UPLOAD_STAGING_URN)
             traced_urn = movie.get(odb.MOVIE_TRACED_URN)
-            logging.info("deleting workflow movie movie_id=%s original=%s traced=%s", movie_id,
-                         original_urn, traced_urn)
+            logging.info("deleting workflow movie movie_id=%s staging=%s original=%s traced=%s",
+                         movie_id, staging_urn, original_urn, traced_urn)
             odb_movie_data.purge_movie(movie_id=movie_id)
+            if staging_urn and staging_urn != original_urn:
+                odb_movie_data.delete_object(staging_urn)
             if traced_urn:
                 odb_movie_data.delete_object(traced_urn)
             ddbo.batch_delete_movie_ids([movie_id])

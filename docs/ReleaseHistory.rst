@@ -78,8 +78,14 @@ Release Notes
 Unreleased Summary
 ******************
     * Deployment: automatically repair and verify the selected S3 bucket's
-      browser CORS policy before the deployed workflow creates test data, and
-      include bounded response details when an HTTP step fails.
+      browser CORS policy and EventBridge delivery after every deployment and
+      again before the deployed workflow creates test data, preserve other
+      notification destinations, clean up staging objects, and include bounded
+      response details when an HTTP step fails.
+    * Upload: distinguish S3 transfer completion from the 1–3 minute processing
+      phase, report a useful five-minute timeout, disable Play and Analyze until
+      durable movie data exists, and reject direct Analyze initialization for
+      incomplete uploads.
     * Movies: show one prominent upload button on the movie list instead of
       repeating upload links after each movie section
     * Operations: replace five continuously polling SQS event-source mappings

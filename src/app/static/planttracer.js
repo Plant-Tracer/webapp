@@ -14,6 +14,9 @@ const UNDELETE_BUTTON='UNDELETE';
 const PLAY_LABEL = 'play';
 const PLAY_TRACKED_LABEL = 'play tracked';
 const UPLOAD_TIMEOUT_SECONDS = 600;  // 10 minutes for large files on slow connections
+const UPLOAD_PROCESSING_TIMEOUT_MS = 5 * 60 * 1000;
+const MOVIE_PROCESSING_MESSAGE = 'Upload complete. Processing the movie usually takes 1–3 minutes.';
+const MOVIE_UNAVAILABLE_MESSAGE = 'Movie upload processing is not complete.';
 
 // sounds for buttons
 var SOUNDS = [];
@@ -205,18 +208,26 @@ async function startLambdaProcessing(movie_id) {
   return response.json();
 }
 
-const UPLOAD_PROCESSING_TIMEOUT_MS = 5 * 60 * 1000;
-
 async function waitForUploadProcessing(movie_id) {
+  const startTime = Date.now();
   const deadline = Date.now() + UPLOAD_PROCESSING_TIMEOUT_MS;
   while (Date.now() < deadline) {
+    const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
+    $('#upload_message').text(
+      `${MOVIE_PROCESSING_MESSAGE} Elapsed: ${Math.floor(elapsedSeconds / 60)}:${String(elapsedSeconds % 60).padStart(2, '0')}`
+    );
     const metadata = await _get_movie_metadata(movie_id);
     if (metadata && metadata.resized_at && metadata.status === 'ready') {
       return metadata;
     }
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
-  throw new Error('Timed out waiting for the uploaded movie to be processed.');
+  const error = new Error(
+    'The file reached storage, but movie processing did not finish within 5 minutes. ' +
+    'The movie remains listed as uploading; contact an administrator.'
+  );
+  error.name = 'UploadProcessingTimeoutError';
+  throw error;
 }
 
 /*
@@ -312,6 +323,7 @@ async function upload_movie_post(movie_title, description, movieFile, research_u
       $('#upload_message').html(`Error uploading movie status=${r.status} ${r.statusText}`);
       return;
     }
+    $('#upload_message').text(MOVIE_PROCESSING_MESSAGE);
     // Production completion is authoritative from S3/EventBridge. MinIO local
     // development uses the authenticated HTTP adapter for the same service.
     if (obj.upload_completion_mode === 'http') {
@@ -322,9 +334,14 @@ async function upload_movie_post(movie_title, description, movieFile, research_u
     // #region agent log
     console.log("[DEBUG]", JSON.stringify({hypothesisId:"H_all",location:"planttracer.js:catch",message:"Upload catch",data:{name:e.name,message:e.message,cause:e.cause?String(e.cause):null},timestamp:Date.now()}));
     // #endregion
-    const msg = (e.name === 'AbortError')
-          ? `Timeout uploading movie (${UPLOAD_TIMEOUT_SECONDS}s). Try a smaller file or check your connection.`
-          : `Upload failed: ${e.message || String(e)}. If you see "Failed to fetch" or connection reset, check that the S3 bucket CORS is set (bootstrap) and the bucket is in the same region as the server (AWS_REGION).`;
+    let msg;
+    if (e.name === 'AbortError') {
+      msg = `Timeout uploading movie (${UPLOAD_TIMEOUT_SECONDS}s). Try a smaller file or check your connection.`;
+    } else if (e.name === 'UploadProcessingTimeoutError') {
+      msg = e.message;
+    } else {
+      msg = `Upload failed: ${e.message || String(e)}. If you see "Failed to fetch" or connection reset, check that the S3 bucket CORS is set (bootstrap) and the bucket is in the same region as the server (AWS_REGION).`;
+    }
     $('#upload_message').html(msg);
     console.log("error: ", e);
     return;
@@ -420,10 +437,11 @@ async function _get_movie_metadata(movie_id){
   formData.append("api_key",     api_key);   // on the upload form
   formData.append("movie_id",    movie_id);
   const r = await fetch(`${API_BASE}api/get-movie-metadata`, { method:"POST", body:formData});
-  if (r.ok) {
-    const response = await r.json();
-    return response.metadata;
+  const response = await r.json();
+  if (!r.ok || response.error) {
+    throw new Error(response.message || `Unable to read movie processing status (${r.status}).`);
   }
+  return response.metadata;
 }
 
 
@@ -609,6 +627,10 @@ function hide_clicked( e ) {
 function analyze_clicked( e ) {
   const movie_id = e.getAttribute('x-movie_id');
   window.location = `/analyze?movie_id=${movie_id}`;
+}
+
+function movie_is_available(movie) {
+  return Boolean(movie && (movie.uploaded_at || movie.date_uploaded));
 }
 
 function download_traced_clicked( e ) {
@@ -872,7 +894,9 @@ function list_movies_data( movies ) {
       const dateSec = uploadedValue && Number(uploadedValue);
       const movieDate = dateSec ? new Date(dateSec * 1000) : null;
       const up_down   = movieDate ? movieDate.toLocaleString().replace(' ','<br>').replace(',','') : '—';
-      const play      = `<input class='play'    x-rowid='${rowid}' x-movie_id='${movie_id}' x-div-selector='${divSelector}' type='button' value='${PLAY_LABEL}' onclick='play_clicked(this)'>`;
+      const movieAvailable = movie_is_available(m);
+      const unavailable = movieAvailable ? '' : ` disabled title='${MOVIE_UNAVAILABLE_MESSAGE}'`;
+      const play      = `<input class='play'    x-rowid='${rowid}' x-movie_id='${movie_id}' x-div-selector='${divSelector}' type='button' value='${PLAY_LABEL}'${unavailable} onclick='play_clicked(this)'>`;
       let playt = '';
       let analyze_label = 'analyze';
       if (m.tracked_movie_id){
@@ -885,7 +909,7 @@ function list_movies_data( movies ) {
       );
       const analyze   = (m.orig_movie || readOnlySuperauditorMovie)
         ? ''
-        : `<input class='analyze' x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='${analyze_label}' onclick='analyze_clicked(this)'>`;
+        : `<input class='analyze' x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='${analyze_label}'${unavailable} onclick='analyze_clicked(this)'>`;
       const downloadTraced = m.movie_traced_url
         ? `<input class='play traced-movie-download' x-movie_traced_url="${html_attr(m.movie_traced_url)}" type='button' value='download traced' onclick='download_traced_clicked(this)'>`
         : '';
@@ -1146,6 +1170,7 @@ if (typeof module != 'undefined'){
     dtInstances,
     first_frame_url,
     list_movies_data,
+    movie_is_available,
     list_users,
     list_users_data,
     purge_movie,
@@ -1158,6 +1183,7 @@ if (typeof module != 'undefined'){
     row_checkbox_clicked,
     set_property,
     upload_movie_post,
-    upload_ready_function
+    upload_ready_function,
+    waitForUploadProcessing
   }
 }

@@ -21,7 +21,7 @@ from app import s3_presigned
 from app import odb_movie_data
 from app import apikey
 
-from app.odb import API_KEY,MOVIE_ID,USER_ID
+from app.odb import API_KEY,COURSE_ID,MOVIE_ID,USER_ID
 from app.constants import MIME
 from app.schema import Trackpoint
 from app.s3_presigned import s3_client
@@ -867,6 +867,28 @@ def test_analysis_lease_makes_second_browser_view_only_and_releases_on_exit(clie
     assert blocked.status_code == 409
     assert written.status_code == 200
     assert released['released'] is True
+
+
+def test_analysis_lease_rejects_movie_before_upload_completion(client, new_movie):
+    pending_movie_id = odb.create_new_movie(
+        user_id=new_movie[USER_ID],
+        course_id=new_movie[COURSE_ID],
+        title="pending upload",
+        description="not yet in durable storage",
+    )
+    try:
+        response = client.post('/api/acquire-movie-analysis-lease', data={
+            'api_key': new_movie[API_KEY],
+            'movie_id': pending_movie_id,
+        })
+        assert response.status_code == 409
+        assert response.get_json() == {
+            'error': True,
+            'message': "Movie upload processing is not complete.",
+        }
+        assert odb.DDBO().get_active_movie_analysis_lock(pending_movie_id) is None
+    finally:
+        odb_movie_data.delete_movie(movie_id=pending_movie_id)
 
 
 def test_analysis_lease_endpoints_validate_renew_and_release(client, new_movie):

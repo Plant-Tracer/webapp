@@ -40,6 +40,11 @@ Uploading Movies (optional)
 - The upload form asks whether your movie may be used in academic research. Before answering, review the `Contributor Agreement <tos#contributor-agreement>`_ linked on the form. Select **Yes** or **No**. If you select **Yes**, you will also be asked whether you want to be credited by name; your display name is pre-filled as the attribution name, which you can edit.
 - If you know the capture interval of your recording (how many frames were captured per minute of real time), enter it in the **Capture interval (frames/minute)** field. You can also set or change this later on the Analyze page.
 - Choose a file to upload.
+- After S3 accepts the file, the page reports a separate processing phase,
+  normally lasting 1–3 minutes. Play and Analyze remain disabled on the Movies
+  page until the file has reached durable movie storage. If processing does not
+  finish within five minutes, the upload page retains the movie record and
+  tells you to contact an administrator.
 
 .. image:: tutorial_images/upload_movie.png
    :alt: Plant Tracer Upload page with fields for movie title, description, research use radio buttons, capture interval, and file chooser

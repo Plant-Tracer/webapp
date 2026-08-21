@@ -546,6 +546,10 @@ default course. A missing deleted course falls back to the valid default.
 
 Each movie dict contains all DynamoDB metadata fields. In addition, if the movie has a traced MP4 stored in S3 (`movie_traced_urn` starts with `s3:`), the response injects a short-lived presigned URL. Clients should treat `needs_retracing=1` as user-visible only when this URL is present; before the first traced MP4 exists there is no stale traced artifact to warn about.
 
+The movie-list client treats `uploaded_at` (or legacy `date_uploaded`) as the
+availability boundary. Until one is present, Play and Analyze are disabled and
+the stored `status` remains visible.
+
 | Field | Description |
 |-------|-------------|
 | `movie_traced_url` | Presigned S3 URL for downloading the traced MP4; only present when a traced MP4 exists |
@@ -596,6 +600,10 @@ Acquire Analyze's movie-row lease immediately on page entry. The successful
 holder receives an opaque `lease_id`. When another browser already holds the
 lease, this still returns HTTP 200 with `lease_id: null` and an `analysis_lock`
 object so the caller can display Analyze as view-only.
+
+A movie without `uploaded_at` (or legacy `date_uploaded`) is not yet in durable
+movie storage. Lease acquisition returns HTTP 409 with `error: true` and
+`message: "Movie upload processing is not complete."` for such a record.
 
 `POST /api/heartbeat-movie-analysis-lease` renews the holder's lease, and
 `POST /api/release-movie-analysis-lease` releases it on page exit. Both require

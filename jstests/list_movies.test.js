@@ -9,6 +9,7 @@ const path = require('path');
 const module = require('planttracer');
 const { RETRACE_REQUIRED_MESSAGE } = require('ui_constants');
 const list_movies_data = module.list_movies_data;
+const movie_is_available = module.movie_is_available;
 const play_clicked = module.play_clicked;
 const hide_clicked = module.hide_clicked;
 const dtInstances = module.dtInstances;
@@ -110,6 +111,48 @@ describe('list_movies_data', () => {
     const publishedHtml = mockElements['#your-published-movies'].innerHTML;
     expect(publishedHtml).toContain("pure-table");
     expect(publishedHtml).toContain("Movie Title");
+  });
+
+  test('disables Play and Analyze while an upload is unavailable', () => {
+    const movies = [{
+      movie_id: 1,
+      user_id: global.user_id,
+      published: 1,
+      title: 'Pending Movie',
+      description: 'Still uploading',
+      status: 'uploading',
+      deleted: 0,
+      orig_movie: false,
+    }];
+
+    list_movies_data(movies);
+
+    const publishedHtml = mockElements['#your-published-movies'].innerHTML;
+    expect(movie_is_available(movies[0])).toBe(false);
+    expect(publishedHtml).toMatch(/class='play'[^>]*disabled/);
+    expect(publishedHtml).toMatch(/class='analyze'[^>]*disabled/);
+    expect(publishedHtml).toContain('Movie upload processing is not complete.');
+  });
+
+  test('enables Play and Analyze after durable upload completion', () => {
+    const movies = [{
+      movie_id: 1,
+      user_id: global.user_id,
+      published: 1,
+      title: 'Available Movie',
+      description: 'Uploaded',
+      status: 'processing',
+      uploaded_at: 1627689600,
+      deleted: 0,
+      orig_movie: false,
+    }];
+
+    list_movies_data(movies);
+
+    const publishedHtml = mockElements['#your-published-movies'].innerHTML;
+    expect(movie_is_available(movies[0])).toBe(true);
+    expect(publishedHtml).not.toMatch(/class='play'[^>]*disabled/);
+    expect(publishedHtml).not.toMatch(/class='analyze'[^>]*disabled/);
   });
 
   test('should let a superauditor analyze their own movie', () => {

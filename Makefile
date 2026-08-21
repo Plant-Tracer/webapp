@@ -13,6 +13,8 @@
 # DYNAMODB_TABLE_PREFIX=<stack>- poetry run dbutil createdb && STACK=<stack> make sam-build sam-deploy-guided
 # New stack using existing DynamoDB tables:
 # DYNAMODB_TABLE_PREFIX=<existing-prefix>- STACK=<stack> make sam-build sam-deploy-guided
+# Create a dev test course administered by simsong@acm.org:
+# AWS_REGION=us-east-1 STACK_NAME=dev COURSE_CREATE_FLAGS="--course_id dev-test --course_name 'Dev Test Course' --admin_email simsong@acm.org --admin_name 'Simson Garfinkel'" make sam-course-create
 # Replace a stack while retaining its external DynamoDB tables and S3 bucket:
 # STACK=<stack> make sam-delete && STACK=<stack> make sam-build sam-deploy
 # Shut down and delete a stack while retaining external DynamoDB and S3 data:
@@ -22,6 +24,8 @@
 # deployment parameters and saves them in the ignored per-stack file
 # samconfigs/<stack>.toml. Later sam-deploy runs are non-interactive and reuse
 # that file; sam-deploy refuses to proceed when the saved config does not exist.
+# Every deployment configures and verifies CORS and EventBridge delivery on the
+# selected pre-existing S3 bucket before running status and workflow checks.
 
 SHELL := /bin/bash
 PYLINT_THRESHOLD := 10.0
@@ -675,7 +679,7 @@ lambda-web-check: lambda-web-lint
 	$(MAKE) vend-lambda-web
 	PYTHONPATH=.:src:lambda-web/src poetry run pytest lambda-web/tests -q --cov=lambda-web/src/lambda_web --cov-report=term -o junit_family=legacy --log-cli-level=$(LOG_LEVEL)
 
-.PHONY: lambda-resize/src/requirements.txt lambda-web/src/requirements.txt template-lint sam-config-show sam-config-path-safety-check sam-config-sync sam-config-path-check sam-config-check sam-config-guided-bootstrap sam-version-check sam-source-commit-check stamp-lambda-web-source-commit lambda-web-source-commit-check sam-deploy-version-check stamp-sam-deploy-metadata sam-status
+.PHONY: lambda-resize/src/requirements.txt lambda-web/src/requirements.txt template-lint sam-config-show sam-config-path-safety-check sam-config-sync sam-config-path-check sam-config-check sam-config-guided-bootstrap sam-version-check sam-source-commit-check stamp-lambda-web-source-commit lambda-web-source-commit-check sam-deploy-version-check stamp-sam-deploy-metadata sam-storage-configure sam-status
 lambda-resize/src/requirements.txt:
 	poetry export --with lambda --without dev --without vm --format=requirements.txt --output lambda-resize/src/requirements.txt --without-hashes
 
@@ -897,6 +901,7 @@ endif
 	$(MAKE) stamp-sam-deploy-metadata
 	aws sts get-caller-identity --no-cli-pager
 	sam deploy --config-file "$(SAM_CONFIG)" --stack-name "$(EFFECTIVE_STACK_NAME)" --no-confirm-changeset --capabilities CAPABILITY_IAM
+	$(MAKE) sam-storage-configure
 	$(MAKE) sam-status
 	$(MAKE) sam-deployed-workflow-test
 
@@ -915,6 +920,7 @@ endif
 	@echo use one of these S3 buckets:
 	aws s3 ls
 	sam deploy --config-file "$(SAM_CONFIG)" --guided $(if $(EFFECTIVE_STACK_NAME),--stack-name "$(EFFECTIVE_STACK_NAME)",) --capabilities CAPABILITY_IAM
+	$(MAKE) sam-storage-configure
 	$(MAKE) sam-status
 	$(MAKE) sam-deployed-workflow-test
 
@@ -948,6 +954,19 @@ endif
 	env -u AWS_ENDPOINT_URL_DYNAMODB -u AWS_ENDPOINT_URL_S3 \
 		DYNAMODB_TABLE_PREFIX="$$DDB_PREFIX" MAILER_DRY_RUN="$$MAILER_DRY_RUN_STACK" \
 		poetry run python $(DBUTIL) create-course --send-email --planttracer_endpoint "$$APP_URL" $(COURSE_CREATE_FLAGS)
+
+sam-storage-configure: sam-config-check
+ifeq ($(AWS_REGION),local)
+	@echo cannot configure deployed storage with AWS_REGION=local. Please specify AWS_REGION. && exit 1
+endif
+	@BUCKET=$$(aws cloudformation describe-stacks --stack-name "$(EFFECTIVE_STACK_NAME)" --query 'Stacks[0].Parameters[?ParameterKey==`ImageBucketName`].ParameterValue | [0]' --output text); \
+	if [ -z "$$BUCKET" ] || [ "$$BUCKET" = "None" ]; then \
+		echo "Refusing to configure storage: stack $(EFFECTIVE_STACK_NAME) did not report ImageBucketName."; \
+		exit 1; \
+	fi; \
+	echo "Configuring and verifying CORS and EventBridge delivery for $$BUCKET"; \
+	poetry run python -m app.s3_presigned "$$BUCKET"; \
+	$(MAKE) PLANTTRACER_S3_BUCKET="$$BUCKET" CONFIRM_BUCKET="$$BUCKET" s3-eventbridge-enable
 
 s3-eventbridge-status:
 	@if [ -z "$(PLANTTRACER_S3_BUCKET)" ]; then \

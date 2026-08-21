@@ -42,6 +42,7 @@ const MOVIE_TRACED_URL = 'movie_traced_url';
 const NEEDS_RETRACING = 'needs_retracing';
 const ANALYSIS_LEASE_ID = 'analysis_lease_id';
 const ANALYSIS_LEASE_HEARTBEAT_MSEC = 5 * 60 * 1000;
+const MOVIE_UNAVAILABLE_MESSAGE = 'Movie upload processing is not complete.';
 
 let analysisLease = null;
 
@@ -2324,6 +2325,14 @@ function trace_movie(div_controller, movie_id, api_key) {
             alert(resp.message);
             return;
         }
+        if (!movie_is_available_for_analysis(resp.metadata)) {
+            if (analysisLease) {
+                analysisLease.release();
+                stop_analysis_lease();
+            }
+            $('#status-big').text(MOVIE_UNAVAILABLE_MESSAGE);
+            return;
+        }
         resp.metadata[ANALYSIS_LEASE_ID] = leaseId;
         resp.metadata.analysis_read_only = !leaseId;
         const width = resp.metadata.width;
@@ -2363,6 +2372,10 @@ function trace_movie(div_controller, movie_id, api_key) {
         }
         const movie_zipfile_url = resp.metadata.movie_zipfile_url;
         trace_movie_frames(div_controller, resp.metadata, movie_zipfile_url, resp.frames, api_key, showResults);
+        }).fail((response) => {
+            $('#status-big').text(
+                response.responseJSON?.message || 'Unable to load this movie for analysis.'
+            );
         });
     }
     if (demo_mode) {
@@ -2381,6 +2394,10 @@ function trace_movie(div_controller, movie_id, api_key) {
     });
 }
 
+function movie_is_available_for_analysis(metadata) {
+    return Boolean(metadata && (metadata.uploaded_at || metadata.date_uploaded));
+}
+
 /** True only when the movie has been tracked (at least 2 frames with trackpoints or status TRACING COMPLETED). */
 function is_movie_tracked(metadata) {
     if (!metadata) return false;
@@ -2392,6 +2409,7 @@ function is_movie_tracked(metadata) {
 
 export { TracerController, trace_movie, trace_movie_one_frame, trace_movie_frames,
          get_ruler_size, frame_index_from_zip_name, is_movie_tracked,
+         movie_is_available_for_analysis,
          create_default_markers, calc_scale,
          is_inflection_marker_label, is_graphable_marker, INFLECTION_POINT_LABEL,
          display_results };

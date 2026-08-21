@@ -83,6 +83,7 @@ def test_deployment_info_http_error_includes_response_body():
 def test_validate_deployment_config_repairs_cors_before_workflow(monkeypatch):
     cors_configured = False
     configured_buckets = []
+    eventbridge_buckets = []
     monkeypatch.setattr(deployed_workflow_test, "CORS_REPAIR_RECHECK_INTERVAL", 0)
 
     class ConfigHandler(BaseHTTPRequestHandler):
@@ -115,12 +116,14 @@ def test_validate_deployment_config_repairs_cors_before_workflow(monkeypatch):
                 f"http://127.0.0.1:{server.server_port}/",
                 bucket="planttracer-test",
                 cors_configurer=configure_cors,
+                eventbridge_configurer=lambda bucket: eventbridge_buckets.append(bucket) or True,
             )
         finally:
             server.shutdown()
             thread.join()
 
     assert configured_buckets == ["planttracer-test"]
+    assert eventbridge_buckets == ["planttracer-test"]
 
 
 def reference_trackpoint():

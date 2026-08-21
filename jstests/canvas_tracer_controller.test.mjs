@@ -1981,6 +1981,7 @@ describe('trace_movie', () => {
             error: false,
             metadata: {
                 movie_id: 'movie-123',
+                uploaded_at: 1700000000,
                 width: null,
                 height: null,
                 movie_zipfile_url: null,
@@ -2056,6 +2057,15 @@ describe('trace_movie', () => {
     test('does not create a TracerController when resp.error is true', () => {
         mockApiResponse({ error: true, message: 'Fail' });
         trace_movie('div#tracer', 'movie-123', 'api-key');
+        expect(capturedTc).toBeNull();
+    });
+
+    test('shows an unavailable message instead of initializing a pending upload', () => {
+        mockApiResponse(makeResp({ uploaded_at: null, date_uploaded: null }));
+        trace_movie('div#tracer', 'movie-123', 'api-key');
+        const idx = mock$.mock.calls.findLastIndex(args => args[0] === '#status-big');
+        expect(mock$.mock.results[idx].value.text)
+            .toHaveBeenCalledWith('Movie upload processing is not complete.');
         expect(capturedTc).toBeNull();
     });
 

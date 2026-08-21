@@ -256,6 +256,14 @@ command-line options remain available to override those defaults.
 Comparing the traced movie's final frame also requires an ``ffmpeg`` executable
 on ``PATH`` or selected explicitly with ``FFMPEG_PATH``.
 
+Every guided and normal SAM deployment runs ``make sam-storage-configure``
+immediately after CloudFormation completes. It applies the bucket CORS policy
+and idempotently enables and verifies bucket-level EventBridge delivery.
+Existing topic, queue, and Lambda notification destinations are preserved. The
+deployed workflow verifier repeats these checks before creating test data as a
+defense-in-depth gate. This ensures a new pre-existing bucket is ready for
+browser uploads and the stack-scoped ``uploads/<stack>/`` EventBridge rule.
+
 Metadata Stored with Original Movies
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
