@@ -1,0 +1,320 @@
+S3 and Plant Tracer
+===================
+
+Plant Tracer uses three distinct S3 locations:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 24 30 46
+
+   * - Location
+     - Configuration
+     - Purpose and lifetime
+   * - Runtime movie archive
+     - ``PLANTTRACER_S3_BUCKET`` / SAM ``ImageBucketName``
+     - Upload staging, original movies, and derived movie artifacts. The bucket
+       is pre-existing, shared, and outlives every application stack.
+   * - Operational artifacts
+     - ``s3://planttracer-artifacts/artifacts/``
+     - Temporary diagnostics such as CloudWatch Synthetics output. These are
+       not movie data and expire according to bucket lifecycle rules.
+   * - SAM deployment artifacts
+     - SAM CLI managed bucket selected by ``resolve_s3=true``
+     - Packaged Lambda deployment files consumed by CloudFormation.
+
+Runtime Movie Archive
+---------------------
+
+The runtime bucket is supplied to the stack; ``template.yaml`` does not create
+or delete it. DynamoDB stores complete S3 URNs so existing rows remain readable
+when they refer to an older bucket or object layout.
+
+Creating a Runtime Movie Bucket
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The following procedure creates a new runtime movie archive for stacks in the
+same AWS account and region. Bucket names are globally unique. Use a
+project-specific bucket name and the region in which the Plant Tracer stacks
+run; an S3 bucket sends its events to EventBridge in that same region.
+
+1. Load the AWS environment, choose the bucket name and region, verify the
+   active AWS identity, and create the bucket:
+
+   .. code-block:: console
+
+      source .envrc
+      export PT_BUCKET=planttracer-example
+      export PT_BUCKET_REGION=us-east-1
+      aws sts get-caller-identity --no-cli-pager
+      aws s3 mb "s3://${PT_BUCKET}" --region "${PT_BUCKET_REGION}"
+
+2. Keep the archive private and make the bucket owner the owner of every
+   object. Plant Tracer uses presigned requests; it does not require public
+   bucket or object access:
+
+   .. code-block:: console
+
+      aws s3api put-public-access-block \
+        --bucket "${PT_BUCKET}" \
+        --public-access-block-configuration \
+        'BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true'
+      aws s3api put-bucket-ownership-controls \
+        --bucket "${PT_BUCKET}" \
+        --ownership-controls 'Rules=[{ObjectOwnership=BucketOwnerEnforced}]'
+
+3. Explicitly enable server-side encryption with Amazon S3 managed keys:
+
+   .. code-block:: console
+
+      aws s3api put-bucket-encryption \
+        --bucket "${PT_BUCKET}" \
+        --server-side-encryption-configuration \
+        '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
+
+4. Configure CORS for browser presigned uploads and downloads. The deployed
+   workflow test automatically applies and verifies this policy on the bucket
+   selected by ``ImageBucketName`` when CORS is missing or incompatible. The
+   following equivalent command is available for manual setup. CORS permission
+   does not make objects public; S3 still requires a valid presigned request.
+   The configuration matches ``CORS_CONFIGURATION`` in
+   ``src/app/s3_presigned.py``:
+
+   .. code-block:: console
+
+      aws s3api put-bucket-cors \
+        --bucket "${PT_BUCKET}" \
+        --cors-configuration \
+        '{"CORSRules":[{"AllowedHeaders":["*"],"AllowedMethods":["GET","POST","PUT","DELETE"],"AllowedOrigins":["*"],"MaxAgeSeconds":3600}]}'
+
+5. Enable S3 delivery to EventBridge. This is a one-time operation for each
+   bucket, regardless of how many Plant Tracer stacks share it. The Makefile
+   helper preserves any existing S3 topic, queue, and Lambda notification
+   configuration:
+
+   .. code-block:: console
+
+      PLANTTRACER_S3_BUCKET="${PT_BUCKET}" \
+        CONFIRM_BUCKET="${PT_BUCKET}" \
+        make s3-eventbridge-enable
+
+6. Verify the bucket configuration:
+
+   .. code-block:: console
+
+      aws s3api head-bucket --bucket "${PT_BUCKET}"
+      aws s3api get-public-access-block --bucket "${PT_BUCKET}"
+      aws s3api get-bucket-ownership-controls --bucket "${PT_BUCKET}"
+      aws s3api get-bucket-encryption --bucket "${PT_BUCKET}"
+      aws s3api get-bucket-cors --bucket "${PT_BUCKET}"
+      PLANTTRACER_S3_BUCKET="${PT_BUCKET}" make s3-eventbridge-status
+
+7. Supply the bucket name, without an ``s3://`` prefix, as ``ImageBucketName``
+   when running ``STACK=<name> make sam-deploy-guided`` (or using the
+   equivalent ``STACK_NAME=<name>`` alias). The SAM template then
+   grants that stack's Lambda execution roles access to the named bucket and
+   creates an EventBridge rule restricted to
+   ``uploads/<stack-name>/``. No bucket policy is required for this
+   same-account setup.
+
+Do not add a bucket-wide expiration rule: objects under ``movies/`` are the
+durable archive and must outlive application stacks. S3 Versioning is not
+required and is disabled by default. If it is enabled as an operational choice,
+remember that application deletes create delete markers and do not immediately
+reclaim storage. Cross-account buckets require additional bucket and
+EventBridge policies and are outside this procedure.
+
+Current Object Layout
+~~~~~~~~~~~~~~~~~~~~~
+
+``PLANTTRACER_STACK_NAME`` is the deployment identifier used in current object
+keys. Application code must use the templates in ``src/app/constants.py`` and
+the formatting helpers in ``src/app/s3_presigned.py`` rather than reconstruct
+paths from this page.
+
+Current keys are namespaced by deployment. Legacy un-namespaced keys remain
+readable through the complete S3 URNs stored in DynamoDB.
+
+The resulting objects are:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 42 18 20
+
+   * - Artifact
+     - Current key
+     - DynamoDB field
+     - Lifetime
+   * - Upload staging
+     - ``uploads/{deployment_id}/{course_id}/{movie_id}.mov``
+     - ``upload_staging_urn``
+     - Temporary; removed after a verified server-side copy
+   * - Original movie
+     - ``movies/{deployment_id}/{course_id}/{movie_id}.mov``
+     - ``movie_data_urn``
+     - Durable archive
+   * - Traced movie
+     - ``movies/{deployment_id}/{course_id}/{movie_id}_traced.mov``
+     - ``movie_traced_urn``
+     - Derived and regenerable
+   * - Analysis-frame ZIP
+     - ``movies/{deployment_id}/{course_id}/{movie_id}_zipfile.mov``
+     - ``movie_zipfile_urn``
+     - Derived and regenerable
+   * - Persisted JPEG frame
+     - ``movies/{deployment_id}/{course_id}/{movie_id}/{frame_number:06d}.jpg``
+     - ``frame_urn`` on a ``movie_frames`` row
+     - Optional and regenerable
+
+The ZIP key retains the original movie extension for compatibility even though
+the object contains ZIP bytes. Derived-artifact helpers preserve the original
+bucket, path, and extension, so legacy un-namespaced URNs remain readable and
+retraceable. Course migration supports both legacy and deployment-scoped keys.
+
+Upload Processing
+~~~~~~~~~~~~~~~~~
+
+``POST /api/new-movie`` creates a movie row with ``status="uploading"``,
+``created_at``, and ``upload_bytes_expected``. It records both the temporary
+``upload_staging_urn`` and durable ``movie_data_urn`` and returns a presigned
+POST for the staging object. The signed policy requires the exact declared byte
+count.
+
+For deployed stacks:
+
+1. The browser uploads to ``uploads/{deployment_id}/...``.
+2. S3 sends an Object Created event to EventBridge.
+3. Each stack's EventBridge rule matches the shared bucket and its exact
+   ``uploads/{deployment_id}/`` prefix. Other stacks do not match the key.
+4. lambda-resize validates the Pydantic event envelope, bucket, deployment,
+   key identifiers, DynamoDB row, and expected byte count.
+5. lambda-resize copies the staging object to its durable ``movies/`` key while
+   preserving metadata, verifies the copy, conditionally records
+   ``uploaded_at`` and ``total_bytes``, and deletes the staging object.
+6. The post-upload job records width, height, encoded ``fps``, frame count, and
+   resize lifecycle timestamps. The browser polls movie metadata before
+   requesting the first frame.
+
+EventBridge and asynchronous Lambda delivery are at least once. Conditional
+movie updates and verified durable-object checks make duplicate upload events
+safe. EventBridge pushes post-upload work without an idle-polling queue.
+Exhausted delivery or invocation failures go to the stack's unpolled
+dead-letter queue.
+
+``POST /resize-api/v1/process-upload`` remains an authenticated local-
+development adapter for MinIO, which does not supply the deployed AWS
+EventBridge path. It invokes the same completion service; production browsers
+do not use it.
+
+Shared Bucket EventBridge Configuration
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+S3 EventBridge delivery is enabled once on the shared bucket. This is bucket
+configuration, not stack-owned infrastructure, so deleting a stack does not
+disable it. Each stack owns only its prefix-filtered EventBridge rule.
+
+Inspect the current notification configuration:
+
+.. code-block:: console
+
+   PLANTTRACER_S3_BUCKET=planttracer-movies make s3-eventbridge-status
+
+Enable EventBridge after verifying the exact bucket:
+
+.. code-block:: console
+
+   PLANTTRACER_S3_BUCKET=planttracer-movies \
+     CONFIRM_BUCKET=planttracer-movies \
+     make s3-eventbridge-enable
+
+Updating an S3 notification configuration replaces the complete configuration.
+``uv run s3_upload_trigger`` invokes the packaged
+``etc/s3_upload_trigger.py`` utility. It reads and preserves existing topic,
+queue, and Lambda destinations, adds ``EventBridgeConfiguration``, then reads
+the bucket again to verify the change.
+
+Deployed Workflow Verification
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+After deploying a stack, authenticate with ``aws sso login`` and run:
+
+.. code-block:: console
+
+   AWS_PROFILE=planttracer-admin AWS_REGION=us-east-1 \
+     make sam-deployed-workflow-test
+
+The target uploads the circumnutation fixture through the deployed presigned
+POST, verifies S3-to-EventBridge processing, deployed movie listing, original
+movie download, calibrated start/end tracking positions, CSV and XLSX exports,
+and the final rendered frame of the traced movie. It does not validate ZIP
+downloads. It then removes the test movie and always revokes the temporary API
+key it creates. The underlying verifier declares its runtime dependencies as
+inline script metadata, and the project exposes it as a command, so
+``uv run deployed_workflow_test --endpoint https://prod.planttracer.com/``
+runs in an isolated environment without a pre-populated project virtualenv.
+The command reads the stack name and DynamoDB table prefix from ``/api/ver``
+and defaults to the committed circumnutation movie and reference outputs;
+command-line options remain available to override those defaults.
+Comparing the traced movie's final frame also requires an ``ffmpeg`` executable
+on ``PATH`` or selected explicitly with ``FFMPEG_PATH``.
+
+Every guided and normal SAM deployment runs ``make sam-storage-configure``
+immediately after CloudFormation completes. It applies the bucket CORS policy
+and idempotently enables and verifies bucket-level EventBridge delivery.
+Existing topic, queue, and Lambda notification destinations are preserved. The
+deployed workflow verifier repeats these checks before creating test data as a
+defense-in-depth gate. This ensures a new pre-existing bucket is ready for
+browser uploads and the stack-scoped ``uploads/<stack>/`` EventBridge rule.
+
+Metadata Stored with Original Movies
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The presigned POST fixes ``Content-Type`` to ``video/mp4`` and signs these S3
+object metadata fields:
+
+* ``sha256``
+* ``research-use``
+* ``credit-by-name``
+* ``attribution-name``
+* ``fpm``
+
+The server-side staging-to-durable copy preserves this metadata. Research-use,
+attribution, and capture-interval metadata are also stored in DynamoDB and,
+where supported, in MP4 metadata. See :doc:`MOVIE_METADATA`.
+
+Access, CORS, and Local Development
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Browser uploads and downloads use time-limited presigned S3 requests. Bucket
+CORS must allow the application origin to issue the required methods and
+headers. lambda-web and lambda-resize receive the bucket name through
+``PLANTTRACER_S3_BUCKET`` and have the read/write permissions required for
+their operations.
+
+Local development and integration tests use MinIO and DynamoDB Local, not
+mocked clients. ``AWS_ENDPOINT_URL_S3`` selects MinIO and the default local
+deployment identifier is ``local``. Use Makefile targets to start services,
+create the bucket, and run tests.
+
+Operational and Deployment Artifacts
+------------------------------------
+
+``s3://planttracer-artifacts`` is manually managed project infrastructure for
+temporary operational output. Objects under ``artifacts/`` expire; do not put
+movie data, ``.ptb`` backups, or releases there.
+
+SAM uses its own managed deployment bucket for packaged Lambda artifacts. The
+application never addresses those keys at runtime.
+
+Implementation Sources
+----------------------
+
+* ``src/app/constants.py`` -- canonical templates and deployment identifier
+* ``src/app/s3_presigned.py`` -- key helpers, URNs, presigning, and CORS
+* ``src/app/flask_api.py`` -- staging and durable upload allocation
+* ``lambda-resize/src/resize_app/upload_event.py`` -- EventBridge validation
+* ``lambda-resize/src/resize_app/movie_glue.py`` -- upload completion and
+  post-upload processing
+* ``src/app/odb_movie_data.py`` -- object and persisted-frame operations
+* ``src/dbbackup.py`` -- backup/restore and course migration
+* ``etc/s3_upload_trigger.py`` -- shared-bucket EventBridge enablement
+* ``template.yaml`` -- per-stack EventBridge rule, retry, and dead-letter queue

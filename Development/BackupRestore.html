@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Backup and Restore &#8212; Plant Tracer Web Application 1.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=b93c872d" />
+    <script src="../_static/documentation_options.js?v=f2a433a1"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="DynamoDB and Plant Tracer" href="DynamoDB.html" />
+    <link rel="prev" title="Data Ownership" href="DataOwnership.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="backup-and-restore">
+<h1>Backup and Restore<a class="headerlink" href="#backup-and-restore" title="Link to this heading">¶</a></h1>
+<p>This page specifies the Plant Tracer backup, restore, and course migration
+tool, <code class="docutils literal notranslate"><span class="pre">src/dbbackup.py</span></code>.</p>
+<p>This is an operational backup for selected Plant Tracer data, not a full AWS
+account snapshot. It is intended to run from a developer or administrator
+machine with AWS credentials. The target DynamoDB table prefix is specified on
+the command line and supersedes <code class="docutils literal notranslate"><span class="pre">DYNAMODB_TABLE_PREFIX</span></code>. If
+<code class="docutils literal notranslate"><span class="pre">PLANTTRACER_S3_BUCKET</span></code> is configured during restore, restored movie objects
+are written to that bucket; otherwise restore uses the bucket recorded for each
+movie object in the archive. A future web-admin download/upload workflow may be
+added later.</p>
+<section id="goals">
+<h2>Goals<a class="headerlink" href="#goals" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">src/dbbackup.py</span></code> supports:</p>
+<ul class="simple">
+<li><p>full and selective backups;</p></li>
+<li><p>full and selective restores;</p></li>
+<li><p>restoring a complete course, user, or movie dependency set;</p></li>
+<li><p>dry-run login-link generation for restored users, with sending only when
+<code class="docutils literal notranslate"><span class="pre">--send</span></code> is present;</p></li>
+<li><p>course and movie migration without leaving inconsistent DynamoDB records or
+stale S3 object references.</p></li>
+</ul>
+<p>The implementation preserves existing IDs on restore. In particular,
+<code class="docutils literal notranslate"><span class="pre">course_id</span></code>, <code class="docutils literal notranslate"><span class="pre">user_id</span></code>, and <code class="docutils literal notranslate"><span class="pre">movie_id</span></code> are restored exactly as recorded in
+the backup.</p>
+</section>
+<section id="command-line-contract">
+<h2>Command-Line Contract<a class="headerlink" href="#command-line-contract" title="Link to this heading">¶</a></h2>
+<p>The CLI keeps backup, restore, inspection, login-link sending, and migration as
+separate subcommands:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>poetry run dbbackup backup --table-prefix PREFIX --output file.ptb [--all | --course-id C | --user-email E | --movie-id M] [--include-deleted]
+poetry run dbbackup restore --table-prefix PREFIX file.ptb [--all | --course-id C | --user-email E | --movie-id M] [--commit] [--threads N] [--regenerate-zips]
+poetry run dbbackup inspect file.ptb [--verbose]
+poetry run dbbackup list-prefixes
+poetry run dbutil list-prefixes
+poetry run dbbackup send-restore-links --table-prefix PREFIX file.ptb [--all | --course-id C | --user-email E] [--send]
+poetry run dbbackup migrate-course --table-prefix PREFIX --from-course-id A --to-course-id B [--user-email E] [--commit]
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">--table-prefix</span></code> is the authoritative table prefix for commands that touch
+DynamoDB. It overrides <code class="docutils literal notranslate"><span class="pre">DYNAMODB_TABLE_PREFIX</span></code> if that environment variable is
+also set.</p>
+<p><code class="docutils literal notranslate"><span class="pre">restore</span></code> and <code class="docutils literal notranslate"><span class="pre">migrate-course</span></code> default to preflight mode. They must inspect
+the target state and report planned writes or blockers, but they must not write
+anything unless <code class="docutils literal notranslate"><span class="pre">--commit</span></code> is present.</p>
+<p><code class="docutils literal notranslate"><span class="pre">backup</span></code> defaults to <code class="docutils literal notranslate"><span class="pre">--all</span></code> when no selector is supplied. Restore and
+<code class="docutils literal notranslate"><span class="pre">send-restore-links</span></code> require an explicit selector so operators choose the
+restore or email scope deliberately.</p>
+<p><code class="docutils literal notranslate"><span class="pre">list-prefixes</span></code> does not take <code class="docutils literal notranslate"><span class="pre">--table-prefix</span></code>. It is available from both
+<code class="docutils literal notranslate"><span class="pre">dbbackup</span></code> and <code class="docutils literal notranslate"><span class="pre">dbutil</span></code> and uses shared prefix-discovery code. It uses the
+current DynamoDB connection settings, lists all tables, reports only prefixes
+for which all application tables exist, and prints a fixed-width table with the
+course, user, and movie counts plus a single UTC <code class="docutils literal notranslate"><span class="pre">from</span></code>/<code class="docutils literal notranslate"><span class="pre">to</span></code> range for each
+complete prefix. The range is the
+minimum and maximum timestamp found in user <code class="docutils literal notranslate"><span class="pre">created</span></code> fields, movie
+<code class="docutils literal notranslate"><span class="pre">created_at</span></code>/<code class="docutils literal notranslate"><span class="pre">uploaded_at</span></code>/<code class="docutils literal notranslate"><span class="pre">last_activity_at</span></code> fields, legacy movie
+<code class="docutils literal notranslate"><span class="pre">date_uploaded</span></code>, optional movie <code class="docutils literal notranslate"><span class="pre">status_updated_at</span></code> fields, and optional
+course <code class="docutils literal notranslate"><span class="pre">created</span></code>/<code class="docutils literal notranslate"><span class="pre">created_at</span></code> fields when those attributes are present.
+Legacy course rows may have no schema-defined creation timestamp, and
+frame/trackpoint rows store frame numbers rather than
+timestamps. In <code class="docutils literal notranslate"><span class="pre">dbbackup</span></code>, if the current AWS SSO token is expired,
+<code class="docutils literal notranslate"><span class="pre">list-prefixes</span></code> asks whether it should run <code class="docutils literal notranslate"><span class="pre">aws</span> <span class="pre">sso</span> <span class="pre">login</span></code> and retry once.</p>
+</section>
+<section id="backup-scope">
+<h2>Backup Scope<a class="headerlink" href="#backup-scope" title="Link to this heading">¶</a></h2>
+<p>Backups include application records needed to reconstruct courses, users,
+movies, and movie annotations:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">users</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">courses</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">course_users</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">movies</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">movie_frames</span></code></p></li>
+</ul>
+<p>Backups do not include:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">api_keys</span></code>;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">unique_emails</span></code>;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">logs</span></code>;</p></li>
+<li><p>frame ZIP artifacts;</p></li>
+<li><p>original uploaded movie files, by default;</p></li>
+<li><p>traced movie artifacts.</p></li>
+</ul>
+<p>Deleted movies are excluded by default. <code class="docutils literal notranslate"><span class="pre">backup</span></code> includes deleted movies only
+when <code class="docutils literal notranslate"><span class="pre">--include-deleted</span></code> is present.</p>
+<p><code class="docutils literal notranslate"><span class="pre">unique_emails</span></code> is regenerated during restore from restored user records.
+<code class="docutils literal notranslate"><span class="pre">api_keys</span></code> are intentionally not restored; after restore, the operator should
+be able to send new login emails to every restored account, creating fresh API
+keys. Audit logs are operational history and are not part of the backup. A
+separate log-dump command should export logs to a syslog-like text file.</p>
+</section>
+<section id="movie-objects">
+<h2>Movie Objects<a class="headerlink" href="#movie-objects" title="Link to this heading">¶</a></h2>
+<p>Each backed-up movie includes the rotated and shrunk MP4 used for analysis.
+This file is distinct from the traced MP4. The backup member name should be
+based on the movie ID, for example <code class="docutils literal notranslate"><span class="pre">movies/{movie_id}.mp4</span></code>.</p>
+<p>Original uploaded movies are not included by default. If an implementation
+later adds an explicit option to include originals, those files should be named
+separately, for example <code class="docutils literal notranslate"><span class="pre">movies/{movie_id}-orig.mp4</span></code>.</p>
+<p>Frame ZIP files are not backed up because they can be large and can be
+regenerated from the rotated and shrunk MP4. Restore should provide an option
+to regenerate omitted ZIP files. The data model needs a separate
+<code class="docutils literal notranslate"><span class="pre">needs_zipfile</span></code> concept so a restored movie can distinguish “trackpoints are
+stale and retracing is needed” from “trackpoints are current but the generated
+ZIP artifact is missing.”</p>
+</section>
+<section id="backup-format">
+<h2>Backup Format<a class="headerlink" href="#backup-format" title="Link to this heading">¶</a></h2>
+<p>The backup file extension is <code class="docutils literal notranslate"><span class="pre">.ptb</span></code>. The file is a ZIP archive containing:</p>
+<ul class="simple">
+<li><p>a manifest JSON file;</p></li>
+<li><p>a human-readable <code class="docutils literal notranslate"><span class="pre">README</span></code> file;</p></li>
+<li><p>one JSON Lines file per backed-up DynamoDB table;</p></li>
+<li><p>one MP4 file per backed-up movie.</p></li>
+</ul>
+<p>The archive layout should be:</p>
+<div class="highlight-text notranslate"><div class="highlight"><pre><span></span>manifest.json
+README
+tables/users.jsonl
+tables/courses.jsonl
+tables/course_users.jsonl
+tables/movies.jsonl
+tables/movie_frames.jsonl
+movies/{movie_id}.mp4
+</pre></div>
+</div>
+<p>Each DynamoDB record is written as one JSON object per line using DynamoDB
+AttributeValue JSON, matching the native DynamoDB API item shape. For example,
+a string attribute is stored as <code class="docutils literal notranslate"><span class="pre">{&quot;S&quot;:</span> <span class="pre">&quot;value&quot;}</span></code> and a number attribute is
+stored as <code class="docutils literal notranslate"><span class="pre">{&quot;N&quot;:</span> <span class="pre">&quot;10.0&quot;}</span></code>. This preserves DynamoDB value types, including
+decimal numbers, sets, binary values, booleans, nulls, lists, and maps.</p>
+<p>The manifest records at least:</p>
+<ul class="simple">
+<li><p>backup format version;</p></li>
+<li><p>Plant Tracer application version;</p></li>
+<li><p>creation timestamp;</p></li>
+<li><p>operator identity, when available;</p></li>
+<li><p>source hostname or environment name, when available;</p></li>
+<li><p>source AWS account/region details, when available;</p></li>
+<li><p>source DynamoDB table prefix;</p></li>
+<li><p>source S3 bucket;</p></li>
+<li><p>selection filters used for the backup;</p></li>
+<li><p>backup options, including whether originals were included;</p></li>
+<li><p>per-table record counts;</p></li>
+<li><p>per-movie object names, sizes, and checksums.</p></li>
+</ul>
+<p>The <code class="docutils literal notranslate"><span class="pre">README</span></code> must contain a full warning that the archive contains student
+data, course data, movie metadata, trackpoint annotations, and movie files. It
+must state that the archive is not password protected, should be stored and
+transmitted as sensitive data, and can be restored into a Plant Tracer
+deployment by an operator with suitable AWS credentials.</p>
+</section>
+<section id="selective-backup">
+<h2>Selective Backup<a class="headerlink" href="#selective-backup" title="Link to this heading">¶</a></h2>
+<p>Backup selection is separate from restore selection. Backup supports:</p>
+<ul class="simple">
+<li><p>all courses, users, and movies, which is the default when no selector is
+supplied;</p></li>
+<li><p>one course by <code class="docutils literal notranslate"><span class="pre">course_id</span></code>;</p></li>
+<li><p>one user by email address;</p></li>
+<li><p>one movie by <code class="docutils literal notranslate"><span class="pre">movie_id</span></code>.</p></li>
+</ul>
+<p>A selective backup must include the dependency records needed to restore the
+selected data consistently.</p>
+<p><code class="docutils literal notranslate"><span class="pre">backup</span></code> prints progress to stderr while it examines DynamoDB tables, runs
+preflight checks, reports the S3 bucket or buckets used by selected movie
+objects, and creates the archive. During preflight it verifies that each
+selected movie MP4 object exists in S3. If a selected movie’s MP4 is
+missing, backup prints a warning, records the warning in the manifest, omits
+that movie row and its frame rows from the archive, and continues backing up
+the remaining data. Other S3 access failures still abort the backup.</p>
+<p>If the output archive already exists, <code class="docutils literal notranslate"><span class="pre">backup</span></code> first reads its manifest. It
+will overwrite the archive only when the existing archive’s source DynamoDB
+table prefix matches the requested <code class="docutils literal notranslate"><span class="pre">--table-prefix</span></code> after normalizing the
+trailing dash. This prevents accidentally replacing the metadata tables from a
+different DynamoDB installation. When overwriting a same-prefix archive,
+<code class="docutils literal notranslate"><span class="pre">backup</span></code> reuses an existing archived movie MP4 if the manifest shows the same
+S3 bucket and key, copying that zip member into the new archive instead of
+downloading it again. If the current S3 object is missing but the same object is
+already present in the existing archive, <code class="docutils literal notranslate"><span class="pre">backup</span></code> records a warning and reuses
+the existing archived copy.</p>
+<p>For a user backup, include the user, the user’s default course, every course
+that contains one of the user’s movies, the corresponding enrollment rows, the
+user’s selected movie rows, their frame rows, and their movie MP4 files.</p>
+<p>For a movie backup, include only the movie owner user record, the movie’s
+course, the needed enrollment row, the movie row, frame rows, and movie MP4.
+Do not include course administrator users solely because they administer the
+movie’s course.</p>
+</section>
+<section id="archive-inspection">
+<h2>Archive Inspection<a class="headerlink" href="#archive-inspection" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">inspect</span></code> defaults to a concise summary: manifest metadata, per-table record
+counts, the S3 bucket or buckets a restore would write movie objects to,
+backed-up movie object count, and total backed-up movie bytes. It does not dump
+individual records by default.</p>
+<p><code class="docutils literal notranslate"><span class="pre">inspect</span> <span class="pre">--verbose</span></code> adds one-line summaries for each backed-up user, course,
+course enrollment, movie, and movie object. Frame records are not dumped
+individually. Instead, verbose inspection reports the total number of frame
+records and groups consecutive frame ranges that have the same trackpoint
+count and trackpoint labels, producing one line per trackpoint set.</p>
+</section>
+<section id="restore-behavior">
+<h2>Restore Behavior<a class="headerlink" href="#restore-behavior" title="Link to this heading">¶</a></h2>
+<p>Restore supports:</p>
+<ul class="simple">
+<li><p>all backed-up data;</p></li>
+<li><p>one course by <code class="docutils literal notranslate"><span class="pre">course_id</span></code>;</p></li>
+<li><p>one user by email address;</p></li>
+<li><p>one movie by <code class="docutils literal notranslate"><span class="pre">movie_id</span></code>.</p></li>
+</ul>
+<p>Restore preserves IDs exactly. If no DynamoDB tables exist under the specified
+<code class="docutils literal notranslate"><span class="pre">--table-prefix</span></code>, restore treats the target prefix as a new installation. In
+preflight mode it reports that the tables will be created and exits without
+creating them. With <code class="docutils literal notranslate"><span class="pre">--commit</span></code>, restore creates the full table set in
+parallel before writing restored rows and movie objects. If any table creation
+fails, restore deletes tables it created and fails before writing S3 objects or
+DynamoDB rows. If only some required target tables exist, restore blocks
+because a partial prefix can hide existing data or schema drift.</p>
+<p>Restore defaults to preflight mode. Without <code class="docutils literal notranslate"><span class="pre">--commit</span></code>, it validates the
+archive, validates target dependencies, reports blockers, planned changes, and
+the S3 bucket or buckets movie objects would be restored to, prints <code class="docutils literal notranslate"><span class="pre">no</span> <span class="pre">restore</span>
+<span class="pre">was</span> <span class="pre">done</span> <span class="pre">because</span> <span class="pre">--commit</span> <span class="pre">was</span> <span class="pre">not</span> <span class="pre">provided</span></code>, and exits without writing
+DynamoDB records or S3 objects. Stderr is enough for preflight failure reporting
+in the first implementation.</p>
+<p>When <code class="docutils literal notranslate"><span class="pre">PLANTTRACER_S3_BUCKET</span></code> is not set, committed restore falls back to the
+bucket recorded for each movie object in the archive. Before writing anything,
+it prints a warning naming the archive bucket or buckets and requires the
+operator to type <code class="docutils literal notranslate"><span class="pre">yes</span></code>. To avoid that confirmation, set
+<code class="docutils literal notranslate"><span class="pre">PLANTTRACER_S3_BUCKET</span></code> explicitly.</p>
+<p>Committed restore uploads movie MP4 objects through a thread pool and prints a
+status line after each movie object is uploaded. It also writes
+<code class="docutils literal notranslate"><span class="pre">movie_frames</span></code> in parallel by <code class="docutils literal notranslate"><span class="pre">movie_id</span></code>; each movie’s frame rows remain
+batched together, and restore prints a status line when all frame rows for that
+movie have been written. <code class="docutils literal notranslate"><span class="pre">--threads</span></code> controls the S3 upload and frame-write
+worker count and defaults to 6.</p>
+<p>If any restored email address already exists in the target <code class="docutils literal notranslate"><span class="pre">users</span></code> table,
+restore blocks before writing data. A future enhancement should allow movies
+from the backup to be restored under the existing email address with a different
+<code class="docutils literal notranslate"><span class="pre">user_id</span></code>. That remapping is out of scope for the first implementation.</p>
+<p>Restore does not restore API keys. The <code class="docutils literal notranslate"><span class="pre">send-restore-links</span></code> command provides
+a follow-up option to send fresh login emails to restored users. That
+login-link command defaults to a dry run; it sends email only when <code class="docutils literal notranslate"><span class="pre">--send</span></code>
+is present.</p>
+<p>Backup records a manifest warning that the backup may not be transactionally
+consistent if the production app is active during backup. The implementation
+does not force downtime because current utilization is low.</p>
+</section>
+<section id="regenerating-zip-artifacts">
+<h2>Regenerating ZIP Artifacts<a class="headerlink" href="#regenerating-zip-artifacts" title="Link to this heading">¶</a></h2>
+<p>Restore should provide an option to regenerate ZIP files after movie records
+and MP4 objects are restored. Regeneration must use the same local/deployed
+processing path used elsewhere in the project: Lambda through HTTP/EventBridge
+or the local Lambda bridge. The restore path should not invent a separate
+video processing implementation.</p>
+<p>When <code class="docutils literal notranslate"><span class="pre">--regenerate-zips</span></code> is present, restore should enqueue regeneration work,
+poll until completion, and print status to stderr once per second using <code class="docutils literal notranslate"><span class="pre">\r</span></code>
+to overprint the current line. It should emit a real newline every 30 seconds so
+logs remain readable. ZIP regeneration times out after 5 minutes.</p>
+<p>The current implementation accepts <code class="docutils literal notranslate"><span class="pre">--regenerate-zips</span></code> but fails closed with
+an operator-facing error because the regeneration queue/polling integration has
+not been implemented yet.</p>
+</section>
+<section id="course-and-movie-migration">
+<h2>Course and Movie Migration<a class="headerlink" href="#course-and-movie-migration" title="Link to this heading">¶</a></h2>
+<p>Course migration is part of <code class="docutils literal notranslate"><span class="pre">src/dbbackup.py</span></code> but is logically separate from
+backup and restore.</p>
+<p>Moving a user or course must update every field and index table needed to avoid
+database inconsistency, including:</p>
+<ul class="simple">
+<li><p>user course lists and default course fields where applicable;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">course_users</span></code> rows;</p></li>
+<li><p>course admin lists when affected;</p></li>
+<li><p>movie <code class="docutils literal notranslate"><span class="pre">course_id</span></code> values;</p></li>
+<li><p>S3 object keys and all S3 URNs stored in movie records or frame records.</p></li>
+</ul>
+<p>Plant Tracer S3 keys include <code class="docutils literal notranslate"><span class="pre">course_id/movie_id</span></code>. Therefore migrating a
+movie to a new course must move or copy its objects under the new course prefix
+and rewrite the stored URNs. Leaving movie objects under the old course prefix
+is not acceptable for the migration command. Course migration should completely
+rewrite affected records to the new course ID rather than preserving the old
+course ID as restore metadata.</p>
+</section>
+<section id="security-and-privacy">
+<h2>Security and Privacy<a class="headerlink" href="#security-and-privacy" title="Link to this heading">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">.ptb</span></code> files are not password protected in the first implementation. Operators
+must treat them as sensitive student-data archives. The archive <code class="docutils literal notranslate"><span class="pre">README</span></code> must
+make this explicit.</p>
+<p>Because the backup includes movie files and metadata, it should be stored only
+where student data is allowed, transmitted only over approved channels, and
+deleted when it is no longer operationally needed.</p>
+</section>
+<section id="testing-requirements">
+<h2>Testing Requirements<a class="headerlink" href="#testing-requirements" title="Link to this heading">¶</a></h2>
+<p>Backup and restore tests belong under the existing <code class="docutils literal notranslate"><span class="pre">make</span> <span class="pre">pytest</span></code> target.
+Tests must use DynamoDB Local and MinIO through existing fixtures and Makefile
+environment, not mocks.</p>
+<p>The first substantive integration test:</p>
+<ul class="simple">
+<li><p>creates one course with one user and one movie;</p></li>
+<li><p>backs up that single course;</p></li>
+<li><p>verifies that restore without <code class="docutils literal notranslate"><span class="pre">--commit</span></code> performs preflight only;</p></li>
+<li><p>restores with <code class="docutils literal notranslate"><span class="pre">--commit</span></code> and verifies the restored DynamoDB records and MP4
+object match the source backup data;</p></li>
+<li><p>restores or migrates the same data to a different course and verifies that course
+references and S3 object keys are consistent.</p></li>
+</ul>
+<p><code class="docutils literal notranslate"><span class="pre">inspect</span></code> is also covered so operators can view manifest data and counts
+before running restore.</p>
+</section>
+<section id="open-follow-ups">
+<h2>Open Follow-Ups<a class="headerlink" href="#open-follow-ups" title="Link to this heading">¶</a></h2>
+<p>The first implementation depends on or is intentionally deferring these related
+issues:</p>
+<ul class="simple">
+<li><p><a class="reference external" href="https://github.com/Plant-Tracer/webapp/issues/1081">#1081</a>:
+distinguish missing ZIP artifacts from stale trace data.</p></li>
+<li><p><a class="reference external" href="https://github.com/Plant-Tracer/webapp/issues/1082">#1082</a>:
+add a syslog-style audit log dump command.</p></li>
+<li><p><a class="reference external" href="https://github.com/Plant-Tracer/webapp/issues/1083">#1083</a>:
+allow restore when the target email address already exists.</p></li>
+</ul>
+</section>
+<section id="documentation">
+<h2>Documentation<a class="headerlink" href="#documentation" title="Link to this heading">¶</a></h2>
+<p>When this feature is implemented, update at least:</p>
+<ul class="simple">
+<li><p>this page;</p></li>
+<li><p><a class="reference internal" href="DynamoDB.html"><span class="doc">DynamoDB and Plant Tracer</span></a>, if table contents or restore ordering change;</p></li>
+<li><p><a class="reference internal" href="S3.html"><span class="doc">S3 and Plant Tracer</span></a>, if object layout or migration rules change;</p></li>
+<li><p><a class="reference internal" href="EnvironmentVariables.html"><span class="doc">Environment Variables</span></a>, if new runtime variables are introduced;</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">docs/ReleaseHistory.rst</span></code>.</p></li>
+</ul>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">Plant Tracer Web Application</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../UserTutorial.html">Plant Tracer Web App Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../CalculationReference.html">Calculation Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../VideoResizing.html">Resizing Video Files</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../ReleaseHistory.html">Plant-Tracer/webapp Releases</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Developer Documentation</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="DeveloperSetup.html">Developer Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="DevSetupAmazonLinuxEC2.html">Developer Setup On Amazon Linux 2023 EC2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="DevSetupUbuntu.html">Setting Up Plant Tracer On Ubuntu 24.04</a></li>
+<li class="toctree-l2"><a class="reference internal" href="DeveloperSetup_Mac.html">Developer Setup Mac</a></li>
+<li class="toctree-l2"><a class="reference internal" href="WindowsDevSetup.html">Windows Developer Setup Notes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Local%20Development%20and%20Github%20Actions.html">Local Development and GitHub Actions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Installation.html">Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="EnvironmentVariables.html">Environment Variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="IdentityManagement.html">Identity Management</a></li>
+<li class="toctree-l2"><a class="reference internal" href="demo_mode.html">Demo Mode</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuring_aws.html">Configuring AWS</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deploy_ec2.html">Deploying To EC2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="DataOwnership.html">Data Ownership</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Backup and Restore</a></li>
+<li class="toctree-l2"><a class="reference internal" href="DynamoDB.html">DynamoDB and Plant Tracer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="S3.html">S3 and Plant Tracer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="MOVIE_METADATA.html">Movie attribution and research metadata</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ArchitectureDesign.html">Architecture Design Principles</a></li>
+<li class="toctree-l2"><a class="reference internal" href="LambdaWebMigration.html">Lambda Web Migration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ClientLambdaAPI.html">Client Lambda API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="FlaskAPI.html">Flask API Reference</a></li>
+<li class="toctree-l2"><a class="reference internal" href="TrackpointCoordinateSystem.html">Trackpoint Coordinate System</a></li>
+<li class="toctree-l2"><a class="reference internal" href="trim-design.html">Video Trim Design</a></li>
+<li class="toctree-l2"><a class="reference internal" href="AnalysisResults.html">Analyze: Aggregate Result Statistics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ProcessingPhases.html">Plant Tracer Movie Processing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="TracingLocks.html">Tracing locks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="THEORY_OF_DESIGN.html">Web App Theory Of Design</a></li>
+<li class="toctree-l2"><a class="reference internal" href="NOTES_ON_SIMPLIFYING.html">Notes on simplfying the implementation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="notes_on_resizing.html">Notes on Resizing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="optional-dict-keys-scan.html">Optional / Possibly Missing Dict Keys</a></li>
+<li class="toctree-l2"><a class="reference internal" href="CODING_STANDARDS.html">Coding Standards</a></li>
+<li class="toctree-l2"><a class="reference internal" href="TechDebt.html">Technical Debt Review</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ReleaseProcess.html">Release Process</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gallery.html">Gallery Of Plant Videos</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gallery_learning_plan.html">Gallery Learning Plan</a></li>
+<li class="toctree-l2"><a class="reference internal" href="movie_player.html">Movie Player Design</a></li>
+<li class="toctree-l2"><a class="reference internal" href="resources.html">Bibliography</a></li>
+<li class="toctree-l2"><a class="reference internal" href="user%20story%20-%20tracking.html">Upload And Track User Story</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sam_notes.html">Notes on Deploying to SAM</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mv1.html">Configuration on mv1</a></li>
+</ul>
+</li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="index.html">Developer Documentation</a><ul>
+      <li>Previous: <a href="DataOwnership.html" title="previous chapter">Data Ownership</a></li>
+      <li>Next: <a href="DynamoDB.html" title="next chapter">DynamoDB and Plant Tracer</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2023-2026 Simson Garfinkel, Steven E. Barber, JoAnn Juzefyk, Eric D. Brenner.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../_sources/Development/BackupRestore.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
