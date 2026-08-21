@@ -282,7 +282,7 @@ def func_audit() -> str:
 
 @app.route('/admin', methods=GET)
 def func_admin() -> str | tuple[str, int]:
-    """Serve the read-only admin page."""
+    """Serve the role-scoped admin page."""
     user_dict = apikey.get_user_dict()
     if not odb.admin_read_access(user_dict).allowed:
         return "<h1>403 Forbidden</h1><p>Admin read access required.</p>", 403

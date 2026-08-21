@@ -62,13 +62,12 @@ from . import local_queue
 from . import mpeg_jpeg_zip
 from . import tracer
 
-__version__ = "0.1.0"
 LOG_ID_STATUS_PING = "lambda-status-ping"
 LOGGER = Logger(service="planttracer")
 
 class MovieInfo(NamedTuple):
-    signed_url: str                    #
-    signed_zipfile_url: str            # TODO
+    signed_url: str
+    signed_zipfile_url: str | None
     rotation: int
 
 
@@ -120,8 +119,14 @@ def validate_movie_access(*, api_key=None, movie_id=None, require_edit=False):
         raise ValueError("movie_id is invalid") from e
     return ddbo, user_id, movie
 
-def queue_tracing(_api_key:str, movie_id:str, frame_start:int, frame_end:int|None=None,
-                  job_id:str|None=None):
+def async_queue_mode() -> str:
+    """Return the configured local/deployed asynchronous-work mode."""
+    return (os.environ.get("TRACING_QUEUE_MODE")
+            or os.environ.get("TRACKING_QUEUE_MODE", "")).strip().lower()
+
+
+def queue_tracing(_api_key: str, movie_id: str, frame_start: int,
+                  frame_end: int | None = None, job_id: str | None = None):
     """Dispatch tracing through EventBridge or the local debug queue."""
     job = async_work.TraceJob(
         movie_id=movie_id,
@@ -134,22 +139,20 @@ def queue_tracing(_api_key:str, movie_id:str, frame_start:int, frame_end:int|Non
         safe_msg["job_id"] = job_id
     if frame_end is not None:
         safe_msg["frame_end"] = int(frame_end)
-    queue_mode = (os.environ.get("TRACING_QUEUE_MODE")
-                  or os.environ.get("TRACKING_QUEUE_MODE", "")).strip().lower()
+    queue_mode = async_queue_mode()
     if queue_mode == "local":
         LOGGER.info("Enqueuing follow-up local batch: %s", safe_msg)
         local_queue.enqueue_message(job.model_dump())
         return {"error": False, "message": safe_msg}
     LOGGER.info("Publishing follow-up EventBridge work: %s", safe_msg)
     async_work.publish_job(job)
-    return {"error":False, "message": safe_msg}
+    return {"error": False, "message": safe_msg}
 
 
 def queue_post_upload(movie_id: str):
     """Dispatch post-upload inspection through EventBridge or local work."""
     job = async_work.PostUploadJob(movie_id=movie_id)
-    queue_mode = (os.environ.get("TRACING_QUEUE_MODE")
-                  or os.environ.get("TRACKING_QUEUE_MODE", "")).strip().lower()
+    queue_mode = async_queue_mode()
     if queue_mode == "local":
         if local_queue.worker_running():
             local_queue.enqueue_message(job.model_dump())

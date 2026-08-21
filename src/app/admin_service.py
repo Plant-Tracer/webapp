@@ -1,4 +1,4 @@
-"""Read-only admin summary service."""
+"""Admin summary models and service operations."""
 
 import base64
 import binascii

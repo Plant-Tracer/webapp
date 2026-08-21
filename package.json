@@ -1,4 +1,6 @@
 {
+  "name": "planttracer-webapp",
+  "private": true,
   "dependencies": {
     "crypto-js": "^4.2.0",
     "jslint": "^0.12.1",
@@ -42,7 +44,14 @@
     ],
     "modulePathIgnorePatterns": [
       "<rootDir>/.venv",
-      "<rootDir>/lambda-resize/.venv"
+      "<rootDir>/lambda-resize/.venv",
+      "<rootDir>/.tmp/"
+    ],
+    "testPathIgnorePatterns": [
+      "<rootDir>/.tmp/"
+    ],
+    "coveragePathIgnorePatterns": [
+      "<rootDir>/.tmp/"
     ],
     "testEnvironment": "jsdom",
     "coverageDirectory": "coverage",

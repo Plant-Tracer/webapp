@@ -226,29 +226,29 @@ function movieSizeText(movie) {
   return details.length ? details.join(" · ") : "—";
 }
 
-async function fetchMovieMedia(movieId) {
-  const response = await fetch(
-    `${API_BASE}api/admin/movies/${encodeURIComponent(movieId)}/media`,
-    { credentials: "same-origin" },
-  );
+async function fetchAdminJson(url, failureLabel, options = {}) {
+  const response = await fetch(url, { ...options, credentials: "same-origin" });
   const payload = await response.json();
   if (!response.ok || payload.error) {
-    throw new Error(payload.message || `Movie media request failed with HTTP ${response.status}`);
+    throw new Error(payload.message || `${failureLabel} failed with HTTP ${response.status}`);
   }
   return payload;
 }
 
 
-async function fetchMovieStorageHealth(movieId) {
-  const response = await fetch(
-    `${API_BASE}api/admin/movies/${encodeURIComponent(movieId)}/storage-health`,
-    { credentials: "same-origin" },
+async function fetchMovieMedia(movieId) {
+  return fetchAdminJson(
+    `${API_BASE}api/admin/movies/${encodeURIComponent(movieId)}/media`,
+    "Movie media request",
   );
-  const payload = await response.json();
-  if (!response.ok || payload.error) {
-    throw new Error(payload.message || `Storage health failed with HTTP ${response.status}`);
-  }
-  return payload;
+}
+
+
+async function fetchMovieStorageHealth(movieId) {
+  return fetchAdminJson(
+    `${API_BASE}api/admin/movies/${encodeURIComponent(movieId)}/storage-health`,
+    "Storage health",
+  );
 }
 
 
@@ -512,16 +512,11 @@ async function submitCourseCreate(form) {
   formStatus.className = "";
   formStatus.textContent = "Creating course...";
   try {
-    const response = await fetch(`${API_BASE}api/admin/courses`, {
+    const payload = await fetchAdminJson(`${API_BASE}api/admin/courses`, "Course creation", {
       method: "POST",
-      credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(Object.fromEntries(fields.entries())),
     });
-    const payload = await response.json();
-    if (!response.ok || payload.error) {
-      throw new Error(payload.message || `Course creation failed with HTTP ${response.status}`);
-    }
     document.getElementById("admin-course-dialog").close();
     const status = document.getElementById("admin-status");
     try {
@@ -714,14 +709,7 @@ async function fetchAdminPage(section, marker = null) {
   if (marker) {
     params.set(TABLE_CONFIG[section].markerParam, marker);
   }
-  const response = await fetch(`${API_BASE}api/admin/summary?${params}`, {
-    credentials: "same-origin",
-  });
-  const payload = await response.json();
-  if (!response.ok || payload.error) {
-    throw new Error(payload.message || `Admin summary failed with HTTP ${response.status}`);
-  }
-  return payload;
+  return fetchAdminJson(`${API_BASE}api/admin/summary?${params}`, "Admin summary");
 }
 
 async function loadRemainingPages(table, marker) {

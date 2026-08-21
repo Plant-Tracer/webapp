@@ -182,7 +182,7 @@ def admin_create_for_courses(*, admin_email, admin_name, course_ids,
 
 
 def send_course_created_notification(*, course, admin_user, planttracer_endpoint):
-    """Email one course administrator a setup link for a created course."""
+    """Email one course administrator a setup link for a course."""
     api_key = odb.get_first_api_key_for_user(admin_user.user_id)
     if api_key is None:
         api_key = odb.make_new_api_key_for_user_id(user_id=admin_user.user_id)

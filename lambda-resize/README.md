@@ -1,8 +1,9 @@
 # lambda-resize
 
-`lambda-resize` is the Plant Tracer video/frame/tracing service. It handles HTTP,
-S3 Object Created events, and custom asynchronous-work events from EventBridge.
-It can also run locally through `make run-local-lambda-debug`.
+`lambda-resize` is the Plant Tracer video/frame/tracing service. Its entry point
+has two invocation modes: HTTP API requests and pushed EventBridge events. The
+EventBridge adapter accepts both S3 Object Created and stack-scoped custom work
+events. It can also run locally through `make run-local-lambda-debug`.
 
 ## HTTP Routes
 
@@ -39,6 +40,11 @@ It can also run locally through `make run-local-lambda-debug`.
   Lambda. There is no SQS event-source mapping and therefore no idle polling.
 - Failed asynchronous invocations go to an unpolled 14-day SQS dead-letter
   queue and raise the stack's dead-letter alarm.
+
+Do not replace the EventBridge rules with an SQS Lambda event-source mapping:
+Lambda implements SQS triggers with managed pollers, so that would reintroduce
+idle receives. The SQS queue in the stack is failure storage, not an invocation
+path.
 
 ## Upload Events
 

@@ -8,7 +8,7 @@ from botocore.exceptions import ClientError
 import pytest
 from pydantic import BaseModel
 
-from resize_app import lambda_tracing_handler, local_queue, movie_glue, upload_event
+from resize_app import lambda_tracing_handler, local_queue, main, movie_glue, upload_event
 from resize_app.src.app import odb, odb_movie_data, s3_presigned
 from resize_app.src.app.constants import C
 from tests.constants import TEST_PLANTMOVIE_PATH
@@ -113,10 +113,10 @@ def test_eventbridge_upload_moves_object_processes_metadata_and_logs(
         key=pending.staging_key,
         size=len(pending.movie_data),
     )
-    local_queue.start_worker(processor=lambda_tracing_handler.process_queue_message)
+    local_queue.start_worker(processor=lambda_tracing_handler.process_local_queue_message)
     try:
-        completed = upload_event.process_upload_event(event)
-        assert completed.total_bytes == len(pending.movie_data)
+        completed = main.process_eventbridge_event(event)
+        assert completed["total_bytes"] == len(pending.movie_data)
         deadline = time.time() + 10
         while time.time() < deadline:
             movie = ddbo.get_movie(pending.movie_id)
@@ -146,7 +146,7 @@ def test_eventbridge_upload_moves_object_processes_metadata_and_logs(
             event_id="event-2",
         )
         duplicate = upload_event.process_upload_event(duplicate_event)
-        assert duplicate.uploaded_at == completed.uploaded_at
+        assert duplicate.uploaded_at == completed["uploaded_at"]
         completed_log_id = (
             f"{pending.movie_id}:{C.LOG_EVENT_MOVIE_RESIZE_COMPLETED}"
         )

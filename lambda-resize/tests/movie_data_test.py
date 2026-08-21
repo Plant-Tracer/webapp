@@ -102,6 +102,13 @@ def test_process_upload_requires_authentication_and_movie_id():
     assert response["statusCode"] == 401
 
     response = lambda_handler(
+        make_post_event(path, None, {"X-API-Key": "test-key"}),
+        DummyContext(),
+    )
+    assert response["statusCode"] == 400
+    assert "Request body" in response["body"]
+
+    response = lambda_handler(
         make_post_event(path, None, {"x-api-key": "test-key"}),
         DummyContext(),
     )
