@@ -793,8 +793,8 @@ sam-build: $(REQ)
 	$(MAKE) vend-lambda-resize
 	uv run pylint $(PYLINT_OPTS) lambda-web/src/lambda_web
 	uv run pylint $(PYLINT_OPTS) lambda-resize/src
-	poetry check
-	poetry lock
+	poetry check --lock
+	uv lock --check
 	finch vm start || echo AWS finch is already running
 	sam validate --lint
 	@echo cfn-lint requires a valid AWS_REGION so we use us-east-1

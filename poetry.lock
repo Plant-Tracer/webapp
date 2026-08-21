@@ -1829,7 +1829,7 @@ version = "0.0.2"
 description = "Pure Python Basic HTML validatation library - for CI, django tests, etc.  Based on HTML5lib"
 optional = false
 python-versions = "*"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "html5validate-0.0.2.tar.gz", hash = "sha256:13a2b743f7d5e92c6cb6e5ae440d0eab9d5f9a384c9e9b9a23a0d5a7d8df1519"},
 ]
