@@ -1783,9 +1783,9 @@ def _course_admin_transaction(*, admin_id, course_id, assigned,
         if assigned:
             if not admin.get(ENABLED):
                 raise DisabledCourseAdmin(admin_id)
-            new_admin_courses = sorted(set(old_admin_courses).union((course_id,)))
-            new_courses = sorted(set(old_courses).union((course_id,)))
-            new_course_admins = sorted(set(old_course_admins).union((admin_id,)))
+            new_admin_courses = list(dict.fromkeys((*old_admin_courses, course_id)))
+            new_courses = list(dict.fromkeys((*old_courses, course_id)))
+            new_course_admins = list(dict.fromkeys((*old_course_admins, admin_id)))
             changed = (
                 new_admin_courses != old_admin_courses
                 or new_courses != old_courses
@@ -1810,6 +1810,27 @@ def _course_admin_transaction(*, admin_id, course_id, assigned,
                 assigned=assigned, changed=False,
             )
 
+        user_condition = (
+            'attribute_exists(#user_id) '
+            'AND #admin_for_courses=:old_admin_for_courses '
+            'AND #courses=:old_courses'
+        )
+        user_names = {
+            '#user_id': USER_ID,
+            '#admin_for_courses': ADMIN_FOR_COURSES,
+            '#courses': COURSES,
+        }
+        user_values = {
+            ':new_admin_for_courses': new_admin_courses,
+            ':new_courses': new_courses,
+            ':old_admin_for_courses': old_admin_courses,
+            ':old_courses': old_courses,
+        }
+        if assigned:
+            user_condition += ' AND #enabled=:enabled'
+            user_names['#enabled'] = ENABLED
+            user_values[':enabled'] = admin[ENABLED]
+
         transaction = [
             {
                 'Update': {
@@ -1818,22 +1839,9 @@ def _course_admin_transaction(*, admin_id, course_id, assigned,
                     'UpdateExpression': (
                         'SET #admin_for_courses=:new_admin_for_courses, #courses=:new_courses'
                     ),
-                    'ConditionExpression': (
-                        'attribute_exists(#user_id) '
-                        'AND #admin_for_courses=:old_admin_for_courses '
-                        'AND #courses=:old_courses'
-                    ),
-                    'ExpressionAttributeNames': {
-                        '#user_id': USER_ID,
-                        '#admin_for_courses': ADMIN_FOR_COURSES,
-                        '#courses': COURSES,
-                    },
-                    'ExpressionAttributeValues': {
-                        ':new_admin_for_courses': new_admin_courses,
-                        ':new_courses': new_courses,
-                        ':old_admin_for_courses': old_admin_courses,
-                        ':old_courses': old_courses,
-                    },
+                    'ConditionExpression': user_condition,
+                    'ExpressionAttributeNames': user_names,
+                    'ExpressionAttributeValues': user_values,
                 },
             },
             {

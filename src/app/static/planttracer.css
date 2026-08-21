@@ -444,7 +444,7 @@ div.mtable td.check {
 }
 
 .admin-dialog-heading {
-  align-items: start;
+  align-items: flex-start;
   display: flex;
   justify-content: space-between;
 }

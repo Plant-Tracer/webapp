@@ -591,7 +591,17 @@ def test_course_admin_mutations_are_idempotent_without_duplicate_audit(client, n
     url = course_admin_url(course_id, target_id)
 
     assert client.put(url).json["changed"] is True
+    reversed_admins = sorted(
+        odb.lookup_course_by_id(course_id=course_id)[odb.ADMINS_FOR_COURSE],
+        reverse=True,
+    )
+    ddbo.update_table(
+        ddbo.courses,
+        course_id,
+        {odb.ADMINS_FOR_COURSE: reversed_admins},
+    )
     assert client.put(url).json["changed"] is False
+    assert odb.lookup_course_by_id(course_id=course_id)[odb.ADMINS_FOR_COURSE] == reversed_admins
     assert client.delete(url).json["changed"] is True
     assert client.delete(url).json["changed"] is False
 
