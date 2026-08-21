@@ -79,7 +79,8 @@ Unreleased Summary
 ******************
     * Developer: package the S3 EventBridge configuration utility as
       ``uv run s3_upload_trigger`` and consistently execute Python programs
-      from Makefile targets through ``uv run``.
+      from Makefile targets through ``uv run``, with a complete standard
+      development dependency group for clean-checkout builds.
     * Deployment: automatically repair and verify the selected S3 bucket's
       browser CORS policy and EventBridge delivery after every deployment and
       again before the deployed workflow creates test data, preserve other

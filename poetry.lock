@@ -37,7 +37,7 @@ version = "1.18.4"
 description = "A database migration tool for SQLAlchemy."
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "alembic-1.18.4-py3-none-any.whl", hash = "sha256:a5ed4adcf6d8a4cb575f3d759f071b03cd6e5c7618eb796cb52497be25bfe19a"},
     {file = "alembic-1.18.4.tar.gz", hash = "sha256:cb6e1fd84b6174ab8dbb2329f86d631ba9559dd78df550b57804d607672cedbc"},
@@ -57,7 +57,7 @@ version = "5.3.1"
 description = "Low-level AMQP client for Python (fork of amqplib)."
 optional = false
 python-versions = ">=3.6"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "amqp-5.3.1-py3-none-any.whl", hash = "sha256:43b3319e1b4e7d1251833a93d672b4af1e40f3d632d479b98661a95f117880a2"},
     {file = "amqp-5.3.1.tar.gz", hash = "sha256:cddc00c725449522023bad949f70fff7b48f0b1ade74d170a6f10ab044739432"},
@@ -135,7 +135,7 @@ version = "3.4.0"
 description = "Friendly state machines for Python."
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "automaton-3.4.0-py3-none-any.whl", hash = "sha256:d7c3d4b173e4935102a3e9cfe7fc0e434f1e2afbfb90d1e9c713f28e85f6c85e"},
     {file = "automaton-3.4.0.tar.gz", hash = "sha256:4d4fa68069fc4706f4a294fb0a0d49972103c717a6bae41ef372a369112c5519"},
@@ -154,7 +154,7 @@ version = "0.6.0"
 description = "A library to provide automatic paging for console output"
 optional = false
 python-versions = ">=3.6"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "autopage-0.6.0-py3-none-any.whl", hash = "sha256:87566f08a7d4ba20e346515d26ba1132f2fac4e5619ffba3079e63c28e5df98f"},
     {file = "autopage-0.6.0.tar.gz", hash = "sha256:42d07de90de63e83762828028bfd56d19906a18f7c951ef6eef3e9ad48a3071d"},
@@ -296,7 +296,7 @@ version = "5.0.0"
 description = "Modern password hashing for your software and your servers"
 optional = false
 python-versions = ">=3.8"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "bcrypt-5.0.0-cp313-cp313t-macosx_10_12_universal2.whl", hash = "sha256:f3c08197f3039bec79cee59a606d62b96b16669cff3949f21e74796b6e3cd2be"},
     {file = "bcrypt-5.0.0-cp313-cp313t-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:200af71bc25f22006f4069060c88ed36f8aa4ff7f53e67ff04d2ab3f1e79a5b2"},
@@ -396,7 +396,7 @@ version = "1.9.0"
 description = "Fast, simple object-to-object and broadcast signaling"
 optional = false
 python-versions = ">=3.9"
-groups = ["lambda-web", "vm"]
+groups = ["dev", "lambda-web", "vm"]
 files = [
     {file = "blinker-1.9.0-py3-none-any.whl", hash = "sha256:ba0efaa9080b619ff2f3459d1d500c57bddea4a6b424b60a91141db6fd2f08bc"},
     {file = "blinker-1.9.0.tar.gz", hash = "sha256:b4ce2265a7abece45e7cc896e98dbebe6cead56bcf805a3d23136d145f5445bf"},
@@ -921,7 +921,7 @@ version = "7.1.4"
 description = "Extensible memoizing collections and decorators"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "cachetools-7.1.4-py3-none-any.whl", hash = "sha256:323dc4127934744db5b54eb4924482d7edafbf9554e820d1531c2e08c0e4ef54"},
     {file = "cachetools-7.1.4.tar.gz", hash = "sha256:437f55a4e0c1b01a4f3077cc470e6991d47430970e36fbcb77e2be0df4fc1cd6"},
@@ -1209,7 +1209,7 @@ version = "8.4.1"
 description = "Composable command line interface toolkit"
 optional = false
 python-versions = ">=3.10"
-groups = ["lambda-web", "vm"]
+groups = ["dev", "lambda-web", "vm"]
 files = [
     {file = "click-8.4.1-py3-none-any.whl", hash = "sha256:482be17c6991b8c19c5429a1e995d9b0efdbb63172824c41f99965dc0ade8ec2"},
     {file = "click-8.4.1.tar.gz", hash = "sha256:918b5633eddf6b41c32d4f454bf0de810065c74e3f7dbf8ee5452f8be88d3e96"},
@@ -1224,7 +1224,7 @@ version = "4.14.0"
 description = "Command Line Interface Formulation Framework"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "cliff-4.14.0-py3-none-any.whl", hash = "sha256:2ca28f61cb7bf0b3b3f3061955b22e07f40a270a8837d1ce0f462f985bf7d77f"},
     {file = "cliff-4.14.0.tar.gz", hash = "sha256:66f2fbb0e18c348e44794014cfed92bf6522ef997e0c096df199dad195182f8a"},
@@ -1243,7 +1243,7 @@ version = "4.0.0"
 description = "cmd2 - quickly build feature-rich and user-friendly interactive command line applications in Python"
 optional = false
 python-versions = ">=3.11"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "cmd2-4.0.0-py3-none-any.whl", hash = "sha256:466d1c5ff0237c221e56a63342338f3b32acd57e7e90269d54a9e866ca6a4a87"},
     {file = "cmd2-4.0.0.tar.gz", hash = "sha256:97956c491be8ae2c5239ba1e7658b52804f0e54b401b15cae80c6b85c9dce74f"},
@@ -1282,7 +1282,7 @@ files = [
     {file = "colorama-0.4.6-py2.py3-none-any.whl", hash = "sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6"},
     {file = "colorama-0.4.6.tar.gz", hash = "sha256:08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44"},
 ]
-markers = {dev = "sys_platform == \"win32\"", lambda-web = "platform_system == \"Windows\"", vm = "platform_system == \"Windows\""}
+markers = {dev = "platform_system == \"Windows\" or sys_platform == \"win32\"", lambda-web = "platform_system == \"Windows\"", vm = "platform_system == \"Windows\""}
 
 [[package]]
 name = "constantly"
@@ -1406,7 +1406,7 @@ version = "0.5.8"
 description = "Reliable and fast NGINX configuration file parser."
 optional = false
 python-versions = "*"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "crossplane-0.5.8-py2.py3-none-any.whl", hash = "sha256:ede8e83c9e3a58dfc37c69f5ee065d4b3adc44ae42749ced496962a0e7f545b7"},
     {file = "crossplane-0.5.8.tar.gz", hash = "sha256:b193bd8b963a041d5414ea18dcbb1c55b5424fee3d73bfa1809124605b322101"},
@@ -1480,7 +1480,7 @@ version = "3.1.0"
 description = "A collection of Python deprecation patterns and strategies that help you collect your technical debt in a non-destructive manner."
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "debtcollector-3.1.0-py3-none-any.whl", hash = "sha256:c64e49a66c0b71289620fc2fdf89c03d740bddb20576ddd4f04ddc01da946668"},
     {file = "debtcollector-3.1.0.tar.gz", hash = "sha256:278a45608cf16e79c0ae10851d869185c6b78f86610df8f27a451a18c1fec732"},
@@ -1495,7 +1495,7 @@ version = "5.3.1"
 description = "Decorators for Humans"
 optional = false
 python-versions = ">=3.8"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "decorator-5.3.1-py3-none-any.whl", hash = "sha256:f47fe6fdbd2edd623ecfe36875d37aba411624e2670dd395dddae1358689bb3c"},
     {file = "decorator-5.3.1.tar.gz", hash = "sha256:4cbcdd55a6efadb9dbea26b858f4fb3264567b52d69ca0d25b721b553f60ea82"},
@@ -1523,7 +1523,7 @@ version = "2.8.0"
 description = "DNS toolkit"
 optional = false
 python-versions = ">=3.10"
-groups = ["lambda-web", "vm"]
+groups = ["dev", "lambda-web", "vm"]
 files = [
     {file = "dnspython-2.8.0-py3-none-any.whl", hash = "sha256:01d9bbc4a2d76bf0db7c1f729812ded6d912bd318d3b1cf81d30c0f845dbf3af"},
     {file = "dnspython-2.8.0.tar.gz", hash = "sha256:181d3c6996452cb1189c4046c61599b84a5a86e099562ffde77d26984ff26d0f"},
@@ -1556,7 +1556,7 @@ version = "1.5.0"
 description = "A caching front-end based on the Dogpile lock."
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "dogpile_cache-1.5.0-py3-none-any.whl", hash = "sha256:dc7b47d37844db15e8fdc0243c1b58857a2ddc52a5118237a97127bac200e18d"},
     {file = "dogpile_cache-1.5.0.tar.gz", hash = "sha256:849c5573c9a38f155cd4173103c702b637ede0361c12e864876877d0cd125eec"},
@@ -1581,7 +1581,7 @@ version = "2.3.0"
 description = "A robust email address syntax and deliverability validation library."
 optional = false
 python-versions = ">=3.8"
-groups = ["lambda-web", "vm"]
+groups = ["dev", "lambda-web", "vm"]
 files = [
     {file = "email_validator-2.3.0-py3-none-any.whl", hash = "sha256:80f13f623413e6b197ae73bb10bf4eb0908faf509ad8362c5edeb0be7fd450b4"},
     {file = "email_validator-2.3.0.tar.gz", hash = "sha256:9fc05c37f2f6cf439ff414f8fc46d917929974a82244c20eb10231ba60c54426"},
@@ -1597,7 +1597,7 @@ version = "0.41.0"
 description = "Highly concurrent networking library"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "eventlet-0.41.0-py3-none-any.whl", hash = "sha256:bc22396093cb4119ff7007776be6a5348a613ccd42eeb0f9519853a6efcbcabe"},
     {file = "eventlet-0.41.0.tar.gz", hash = "sha256:35df85f0ccd3e73effb6fd9f1ceae46b500b966c7da1817289c323a307bd397b"},
@@ -1616,7 +1616,7 @@ version = "0.20"
 description = "A python package that provides useful locks"
 optional = false
 python-versions = ">=3.6"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "fasteners-0.20-py3-none-any.whl", hash = "sha256:9422c40d1e350e4259f509fb2e608d6bc43c0136f79a00db1b49046029d0b3b7"},
     {file = "fasteners-0.20.tar.gz", hash = "sha256:55dce8792a41b56f727ba6e123fcaee77fd87e638a6863cec00007bfea84c8d8"},
@@ -1640,7 +1640,7 @@ version = "3.1.3"
 description = "A simple framework for building complex web applications."
 optional = false
 python-versions = ">=3.9"
-groups = ["lambda-web", "vm"]
+groups = ["dev", "lambda-web", "vm"]
 files = [
     {file = "flask-3.1.3-py3-none-any.whl", hash = "sha256:f4bcbefc124291925f1a26446da31a5178f9483862233b23c0c96a20701f670c"},
     {file = "flask-3.1.3.tar.gz", hash = "sha256:0ef0e52b8a9cd932855379197dd8f94047b359ca0a78695144304cb45f87c9eb"},
@@ -1664,7 +1664,7 @@ version = "3.3.0"
 description = "Useful additions to futures, from the future."
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "futurist-3.3.0-py3-none-any.whl", hash = "sha256:3ba50d57b6086e3ba3d8bf87402218ab9fc4e280592cf5a19a49c0b375c3a69d"},
     {file = "futurist-3.3.0.tar.gz", hash = "sha256:3b84fdce52eb5094b486d95b8b9b1117fdf040f364a96969fbc22df955f42558"},
@@ -1679,7 +1679,7 @@ version = "3.5.2"
 description = "Lightweight in-process concurrent programming"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "greenlet-3.5.2-cp310-cp310-macosx_11_0_universal2.whl", hash = "sha256:9df9daae96848508450011d0d86ed7c95f8829a354ce438284a77b24896fd1f8"},
     {file = "greenlet-3.5.2-cp310-cp310-manylinux_2_24_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:01e32e9d2b1714a2b06184cb3071ff2a2fd9bc7d065e39198ab21f7253dad421"},
@@ -1772,7 +1772,7 @@ version = "26.0.0"
 description = "WSGI HTTP Server for UNIX"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "gunicorn-26.0.0-py3-none-any.whl", hash = "sha256:40233d26a5f0d1872916188c276e21641155111c2853f0c2cd55260aec0d24fc"},
     {file = "gunicorn-26.0.0.tar.gz", hash = "sha256:ca9346f85e3a4aeeb64d491045c16b9a35647abd37ea15efe53080eb8b090baf"},
@@ -1807,7 +1807,7 @@ version = "1.1"
 description = "HTML parser based on the WHATWG HTML specification"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
-groups = ["lambda-web", "vm"]
+groups = ["dev", "lambda-web", "vm"]
 files = [
     {file = "html5lib-1.1-py2.py3-none-any.whl", hash = "sha256:0d78f8fde1c230e99fe37986a60526d7049ed4bf8a9fadbad5f00e22e58e041d"},
     {file = "html5lib-1.1.tar.gz", hash = "sha256:b2e5b40261e20f354d198eae92afc10d750afb487ed5e50f9c4eaf07c184146f"},
@@ -1870,7 +1870,7 @@ version = "2.37.3"
 description = "Read and write images and video across all major formats. Supports scientific and volumetric data."
 optional = false
 python-versions = ">=3.10"
-groups = ["lambda"]
+groups = ["dev", "lambda"]
 files = [
     {file = "imageio-2.37.3-py3-none-any.whl", hash = "sha256:46f5bb8522cd421c0f5ae104d8268f569d856b29eb1a13b92829d1970f32c9f0"},
     {file = "imageio-2.37.3.tar.gz", hash = "sha256:bbb37efbfc4c400fcd534b367b91fcd66d5da639aaa138034431a1c5e0a41451"},
@@ -1906,7 +1906,7 @@ version = "0.6.0"
 description = "FFMPEG wrapper for Python"
 optional = false
 python-versions = ">=3.9"
-groups = ["lambda"]
+groups = ["dev", "lambda"]
 files = [
     {file = "imageio_ffmpeg-0.6.0-py3-none-macosx_10_9_intel.macosx_10_9_x86_64.whl", hash = "sha256:9d2baaf867088508d4a3458e61eeb30e945c4ad8016025545f66c4b5aaef0a61"},
     {file = "imageio_ffmpeg-0.6.0-py3-none-macosx_11_0_arm64.whl", hash = "sha256:b1ae3173414b5fc5f538a726c4e48ea97edc0d2cdc11f103afee655c463fa742"},
@@ -1935,7 +1935,7 @@ version = "9.0.0"
 description = "Read metadata from Python packages"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "importlib_metadata-9.0.0-py3-none-any.whl", hash = "sha256:2d21d1cc5a017bd0559e36150c21c830ab1dc304dedd1b7ea85d20f45ef3edd7"},
     {file = "importlib_metadata-9.0.0.tar.gz", hash = "sha256:a4f57ab599e6a2e3016d7595cfd72eb4661a5106e787a95bcc90c7105b831efc"},
@@ -1986,7 +1986,7 @@ version = "2.1.0"
 description = "Simple module to parse ISO 8601 dates"
 optional = false
 python-versions = ">=3.7,<4.0"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "iso8601-2.1.0-py3-none-any.whl", hash = "sha256:aac4145c4dcb66ad8b648a02830f5e2ff6c24af20f4f482689be402db2429242"},
     {file = "iso8601-2.1.0.tar.gz", hash = "sha256:6b1d3829ee8921c4301998c909f7829fa9ed3cbdac0d3b16af2d743aed1ba8df"},
@@ -2013,7 +2013,7 @@ version = "2.2.0"
 description = "Safely pass data to untrusted environments and back."
 optional = false
 python-versions = ">=3.8"
-groups = ["lambda-web", "vm"]
+groups = ["dev", "lambda-web", "vm"]
 files = [
     {file = "itsdangerous-2.2.0-py3-none-any.whl", hash = "sha256:c6242fc49e35958c8b15141343aa660db5fc54d4f13a1db01a3f5891b98700ef"},
     {file = "itsdangerous-2.2.0.tar.gz", hash = "sha256:e0050c0b7da1eea53ffaf149c0cfbb5c6e2e2b69c4bef22c81fa6eb73e5f6173"},
@@ -2119,7 +2119,7 @@ version = "5.14.0"
 description = "Authentication Library for OpenStack Identity"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "keystoneauth1-5.14.0-py3-none-any.whl", hash = "sha256:f8c503a95fdd83b5b72736657e4ffbb53d4b28b01763f23013f0294ed8a0e4b9"},
     {file = "keystoneauth1-5.14.0.tar.gz", hash = "sha256:7b942084d3db27dd285c13253cdfee10b05be0436db1c01e15dc744902197a7f"},
@@ -2145,7 +2145,7 @@ version = "13.0.0"
 description = "Middleware for OpenStack Identity"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "keystonemiddleware-13.0.0-py3-none-any.whl", hash = "sha256:d2102b1dbac26f985a6bfdb003e0dc84fb193106ee1c99bd7470af1d1269ec94"},
     {file = "keystonemiddleware-13.0.0.tar.gz", hash = "sha256:2b52b2f840bee72568666e69f9cf82b9ce1558d6124ce25f0f262083494b4b19"},
@@ -2178,7 +2178,7 @@ version = "5.6.2"
 description = "Messaging library for Python."
 optional = false
 python-versions = ">=3.9"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "kombu-5.6.2-py3-none-any.whl", hash = "sha256:efcfc559da324d41d61ca311b0c64965ea35b4c55cc04ee36e55386145dace93"},
     {file = "kombu-5.6.2.tar.gz", hash = "sha256:8060497058066c6f5aed7c26d7cd0d3b574990b09de842a8c5aaed0b92cc5a55"},
@@ -2230,7 +2230,7 @@ version = "22.0.0"
 description = "Container Management project for OpenStack"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "magnum-22.0.0-py3-none-any.whl", hash = "sha256:9e4f812fe184b330b2aa716522157fad1ba849c763a7723c41fed7408afbfa45"},
     {file = "magnum-22.0.0.tar.gz", hash = "sha256:099960f18431a5bdd455d60fe78db1bd32d0b2ec5f9376912dc4d6838a35fb91"},
@@ -2292,7 +2292,7 @@ version = "1.3.12"
 description = "A super-fast templating language that borrows the best ideas from the existing templating languages."
 optional = false
 python-versions = ">=3.8"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "mako-1.3.12-py3-none-any.whl", hash = "sha256:8f61569480282dbf557145ce441e4ba888be453c30989f879f0d652e39f53ea9"},
     {file = "mako-1.3.12.tar.gz", hash = "sha256:9f778e93289bd410bb35daadeb4fc66d95a746f0b75777b942088b7fd7af550a"},
@@ -2497,7 +2497,7 @@ version = "1.2.1"
 description = "MessagePack serializer"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "msgpack-1.2.1-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:8c7b398c56ff125feae96c2737abfec5595f1fa0aa186df60c56040b8accb95c"},
     {file = "msgpack-1.2.1-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:1548006a91aa93c5da81f3bdcebc1a0d10cea2d25969754fbe848da622b2b895"},
@@ -2696,7 +2696,7 @@ version = "1.3.0"
 description = "A network address manipulation library for Python"
 optional = false
 python-versions = ">=3.7"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "netaddr-1.3.0-py3-none-any.whl", hash = "sha256:c2c6a8ebe5554ce33b7d5b3a306b71bbb373e000bbbf2350dd5213cc56e3dbbe"},
     {file = "netaddr-1.3.0.tar.gz", hash = "sha256:5c3c3d9895b551b763779ba7db7a03487dc1f8e3b385af819af341ae9ef6e48a"},
@@ -2746,7 +2746,7 @@ version = "2.5.0"
 description = "Fundamental package for array computing in Python"
 optional = false
 python-versions = ">=3.12"
-groups = ["lambda"]
+groups = ["dev", "lambda"]
 files = [
     {file = "numpy-2.5.0-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:489780423903667933b4ed6197b6ec3b75ea5dd17d1d8f0f38d798feb6921561"},
     {file = "numpy-2.5.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:ece55976ced6bca95a03ae2839e2e5ccffe8eb6a3e7022415645eb154a81e4e6"},
@@ -2800,7 +2800,7 @@ version = "4.13.0.92"
 description = "Wrapper package for OpenCV python bindings."
 optional = false
 python-versions = ">=3.6"
-groups = ["lambda"]
+groups = ["dev", "lambda"]
 files = [
     {file = "opencv_python_headless-4.13.0.92-cp37-abi3-macosx_13_0_arm64.whl", hash = "sha256:1a7d040ac656c11b8c38677cc8cccdc149f98535089dbe5b081e80a4e5903209"},
     {file = "opencv_python_headless-4.13.0.92-cp37-abi3-macosx_14_0_x86_64.whl", hash = "sha256:3e0a6f0a37994ec6ce5f59e936be21d5d6384a4556f2d2da9c2f9c5dc948394c"},
@@ -2821,7 +2821,7 @@ version = "4.16.0"
 description = "An SDK for building applications to work with OpenStack"
 optional = false
 python-versions = ">=3.11"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "openstacksdk-4.16.0-py3-none-any.whl", hash = "sha256:0469939bd7fc1b80979e4440dd8f8026eea302bdd979fac5437b56ada3780a62"},
     {file = "openstacksdk-4.16.0.tar.gz", hash = "sha256:466640c6d2b813b782d4ad58a4f2960633e8e58f147ec0baa2019454de190d30"},
@@ -2847,7 +2847,7 @@ version = "1.8.2"
 description = "Python library for consuming OpenStack sevice-types-authority data"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "os_service_types-1.8.2-py3-none-any.whl", hash = "sha256:f78890d71814deffabf0ed4358288ec2ced579bc4d0bb87a79ae806cbb4deb6e"},
     {file = "os_service_types-1.8.2.tar.gz", hash = "sha256:ab7648d7232849943196e1bb00a30e2e25e600fa3b57bb241d15b7f521b5b575"},
@@ -2863,7 +2863,7 @@ version = "4.6.0"
 description = "OpenStackClient Library"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "osc_lib-4.6.0-py3-none-any.whl", hash = "sha256:b896217bcb175e29f41f84d05b5b4b7163269cd6a7f873cc71b17a991b5b0055"},
     {file = "osc_lib-4.6.0.tar.gz", hash = "sha256:b2588feb50c4192ebacf51f95c51278eb709c8217b36cb72c667958bbfeece3e"},
@@ -2888,7 +2888,7 @@ version = "4.2.0"
 description = "Cache storage for OpenStack projects."
 optional = false
 python-versions = ">=3.11"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "oslo_cache-4.2.0-py3-none-any.whl", hash = "sha256:838060778cfe73521a74ba59cc2ddc39913275a78eb51df884c5c5263e8c75d1"},
     {file = "oslo_cache-4.2.0.tar.gz", hash = "sha256:3defc1f43f34b1c7dca4d7c9ce41a3476f50186aff239a2ac9d71ea726d1f29b"},
@@ -2911,7 +2911,7 @@ version = "7.5.0"
 description = "Oslo Concurrency library"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "oslo_concurrency-7.5.0-py3-none-any.whl", hash = "sha256:11dfa769f330de64cad0aca2736f75239265e571b5e17edcb23f08f29b917aef"},
     {file = "oslo_concurrency-7.5.0.tar.gz", hash = "sha256:091ce0a27c5f347e393cf4776176389fe23c0b863ff0539d121619d0ec691367"},
@@ -2934,7 +2934,7 @@ version = "10.5.0"
 description = "Oslo Configuration API"
 optional = false
 python-versions = ">=3.11"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "oslo_config-10.5.0-py3-none-any.whl", hash = "sha256:f21b985d28e607e22dd9d12b615cb93bf6fdb890d8ff165a9dde0521464d672f"},
     {file = "oslo_config-10.5.0.tar.gz", hash = "sha256:8eea3356c93828c2d61bea1eb19b8cd7860a3edaff4ad2678d774dd353730dfa"},
@@ -2957,7 +2957,7 @@ version = "6.4.0"
 description = "Oslo Context library"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "oslo_context-6.4.0-py3-none-any.whl", hash = "sha256:82de0f7967a5e79e8efd7df46540789ca8b722b600d0608025ac3ce3a5402d7e"},
     {file = "oslo_context-6.4.0.tar.gz", hash = "sha256:4d77f78b347be240e6555e4a371904b5e9800c9bd79738c7e6488892cd79b1b3"},
@@ -2973,7 +2973,7 @@ version = "18.0.0"
 description = "Oslo Database library"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "oslo_db-18.0.0-py3-none-any.whl", hash = "sha256:d1ac478e7601bb86dd4dc57a4c8df2f15ba6268ba50ceb15936ca5c1516e9e08"},
     {file = "oslo_db-18.0.0.tar.gz", hash = "sha256:94bff3241ad389ef5866c16919de005ae0e5b9df1814eeb94d4027c575270923"},
@@ -3000,7 +3000,7 @@ version = "6.8.0"
 description = "Oslo i18n library"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "oslo_i18n-6.8.0-py3-none-any.whl", hash = "sha256:77a6729535ec5a49f72bc64d7795b673a88c1b9c753e0fca45d4e6b14e892bb9"},
     {file = "oslo_i18n-6.8.0.tar.gz", hash = "sha256:a0b4c64c1396869d7144dca60ad97c7eb028f78f61f91c7007531238051997df"},
@@ -3015,7 +3015,7 @@ version = "8.2.0"
 description = "oslo.log library"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "oslo_log-8.2.0-py3-none-any.whl", hash = "sha256:783dab9d4523262ec3b6403cd3a4e34b709b2db90da59b0435c5ed1a702ec1b6"},
     {file = "oslo_log-8.2.0.tar.gz", hash = "sha256:12b3f6574429cd9675e3c70496f6e0c2e48217f5126c5ff0a0c188ac575bc970"},
@@ -3041,7 +3041,7 @@ version = "18.1.0"
 description = "Oslo Messaging API"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "oslo_messaging-18.1.0-py3-none-any.whl", hash = "sha256:c7d29835d2db98fbe3cb94b84de63d5dfaa10fc433ee66ceddc909fb1d95c49a"},
     {file = "oslo_messaging-18.1.0.tar.gz", hash = "sha256:2e867a1fbdbd5257b63c9b1256914bb7e258ee51b5ef525ca4931bc118b8c297"},
@@ -3075,7 +3075,7 @@ version = "0.16.0"
 description = "Oslo Metrics library"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "oslo_metrics-0.16.0-py3-none-any.whl", hash = "sha256:eaa07cce3929724710fc04a3f810f0a7b2bc833e3ee88aa70a165d424869a8fe"},
     {file = "oslo_metrics-0.16.0.tar.gz", hash = "sha256:7eeefd97906f89b450cf6085b19aea0350acdbbf6dd9ffdbfdeec960bdec06c9"},
@@ -3094,7 +3094,7 @@ version = "8.1.0"
 description = "Oslo Middleware library"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "oslo_middleware-8.1.0-py3-none-any.whl", hash = "sha256:a15b09e626c2c9b2ebd1bcdda20cf6dc36d575b5433f8054c4d2e91b39f2123b"},
     {file = "oslo_middleware-8.1.0.tar.gz", hash = "sha256:974f5a822505fe07bfe2451f699a64cfc20ce1bab30ee1e311ad21123f144335"},
@@ -3119,7 +3119,7 @@ version = "5.1.0"
 description = "Oslo Policy library"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "oslo_policy-5.1.0-py3-none-any.whl", hash = "sha256:0a22820425605c4b8058439ba41f9d9b1905c0a8196793f6c9425c3a056f1a8d"},
     {file = "oslo_policy-5.1.0.tar.gz", hash = "sha256:382f0285836215c4dd60d453c508c2043e0b82c531177b8c05863ebb7b222834"},
@@ -3141,7 +3141,7 @@ version = "3.8.0"
 description = "oslo.reports library"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "oslo_reports-3.8.0-py3-none-any.whl", hash = "sha256:c549c582387c939acb1495e9525694603a8992e353cb33d7b0ac6f9fcf0a05f8"},
     {file = "oslo_reports-3.8.0.tar.gz", hash = "sha256:6345d694fa22e5e0a80bc4e74728be8e0e990ae6276825886627b013d236a7a7"},
@@ -3165,7 +3165,7 @@ version = "5.10.0"
 description = "Oslo Serialization library"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "oslo_serialization-5.10.0-py3-none-any.whl", hash = "sha256:197b94cc76a11362e9d53a8d5cfc168c4eabbdd071e2a8a5753b6419130451b5"},
     {file = "oslo_serialization-5.10.0.tar.gz", hash = "sha256:79a71cde2651afd5dc7f065a56e4a100a4d4127ef1b17f798a6d09cea24976b6"},
@@ -3181,7 +3181,7 @@ version = "4.6.0"
 description = "oslo.service library"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "oslo_service-4.6.0-py3-none-any.whl", hash = "sha256:11dd9b944c049186d8d648a8871e264af19b560cad2e77f07bbc37ffde52df93"},
     {file = "oslo_service-4.6.0.tar.gz", hash = "sha256:c216163e70ca491dff690a557dddbec35eeb8e56a7e3cba3c1fffc8fea5e5f86"},
@@ -3211,7 +3211,7 @@ version = "2.7.1"
 description = "Common code for writing OpenStack upgrade checks"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "oslo_upgradecheck-2.7.1-py3-none-any.whl", hash = "sha256:157ce7e2195d0ebc72cfe7ee9fdf9d8a0e4a35959531b5701303330b7b493055"},
     {file = "oslo_upgradecheck-2.7.1.tar.gz", hash = "sha256:9ab2e726d32e47cab4f9c42580e2726e311d8243f3e44f2f67f4875517f29ef4"},
@@ -3230,7 +3230,7 @@ version = "10.1.1"
 description = "Oslo Utility library"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "oslo_utils-10.1.1-py3-none-any.whl", hash = "sha256:dcc7aa6668aa84fc14a18a4064b389b2992e1ee793ba38dadac327dfba69dadd"},
     {file = "oslo_utils-10.1.1.tar.gz", hash = "sha256:c8ac3ee295303cc5776c4d8e1d4ef10078ece60ede4931177e4f07aca58f81ab"},
@@ -3255,7 +3255,7 @@ version = "3.10.2"
 description = "Oslo Versioned Objects library"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "oslo_versionedobjects-3.10.2-py3-none-any.whl", hash = "sha256:22a9b89a7df40358feed1016b9e3484cd89072bcbe5d9bbff78268dd7bd91f3e"},
     {file = "oslo_versionedobjects-3.10.2.tar.gz", hash = "sha256:b26d6c364190feee11fce05c296f15f87c91834f87e8977de785fe5b32103b6b"},
@@ -3305,7 +3305,7 @@ version = "3.10.1"
 description = "Tools for using a Web Server Gateway Interface stack"
 optional = false
 python-versions = ">=3"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "Paste-3.10.1-py3-none-any.whl", hash = "sha256:995e9994b6a94a2bdd8bd9654fb70ca3946ffab75442468bacf31b4d06481c3d"},
     {file = "paste-3.10.1.tar.gz", hash = "sha256:1c3d12065a5e8a7a18c0c7be1653a97cf38cc3e9a5a0c8334a9dd992d3a05e4a"},
@@ -3324,7 +3324,7 @@ version = "3.1.0"
 description = "Load, configure, and compose WSGI applications and servers"
 optional = false
 python-versions = ">=3.7"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "PasteDeploy-3.1.0-py3-none-any.whl", hash = "sha256:76388ad53a661448d436df28c798063108f70e994ddc749540d733cdbd1b38cf"},
     {file = "PasteDeploy-3.1.0.tar.gz", hash = "sha256:9ddbaf152f8095438a9fe81f82c78a6714b92ae8e066bed418b6a7ff6a095a95"},
@@ -3341,7 +3341,7 @@ version = "7.0.3"
 description = "Python Build Reasonableness"
 optional = false
 python-versions = ">=2.6"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "pbr-7.0.3-py2.py3-none-any.whl", hash = "sha256:ff223894eb1cd271a98076b13d3badff3bb36c424074d26334cd25aebeecea6b"},
     {file = "pbr-7.0.3.tar.gz", hash = "sha256:b46004ec30a5324672683ec848aed9e8fc500b0d261d40a3229c2d2bbfcedc29"},
@@ -3356,7 +3356,7 @@ version = "1.8.0"
 description = "A WSGI object-dispatching web framework, designed to be lean and fast, with few dependencies."
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "pecan-1.8.0-py3-none-any.whl", hash = "sha256:eb3e2833d4c0295163d9cce57adc2736f5f8116946a4e68c2e4e6297fc1865de"},
     {file = "pecan-1.8.0.tar.gz", hash = "sha256:2f9fbcea86e8dbf1a2d28954225547634a289db7201e7764516a5dce86c116de"},
@@ -3373,7 +3373,7 @@ version = "11.3.0"
 description = "Python Imaging Library (Fork)"
 optional = false
 python-versions = ">=3.9"
-groups = ["main", "lambda", "lambda-web"]
+groups = ["main", "dev", "lambda", "lambda-web"]
 files = [
     {file = "pillow-11.3.0-cp310-cp310-macosx_10_10_x86_64.whl", hash = "sha256:1b9c17fd4ace828b3003dfd1e30bff24863e0eb59b535e8f80194d9cc7ecf860"},
     {file = "pillow-11.3.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:65dc69160114cdd0ca0f35cb434633c75e8e7fad4cf855177a05bf38678f73ad"},
@@ -3526,7 +3526,7 @@ version = "3.17.0"
 description = "A simple Python library for easily displaying tabular data in a visually appealing ASCII table format"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "prettytable-3.17.0-py3-none-any.whl", hash = "sha256:aad69b294ddbe3e1f95ef8886a060ed1666a0b83018bbf56295f6f226c43d287"},
     {file = "prettytable-3.17.0.tar.gz", hash = "sha256:59f2590776527f3c9e8cf9fe7b66dd215837cca96a9c39567414cbc632e8ddb0"},
@@ -3544,7 +3544,7 @@ version = "0.25.0"
 description = "Python client for the Prometheus monitoring system."
 optional = false
 python-versions = ">=3.9"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "prometheus_client-0.25.0-py3-none-any.whl", hash = "sha256:d5aec89e349a6ec230805d0df882f3807f74fd6c1a2fa86864e3c2279059fed1"},
     {file = "prometheus_client-0.25.0.tar.gz", hash = "sha256:5e373b75c31afb3c86f1a52fa1ad470c9aace18082d39ec0d2f918d11cc9ba28"},
@@ -3561,7 +3561,7 @@ version = "3.0.52"
 description = "Library for building powerful interactive command lines in Python"
 optional = false
 python-versions = ">=3.8"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "prompt_toolkit-3.0.52-py3-none-any.whl", hash = "sha256:9aac639a3bbd33284347de5ad8d68ecc044b91a762dc39b7c21095fcd6a19955"},
     {file = "prompt_toolkit-3.0.52.tar.gz", hash = "sha256:28cde192929c8e7321de85de1ddbe736f1375148b02f2e17edd840042b1be855"},
@@ -3576,7 +3576,7 @@ version = "7.2.2"
 description = "Cross-platform lib for process and system monitoring."
 optional = false
 python-versions = ">=3.6"
-groups = ["lambda", "vm"]
+groups = ["dev", "lambda", "vm"]
 files = [
     {file = "psutil-7.2.2-cp313-cp313t-macosx_10_13_x86_64.whl", hash = "sha256:2edccc433cbfa046b980b0df0171cd25bcaeb3a68fe9022db0979e7aa74a826b"},
     {file = "psutil-7.2.2-cp313-cp313t-macosx_11_0_arm64.whl", hash = "sha256:e78c8603dcd9a04c7364f1a3e670cea95d51ee865e4efb3556a3a63adef958ea"},
@@ -3611,7 +3611,7 @@ version = "4.0.1"
 description = "CADF Library"
 optional = false
 python-versions = ">=3.9"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "pycadf-4.0.1-py3-none-any.whl", hash = "sha256:eb15577f6771392fa285ec0b2996434b1a91e91e347659878817927b92dbad0f"},
     {file = "pycadf-4.0.1.tar.gz", hash = "sha256:b015f1e4cfb6bd968bb8e23f903593328f0d82e1922902447197f4862f259d2f"},
@@ -3823,7 +3823,7 @@ version = "4.0.1"
 description = "Python interface to Graphviz's Dot"
 optional = false
 python-versions = ">=3.8"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "pydot-4.0.1-py3-none-any.whl", hash = "sha256:869c0efadd2708c0be1f916eb669f3d664ca684bc57ffb7ecc08e70d5e93fee6"},
     {file = "pydot-4.0.1.tar.gz", hash = "sha256:c2148f681c4a33e08bf0e26a9e5f8e4099a82e0e2a068098f32ce86577364ad5"},
@@ -3860,7 +3860,7 @@ version = "2.13.0"
 description = "JSON Web Token implementation in Python"
 optional = false
 python-versions = ">=3.9"
-groups = ["lambda-web", "vm"]
+groups = ["dev", "lambda-web", "vm"]
 files = [
     {file = "pyjwt-2.13.0-py3-none-any.whl", hash = "sha256:66adcc2aff09b3f1bbd95fc1e1577df8ac8723c978552fd43304c8a290ac5728"},
     {file = "pyjwt-2.13.0.tar.gz", hash = "sha256:41571c89ca91598c79e8ef18a2d07367d4810fbbd6f637794879baf1b7703423"},
@@ -3900,7 +3900,7 @@ version = "26.3.0"
 description = "Python wrapper module around the OpenSSL library"
 optional = false
 python-versions = ">=3.9"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "pyopenssl-26.3.0-py3-none-any.whl", hash = "sha256:46367f8f66b92271e6d218da9c87607e1ef5a0bc5c8dea5bb3db82f395c385a3"},
     {file = "pyopenssl-26.3.0.tar.gz", hash = "sha256:589de7fae1c9ea670d18422ed00fc04da787bbde8e1454aea872aa57b49ad341"},
@@ -3920,7 +3920,7 @@ version = "3.3.2"
 description = "pyparsing - Classes and methods to define and execute parsing grammars"
 optional = false
 python-versions = ">=3.9"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "pyparsing-3.3.2-py3-none-any.whl", hash = "sha256:850ba148bd908d7e2411587e247a1e4f0327839c40e2e5e6d05a007ecc69911d"},
     {file = "pyparsing-3.3.2.tar.gz", hash = "sha256:c777f4d763f140633dcb6d8a3eda953bf7a214dc4eff598413c070bcdc117cbc"},
@@ -3935,7 +3935,7 @@ version = "1.11.0"
 description = "A cross-platform clipboard module for Python. (Only handles plain text for now.)"
 optional = false
 python-versions = "*"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "pyperclip-1.11.0-py3-none-any.whl", hash = "sha256:299403e9ff44581cb9ba2ffeed69c7aa96a008622ad0c46cb575ca75b5b84273"},
     {file = "pyperclip-1.11.0.tar.gz", hash = "sha256:244035963e4428530d9e3a6101a1ef97209c6825edab1567beac148ccc1db1b6"},
@@ -4059,7 +4059,7 @@ version = "7.4.0"
 description = "Client Library for OpenStack Barbican Key Management API"
 optional = false
 python-versions = ">=3.9"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "python_barbicanclient-7.4.0-py3-none-any.whl", hash = "sha256:bb3fd194d617bb4c3d58a5a7d8d88a369b85a2cce24654ec1b323f3bce292e9b"},
     {file = "python_barbicanclient-7.4.0.tar.gz", hash = "sha256:f1903940b4bd411bfbd78788944c91e2220de08276e4b5cf41a722d827990fe2"},
@@ -4080,7 +4080,7 @@ version = "9.9.0"
 description = "OpenStack Block Storage API Client Library"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "python_cinderclient-9.9.0-py3-none-any.whl", hash = "sha256:1c7a5cb0d8202225fd8e7abc60b7cee6e23a5a2ba44f9afb0f92408330486e39"},
     {file = "python_cinderclient-9.9.0.tar.gz", hash = "sha256:697e4d12c249f39b41ecf4fa6fcb8c38cbf2d6b2d84d6f515ed567b82dcd0bd1"},
@@ -4116,7 +4116,7 @@ version = "4.12.0"
 description = "OpenStack Image API Client Library"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "python_glanceclient-4.12.0-py3-none-any.whl", hash = "sha256:37741ff42edc0b9f083c3b87392416963d2ad0797b8149dc06ab671a522dbd67"},
     {file = "python_glanceclient-4.12.0.tar.gz", hash = "sha256:390556573c8736409adaa3c8ba800e0d9fc1b12e2fb6d6939b8dfe999468f50f"},
@@ -4139,7 +4139,7 @@ version = "5.2.0"
 description = "OpenStack Orchestration API Client Library"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "python_heatclient-5.2.0-py3-none-any.whl", hash = "sha256:e2b80b82e50403c27d58d685e751bb8ba76990d5bd25c9e2c522e8ae2e31ab3e"},
     {file = "python_heatclient-5.2.0.tar.gz", hash = "sha256:0ba1a9526d696b004582e065cfb09f00bfd43989203db29dee559a3bf39e2c0e"},
@@ -4165,7 +4165,7 @@ version = "5.8.0"
 description = "Client Library for OpenStack Identity"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "python_keystoneclient-5.8.0-py3-none-any.whl", hash = "sha256:0cc96cc719bbd8b1ca8fda71e38017dba3e87ebe3b479fcc9261a67e30b21b85"},
     {file = "python_keystoneclient-5.8.0.tar.gz", hash = "sha256:3ca87c67c404298ce862310b569f545a58acf75cd5685094c82f35320b3a355d"},
@@ -4189,7 +4189,7 @@ version = "0.4.27"
 description = "File type identification using libmagic"
 optional = false
 python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
-groups = ["lambda-web", "vm"]
+groups = ["dev", "lambda-web", "vm"]
 files = [
     {file = "python-magic-0.4.27.tar.gz", hash = "sha256:c1ba14b08e4a5f5c31a302b7721239695b2f0f058d125bd5ce1ee36b9d9d3c3b"},
     {file = "python_magic-0.4.27-py2.py3-none-any.whl", hash = "sha256:c212960ad306f700aa0d01e5d7a325d20548ff97eb9920dcd29513174f0294d3"},
@@ -4201,7 +4201,7 @@ version = "12.0.0"
 description = "CLI and Client Library for OpenStack Networking"
 optional = false
 python-versions = ">=3.9"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "python_neutronclient-12.0.0-py3-none-any.whl", hash = "sha256:624a735ccd6d1e7405aba08309e058cddf7de7c477195ec31e4752d794a54437"},
     {file = "python_neutronclient-12.0.0.tar.gz", hash = "sha256:f9ea3631101aa5ab833c26c30d27b48afac70a9333bb66c2fa1fb8072b8f93d6"},
@@ -4228,7 +4228,7 @@ version = "18.13.0"
 description = "Client library for OpenStack Compute API"
 optional = false
 python-versions = ">=3.9"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "python_novaclient-18.13.0-py3-none-any.whl", hash = "sha256:e46abb6d2a77c8f547691a9f49e66216dc03847bc2b0d1884cefba58a0bca750"},
     {file = "python_novaclient-18.13.0.tar.gz", hash = "sha256:812272fa36fae042c5c195aaeeaf0e5df2ca77edcb9c9e1fd66943f39d32bc4b"},
@@ -4250,7 +4250,7 @@ version = "3.14.0"
 description = "Octavia client for OpenStack Load Balancing"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "python_octaviaclient-3.14.0-py3-none-any.whl", hash = "sha256:36553f8f27214761ca0fb78c906b67c66851dc094ca271e8835e5eb756e2e316"},
     {file = "python_octaviaclient-3.14.0.tar.gz", hash = "sha256:0ac663436b9204cdc288d5ab95dca18797b528f55cd54adbdbc217371367388f"},
@@ -4272,7 +4272,7 @@ version = "10.1.0"
 description = "OpenStack Command-line Client"
 optional = false
 python-versions = ">=3.11"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "python_openstackclient-10.1.0-py3-none-any.whl", hash = "sha256:6ae13c64dce6b54407aa94cde782c24b1b55060fae90c98768fd53d6dd3ecc71"},
     {file = "python_openstackclient-10.1.0.tar.gz", hash = "sha256:e5557041c40d2daf5dfe591af2f9375aa057db87b1b5630fc96e1c600763295e"},
@@ -4296,7 +4296,7 @@ version = "4.10.0"
 description = "OpenStack Object Storage API Client Library"
 optional = false
 python-versions = ">=3.7"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "python_swiftclient-4.10.0-py3-none-any.whl", hash = "sha256:6fb8187b736b63c1bc306aba203314510244cdf731dc54031d1cc5d5962e78e6"},
     {file = "python_swiftclient-4.10.0.tar.gz", hash = "sha256:981891abc7fb355b266e823df3ecb80e5c267c57934fb5094bb102ddaf7e51be"},
@@ -4315,7 +4315,7 @@ version = "2026.2"
 description = "World timezone definitions, modern and historical"
 optional = false
 python-versions = "*"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "pytz-2026.2-py2.py3-none-any.whl", hash = "sha256:04156e608bee23d3792fd45c94ae47fae1036688e75032eea2e3bf0323d1f126"},
     {file = "pytz-2026.2.tar.gz", hash = "sha256:0e60b47b29f21574376f218fe21abc009894a2321ea16c6754f3cad6eb7cdd6a"},
@@ -4551,7 +4551,7 @@ version = "0.8"
 description = "A tiny LRU cache implementation and decorator"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "repoze_lru-0.8-py3-none-any.whl", hash = "sha256:979a30d2e567e31f292009ba4467aa444c89ee0da3e3013980c35f1fb4f19d99"},
     {file = "repoze_lru-0.8.tar.gz", hash = "sha256:a252408cd93fe670c88d6665b96fe5d42e071dba2507a1f21a1e609ae4fa891a"},
@@ -4585,7 +4585,7 @@ version = "2.0.0"
 description = "Validating URI References per RFC 3986"
 optional = false
 python-versions = ">=3.7"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "rfc3986-2.0.0-py2.py3-none-any.whl", hash = "sha256:50b1502b60e289cb37883f3dfd34532b8873c7de9f49bb546641ce9cbd256ebd"},
     {file = "rfc3986-2.0.0.tar.gz", hash = "sha256:97aacf9dbd4bfd829baad6e6309fa6573aaf1be3f6fa735c8ab05e46cecb261c"},
@@ -4600,7 +4600,7 @@ version = "15.0.0"
 description = "Render rich text, tables, progress bars, syntax highlighting, markdown and more to the terminal"
 optional = false
 python-versions = ">=3.9.0"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "rich-15.0.0-py3-none-any.whl", hash = "sha256:33bd4ef74232fb73fe9279a257718407f169c09b78a87ad3d296f548e27de0bb"},
     {file = "rich-15.0.0.tar.gz", hash = "sha256:edd07a4824c6b40189fb7ac9bc4c52536e9780fbbfbddf6f1e2502c31b068c36"},
@@ -4619,7 +4619,7 @@ version = "1.8.0"
 description = "Rich help formatters for argparse and optparse"
 optional = false
 python-versions = ">=3.9"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "rich_argparse-1.8.0-py3-none-any.whl", hash = "sha256:d2a3ce7854654e2253c578763ab0a32f05016f23a55fadba7b9a91b6c0e92142"},
     {file = "rich_argparse-1.8.0.tar.gz", hash = "sha256:679df3d832fa94ad6e4bdb07ded088cd7ea2dddc58ae9b2b46346a40b06cbc0c"},
@@ -4646,7 +4646,7 @@ version = "2.5.1"
 description = "Routing Recognition and Generation Tools"
 optional = false
 python-versions = "*"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "Routes-2.5.1-py2.py3-none-any.whl", hash = "sha256:fab5a042a3a87778eb271d053ca2723cadf43c95b471532a191a48539cb606ea"},
     {file = "Routes-2.5.1.tar.gz", hash = "sha256:b6346459a15f0cbab01a45a90c3d25caf980d4733d628b4cc1952b865125d053"},
@@ -4801,6 +4801,34 @@ files = [
 ]
 
 [[package]]
+name = "ruff"
+version = "0.16.4"
+description = "An extremely fast Python linter and code formatter, written in Rust."
+optional = false
+python-versions = ">=3.7"
+groups = ["dev"]
+files = [
+    {file = "ruff-0.16.4-py3-none-linux_armv6l.whl", hash = "sha256:df4075f71ddac40b9934af60c3ec8a53047dd5a5fdc43224e6e4e8e9a27cb6f7"},
+    {file = "ruff-0.16.4-py3-none-macosx_10_12_x86_64.whl", hash = "sha256:0c95538517af68004306b0fb3214ff2f2af67a65092aee77cd9eb86db6656604"},
+    {file = "ruff-0.16.4-py3-none-macosx_11_0_arm64.whl", hash = "sha256:963f83df8e69e575b64d67dd447ebbc917db41a14bf38d4593a4183e7aaa8255"},
+    {file = "ruff-0.16.4-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:32a5057c7ff3f6e6480a48fccfb3a412a690f48a3d03ac5cf08177d6c2da3ade"},
+    {file = "ruff-0.16.4-py3-none-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:b3dce8d9b0c57c265b91885a66a567d8ea1372e8eb4e250fa8e5e3f579e99cff"},
+    {file = "ruff-0.16.4-py3-none-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:7dc651db49283c69f8e72c834eec4fe5573e4c646856aebece0ce385dceb2a80"},
+    {file = "ruff-0.16.4-py3-none-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:3817b87dbcabc92f13b05019257c5b89b5b4d51b5fb20f56fb5235ceb723cd07"},
+    {file = "ruff-0.16.4-py3-none-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:e9fce1499134b2c8c68e5166f95705a5812062bb93aacc5f9873bb1a27084bc7"},
+    {file = "ruff-0.16.4-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:f2d812e482f5a7e02eee26cd73d2a37ebbdf47d795ea63ba1b89110ae93e9fb3"},
+    {file = "ruff-0.16.4-py3-none-manylinux_2_31_riscv64.whl", hash = "sha256:6baaf984aa7976edf93d3b627fe2d1d22ee94bbca05fa6f90fc76d73924e3454"},
+    {file = "ruff-0.16.4-py3-none-musllinux_1_2_aarch64.whl", hash = "sha256:bdfcf0b28662eb890372d50f92c283bb94e67e7635ed93c7fd533970acff7b2b"},
+    {file = "ruff-0.16.4-py3-none-musllinux_1_2_armv7l.whl", hash = "sha256:b66b02cb9b04f537643cadf5768e5f98dc461890d530cb67113d71c8c76e605d"},
+    {file = "ruff-0.16.4-py3-none-musllinux_1_2_i686.whl", hash = "sha256:8528bf9a4b291a60bf02ea453511e8ce6215bd2b982ee80405b66b008b6c30a0"},
+    {file = "ruff-0.16.4-py3-none-musllinux_1_2_x86_64.whl", hash = "sha256:fbd85d2875fdd67e833213a651f613bbf25303abf6aa822a5121f4531195678d"},
+    {file = "ruff-0.16.4-py3-none-win32.whl", hash = "sha256:312769988007aaeb8e189b443ccdd03c0e6374489e053467be6d96518ebff76e"},
+    {file = "ruff-0.16.4-py3-none-win_amd64.whl", hash = "sha256:05d9d27a18c4bcbefada602480ec9e01e0bc949d432e0ced5df77edac195919c"},
+    {file = "ruff-0.16.4-py3-none-win_arm64.whl", hash = "sha256:a3a61621c9b6f6a89573e938a080e648f1695baa3f58570a3a707bc51ff65a21"},
+    {file = "ruff-0.16.4.tar.gz", hash = "sha256:13171aa9d9af2240ee3504e639de73122c67e74036de5ba2e1d01422cd17e3dc"},
+]
+
+[[package]]
 name = "s3transfer"
 version = "0.19.0"
 description = "An Amazon S3 Transfer Manager"
@@ -4884,7 +4912,7 @@ version = "0.8.1"
 description = "Simple generic functions (similar to Python's own len(), pickle.dump(), etc.)"
 optional = false
 python-versions = "*"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "simplegeneric-0.8.1.zip", hash = "sha256:dc972e06094b9af5b855b3df4a646395e43d1c9d0d39ed345b7393560d0b9173"},
 ]
@@ -5173,7 +5201,7 @@ version = "2.0.51"
 description = "Database Abstraction Library"
 optional = false
 python-versions = ">=3.7"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "sqlalchemy-2.0.51-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:0e8203d2fbd5c6254692ef0a72c740d75b2f3c7ca345404f4c1a4604813c77c0"},
     {file = "sqlalchemy-2.0.51-cp310-cp310-manylinux2014_aarch64.manylinux_2_17_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:1af05726b3d0cdba1c55284bf408fd3b792e690fe2399bfb8304565551cda652"},
@@ -5270,7 +5298,7 @@ version = "4.0.1"
 description = "A simple statsd client."
 optional = false
 python-versions = "*"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "statsd-4.0.1-py2.py3-none-any.whl", hash = "sha256:c2676519927f7afade3723aca9ca8ea986ef5b059556a980a867721ca69df093"},
     {file = "statsd-4.0.1.tar.gz", hash = "sha256:99763da81bfea8daf6b3d22d11aaccb01a8d0f52ea521daab37e758a4ca7d128"},
@@ -5282,7 +5310,7 @@ version = "5.8.0"
 description = "Manage dynamic plugins for Python applications"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "stevedore-5.8.0-py3-none-any.whl", hash = "sha256:88eede9e66ca80e34085b9174e2327da2c61ac91f24f70e41c3ad76e4bb4872b"},
     {file = "stevedore-5.8.0.tar.gz", hash = "sha256:b49867b32ca3016e94100e68dbf26e72aa7b8708d0a3f73c08aeb220370ac715"},
@@ -5312,7 +5340,7 @@ version = "0.10.0"
 description = "Pretty-print tabular data"
 optional = false
 python-versions = ">=3.10"
-groups = ["lambda-web", "vm"]
+groups = ["dev", "lambda-web", "vm"]
 files = [
     {file = "tabulate-0.10.0-py3-none-any.whl", hash = "sha256:f0b0622e567335c8fabaaa659f1b33bcb6ddfe2e496071b743aa113f8774f2d3"},
     {file = "tabulate-0.10.0.tar.gz", hash = "sha256:e2cfde8f79420f6deeffdeda9aaec3b6bc5abce947655d17ac662b126e48a60d"},
@@ -5327,7 +5355,7 @@ version = "6.3.0"
 description = "Taskflow structured state management library."
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "taskflow-6.3.0-py3-none-any.whl", hash = "sha256:406fd54bf997dd71896d2a5ae8e9563f34346e5b781c42720272ea74d8f78979"},
     {file = "taskflow-6.3.0.tar.gz", hash = "sha256:2358762bd3b16696ad182a995c97e27746970970b4876b92e0b5c442fa03aa96"},
@@ -5364,7 +5392,7 @@ version = "9.1.4"
 description = "Retry code until it succeeds"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "tenacity-9.1.4-py3-none-any.whl", hash = "sha256:6095a360c919085f28c6527de529e76a06ad89b23659fa881ae0649b867a9d55"},
     {file = "tenacity-9.1.4.tar.gz", hash = "sha256:adb31d4c263f2bd041081ab33b498309a57c77f9acf2db65aadf0898179cf93a"},
@@ -5380,7 +5408,7 @@ version = "2.1.2"
 description = "Testresources, a pyunit extension for managing expensive test resources"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "testresources-2.1.2-py3-none-any.whl", hash = "sha256:9158997b8373a80a19809858d052c3321108651c585f83c026cc801b1b34190d"},
     {file = "testresources-2.1.2.tar.gz", hash = "sha256:a2b1266fd6cb89295dbb79e3442e5ff1c27db35a0b62b84c7846002676d12ae2"},
@@ -5395,7 +5423,7 @@ version = "0.6.2"
 description = "Testscenarios, a unittest extension for dependency injection"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "testscenarios-0.6.2-py3-none-any.whl", hash = "sha256:54626a5aa3cd0cae2f5b689de2f1bac73376c926b1717c456d4d483f699ea4ba"},
     {file = "testscenarios-0.6.2.tar.gz", hash = "sha256:ab5ae8cd550e11ea978151981e7a8ecac329b7b22e4dec706b1e6fe213f463e7"},
@@ -5562,7 +5590,7 @@ version = "2026.2"
 description = "Provider of IANA time zone data"
 optional = false
 python-versions = ">=2"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "tzdata-2026.2-py2.py3-none-any.whl", hash = "sha256:bbe9af844f658da81a5f95019480da3a89415801f6cc966806612cc7169bffe7"},
     {file = "tzdata-2026.2.tar.gz", hash = "sha256:9173fde7d80d9018e02a662e168e5a2d04f87c41ea174b139fbef642eda62d10"},
@@ -5595,7 +5623,7 @@ version = "1"
 description = "Verify if an email address is valid and really exists."
 optional = false
 python-versions = "*"
-groups = ["lambda-web", "vm"]
+groups = ["dev", "lambda-web", "vm"]
 files = [
     {file = "validate-email-address-1.tar.gz", hash = "sha256:9c00f978fed19d3df368b054292df7e8443761e44d3fadf95ef25499ea980f43"},
 ]
@@ -5606,7 +5634,7 @@ version = "5.1.0"
 description = "Python promises."
 optional = false
 python-versions = ">=3.6"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "vine-5.1.0-py3-none-any.whl", hash = "sha256:40fdf3c48b2cfe1c38a49e9ae2da6fda88e4794c810050a728bd7413811fb1dc"},
     {file = "vine-5.1.0.tar.gz", hash = "sha256:8b62e981d35c41049211cf62a0a1242d8c1ee9bd15bb196ce38aefd6799e61e0"},
@@ -5618,7 +5646,7 @@ version = "2.1.0"
 description = "Python object model built on JSON schema and JSON patch."
 optional = false
 python-versions = ">=3.9"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "warlock-2.1.0-py3-none-any.whl", hash = "sha256:55cb5ad3399083724f1bfbfef4234a11fbacfc78bf2b9c4d0c18b6e203cf78fe"},
     {file = "warlock-2.1.0.tar.gz", hash = "sha256:82319ba017341e7fcdc81efc2be9dd2f8237a0da07c71476b5425651b317b1c9"},
@@ -5637,7 +5665,7 @@ version = "0.8.1"
 description = "Measures the displayed width of unicode strings in a terminal"
 optional = false
 python-versions = ">=3.8"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "wcwidth-0.8.1-py3-none-any.whl", hash = "sha256:f453740b1e4a4f3291faa37944c555d71056c4da08d59809b307ef4feba695c8"},
     {file = "wcwidth-0.8.1.tar.gz", hash = "sha256:faf5b4a5366a72dc49cad48cdf21f52bdf63bdda995178e483ba247ff79089b9"},
@@ -5649,7 +5677,7 @@ version = "0.5.1"
 description = "Character encoding aliases for legacy web content"
 optional = false
 python-versions = "*"
-groups = ["lambda-web", "vm"]
+groups = ["dev", "lambda-web", "vm"]
 files = [
     {file = "webencodings-0.5.1-py2.py3-none-any.whl", hash = "sha256:a0af1213f3c2226497a97e2b3aa01a7e4bee4f403f95be16fc9acd2947514a78"},
     {file = "webencodings-0.5.1.tar.gz", hash = "sha256:b36a1c245f2d304965eb4e0a82848379241dc04b865afcc4aab16748587e1923"},
@@ -5661,7 +5689,7 @@ version = "1.8.10"
 description = "WSGI request and response object"
 optional = false
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,>=2.7"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "webob-1.8.10-py2.py3-none-any.whl", hash = "sha256:e68ad87fda378191081965ab02a185391c26e4e926adec855c3b0286a8369d49"},
     {file = "webob-1.8.10.tar.gz", hash = "sha256:1c963a11f307bc3f624fbab9dde737701eae255f32981b7a5486a88db1767c2b"},
@@ -5694,7 +5722,7 @@ version = "3.1.8"
 description = "The comprehensive WSGI web application library."
 optional = false
 python-versions = ">=3.9"
-groups = ["lambda-web", "vm"]
+groups = ["dev", "lambda-web", "vm"]
 files = [
     {file = "werkzeug-3.1.8-py3-none-any.whl", hash = "sha256:63a77fb8892bf28ebc3178683445222aa500e48ebad5ec77b0ad80f8726b1f50"},
     {file = "werkzeug-3.1.8.tar.gz", hash = "sha256:9bad61a4268dac112f1c5cd4630a56ede601b6ed420300677a869083d70a4c44"},
@@ -5727,7 +5755,7 @@ version = "2.2.2"
 description = "Module for decorators, wrappers and monkey patching."
 optional = false
 python-versions = ">=3.9"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "wrapt-2.2.2-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:055e6fcfaa28e58c6a8c247d48b92be9d56f818b7068aa4f22b15b3343a09931"},
     {file = "wrapt-2.2.2-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:8374eb6b1a58809211e84ff835a182bb17ab2807a5bfef23204c8cff38178a00"},
@@ -5830,7 +5858,7 @@ version = "0.12.1"
 description = "Simplify the writing of REST APIs, and extend them with additional protocols."
 optional = false
 python-versions = ">=3.8"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "WSME-0.12.1-py3-none-any.whl", hash = "sha256:6d8a975289089f8d38a5ab556731637da45ef6e4c114058fef0990c05249c471"},
     {file = "WSME-0.12.1.tar.gz", hash = "sha256:9b7eb2244af3c704ac914b5ed221954bb68add0a8b2b2f38a244b067b337992d"},
@@ -5864,7 +5892,7 @@ version = "3.2.9"
 description = "A Python module for creating Excel XLSX files."
 optional = false
 python-versions = ">=3.8"
-groups = ["lambda-web", "vm"]
+groups = ["dev", "lambda-web", "vm"]
 files = [
     {file = "xlsxwriter-3.2.9-py3-none-any.whl", hash = "sha256:9a5db42bc5dff014806c58a20b9eae7322a134abb6fce3c92c181bfb275ec5b3"},
     {file = "xlsxwriter-3.2.9.tar.gz", hash = "sha256:254b1c37a368c444eac6e2f867405cc9e461b0ed97a3233b2ac1e574efb4140c"},
@@ -5876,7 +5904,7 @@ version = "1.7.6"
 description = "Yet Another Python Profiler"
 optional = false
 python-versions = ">=3.6"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "yappi-1.7.6-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:90ba3317c5d58b1da592f6368658776e9401abd2cc39aef8a11e4e220fdbd4ab"},
     {file = "yappi-1.7.6-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:13dec55a9fe794754471109bab7919ab251296d41ca1ede6e4bb94cb4437916d"},
@@ -5952,7 +5980,7 @@ version = "4.1.0"
 description = "Backport of pathlib-compatible object wrapper for zip files"
 optional = false
 python-versions = ">=3.10"
-groups = ["vm"]
+groups = ["dev", "vm"]
 files = [
     {file = "zipp-4.1.0-py3-none-any.whl", hash = "sha256:25ad4e16390cd314347dd8f1de67a2ac538ae658ed4ab9db16029c07c188e97f"},
     {file = "zipp-4.1.0.tar.gz", hash = "sha256:4cb57381f544315db7688e976e922a2b18cdb513d21cc194eb42232ba2a3e602"},
@@ -6025,4 +6053,4 @@ testing = ["coverage[toml]", "zope.event", "zope.testing"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<3.13"
-content-hash = "f3da2473592a6fc96942530aae2ca6eac5136ef41d95d98d27c4f177d7a1cb7f"
+content-hash = "a6b636f4a090ae5aac6ea63ab67e4e776bc8ff23115994707f5f2d3aea906891"
