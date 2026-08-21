@@ -227,7 +227,8 @@ Enable EventBridge after verifying the exact bucket:
      make s3-eventbridge-enable
 
 Updating an S3 notification configuration replaces the complete configuration.
-``etc/s3_upload_trigger.py`` therefore reads and preserves existing topic,
+``uv run s3_upload_trigger`` invokes the packaged
+``etc/s3_upload_trigger.py`` utility. It reads and preserves existing topic,
 queue, and Lambda destinations, adds ``EventBridgeConfiguration``, then reads
 the bucket again to verify the change.
 

@@ -260,7 +260,7 @@ wheels = [
 
 [[package]]
 name = "webapp"
-version = "0.9.9.3b0"
+version = "0.9.9.3rc0"
 source = { editable = "." }
 dependencies = [
     { name = "apig-wsgi" },

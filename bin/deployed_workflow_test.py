@@ -31,12 +31,12 @@ from xml.etree import ElementTree as ET
 import requests
 from PIL import Image, ImageChops
 from pydantic import BaseModel, Field
+from s3_upload_trigger import configure_bucket_eventbridge
 
 from app import odb, odb_movie_data, s3_presigned
 from app.constants import C
 from app.paths import ffmpeg_path
 from app.schema import Trackpoint
-from etc.s3_upload_trigger import configure_bucket_eventbridge
 
 
 API_KEY_FIELD = "api_key"

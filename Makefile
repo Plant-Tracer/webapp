@@ -10,7 +10,7 @@
 #
 # AWS stack quickstart (AWS authentication and AWS_REGION must already be set):
 # New stack and new DynamoDB tables:
-# DYNAMODB_TABLE_PREFIX=<stack>- poetry run dbutil createdb && STACK=<stack> make sam-build sam-deploy-guided
+# DYNAMODB_TABLE_PREFIX=<stack>- uv run dbutil createdb && STACK=<stack> make sam-build sam-deploy-guided
 # New stack using existing DynamoDB tables:
 # DYNAMODB_TABLE_PREFIX=<existing-prefix>- STACK=<stack> make sam-build sam-deploy-guided
 # Create a dev test course administered by simsong@acm.org:
@@ -44,8 +44,8 @@ LOCAL_FLASK_ENV=$(LOCAL_AWS_ENV) PLANTTRACER_LAMBDA_API_BASE=$(LOCAL_LAMBDA_BASE
 LOCAL_NONDEMO_ENV=env -u DEMO_MODE -u DEMO_COURSE_ID $(LOCAL_FLASK_ENV)
 LOCAL_DEMO_ENV=DEMO_MODE=1 DEMO_COURSE_ID=demo-course $(LOCAL_FLASK_ENV)
 LOCAL_ADMIN_EMAIL=plantadmin@planttracer.com
-FLASK_DEBUG_RUN=poetry run flask --debug --app src.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
-LOCAL_LAMBDA_PROBE=python3 -c 'import socket, sys; s=socket.socket(); s.settimeout(0.2); sys.exit(0 if s.connect_ex(("127.0.0.1", $(LOCAL_LAMBDA_PORT))) == 0 else 1)'
+FLASK_DEBUG_RUN=uv run flask --debug --app src.app.flask_app:app run --port $(LOCAL_HTTP_PORT) --with-threads
+LOCAL_LAMBDA_PROBE=uv run python -c 'import socket, sys; s=socket.socket(); s.settimeout(0.2); sys.exit(0 if s.connect_ex(("127.0.0.1", $(LOCAL_LAMBDA_PORT))) == 0 else 1)'
 LOCAL_LAMBDA_WAIT_SECONDS ?= 30
 
 # STACK is the canonical selector. STACK_NAME is accepted as an operator-facing
@@ -60,10 +60,10 @@ endif
 SAM_CONFIG_DIR ?= samconfigs
 SAM_CONFIG ?= $(if $(STACK),$(SAM_CONFIG_DIR)/$(STACK).toml,samconfig.toml)
 SAM_BUILD_DIR=.aws-sam/build
-SAM_CONFIG_STACK_NAME = $(shell python3 etc/sam_config_tool.py --samconfig "$(SAM_CONFIG)" stack-name 2>/dev/null)
-SAM_CONFIG_DYNAMODB_TABLE_PREFIX = $(shell python3 etc/sam_config_tool.py --samconfig "$(SAM_CONFIG)" parameter-override --name DynamoDBTablePrefix 2>/dev/null)
+SAM_CONFIG_STACK_NAME = $(shell uv run sam-config-tool --samconfig "$(SAM_CONFIG)" stack-name 2>/dev/null)
+SAM_CONFIG_DYNAMODB_TABLE_PREFIX = $(shell uv run sam-config-tool --samconfig "$(SAM_CONFIG)" parameter-override --name DynamoDBTablePrefix 2>/dev/null)
 EFFECTIVE_STACK_NAME = $(if $(STACK),$(STACK),$(SAM_CONFIG_STACK_NAME))
-APP_VERSION := $(shell python3 -c 'import tomllib; print(tomllib.load(open("pyproject.toml","rb"))["project"]["version"])')
+APP_VERSION := $(shell uv run python -c 'import tomllib; print(tomllib.load(open("pyproject.toml","rb"))["project"]["version"])')
 
 # Only show events from the last N minutes (filter-log-events returns ascending order, so without this we get oldest events).
 SAM_LOGS_LIMIT ?= 1000
@@ -152,19 +152,19 @@ tags:
 	etags src/app/*.py tests/*.py tests/fixtures/*.py src/app/static/*.js lambda-web/src/lambda_web/*.py lambda-resize/src/resize_app/*.py
 
 admin-list:
-	poetry run python $(DBUTIL) admin-list
+	uv run python $(DBUTIL) admin-list
 
 ADMIN_CREATE_FLAGS ?=
 admin-create:
-	poetry run python $(DBUTIL) admin-create $(ADMIN_CREATE_FLAGS)
+	uv run python $(DBUTIL) admin-create $(ADMIN_CREATE_FLAGS)
 
 COURSE_CREATE_FLAGS ?=
 course-create:
-	poetry run python $(DBUTIL) create-course --send-email $(COURSE_CREATE_FLAGS)
+	uv run python $(DBUTIL) create-course --send-email $(COURSE_CREATE_FLAGS)
 
 DEMO_COURSE_CREATE_FLAGS ?=
 demo-course-create:
-	poetry run python $(DBUTIL) create-demo-course $(DEMO_COURSE_CREATE_FLAGS)
+	uv run python $(DBUTIL) create-demo-course $(DEMO_COURSE_CREATE_FLAGS)
 
 ################################################################
 ## Program development: static analysis tools
@@ -179,7 +179,7 @@ lint: $(REQ)
 pylint:
 	$(MAKE) vend-lambda-resize
 	$(MAKE) vend-lambda-web
-	poetry run pylint $(PYLINT_OPTS) browser_tests lambda-web/src/lambda_web lambda-web/tests lambda-resize src tests \
+	uv run pylint $(PYLINT_OPTS) browser_tests lambda-web/src/lambda_web lambda-web/tests lambda-resize src tests \
 		bin/deployed_workflow_test.py etc/sam_config_tool.py etc/sam_config_writer.py *.py
 
 ## Mypy static analysis
@@ -211,21 +211,21 @@ dump.txt:
 pytest: $(LOCAL_TEST_REQ)
 	$(MAKE) vend-lambda-resize
 	$(MAKE) vend-lambda-web
-	$(LOCAL_AWS_ENV) PYTHONPATH=.:src:lambda-web/src:lambda-resize/src:$$PYTHONPATH poetry run pytest -vv --log-cli-level=$(LOG_LEVEL) tests lambda-web/tests lambda-resize/tests
+	$(LOCAL_AWS_ENV) PYTHONPATH=.:src:lambda-web/src:lambda-resize/src:$$PYTHONPATH uv run pytest -vv --log-cli-level=$(LOG_LEVEL) tests lambda-web/tests lambda-resize/tests
 
 pytest-coverage: $(LOCAL_TEST_REQ)
 	$(MAKE) vend-lambda-resize
 	$(MAKE) vend-lambda-web
-	$(LOCAL_AWS_ENV) PYTHONPATH=.:src:lambda-web/src:lambda-resize/src:$$PYTHONPATH poetry run pytest -vv --log-cli-level=$(LOG_LEVEL) --cov=src --cov=lambda-web/src/lambda_web --cov=lambda-resize/src --cov-report=xml --cov-report=html tests lambda-web/tests lambda-resize/tests
+	$(LOCAL_AWS_ENV) PYTHONPATH=.:src:lambda-web/src:lambda-resize/src:$$PYTHONPATH uv run pytest -vv --log-cli-level=$(LOG_LEVEL) --cov=src --cov=lambda-web/src/lambda_web --cov=lambda-resize/src --cov-report=xml --cov-report=html tests lambda-web/tests lambda-resize/tests
 	@echo coverage report in htmlcov/
 
 # This doesn't work yet...
 pytest-selenium:
-	poetry run pytest -v --log-cli-level=$(LOG_LEVEL) tests/sitetitle_test.py
+	uv run pytest -v --log-cli-level=$(LOG_LEVEL) tests/sitetitle_test.py
 
 .PHONY: frame-step-browser-test
 frame-step-browser-test: .venv/pyvenv.cfg
-	poetry run python -m pytest -v --log-cli-level=$(LOG_LEVEL) browser_tests/frame_step_browser_test.py
+	uv run python -m pytest -v --log-cli-level=$(LOG_LEVEL) browser_tests/frame_step_browser_test.py
 
 ANALYSIS_MP4_INPUT ?=
 ANALYSIS_MP4_OUTPUT ?=
@@ -238,7 +238,7 @@ analysis-mp4-bundle: install-lambda-deps
 	@test -n "$(ANALYSIS_MP4_INPUT)" || (echo "set ANALYSIS_MP4_INPUT=/path/to/movie.mp4"; exit 2)
 	@test -n "$(ANALYSIS_MP4_OUTPUT)" || (echo "set ANALYSIS_MP4_OUTPUT=/path/to/new-bundle-directory"; exit 2)
 	$(MAKE) vend-lambda-resize
-	PYTHONPATH=lambda-resize/src:$$PYTHONPATH poetry run python -m resize_app.analysis_mp4_cli \
+	PYTHONPATH=lambda-resize/src:$$PYTHONPATH uv run python -m resize_app.analysis_mp4_cli \
 		"$(ANALYSIS_MP4_INPUT)" "$(ANALYSIS_MP4_OUTPUT)" \
 		--rotation "$(ANALYSIS_MP4_ROTATION)" \
 		--max-width "$(ANALYSIS_MP4_MAX_WIDTH)" \
@@ -246,13 +246,13 @@ analysis-mp4-bundle: install-lambda-deps
 
 analysis-mp4-browser-test: install-lambda-deps
 	$(MAKE) vend-lambda-resize
-	PYTHONPATH=.:lambda-resize/src:$$PYTHONPATH poetry run pytest -v --log-cli-level=$(LOG_LEVEL) browser_tests/analysis_mp4_browser_test.py
+	PYTHONPATH=.:lambda-resize/src:$$PYTHONPATH uv run pytest -v --log-cli-level=$(LOG_LEVEL) browser_tests/analysis_mp4_browser_test.py
 
 # Set these during development to speed testing of the one function you care about:
 TEST1MODULE=tests/endpoint_test.py
 #TEST1FUNCTION="-k test_ver1"
 pytest1:
-	$(LOCAL_AWS_ENV) PYTHONPATH=.:src:lambda-web/src:lambda-resize/src:$$PYTHONPATH poetry run pytest -v --log-cli-level=$(LOG_LEVEL) --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
+	$(LOCAL_AWS_ENV) PYTHONPATH=.:src:lambda-web/src:lambda-resize/src:$$PYTHONPATH uv run pytest -v --log-cli-level=$(LOG_LEVEL) --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
 
 ################################################################
 ### Debug targets to develop and run locally.
@@ -280,9 +280,9 @@ make-local-demo:
 	@echo creating local demo tables, course, and movies with the prefix demo-
 	$(MAKE) start-local-services
 	$(MAKE) make-local-bucket
-	$(LOCAL_AWS_ENV) poetry run python $(DBUTIL) createdb
-	$(LOCAL_AWS_ENV) poetry run python $(DBUTIL) create-demo-course
-	$(LOCAL_AWS_ENV) poetry run python $(DBUTIL) seed-demo-movies
+	$(LOCAL_AWS_ENV) uv run python $(DBUTIL) createdb
+	$(LOCAL_AWS_ENV) uv run python $(DBUTIL) create-demo-course
+	$(LOCAL_AWS_ENV) uv run python $(DBUTIL) seed-demo-movies
 	$(LOCAL_AWS_ENV) aws s3 ls --recursive s3://$(LOCAL_BUCKET)
 
 ensure-local-lambda-debug:
@@ -309,12 +309,12 @@ ensure-local-lambda-debug:
 run-local-lambda-debug:
 	@echo running the local lambda debug server at $(LOCAL_LAMBDA_BASE)
 	$(MAKE) vend-lambda-resize
-	$(LOCAL_AWS_ENV) PYTHONPATH=lambda-resize/src:$$PYTHONPATH TRACING_QUEUE_MODE=local LOG_LEVEL=$(LOG_LEVEL) poetry run python -m app.local_lambda_debug --host 127.0.0.1 --port $(LOCAL_LAMBDA_PORT)
+	$(LOCAL_AWS_ENV) PYTHONPATH=lambda-resize/src:$$PYTHONPATH TRACING_QUEUE_MODE=local LOG_LEVEL=$(LOG_LEVEL) uv run python -m app.local_lambda_debug --host 127.0.0.1 --port $(LOCAL_LAMBDA_PORT)
 
 run-local-debug:
 	@echo run Flask locally against the local demo dataset, but not in demo mode
 	$(MAKE) ensure-local-lambda-debug
-	$(LOCAL_NONDEMO_ENV) poetry run python $(DBUTIL) makelink $(LOCAL_ADMIN_EMAIL) --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
+	$(LOCAL_NONDEMO_ENV) uv run python $(DBUTIL) makelink $(LOCAL_ADMIN_EMAIL) --planttracer_endpoint http://localhost:$(LOCAL_HTTP_PORT)
 	$(LOCAL_NONDEMO_ENV) $(FLASK_DEBUG_RUN)
 
 run-local-demo-debug:
@@ -334,7 +334,7 @@ debug-dev-api:
 tracer-debug: vend-lambda-resize
 	@echo just test the tracer...
 	/bin/rm -f outfile.mp4
-	PYTHONPATH=lambda-resize/src poetry run python lambda-resize/src/lambda_resize_cli.py tracer --infile="tests/data/2019-07-12 circumnutation.mp4" --movie-traced=outfile.mp4
+	PYTHONPATH=lambda-resize/src uv run python lambda-resize/src/lambda_resize_cli.py tracer --infile="tests/data/2019-07-12 circumnutation.mp4" --movie-traced=outfile.mp4
 	open outfile.mp4
 
 .PHONY: start-local-services stop-local-services wipe-local delete-local make-local-demo ensure-local-lambda-debug run-local-lambda-debug run-local-debug run-local-demo-debug debut-dev-api tracer-debug
@@ -359,7 +359,7 @@ instrument-js:
 browser-coverage-xml:
 	@echo Converting browser coverage to XML...
 	@if [ -f coverage/browser-coverage.json ]; then \
-		poetry run python -c "from tests.js_coverage_utils import convert_browser_coverage_to_xml; from pathlib import Path; convert_browser_coverage_to_xml(Path('coverage/browser-coverage.json'), Path('coverage/browser-coverage.xml'))"; \
+		uv run python -c "from tests.js_coverage_utils import convert_browser_coverage_to_xml; from pathlib import Path; convert_browser_coverage_to_xml(Path('coverage/browser-coverage.json'), Path('coverage/browser-coverage.xml'))"; \
 		echo Browser coverage converted to coverage/browser-coverage.xml; \
 	else \
 		echo No browser coverage found; \
@@ -387,10 +387,10 @@ bin/DynamoDBLocal.jar: bin/dynamodb_local_latest.zip
 
 # operation:
 start_local_dynamodb: bin/DynamoDBLocal.jar
-	python3 bin/local_services.py dynamodb start
+	uv run python bin/local_services.py dynamodb start
 
 stop_local_dynamodb:  bin/DynamoDBLocal.jar
-	python3 bin/local_services.py dynamodb stop
+	uv run python bin/local_services.py dynamodb stop
 
 list-tables:
 	$(LOCAL_AWS_ENV) aws dynamodb list-tables
@@ -435,10 +435,10 @@ bin/mailpit:
 	file bin/mailpit
 
 start_local_mailpit: bin/mailpit
-	python3 bin/local_services.py mailpit start
+	uv run python bin/local_services.py mailpit start
 
 stop_local_mailpit: bin/mailpit
-	python3 bin/local_services.py mailpit stop
+	uv run python bin/local_services.py mailpit stop
 
 .PHONY: start_local_mailpit stop_local_mailpit
 
@@ -486,10 +486,10 @@ bin/minio:
 
 # operation:
 start_local_minio: bin/minio
-	python3 bin/local_services.py minio start
+	uv run python bin/local_services.py minio start
 
 stop_local_minio:  bin/minio
-	python3 bin/local_services.py minio stop
+	uv run python bin/local_services.py minio stop
 
 list-local-buckets:
 	$(LOCAL_AWS_ENV) aws s3 ls
@@ -648,11 +648,11 @@ install-lambda-deps: $(REQ)
 # install-lambda-deps ensures av (and other lambda deps) are in the venv so pylint can import them.
 lambda-resize-lint: install-lambda-deps
 	$(MAKE) vend-lambda-resize
-	poetry run ruff check --fix lambda-resize/src
-	PYTHONPATH=lambda-resize/src poetry run pylint lambda-resize/src
+	uv run ruff check --fix lambda-resize/src
+	PYTHONPATH=lambda-resize/src uv run pylint lambda-resize/src
 
 lambda-resize-check: lambda-resize-lint $(LOCAL_TEST_REQ)
-	$(LOCAL_AWS_ENV) PYTHONPATH=.:src:lambda-resize/src:$$PYTHONPATH poetry run pytest lambda-resize/tests -q --cov=lambda-resize/src --cov-report=term -o junit_family=legacy --log-cli-level=$(LOG_LEVEL)
+	$(LOCAL_AWS_ENV) PYTHONPATH=.:src:lambda-resize/src:$$PYTHONPATH uv run pytest lambda-resize/tests -q --cov=lambda-resize/src --cov-report=term -o junit_family=legacy --log-cli-level=$(LOG_LEVEL)
 
 ################################################################
 ## lambda-web
@@ -672,12 +672,12 @@ install-lambda-web-deps: $(REQ)
 	poetry install --with lambda-web
 
 lambda-web-lint: install-lambda-web-deps
-	poetry run ruff check --fix lambda-web/src/lambda_web lambda-web/tests
-	PYTHONPATH=.:src:lambda-web/src poetry run pylint lambda-web/src/lambda_web lambda-web/tests
+	uv run ruff check --fix lambda-web/src/lambda_web lambda-web/tests
+	PYTHONPATH=.:src:lambda-web/src uv run pylint lambda-web/src/lambda_web lambda-web/tests
 
 lambda-web-check: lambda-web-lint
 	$(MAKE) vend-lambda-web
-	PYTHONPATH=.:src:lambda-web/src poetry run pytest lambda-web/tests -q --cov=lambda-web/src/lambda_web --cov-report=term -o junit_family=legacy --log-cli-level=$(LOG_LEVEL)
+	PYTHONPATH=.:src:lambda-web/src uv run pytest lambda-web/tests -q --cov=lambda-web/src/lambda_web --cov-report=term -o junit_family=legacy --log-cli-level=$(LOG_LEVEL)
 
 .PHONY: lambda-resize/src/requirements.txt lambda-web/src/requirements.txt template-lint sam-config-show sam-config-path-safety-check sam-config-sync sam-config-path-check sam-config-check sam-config-guided-bootstrap sam-version-check sam-source-commit-check stamp-lambda-web-source-commit lambda-web-source-commit-check sam-deploy-version-check stamp-sam-deploy-metadata sam-storage-configure sam-status
 lambda-resize/src/requirements.txt:
@@ -689,7 +689,7 @@ lambda-web/src/requirements.txt:
 template-lint: .venv/pyvenv.cfg
 	sam validate --lint
 	@echo cfn-lint requires a valid AWS_REGION so we use us-east-1
-	AWS_REGION=us-east-1 poetry run cfn-lint template.yaml
+	AWS_REGION=us-east-1 uv run cfn-lint template.yaml
 
 sam-config-show: sam-config-sync
 	@echo "SAM_CONFIG=$(SAM_CONFIG)"
@@ -726,7 +726,7 @@ sam-config-sync: sam-config-path-safety-check
 	@if [ -n "$(EFFECTIVE_STACK_NAME)" ]; then \
 		PREFIX="$(DYNAMODB_TABLE_PREFIX_INPUT)"; \
 		if [ -z "$$PREFIX" ]; then PREFIX="$(EFFECTIVE_STACK_NAME)-"; fi; \
-		poetry run python etc/sam_config_writer.py --samconfig "$(SAM_CONFIG)" \
+		uv run python etc/sam_config_writer.py --samconfig "$(SAM_CONFIG)" \
 			--stack-name "$(EFFECTIVE_STACK_NAME)" --dynamodb-table-prefix "$$PREFIX"; \
 	fi
 
@@ -791,14 +791,14 @@ sam-build: $(REQ)
 	$(MAKE) vend-lambda-web
 	$(MAKE) stamp-lambda-web-source-commit
 	$(MAKE) vend-lambda-resize
-	poetry run pylint $(PYLINT_OPTS) lambda-web/src/lambda_web
-	poetry run pylint $(PYLINT_OPTS) lambda-resize/src
+	uv run pylint $(PYLINT_OPTS) lambda-web/src/lambda_web
+	uv run pylint $(PYLINT_OPTS) lambda-resize/src
 	poetry check
 	poetry lock
 	finch vm start || echo AWS finch is already running
 	sam validate --lint
 	@echo cfn-lint requires a valid AWS_REGION so we use us-east-1
-	AWS_REGION=us-east-1 poetry run cfn-lint template.yaml
+	AWS_REGION=us-east-1 uv run cfn-lint template.yaml
 	@# Do not add --parallel here; SAM emits urllib3 cleanup tracebacks during parallel container builds.
 	DOCKER_DEFAULT_PLATFORM=linux/arm64 sam build --use-container
 	@echo "========================================"
@@ -858,7 +858,7 @@ stamp-lambda-web-source-commit: sam-source-commit-check
 	echo "Stamped $$METADATA_FILE with git_commit=$$SOURCE_COMMIT."
 
 lambda-web-source-commit-check: vend-lambda-web stamp-lambda-web-source-commit
-	@PYTHONPATH=lambda-web/src poetry run python -c 'from app.constants import git_commit; assert len(git_commit()) == 40, git_commit()'
+	@PYTHONPATH=lambda-web/src uv run python -c 'from app.constants import git_commit; assert len(git_commit()) == 40, git_commit()'
 
 sam-deploy-version-check: sam-config-check sam-version-check sam-source-commit-check
 	@if [ -z "$(EFFECTIVE_STACK_NAME)" ]; then \
@@ -877,8 +877,8 @@ sam-deploy-version-check: sam-config-check sam-version-check sam-source-commit-c
 	else \
 			VERSION_URL="$${APP_URL%/}/api/ver"; \
 			VERSION_BODY=$$(curl -fsS --max-time 10 "$$VERSION_URL" 2>/dev/null || true); \
-			DEPLOYED_VERSION=$$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("__version__", ""))' 2>/dev/null <<< "$$VERSION_BODY" || true); \
-			DEPLOYED_STACK=$$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("stack_name", ""))' 2>/dev/null <<< "$$VERSION_BODY" || true); \
+			DEPLOYED_VERSION=$$(uv run python -c 'import json,sys; print(json.load(sys.stdin).get("__version__", ""))' 2>/dev/null <<< "$$VERSION_BODY" || true); \
+			DEPLOYED_STACK=$$(uv run python -c 'import json,sys; print(json.load(sys.stdin).get("stack_name", ""))' 2>/dev/null <<< "$$VERSION_BODY" || true); \
 			if [ -z "$$DEPLOYED_VERSION" ]; then \
 				echo "WARNING: could not read deployed version from $$VERSION_URL; allowing deploy."; \
 			elif [ "$$DEPLOYED_VERSION" = "$(APP_VERSION)" ] && [ "$(SAM_DEPLOY_ALLOW_SAME_VERSION)" != "1" ]; then \
@@ -953,7 +953,7 @@ endif
 	echo "Creating or verifying course for stack $(EFFECTIVE_STACK_NAME) using DYNAMODB_TABLE_PREFIX=$$DDB_PREFIX and endpoint $$APP_URL"; \
 	env -u AWS_ENDPOINT_URL_DYNAMODB -u AWS_ENDPOINT_URL_S3 \
 		DYNAMODB_TABLE_PREFIX="$$DDB_PREFIX" MAILER_DRY_RUN="$$MAILER_DRY_RUN_STACK" \
-		poetry run python $(DBUTIL) create-course --send-email --planttracer_endpoint "$$APP_URL" $(COURSE_CREATE_FLAGS)
+		uv run python $(DBUTIL) create-course --send-email --planttracer_endpoint "$$APP_URL" $(COURSE_CREATE_FLAGS)
 
 sam-storage-configure: sam-config-check
 ifeq ($(AWS_REGION),local)
@@ -965,7 +965,7 @@ endif
 		exit 1; \
 	fi; \
 	echo "Configuring and verifying CORS and EventBridge delivery for $$BUCKET"; \
-	poetry run python -m app.s3_presigned "$$BUCKET"; \
+	uv run python -m app.s3_presigned "$$BUCKET"; \
 	$(MAKE) PLANTTRACER_S3_BUCKET="$$BUCKET" CONFIRM_BUCKET="$$BUCKET" s3-eventbridge-enable
 
 s3-eventbridge-status:
@@ -973,7 +973,7 @@ s3-eventbridge-status:
 		echo "PLANTTRACER_S3_BUCKET must be set."; \
 		exit 1; \
 	fi
-	poetry run python etc/s3_upload_trigger.py
+	uv run s3_upload_trigger
 
 s3-eventbridge-enable:
 	@if [ -z "$(PLANTTRACER_S3_BUCKET)" ]; then \
@@ -984,7 +984,7 @@ s3-eventbridge-enable:
 		echo "Refusing to modify bucket notifications. Set CONFIRM_BUCKET=$(PLANTTRACER_S3_BUCKET)."; \
 		exit 1; \
 	fi
-	poetry run python etc/s3_upload_trigger.py --apply --confirm-bucket "$(CONFIRM_BUCKET)"
+	uv run s3_upload_trigger --apply --confirm-bucket "$(CONFIRM_BUCKET)"
 
 # After deploy: verify Lambda URLs. Use curl -s (no -f) so we capture and show body on 4xx/5xx.
 # Simplified by Simson
@@ -995,7 +995,7 @@ sam-status: sam-config-check sam-source-commit-check
 	BASE_URL="$${APP_URL%/}"; \
 	VERSION_URL="$$BASE_URL/api/ver"; \
 	VERSION_BODY=$$(curl -f -s --max-time 10 "$$VERSION_URL"); \
-	DEPLOYED_COMMIT=$$(printf '%s' "$$VERSION_BODY" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("git_commit", ""))'); \
+	DEPLOYED_COMMIT=$$(printf '%s' "$$VERSION_BODY" | uv run python -c 'import json,sys; print(json.load(sys.stdin).get("git_commit", ""))'); \
 	EXPECTED_COMMIT=$$(git rev-parse --verify HEAD); \
 	if [ "$$DEPLOYED_COMMIT" != "$$EXPECTED_COMMIT" ]; then \
 		echo "Deployed source commit mismatch: expected=$$EXPECTED_COMMIT actual=$${DEPLOYED_COMMIT:-unavailable}."; \
@@ -1055,7 +1055,7 @@ sam-logs-simple: sam-config-check
 	  REQ=$$(( $(SAM_LOGS_LIMIT) * 5 )); \
 	  aws logs filter-log-events --log-group-name "/aws/lambda/$$FUNC" --start-time "$$START" --limit $$REQ $(SAM_LOGS_OPTIONS) \
 	    --query 'events[].[timestamp,message]' --output text 2>/dev/null | tail -n $(SAM_LOGS_LIMIT) | while IFS=$$'\t' read -r ts msg; do \
-	    [ -n "$$ts" ] && printf '%s\t%s\n' "$$(python3 -c "import datetime; print(datetime.datetime.fromtimestamp($$ts/1000).strftime('%Y-%m-%d %H:%M:%S'))")" "$$msg"; \
+	    [ -n "$$ts" ] && printf '%s\t%s\n' "$$(uv run python -c "import datetime; print(datetime.datetime.fromtimestamp($$ts/1000).strftime('%Y-%m-%d %H:%M:%S'))")" "$$msg"; \
 	  done || true; \
 	fi
 

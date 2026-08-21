@@ -18,6 +18,7 @@ planttracer-local-trace = "app.local_trace_cli:main"
 dbutil = "dbutil:main"
 dbbackup = "dbbackup:main"
 deployed_workflow_test = "deployed_workflow_test:main"
+s3_upload_trigger = "s3_upload_trigger:main"
 
 [tool.poetry]
 packages = [
@@ -27,6 +28,7 @@ packages = [
     { include = "dbbackup.py", from = "src" },
     { include = "lambda_resize_cli.py", from = "lambda-resize/src" },
     { include = "deployed_workflow_test.py", from = "bin" },
+    { include = "s3_upload_trigger.py", from = "etc" },
 ]
 
 [tool.poetry.dependencies]
