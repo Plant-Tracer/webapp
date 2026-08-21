@@ -77,6 +77,21 @@ Release Notes
 
 Unreleased Summary
 ******************
+    * Admin: fit dashboard tables to the browser width without horizontal
+      table scrollbars.
+    * Developer: package the S3 EventBridge configuration utility as
+      ``uv run s3_upload_trigger`` and consistently execute Python programs
+      from Makefile targets through ``uv run``, with a complete standard
+      development dependency group for clean-checkout builds.
+    * Deployment: automatically repair and verify the selected S3 bucket's
+      browser CORS policy and EventBridge delivery after every deployment and
+      again before the deployed workflow creates test data, preserve other
+      notification destinations, clean up staging objects, and include bounded
+      response details when an HTTP step fails.
+    * Upload: distinguish S3 transfer completion from the 1–3 minute processing
+      phase, report a useful five-minute timeout, disable Play and Analyze until
+      durable movie data exists, and reject direct Analyze initialization for
+      incomplete uploads.
     * Movies: show one prominent upload button on the movie list instead of
       repeating upload links after each movie section
     * Operations: replace five continuously polling SQS event-source mappings

@@ -31,6 +31,22 @@ def configuration_with_eventbridge(configuration):
     return updated
 
 
+def configure_bucket_eventbridge(bucket, *, client=None):
+    """Idempotently enable S3 delivery to EventBridge for one bucket."""
+    s3_client = client or boto3.client("s3")
+    current = s3_client.get_bucket_notification_configuration(Bucket=bucket)
+    if EVENTBRIDGE_CONFIGURATION in current:
+        return False
+    s3_client.put_bucket_notification_configuration(
+        Bucket=bucket,
+        NotificationConfiguration=configuration_with_eventbridge(current),
+    )
+    verified = s3_client.get_bucket_notification_configuration(Bucket=bucket)
+    if EVENTBRIDGE_CONFIGURATION not in verified:
+        raise RuntimeError(f"EventBridge delivery was not enabled for {bucket}")
+    return True
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--apply", action="store_true", help="write the merged configuration")
@@ -59,14 +75,7 @@ def main() -> int:
         print(f"EventBridge delivery is disabled for {bucket}; no changes made.")
         return 0
 
-    updated = configuration_with_eventbridge(current)
-    client.put_bucket_notification_configuration(
-        Bucket=bucket,
-        NotificationConfiguration=updated,
-    )
-    verified = client.get_bucket_notification_configuration(Bucket=bucket)
-    if EVENTBRIDGE_CONFIGURATION not in verified:
-        raise RuntimeError(f"EventBridge delivery was not enabled for {bucket}")
+    configure_bucket_eventbridge(bucket, client=client)
     print(f"EventBridge delivery enabled and verified for {bucket}.")
     return 0
 

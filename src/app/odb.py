@@ -2155,6 +2155,11 @@ def movie_metadata_with_trim_defaults(movie: dict) -> dict:
     return metadata
 
 
+def movie_is_available(movie: dict) -> bool:
+    """Return whether an upload reached durable movie storage."""
+    return bool(movie.get(UPLOADED_AT) or movie.get(DATE_UPLOADED))
+
+
 def _copy_frame_trackpoints_if_missing(*, movie_id: str, from_frame: int, to_frame: int):
     """Copy markers from one frame to another only when the target has no markers."""
     assert is_movie_id(movie_id)

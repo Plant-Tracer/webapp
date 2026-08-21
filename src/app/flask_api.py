@@ -1109,6 +1109,9 @@ def api_acquire_movie_analysis_lease():
     user_id = get_user_id(allow_demo=False)
     movie_id = get_movie_id()
     movie = odb.can_access_movie(user_id=user_id, movie_id=movie_id)
+    if not odb.movie_is_available(movie):
+        return jsonify({C.API_KEY_ERROR: True,
+                        C.API_KEY_MESSAGE: "Movie upload processing is not complete."}), 409
     try:
         movie = odb.can_edit_movie(user_id=user_id, movie_id=movie_id)
     except UnauthorizedUser:

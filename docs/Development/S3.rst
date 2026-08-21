@@ -71,7 +71,10 @@ run; an S3 bucket sends its events to EventBridge in that same region.
         --server-side-encryption-configuration \
         '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
 
-4. Configure CORS for browser presigned uploads and downloads. CORS permission
+4. Configure CORS for browser presigned uploads and downloads. The deployed
+   workflow test automatically applies and verifies this policy on the bucket
+   selected by ``ImageBucketName`` when CORS is missing or incompatible. The
+   following equivalent command is available for manual setup. CORS permission
    does not make objects public; S3 still requires a valid presigned request.
    The configuration matches ``CORS_CONFIGURATION`` in
    ``src/app/s3_presigned.py``:
@@ -224,7 +227,8 @@ Enable EventBridge after verifying the exact bucket:
      make s3-eventbridge-enable
 
 Updating an S3 notification configuration replaces the complete configuration.
-``etc/s3_upload_trigger.py`` therefore reads and preserves existing topic,
+``uv run s3_upload_trigger`` invokes the packaged
+``etc/s3_upload_trigger.py`` utility. It reads and preserves existing topic,
 queue, and Lambda destinations, adds ``EventBridgeConfiguration``, then reads
 the bucket again to verify the change.
 
@@ -252,6 +256,14 @@ and defaults to the committed circumnutation movie and reference outputs;
 command-line options remain available to override those defaults.
 Comparing the traced movie's final frame also requires an ``ffmpeg`` executable
 on ``PATH`` or selected explicitly with ``FFMPEG_PATH``.
+
+Every guided and normal SAM deployment runs ``make sam-storage-configure``
+immediately after CloudFormation completes. It applies the bucket CORS policy
+and idempotently enables and verifies bucket-level EventBridge delivery.
+Existing topic, queue, and Lambda notification destinations are preserved. The
+deployed workflow verifier repeats these checks before creating test data as a
+defense-in-depth gate. This ensures a new pre-existing bucket is ready for
+browser uploads and the stack-scoped ``uploads/<stack>/`` EventBridge rule.
 
 Metadata Stored with Original Movies
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -9,6 +9,7 @@ import json
 import os
 import os.path
 import time
+from collections.abc import Callable
 
 import boto3
 from tabulate import tabulate
@@ -69,20 +70,27 @@ def table_prefix_from_env():
     return (table_prefix.rstrip('-') + '-') if table_prefix else ''
 
 
-def create_tables(*,ignore_table_exists = False):
+def create_tables(*, ignore_table_exists=False, status: Callable[[str], None] | None = None):
     """Creates DynamoDB tables based on etc/dynamodb_tables.json.
     Connects to the local DynamoDB instance using AWS_ENDPOINT_URL_DYNAMODB.
 
-    :param dynamodb_resource: The boto3 DynamoDB resource object.
     :param ignore_table_exists: Tables to ignore if they already exist
-    :type dynamodb_resource: boto3.resources.base.ServiceResource
+    :param status: Optional callback for user-visible progress messages
     :raises ClientError: If a DynamoDB client-side error occurs (e.g., table already exists).
     :raises Exception: For any unexpected errors during creation.
     :return: the connected ddbo object
     """
     table_prefix = table_prefix_from_env()
     dynamodb = DDBO.resource()
-    for table_config in load_table_configurations():
+    table_configurations = load_table_configurations()
+    table_count = len(table_configurations)
+    if status:
+        status(
+            f"Creating {table_count} DynamoDB tables with prefix '{table_prefix}'. "
+            "This usually takes 1-3 minutes in AWS."
+        )
+        status("Tables are created sequentially; DynamoDB status checks may be 20 seconds apart.")
+    for table_number, table_config in enumerate(table_configurations, start=1):
         # prepend the prefix to the table name before creating it
         tc = copy.deepcopy(table_config)
         try:
@@ -91,12 +99,18 @@ def create_tables(*,ignore_table_exists = False):
             pass
         tc[TableName] = table_name = table_prefix + tc[TableName]
         try:
+            if status:
+                status(f"[{table_number}/{table_count}] Creating {table_name}...")
             table = dynamodb.create_table(**tc)
             # because tables don't get created instantly and wait_until_exists
             # has a hard-coded 20-second delay, we sleep a bit...
             time.sleep(C.TABLE_CREATE_SLEEP_TIME)
+            if status:
+                status(f"[{table_number}/{table_count}] Waiting for {table_name} to become ACTIVE...")
             logger.info("Waiting for table %s to be active...", table_name)
             table.wait_until_exists()
+            if status:
+                status(f"[{table_number}/{table_count}] Ready: {table_name}")
             logger.info("Table %s created successfully!", table_name)
         except ClientError as e:
             if e.response['Error']['Code'] in ('TableAlreadyExistsException','ResourceInUseException'):
@@ -104,6 +118,8 @@ def create_tables(*,ignore_table_exists = False):
                 should_warn = not ignore_table_exists
                 if isinstance(ignore_table_exists, (list, tuple, set)) and table_name in ignore_table_exists:
                     should_warn = False
+                if status:
+                    status(f"[{table_number}/{table_count}] Already exists: {table_name}")
                 if should_warn:
                     logger.warning("Table %s already exists.", table_name)
             else:

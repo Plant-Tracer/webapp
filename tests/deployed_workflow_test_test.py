@@ -6,6 +6,7 @@ from decimal import Decimal
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
+import requests
 
 import deployed_workflow_test
 from app.schema import Trackpoint
@@ -49,6 +50,80 @@ def test_deployment_info_reads_api_version():
 
     assert info.stack_name == "prod"
     assert info.dynamodb_table_prefix == "prod-"
+
+
+def test_deployment_info_http_error_includes_response_body():
+    response_body = b'{"error":true,"message":"S3 bucket has no CORS configuration"}'
+
+    class UnavailableHandler(BaseHTTPRequestHandler):
+        def do_GET(self):  # pylint: disable=invalid-name
+            self.send_response(503)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(response_body)))
+            self.end_headers()
+            self.wfile.write(response_body)
+
+    with ThreadingHTTPServer(("127.0.0.1", 0), UnavailableHandler) as server:
+        thread = threading.Thread(target=server.serve_forever)
+        thread.start()
+        try:
+            with pytest.raises(requests.HTTPError) as raised:
+                deployed_workflow_test.deployment_info(
+                    f"http://127.0.0.1:{server.server_port}/")
+        finally:
+            server.shutdown()
+            thread.join()
+
+    message = str(raised.value)
+    assert "deployment identity request failed" in message
+    assert "returned HTTP 503 Service Unavailable" in message
+    assert "S3 bucket has no CORS configuration" in message
+
+
+def test_validate_deployment_config_repairs_cors_before_workflow(monkeypatch):
+    cors_configured = False
+    configured_buckets = []
+    eventbridge_buckets = []
+    monkeypatch.setattr(deployed_workflow_test, "CORS_REPAIR_RECHECK_INTERVAL", 0)
+
+    class ConfigHandler(BaseHTTPRequestHandler):
+        def do_GET(self):  # pylint: disable=invalid-name
+            assert self.path == "/api/config-check"
+            response_body = json.dumps({
+                "dynamodb_ok": True,
+                "dynamodb_message": "",
+                "cors_ok": cors_configured,
+                "cors_message": "" if cors_configured else "S3 bucket has no CORS configuration",
+                "bucket_region_ok": True,
+                "bucket_region_message": "",
+            }).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(response_body)))
+            self.end_headers()
+            self.wfile.write(response_body)
+
+    with ThreadingHTTPServer(("127.0.0.1", 0), ConfigHandler) as server:
+        thread = threading.Thread(target=server.serve_forever)
+        thread.start()
+        try:
+            def configure_cors(bucket):
+                nonlocal cors_configured
+                configured_buckets.append(bucket)
+                cors_configured = True
+
+            deployed_workflow_test.validate_deployment_config(
+                f"http://127.0.0.1:{server.server_port}/",
+                bucket="planttracer-test",
+                cors_configurer=configure_cors,
+                eventbridge_configurer=lambda bucket: eventbridge_buckets.append(bucket) or True,
+            )
+        finally:
+            server.shutdown()
+            thread.join()
+
+    assert configured_buckets == ["planttracer-test"]
+    assert eventbridge_buckets == ["planttracer-test"]
 
 
 def reference_trackpoint():

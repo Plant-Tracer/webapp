@@ -37,6 +37,62 @@ Browser pages load jQuery globally. ES modules import `$` from
 
 Local development uses MinIO for S3 and DynamoDB Local for DynamoDB.
 
+## AWS Stack Quickstart
+
+These commands assume that AWS authentication and `AWS_REGION` are already set,
+the branch is clean and pushed, and the deployment's pre-existing S3 bucket and
+other guided parameters are available. Replace the angle-bracketed values.
+
+Create a new stack with a new, stack-specific DynamoDB database:
+
+```bash
+DYNAMODB_TABLE_PREFIX=<stack>- poetry run dbutil createdb && STACK=<stack> make sam-build sam-deploy-guided
+```
+
+The first deployment must use `sam-deploy-guided`. It collects required values
+such as the pre-existing S3 bucket, domain settings, and mail behavior, then
+writes them to the ignored per-stack file `samconfigs/<stack>.toml`. Subsequent
+`sam-deploy` runs are non-interactive and reuse that file; they refuse to deploy
+a stack whose saved configuration does not yet exist.
+Both deployment targets configure and verify CORS and EventBridge delivery on
+the selected pre-existing S3 bucket before running their status and workflow
+checks.
+
+Create a new stack using an existing DynamoDB database:
+
+```bash
+DYNAMODB_TABLE_PREFIX=<existing-prefix>- STACK=<stack> make sam-build sam-deploy-guided
+```
+
+Create a test course and make `simsong@acm.org` its administrator (the stack
+and its DynamoDB tables must already exist):
+
+```bash
+AWS_REGION=us-east-1 STACK_NAME=dev COURSE_CREATE_FLAGS="--course_id dev-test --course_name 'Dev Test Course' --admin_email simsong@acm.org --admin_name 'Simson Garfinkel'" make sam-course-create
+```
+
+`sam-course-create` reads the stack's DynamoDB prefix and application URL,
+creates or verifies the course and administrator, and sends the administrator a
+login email unless the stack has `MailerDryRun=true`.
+
+Delete and replace a stack under the same name, retaining its DynamoDB database
+and saved SAM configuration:
+
+```bash
+STACK=<stack> make sam-delete && STACK=<stack> make sam-build sam-deploy
+```
+
+Shut down and delete a stack:
+
+```bash
+STACK=<stack> make sam-delete
+```
+
+`sam-delete` waits 10 seconds before proceeding. Deleting a stack does not
+delete its external DynamoDB tables or the pre-existing S3 movie bucket. Table
+names are defined in `etc/dynamodb_tables.json`; the application selects the
+set whose prefix matches the stack's `DynamoDBTablePrefix` parameter.
+
 ## Local Development
 
 Install dependencies:
