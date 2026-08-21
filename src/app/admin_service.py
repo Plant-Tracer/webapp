@@ -161,6 +161,16 @@ class AdminCourseCreateResponse(BaseModel):
     message: str
 
 
+class AdminCourseAdministratorChange(BaseModel):
+    """Result returned by a course-administrator mutation."""
+
+    error: bool = False
+    course_id: str
+    administrator: AdminCourseAdministrator
+    assigned: bool
+    changed: bool
+
+
 class AdminCourseSummary(BaseModel):
     """Course row shown by the minimal admin interface."""
 

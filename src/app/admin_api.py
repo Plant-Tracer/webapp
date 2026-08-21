@@ -14,6 +14,64 @@ from .odb import InvalidAPI_Key
 admin_api_bp = Blueprint("admin_api", __name__)
 
 
+def _change_course_administrator(course_id, user_id, *, assigned):
+    """Apply one authenticated superadmin course-administrator mutation."""
+    try:
+        viewer_user = get_user_dict()
+        if odb.normalize_super_role(viewer_user) != odb.SUPER_ROLE_SUPERADMIN:
+            return jsonify({"error": True, "message": "Superadmin access required"}), 403
+        if not odb.is_user_id(user_id) or not course_id:
+            return jsonify({
+                "error": True,
+                "message": "Invalid course-administrator identifier",
+            }), 400
+        if assigned:
+            change = odb.add_course_admin(
+                admin_id=user_id,
+                course_id=course_id,
+                actor_user_id=viewer_user[odb.USER_ID],
+                ipaddr=request.remote_addr,
+            )
+        else:
+            change = odb.remove_course_admin(
+                admin_id=user_id,
+                course_id=course_id,
+                actor_user_id=viewer_user[odb.USER_ID],
+                ipaddr=request.remote_addr,
+                protect_last_admin=True,
+            )
+        target_user = odb.get_user(user_id)
+        response = admin_service.AdminCourseAdministratorChange(
+            course_id=course_id,
+            administrator=admin_service.AdminCourseAdministrator(
+                user_id=user_id,
+                user_name=target_user.get(odb.USER_NAME, ""),
+                email=target_user.get(odb.EMAIL, ""),
+            ),
+            assigned=change.assigned,
+            changed=change.changed,
+        )
+    except InvalidAPI_Key:
+        return jsonify({"error": True, "message": "Invalid api_key"}), 403
+    except odb.InvalidUser_Id:
+        return jsonify({"error": True, "message": "User not found"}), 404
+    except odb.InvalidCourse_Id:
+        return jsonify({"error": True, "message": "Course not found"}), 404
+    except odb.DisabledCourseAdmin:
+        return jsonify({"error": True, "message": "Administrator account is disabled"}), 409
+    except odb.FinalCourseAdmin:
+        return jsonify({
+            "error": True,
+            "message": "A course must retain at least one administrator",
+        }), 409
+    except odb.CourseAdminConflict:
+        return jsonify({
+            "error": True,
+            "message": "Administrator assignments changed concurrently; retry the request",
+        }), 409
+    return jsonify(response.model_dump())
+
+
 @admin_api_bp.get("/summary")
 def api_admin_summary():
     """Return the read-only admin landing-page summary."""
@@ -128,6 +186,18 @@ def api_admin_create_course():
         message=message if result.created else message.replace("created", "updated", 1),
     )
     return jsonify(response.model_dump()), 201 if result.created else 200
+
+
+@admin_api_bp.put("/courses/<course_id>/administrators/<user_id>")
+def api_admin_assign_course_administrator(course_id, user_id):
+    """Assign an existing user as a course administrator."""
+    return _change_course_administrator(course_id, user_id, assigned=True)
+
+
+@admin_api_bp.delete("/courses/<course_id>/administrators/<user_id>")
+def api_admin_remove_course_administrator(course_id, user_id):
+    """Remove course-admin status while retaining course membership."""
+    return _change_course_administrator(course_id, user_id, assigned=False)
 
 
 @admin_api_bp.get("/movies/<movie_id>/media")

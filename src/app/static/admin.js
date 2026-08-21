@@ -133,6 +133,31 @@ function compactDetails(details) {
     .map(([label, value]) => `${label}: ${value}`).join(" · ");
 }
 
+function administratorLabel(user) {
+  const name = user.user_name || user.email || user.user_id;
+  return user.email && user.email !== name ? `${name} (${user.email})` : name;
+}
+
+function courseAdministratorCell(course) {
+  const cell = document.createElement("td");
+  const administrators = course.administrators || [];
+  const names = document.createElement("span");
+  names.className = "course-admin-names";
+  names.textContent = administrators.length
+    ? administrators.map(administratorLabel).join(", ")
+    : "none";
+  cell.append(names);
+  if (state.viewerRole === "superadmin") {
+    const manage = document.createElement("button");
+    manage.type = "button";
+    manage.className = "course-admin-manage";
+    manage.textContent = "Manage";
+    manage.addEventListener("click", () => openCourseAdminDialog(course));
+    cell.append(manage);
+  }
+  return cell;
+}
+
 function appendCourseRows(courses) {
   const tbody = document.getElementById("admin-course-rows");
   for (const course of courses) {
@@ -141,7 +166,7 @@ function appendCourseRows(courses) {
       textCell(course.course_id),
       courseKeyCell(course),
       courseNameCell(course),
-      textCell(course.admin_count),
+      courseAdministratorCell(course),
       textCell(`${course.enrollment_count} / ${course.max_enrollment}`),
       dateCell(
         course.display_created_at,
@@ -157,6 +182,122 @@ function appendCourseRows(courses) {
       ]), row));
     }
   }
+}
+
+function selectedCourseAdminDialogCourse() {
+  const dialog = document.getElementById("course-admin-dialog");
+  return state.courses.find((course) => course.course_id === dialog.dataset.courseId);
+}
+
+function applyCourseAdministratorChange(payload) {
+  const user = state.users.find((item) => item.user_id === payload.administrator.user_id);
+  if (!user) {
+    throw new Error("The changed user is missing from the loaded Admin data");
+  }
+  let membership = user.courses.find((item) => item.course_id === payload.course_id);
+  if (payload.assigned && !membership) {
+    membership = { course_id: payload.course_id, is_admin: true };
+    user.courses.push(membership);
+  } else if (membership) {
+    membership.is_admin = payload.assigned;
+  }
+  enrichCourseNames();
+  renderTable("courses");
+  renderTable("users");
+}
+
+async function changeCourseAdministrator(course, user, assigned) {
+  if (!assigned && !window.confirm(
+    `Remove ${administratorLabel(user)} as an administrator of ${course.course_name}? `
+    + "The user will remain enrolled in the course.",
+  )) {
+    return;
+  }
+  const status = document.getElementById("course-admin-dialog-status");
+  status.className = "";
+  status.textContent = assigned ? "Adding administrator..." : "Removing administrator...";
+  const url = `${API_BASE}api/admin/courses/${encodeURIComponent(course.course_id)}`
+    + `/administrators/${encodeURIComponent(user.user_id)}`;
+  try {
+    const response = await fetch(url, {
+      method: assigned ? "PUT" : "DELETE",
+      credentials: "same-origin",
+    });
+    const payload = await response.json();
+    if (!response.ok || payload.error) {
+      throw new Error(payload.message || `Administrator update failed with HTTP ${response.status}`);
+    }
+    applyCourseAdministratorChange(payload);
+    renderCourseAdminDialog(
+      selectedCourseAdminDialogCourse(),
+      `${administratorLabel(user)} ${assigned ? "added" : "removed"}.`,
+    );
+  } catch (error) {
+    status.className = "admin-error";
+    status.textContent = error.message;
+  }
+}
+
+function renderCourseAdminDialog(course, message = "") {
+  const list = document.getElementById("course-admin-current");
+  const select = document.getElementById("course-admin-user-select");
+  const add = document.getElementById("course-admin-add");
+  const status = document.getElementById("course-admin-dialog-status");
+  const administrators = course.administrators || [];
+  document.getElementById("course-admin-dialog-title").textContent =
+    `Administrators for ${course.course_name}`;
+  status.className = "";
+  status.textContent = message;
+  list.replaceChildren();
+  administrators.forEach((user) => {
+    const item = document.createElement("li");
+    const label = document.createElement("span");
+    label.textContent = administratorLabel(user);
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.textContent = "Remove";
+    remove.disabled = administrators.length === 1;
+    remove.title = remove.disabled ? "A course must retain at least one administrator" : "";
+    remove.addEventListener("click", () => changeCourseAdministrator(course, user, false));
+    item.append(label, remove);
+    list.append(item);
+  });
+  select.replaceChildren();
+  const administratorIds = new Set(administrators.map((user) => user.user_id));
+  const candidates = state.users.filter((user) => user.enabled && !administratorIds.has(user.user_id));
+  candidates.sort((left, right) => administratorLabel(left).localeCompare(administratorLabel(right)));
+  candidates.forEach((user) => {
+    const option = document.createElement("option");
+    option.value = user.user_id;
+    option.textContent = administratorLabel(user);
+    select.append(option);
+  });
+  add.disabled = candidates.length === 0;
+  select.disabled = candidates.length === 0;
+}
+
+function openCourseAdminDialog(course) {
+  const dialog = document.getElementById("course-admin-dialog");
+  dialog.dataset.courseId = course.course_id;
+  renderCourseAdminDialog(course);
+  dialog.showModal();
+}
+
+function bindCourseAdminDialog() {
+  const dialog = document.getElementById("course-admin-dialog");
+  if (!dialog || dialog.dataset.bound) {
+    return;
+  }
+  dialog.dataset.bound = "true";
+  document.getElementById("course-admin-dialog-close").addEventListener("click", () => dialog.close());
+  document.getElementById("course-admin-add").addEventListener("click", () => {
+    const course = selectedCourseAdminDialogCourse();
+    const userId = document.getElementById("course-admin-user-select").value;
+    const user = state.users.find((item) => item.user_id === userId);
+    if (course && user) {
+      changeCourseAdministrator(course, user, true);
+    }
+  });
 }
 
 function coursesCell(courses) {
@@ -661,7 +802,11 @@ function enrichCourseNames() {
     });
   });
   state.courses.forEach((course) => {
+    course.administrators = state.users.filter((user) => user.courses.some(
+      (membership) => membership.course_id === course.course_id && membership.is_admin,
+    ));
     course.admin_names = (adminNames.get(course.course_id) || []).sort();
+    course.admin_count = course.administrators.length;
   });
   state.movies.forEach((movie) => {
     movie.course_name = names.get(movie.course_id) || movie.course_id;
@@ -730,6 +875,7 @@ async function loadAdminSummary() {
   bindVerboseDetails();
   bindResizableTables();
   bindCourseCreate();
+  bindCourseAdminDialog();
   const status = document.getElementById("admin-status");
   status.className = "";
   status.textContent = "Loading all admin records...";
@@ -758,9 +904,11 @@ export {
   appendCourseRows,
   appendMovieRows,
   appendUserRows,
+  applyCourseAdministratorChange,
   changeSort,
   populateExistingCourseAdmins,
   syncCourseAdminName,
+  openCourseAdminDialog,
   loadAdminSummary,
   sortedRows,
   state,

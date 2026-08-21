@@ -868,7 +868,12 @@ def add_admin(args, parser):
             parser.error(f"User {args.admin_email} does not exist")
         odb.lookup_course_by_id(course_id=args.course_id)
         admin_id = odb.get_user_email(args.admin_email)[USER_ID]
-        odb.add_course_admin(admin_id=admin_id, course_id=args.course_id)
+        odb.add_course_admin(
+            admin_id=admin_id,
+            course_id=args.course_id,
+            actor_user_id="dbutil",
+            ipaddr="dbutil",
+        )
     except InvalidCourse_Id:
         print(f"Course with id {args.course_id} does not exist.", file=sys.stderr)
         return 1
@@ -881,7 +886,16 @@ def remove_admin(args, parser):
     if not args.course_id:
         parser.error("remove-admin requires --course_id")
     admin_id = odb.get_user_email(args.admin_email)[USER_ID]
-    odb.remove_course_admin(admin_id=admin_id, course_id=args.course_id)
+    try:
+        odb.remove_course_admin(
+            admin_id=admin_id,
+            course_id=args.course_id,
+            actor_user_id="dbutil",
+            ipaddr="dbutil",
+            protect_last_admin=True,
+        )
+    except odb.FinalCourseAdmin:
+        parser.error("A course must retain at least one administrator")
 
 
 def purge_all_movies(args, parser):

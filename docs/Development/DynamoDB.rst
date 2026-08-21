@@ -283,8 +283,13 @@ Data Consistency Notes
 * **Email uniqueness** is enforced by a transactional write to both ``users`` and
   ``unique_emails`` at registration time.
 * **Course admin list** (``admins_for_course`` on the course record) is kept in sync with
-  ``admin_for_courses`` on the user record by ``add_course_admin()`` and
-  ``remove_course_admin()``.
+  ``admin_for_courses`` on the user record by one optimistic DynamoDB transaction in
+  ``add_course_admin()`` and ``remove_course_admin()``. Assignment also ensures the
+  user's ``courses`` list and ``course_users`` row exist. Removal changes only the
+  administrator lists: it retains enrollment and the user's default course. Browser and
+  CLI removal protect the final administrator. Actual changes include an attributed
+  ``course.admin.assigned`` or ``course.admin.removed`` log item in the same transaction;
+  idempotent no-op requests do not create audit entries.
 * **Enrollment** (``course_users`` rows) is added by ``register_email()`` and
   removed by ``delete_user()`` for the courses listed on the user record.
 * **Login times** (``first_used_at``, ``last_used_at``) live on ``api_keys``, not ``users``.
