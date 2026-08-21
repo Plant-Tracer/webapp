@@ -783,7 +783,7 @@ def create_course_usage_text(missing):
 
 
 def create_db():
-    odbmaint.create_tables()
+    odbmaint.create_tables(status=lambda message: print(message, flush=True))
 
 
 def drop_db():

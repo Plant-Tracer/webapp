@@ -1,4 +1,7 @@
+import uuid
+
 from app import odbmaint
+from app.constants import C
 
 
 EXPECTED_TABLES = {
@@ -39,3 +42,28 @@ def test_load_table_configurations_returns_independent_copies():
 
     fresh_configs = odbmaint.load_table_configurations()
     assert fresh_configs[0][odbmaint.TableName] == "users"
+
+
+def test_create_tables_reports_creation_progress(local_ddb, monkeypatch):
+    del local_ddb
+    prefix = f"status-{uuid.uuid4()}-"
+    messages = []
+    monkeypatch.setenv(C.DYNAMODB_TABLE_PREFIX, prefix)
+    monkeypatch.setattr(C, "TABLE_CREATE_SLEEP_TIME", 0)
+
+    try:
+        odbmaint.create_tables(status=messages.append)
+
+        assert messages[:2] == [
+            f"Creating 8 DynamoDB tables with prefix '{prefix}'. "
+            "This usually takes 1-3 minutes in AWS.",
+            "Tables are created sequentially; DynamoDB status checks may be 20 seconds apart.",
+        ]
+        table_names = [config[odbmaint.TableName] for config in odbmaint.load_table_configurations()]
+        for table_number, table_name in enumerate(table_names, start=1):
+            full_name = prefix + table_name
+            assert f"[{table_number}/8] Creating {full_name}..." in messages
+            assert f"[{table_number}/8] Waiting for {full_name} to become ACTIVE..." in messages
+            assert f"[{table_number}/8] Ready: {full_name}" in messages
+    finally:
+        odbmaint.drop_tables(silent_warnings=True)

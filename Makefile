@@ -8,8 +8,20 @@
 # Environment variables:
 # PLANTTRACER_CREDENTIALS - the config.ini file that includes [smtp] and [imap] configuration the your production system
 #
-# Example deploy (defaults DynamoDBTablePrefix to slg-dev-):
-# aws sso login && STACK_NAME=slg-dev make sam-build sam-deploy
+# AWS stack quickstart (AWS authentication and AWS_REGION must already be set):
+# New stack and new DynamoDB tables:
+# DYNAMODB_TABLE_PREFIX=<stack>- poetry run dbutil createdb && STACK=<stack> make sam-build sam-deploy-guided
+# New stack using existing DynamoDB tables:
+# DYNAMODB_TABLE_PREFIX=<existing-prefix>- STACK=<stack> make sam-build sam-deploy-guided
+# Replace a stack while retaining its external DynamoDB tables and S3 bucket:
+# STACK=<stack> make sam-delete && STACK=<stack> make sam-build sam-deploy
+# Shut down and delete a stack while retaining external DynamoDB and S3 data:
+# STACK=<stack> make sam-delete
+#
+# A stack's first deployment must use sam-deploy-guided. It collects required
+# deployment parameters and saves them in the ignored per-stack file
+# samconfigs/<stack>.toml. Later sam-deploy runs are non-interactive and reuse
+# that file; sam-deploy refuses to proceed when the saved config does not exist.
 
 SHELL := /bin/bash
 PYLINT_THRESHOLD := 10.0
