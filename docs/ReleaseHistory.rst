@@ -77,6 +77,9 @@ Release Notes
 
 Unreleased Summary
 ******************
+    * Deployment: automatically repair and verify the selected S3 bucket's
+      browser CORS policy before the deployed workflow creates test data, and
+      include bounded response details when an HTTP step fails.
     * Movies: show one prominent upload button on the movie list instead of
       repeating upload links after each movie section
     * Operations: replace five continuously polling SQS event-source mappings

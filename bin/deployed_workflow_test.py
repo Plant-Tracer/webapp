@@ -23,6 +23,7 @@ import os
 import subprocess
 import tempfile
 import time
+import urllib.parse
 import zipfile
 from pathlib import Path
 from xml.etree import ElementTree as ET
@@ -31,7 +32,8 @@ import requests
 from PIL import Image, ImageChops
 from pydantic import BaseModel, Field
 
-from app import odb, odb_movie_data
+from app import odb, odb_movie_data, s3_presigned
+from app.constants import C
 from app.paths import ffmpeg_path
 from app.schema import Trackpoint
 
@@ -49,6 +51,9 @@ TRACE_MOVIE_PATH = "resize-api/v1/trace-movie"
 TRACKPOINTS_PATH = "api/get-movie-trackpoints"
 XLSX_FORMAT = "xlsx"
 TRACKING_TOLERANCE_PIXELS = 2
+HTTP_ERROR_BODY_LIMIT = 2000
+CORS_REPAIR_RECHECK_INTERVAL = 2
+CORS_REPAIR_TIMEOUT = 30
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MOVIE_PATH = PROJECT_ROOT / "tests/data/2019-07-12 circumnutation.mp4"
 DEFAULT_REFERENCE_CSV_PATH = PROJECT_ROOT / "tests/data/2019-07-12 circumnutation_trackpoints.csv"
@@ -105,6 +110,17 @@ class DeploymentInfo(BaseModel):
     dynamodb_table_prefix: str = Field(alias=DYNAMODB_TABLE_PREFIX_ENV)
 
 
+class DeploymentConfigCheck(BaseModel):
+    """Public deployment readiness returned by ``/api/config-check``."""
+
+    dynamodb_ok: bool
+    dynamodb_message: str
+    cors_ok: bool
+    cors_message: str
+    bucket_region_ok: bool
+    bucket_region_message: str
+
+
 class MovieDataResponse(BaseModel):
     """Signed original-movie download URL returned by lambda-resize."""
 
@@ -130,6 +146,33 @@ class ReferenceTrackpoint(BaseModel):
     ruler_0_y: int = Field(alias=RULER_0_Y_COLUMN)
     ruler_10_x: int = Field(alias=RULER_10_X_COLUMN)
     ruler_10_y: int = Field(alias=RULER_10_Y_COLUMN)
+
+
+def raise_for_status(response, operation):
+    """Raise an HTTP error that retains useful response details without leaking URL queries."""
+    try:
+        response.raise_for_status()
+    except requests.HTTPError as exc:
+        parsed_url = urllib.parse.urlsplit(response.url)
+        safe_url = urllib.parse.urlunsplit((
+            parsed_url.scheme, parsed_url.netloc, parsed_url.path, "", ""))
+        content_type = response.headers.get("Content-Type", "unknown").split(";", maxsplit=1)[0]
+        textual = any(marker in content_type for marker in ("json", "text", "xml", "html"))
+        if not response.content:
+            body = "<empty>"
+        elif textual:
+            body = response.content[:HTTP_ERROR_BODY_LIMIT].decode(response.encoding or "utf-8",
+                                                                    errors="replace")
+            if len(response.content) > HTTP_ERROR_BODY_LIMIT:
+                body += "... [truncated]"
+        else:
+            body = f"<{len(response.content)}-byte non-text response omitted>"
+        method = response.request.method if response.request is not None else "HTTP"
+        message = (
+            f"{operation} failed: {method} {safe_url} returned HTTP {response.status_code} "
+            f"{response.reason}; content-type={content_type}; response body={body!r}"
+        )
+        raise requests.HTTPError(message, response=response, request=response.request) from exc
 
 
 def wait_for_movie(ddbo, movie_id, predicate, *, timeout, phase):
@@ -291,15 +334,48 @@ def post_api(endpoint, path, *, api_key, movie_id, response_format=None):
     if response_format:
         data["format"] = response_format
     response = requests.post(f"{endpoint.rstrip('/')}/{path}", data=data, timeout=30)
-    response.raise_for_status()
+    raise_for_status(response, path)
     return response
 
 
 def deployment_info(endpoint):
     """Read the stack identity and DynamoDB prefix from the deployed application."""
     response = requests.get(f"{endpoint.rstrip('/')}/api/ver", timeout=30)
-    response.raise_for_status()
+    raise_for_status(response, "deployment identity request")
     return DeploymentInfo.model_validate(response.json())
+
+
+def _deployment_config(endpoint):
+    """Read the deployed application's current data-store readiness."""
+    response = requests.get(f"{endpoint.rstrip('/')}/api/config-check", timeout=30)
+    raise_for_status(response, "deployment configuration request")
+    return DeploymentConfigCheck.model_validate(response.json())
+
+
+def validate_deployment_config(endpoint, *, bucket=None, cors_configurer=None):
+    """Repair S3 CORS when possible, then fail on any remaining data-store problem."""
+    check = _deployment_config(endpoint)
+    if not check.cors_ok and bucket:
+        configure_cors = cors_configurer or s3_presigned.configure_bucket_cors
+        logging.info("repairing S3 CORS for bucket=%s", bucket)
+        configure_cors(bucket)
+        deadline = time.monotonic() + CORS_REPAIR_TIMEOUT
+        while not check.cors_ok and time.monotonic() < deadline:
+            time.sleep(CORS_REPAIR_RECHECK_INTERVAL)
+            check = _deployment_config(endpoint)
+        if check.cors_ok:
+            logging.info("verified S3 CORS for bucket=%s", bucket)
+    failures = []
+    if not check.dynamodb_ok:
+        failures.append(f"DynamoDB: {check.dynamodb_message}")
+    if not check.cors_ok:
+        failures.append(f"S3 CORS: {check.cors_message}")
+        if not bucket:
+            failures.append(f"automatic CORS repair requires {C.PLANTTRACER_S3_BUCKET}")
+    if not check.bucket_region_ok:
+        failures.append(f"S3 region: {check.bucket_region_message}")
+    if failures:
+        raise RuntimeError("deployment configuration is not ready: " + "; ".join(failures))
 
 
 def run_workflow(*, endpoint, stack_name, movie_path, reference_csv_path, reference_xlsx_path,
@@ -319,7 +395,7 @@ def run_workflow(*, endpoint, stack_name, movie_path, reference_csv_path, refere
             "description": "automated post-deploy EventBridge workflow test",
             "movie_data_sha256": hashlib.sha256(movie_bytes).hexdigest(),
             "movie_data_length": len(movie_bytes), "fpm": "30"}, timeout=30)
-        response.raise_for_status()
+        raise_for_status(response, "create workflow movie")
         created = NewMovieResponse.model_validate(response.json())
         if created.error or created.upload_completion_mode != "eventbridge":
             raise RuntimeError("deployed new-movie did not select EventBridge completion")
@@ -328,7 +404,7 @@ def run_workflow(*, endpoint, stack_name, movie_path, reference_csv_path, refere
                      "the test will delete it during cleanup", movie_id, course_id, movie_title)
         upload = requests.post(created.presigned_post.url, data=created.presigned_post.fields,
                                files={"file": (movie_path.name, movie_bytes, "video/mp4")}, timeout=timeout)
-        upload.raise_for_status()
+        raise_for_status(upload, "upload workflow movie to S3")
         uploaded_movie = wait_for_movie(ddbo, movie_id, lambda movie: bool(movie.get(odb.RESIZED_AT)),
                                          timeout=timeout, phase="upload processing")
         if uploaded_movie.get(odb.MOVIE_STATUS) != odb.MOVIE_STATE_READY:
@@ -342,10 +418,10 @@ def run_workflow(*, endpoint, stack_name, movie_path, reference_csv_path, refere
             raise AssertionError(f"uploaded movie {movie_id} is absent from deployed list-movies")
         metadata_response = requests.get(f"{endpoint.rstrip('/')}/{MOVIE_DATA_PATH}", params={
             API_KEY_FIELD: api_key, MOVIE_ID_FIELD: movie_id, "format": JSON_FORMAT}, timeout=30)
-        metadata_response.raise_for_status()
+        raise_for_status(metadata_response, "request original movie download")
         original = MovieDataResponse.model_validate(metadata_response.json())
         original_download = requests.get(original.url, timeout=timeout)
-        original_download.raise_for_status()
+        raise_for_status(original_download, "download original movie")
         if hashlib.sha256(original_download.content).digest() != hashlib.sha256(movie_bytes).digest():
             raise AssertionError("downloaded original movie differs from the uploaded fixture")
         logging.info("downloaded and validated original movie movie_id=%s bytes=%s", movie_id,
@@ -355,7 +431,7 @@ def run_workflow(*, endpoint, stack_name, movie_path, reference_csv_path, refere
         traced = requests.post(f"{endpoint.rstrip('/')}/{TRACE_MOVIE_PATH}", headers={"x-api-key": api_key},
                                json={MOVIE_ID_FIELD: movie_id, "frame_start": 0,
                                      "frame_end": expected_end.frame_number}, timeout=30)
-        traced.raise_for_status()
+        raise_for_status(traced, "start movie tracing")
         traced_movie_record = wait_for_movie(
             ddbo, movie_id,
             lambda movie: movie.get(odb.MOVIE_STATUS) == odb.MOVIE_STATE_TRACING_COMPLETED,
@@ -393,7 +469,7 @@ def run_workflow(*, endpoint, stack_name, movie_path, reference_csv_path, refere
         if not traced_movie.movie_traced_url:
             raise AssertionError("deployed list-movies did not provide a traced movie download URL")
         traced_download = requests.get(traced_movie.movie_traced_url, timeout=timeout)
-        traced_download.raise_for_status()
+        raise_for_status(traced_download, "download traced movie")
         assert_final_frame(traced_download.content, reference_frame_path)
         logging.info("downloaded and validated traced movie movie_id=%s bytes=%s", movie_id,
                      len(traced_download.content))
@@ -417,6 +493,7 @@ def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--endpoint", required=True)
     parser.add_argument("--stack-name")
+    parser.add_argument("--bucket", default=os.environ.get(C.PLANTTRACER_S3_BUCKET))
     parser.add_argument("--movie", type=Path, default=DEFAULT_MOVIE_PATH)
     parser.add_argument("--reference-csv", type=Path, default=DEFAULT_REFERENCE_CSV_PATH)
     parser.add_argument("--reference-xlsx", type=Path, default=DEFAULT_REFERENCE_XLSX_PATH)
@@ -431,6 +508,7 @@ def main():
     args = parse_args()
     logging.basicConfig(level=logging.INFO)
     info = deployment_info(args.endpoint)
+    validate_deployment_config(args.endpoint, bucket=args.bucket)
     stack_name = args.stack_name or info.stack_name
     os.environ.setdefault(DYNAMODB_TABLE_PREFIX_ENV, info.dynamodb_table_prefix)
     for fixture in (args.movie, args.reference_csv, args.reference_xlsx,

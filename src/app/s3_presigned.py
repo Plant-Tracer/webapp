@@ -60,6 +60,11 @@ CORS_CONFIGURATION = {
     }]
 }
 
+
+def configure_bucket_cors(bucket):
+    """Apply Plant Tracer's canonical browser upload/download CORS policy."""
+    s3_client().put_bucket_cors(Bucket=bucket, CORSConfiguration=CORS_CONFIGURATION)
+
 def sha256_hash(data):
     """Note: We use sha256 and have it hard coded everywhere. But the hashes should really be pluggable, in the form 'hashalg:hash'
     e.g. "sha256:01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
@@ -308,5 +313,4 @@ if __name__ == "__main__":
     parser.add_argument("s3_bucket")
     args = parser.parse_args()
     print("Updating CORS policy for ",args.s3_bucket)
-    s3 = boto3.client( S3 )
-    s3.put_bucket_cors(Bucket=args.s3_bucket, CORSConfiguration=CORS_CONFIGURATION)
+    configure_bucket_cors(args.s3_bucket)

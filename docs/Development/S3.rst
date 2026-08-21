@@ -71,7 +71,10 @@ run; an S3 bucket sends its events to EventBridge in that same region.
         --server-side-encryption-configuration \
         '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
 
-4. Configure CORS for browser presigned uploads and downloads. CORS permission
+4. Configure CORS for browser presigned uploads and downloads. The deployed
+   workflow test automatically applies and verifies this policy on the bucket
+   selected by ``ImageBucketName`` when CORS is missing or incompatible. The
+   following equivalent command is available for manual setup. CORS permission
    does not make objects public; S3 still requires a valid presigned request.
    The configuration matches ``CORS_CONFIGURATION`` in
    ``src/app/s3_presigned.py``:
