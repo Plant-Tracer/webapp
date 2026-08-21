@@ -314,6 +314,24 @@ class NoMovieData(ODB_Errors):
 class AtomicRenameConflict(ODB_Errors):
     """Marker rename lost a race with another trackpoint update"""
 
+class CourseAdminConflict(ODB_Errors):
+    """Course-administrator records kept changing during a mutation."""
+
+class FinalCourseAdmin(ODB_Errors):
+    """A protected course-administrator mutation would leave no administrator."""
+
+class DisabledCourseAdmin(ODB_Errors):
+    """A disabled user cannot be assigned as a course administrator."""
+
+
+class CourseAdminChange(BaseModel):
+    """Result of an idempotent course-administrator mutation."""
+
+    user_id: str
+    course_id: str
+    assigned: bool
+    changed: bool
+
 
 ################################################################
 ## DDBO - The Object Database Class
@@ -1745,80 +1763,165 @@ def delete_course(*,course_id):
     """
     DDBO().del_course(course_id)
 
-def add_course_admin(*, admin_id, course_id):
-    """Promotes the user to be an administrator and makes them an administrator of a specific course.
-    :param admin_id: user ID of the administrator
-    :param course_id: - if specified, use this course_id
-    :returns {'user_id':admin_id, 'admin_id':admin_id, 'course_id':course_id }
-    """
+def _course_admin_transaction(*, admin_id, course_id, assigned,
+                              actor_user_id, ipaddr, protect_last_admin):
+    """Atomically maintain the mirrored course-administrator relationship."""
+    if not is_user_id(admin_id) or not isinstance(course_id, str) or not course_id:
+        raise ValueError("Invalid course-administrator identifier")
     ddbo = DDBO()
-    admin = ddbo.get_user(admin_id)
-    course = ddbo.get_course(course_id)
-    courses           = list(set(admin[ COURSES ] + [course_id]))
-    admin_for_courses = list(set(admin[ ADMIN_FOR_COURSES ] + [course_id]))
+    for _attempt in range(4):
+        admin = ddbo.get_user(admin_id)
+        course = ddbo.get_course(course_id)
+        old_admin_courses = list(admin.get(ADMIN_FOR_COURSES, []))
+        old_courses = list(admin.get(COURSES, []))
+        old_course_admins = list(course.get(ADMINS_FOR_COURSE, []))
+        enrollment = ddbo.course_users.get_item(
+            Key={COURSE_ID: course_id, USER_ID: admin_id},
+            ConsistentRead=True,
+        ).get('Item')
 
-    ddbo.update_table(ddbo.users,
-                      admin_id,
-                      {DEFAULT_COURSE_ID:course_id,
-                       DEFAULT_COURSE_NAME:course[COURSE_NAME],
-                       LEGACY_PRIMARY_COURSE_ID:None,
-                       LEGACY_PRIMARY_COURSE_NAME:None,
-                       COURSES: courses,
-                       ADMIN_FOR_COURSES: admin_for_courses})
+        if assigned:
+            if not admin.get(ENABLED):
+                raise DisabledCourseAdmin(admin_id)
+            new_admin_courses = sorted(set(old_admin_courses).union((course_id,)))
+            new_courses = sorted(set(old_courses).union((course_id,)))
+            new_course_admins = sorted(set(old_course_admins).union((admin_id,)))
+            changed = (
+                new_admin_courses != old_admin_courses
+                or new_courses != old_courses
+                or new_course_admins != old_course_admins
+                or enrollment is None
+            )
+        else:
+            if (protect_last_admin and admin_id in old_course_admins
+                    and len(set(old_course_admins) - {admin_id}) == 0):
+                raise FinalCourseAdmin(course_id)
+            new_admin_courses = [item for item in old_admin_courses if item != course_id]
+            new_courses = old_courses
+            new_course_admins = [item for item in old_course_admins if item != admin_id]
+            changed = (
+                new_admin_courses != old_admin_courses
+                or new_course_admins != old_course_admins
+            )
 
+        if not changed:
+            return CourseAdminChange(
+                user_id=admin_id, course_id=course_id,
+                assigned=assigned, changed=False,
+            )
 
-    ddbo.update_table(ddbo.courses, course_id,
-                      { ADMINS_FOR_COURSE:list(set(course[ ADMINS_FOR_COURSE ] + [admin_id]))})
-    ddbo.course_users.put_item(Item={COURSE_ID:course_id, USER_ID:admin_id})
-
-    return { USER_ID :admin_id, 'admin_id':admin_id, COURSE_ID :course_id}
-
-
-def remove_course_admin(*, course_id, admin_id):
-    """Removes email from the course admin list and takes them out of the course."""
-    ddbo = DDBO()
-
-    ## Update admin in users.
-
-    admin  = ddbo.get_user( admin_id )
-
-    try:
-        courses = admin[ COURSES ]
-        courses.remove(course_id)
-        ddbo.update_table(
-            ddbo.users,
-            admin_id,
+        transaction = [
             {
-                COURSES: courses,
-                **repaired_default_course_updates(ddbo, admin, courses),
+                'Update': {
+                    'TableName': ddbo.users.name,
+                    'Key': {USER_ID: admin_id},
+                    'UpdateExpression': (
+                        'SET #admin_for_courses=:new_admin_for_courses, #courses=:new_courses'
+                    ),
+                    'ConditionExpression': (
+                        'attribute_exists(#user_id) '
+                        'AND #admin_for_courses=:old_admin_for_courses '
+                        'AND #courses=:old_courses'
+                    ),
+                    'ExpressionAttributeNames': {
+                        '#user_id': USER_ID,
+                        '#admin_for_courses': ADMIN_FOR_COURSES,
+                        '#courses': COURSES,
+                    },
+                    'ExpressionAttributeValues': {
+                        ':new_admin_for_courses': new_admin_courses,
+                        ':new_courses': new_courses,
+                        ':old_admin_for_courses': old_admin_courses,
+                        ':old_courses': old_courses,
+                    },
+                },
             },
-        )
+            {
+                'Update': {
+                    'TableName': ddbo.courses.name,
+                    'Key': {COURSE_ID: course_id},
+                    'UpdateExpression': 'SET #admins_for_course=:new_admins_for_course',
+                    'ConditionExpression': (
+                        'attribute_exists(#course_id) '
+                        'AND #admins_for_course=:old_admins_for_course'
+                    ),
+                    'ExpressionAttributeNames': {
+                        '#course_id': COURSE_ID,
+                        '#admins_for_course': ADMINS_FOR_COURSE,
+                    },
+                    'ExpressionAttributeValues': {
+                        ':new_admins_for_course': new_course_admins,
+                        ':old_admins_for_course': old_course_admins,
+                    },
+                },
+            },
+        ]
+        if actor_user_id is not None:
+            log_entry = LogEntry(
+                log_id=f"{int(time.time() * 1000)}-{uuid.uuid4()}",
+                ipaddr=ipaddr or "unknown",
+                user_id=actor_user_id,
+                course_id=course_id,
+                time_t=int(time.time()),
+                event_type="course.admin.assigned" if assigned else "course.admin.removed",
+                movie_id="",
+                target_user_id=admin_id,
+            ).model_dump(exclude_none=True)
+            transaction.append({
+                'Put': {
+                    'TableName': ddbo.logs.name,
+                    'Item': log_entry,
+                    'ConditionExpression': 'attribute_not_exists(#log_id)',
+                    'ExpressionAttributeNames': {'#log_id': LOG_ID},
+                },
+            })
+        if assigned and enrollment is None:
+            transaction.append({
+                'Put': {
+                    'TableName': ddbo.course_users.name,
+                    'Item': {COURSE_ID: course_id, USER_ID: admin_id},
+                    'ConditionExpression': (
+                        'attribute_not_exists(#course_id) AND attribute_not_exists(#user_id)'
+                    ),
+                    'ExpressionAttributeNames': {
+                        '#course_id': COURSE_ID,
+                        '#user_id': USER_ID,
+                    },
+                },
+            })
+        try:
+            ddbo.dynamodb.meta.client.transact_write_items(
+                TransactItems=transaction,
+                ClientRequestToken=uuid.uuid4().hex,
+            )
+            return CourseAdminChange(
+                user_id=admin_id, course_id=course_id,
+                assigned=assigned, changed=True,
+            )
+        except ClientError as exc:
+            if exc.response.get('Error', {}).get('Code') != 'TransactionCanceledException':
+                raise
+    raise CourseAdminConflict(
+        f"Course-administrator records changed repeatedly for {course_id}"
+    )
 
-    except ValueError:
-        logger.warning("removing courses from %s from user %s",course_id,admin_id)
 
-    try:
-        admin_for_courses = admin[ ADMIN_FOR_COURSES ]
-        admin_for_courses.remove(course_id)
-        ddbo.update_table(ddbo.users, admin_id,
-                          {ADMIN_FOR_COURSES: admin_for_courses})
+def add_course_admin(*, admin_id, course_id, actor_user_id=None, ipaddr="system"):
+    """Assign an existing user as a course administrator, idempotently."""
+    return _course_admin_transaction(
+        admin_id=admin_id, course_id=course_id, assigned=True,
+        actor_user_id=actor_user_id, ipaddr=ipaddr, protect_last_admin=False,
+    )
 
-    except ValueError:
-        logger.warning("remove admin_for_courses fail: %s from user %s",course_id,admin_id)
 
-    ## Update admin in courses
-
-    course = ddbo.get_course( course_id )
-    assert course is not None
-    assert course[ADMINS_FOR_COURSE] is not None
-    try:
-        admins_for_course = course[ADMINS_FOR_COURSE]
-        admins_for_course.remove(admin_id)
-        ddbo.update_table(ddbo.courses, course_id,{ADMINS_FOR_COURSE:admins_for_course})
-
-    except ValueError:
-        logger.warning("course admin remove fail: admin %s from course %s",admin_id,course_id)
-    ddbo.course_users.delete_item(Key={COURSE_ID:course_id, USER_ID:admin_id})
+def remove_course_admin(*, course_id, admin_id, actor_user_id=None,
+                        ipaddr="system", protect_last_admin=False):
+    """Remove only course-admin status, retaining enrollment and default course."""
+    return _course_admin_transaction(
+        admin_id=admin_id, course_id=course_id, assigned=False,
+        actor_user_id=actor_user_id, ipaddr=ipaddr,
+        protect_last_admin=protect_last_admin,
+    )
 
 
 def check_course_admin(*, user_id, course_id):

@@ -424,6 +424,63 @@ div.mtable td.check {
   width: 1.15rem;
 }
 
+.course-admin-names {
+  display: block;
+}
+
+.course-admin-manage {
+  margin-top: 0.35rem;
+}
+
+#course-admin-dialog {
+  border: 1px solid #777;
+  border-radius: 6px;
+  max-width: 38rem;
+  width: calc(100% - 2rem);
+}
+
+#course-admin-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.admin-dialog-heading {
+  align-items: start;
+  display: flex;
+  justify-content: space-between;
+}
+
+.admin-dialog-heading h2 {
+  margin-top: 0;
+}
+
+#course-admin-dialog-close {
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font-size: 1.5rem;
+}
+
+#course-admin-current {
+  list-style: none;
+  padding: 0;
+}
+
+#course-admin-current li {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  margin: 0.5rem 0;
+}
+
+#course-admin-add-controls {
+  border-top: 1px solid #ccc;
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+}
+
 /* Movie analyzer and demos. */
 
 #tracer {

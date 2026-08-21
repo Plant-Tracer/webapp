@@ -48,7 +48,15 @@ function adminDocument() {
         </button></th>
       </tr></thead>
       <tbody id="admin-movie-rows"></tbody>
-    </table>`;
+    </table>
+    <dialog id="course-admin-dialog">
+      <div><h2 id="course-admin-dialog-title"></h2>
+        <button id="course-admin-dialog-close" type="button">×</button></div>
+      <p id="course-admin-dialog-status"></p>
+      <ul id="course-admin-current"></ul>
+      <select id="course-admin-user-select"></select>
+      <button id="course-admin-add" type="button">Add administrator</button>
+    </dialog>`;
 }
 
 function payload() {
@@ -108,6 +116,12 @@ describe('admin summary rendering', () => {
     state.sort.courses = { key: 'course_name', direction: 1 };
     state.sort.users = { key: 'user_name', direction: 1 };
     state.sort.movies = { key: 'title', direction: 1 };
+    HTMLDialogElement.prototype.showModal = jest.fn(function showModal() {
+      this.open = true;
+    });
+    HTMLDialogElement.prototype.close = jest.fn(function close() {
+      this.open = false;
+    });
   });
 
   test('renders enrollment, named memberships, and movies', async () => {
@@ -128,6 +142,8 @@ describe('admin summary rendering', () => {
     expect(key.textContent).toBe('••••••••');
     expect(keyToggle.querySelector('.admin-eye-slash')).not.toBeNull();
     expect(document.getElementById('admin-course-rows').textContent).toContain('7 / 10');
+    expect(document.getElementById('admin-course-rows').textContent).toContain('Ada (ada@example.test)');
+    expect(document.querySelector('.course-admin-manage')).toBeNull();
     const userRow = document.getElementById('admin-user-rows');
     expect(userRow.textContent).toContain('Biology, Chemistry');
     expect(userRow.querySelector('strong').textContent).toBe('Biology');
@@ -386,6 +402,70 @@ describe('admin summary rendering', () => {
     expect(document.getElementById('admin-status').textContent)
       .toBe('Course created and administrator email sent. Admin list refresh failed: network unavailable');
     expect(document.getElementById('admin-course-form-status').className).toBe('');
+  });
+
+  test('superadmin manages explicit course administrators', async () => {
+    const adminPayload = payload();
+    adminPayload.viewer.super_role = 'superadmin';
+    adminPayload.users.items.push({
+      user_id: 'user-2', user_name: 'Bob', email: 'bob@example.test', enabled: true,
+      default_course_id: 'CHEM-2', super_role: 'none', created_at: 1700000001,
+      last_movie_activity_at: null, courses: [{ course_id: 'CHEM-2', is_admin: false }],
+    });
+    fetch
+      .mockResponseOnce(JSON.stringify(adminPayload))
+      .mockResponseOnce(JSON.stringify({
+        error: false, course_id: 'BIO-1', assigned: true, changed: true,
+        administrator: { user_id: 'user-2', user_name: 'Bob', email: 'bob@example.test' },
+      }));
+
+    await loadAdminSummary();
+    document.querySelector('.course-admin-manage').click();
+
+    expect(document.getElementById('course-admin-dialog').open).toBe(true);
+    expect(document.getElementById('course-admin-dialog-title').textContent)
+      .toBe('Administrators for Biology');
+    expect(document.querySelector('#course-admin-current button').disabled).toBe(true);
+    expect(document.getElementById('course-admin-user-select').textContent)
+      .toContain('Bob (bob@example.test)');
+
+    document.getElementById('course-admin-add').click();
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
+
+    expect(fetch.mock.calls[1][0]).toContain('/api/admin/courses/BIO-1/administrators/user-2');
+    expect(fetch.mock.calls[1][1].method).toBe('PUT');
+    expect(document.getElementById('course-admin-dialog-status').textContent)
+      .toBe('Bob (bob@example.test) added.');
+    expect(document.getElementById('course-admin-current').textContent).toContain('Bob');
+    expect(document.getElementById('admin-course-rows').textContent).toContain('Bob');
+    expect(document.querySelector('#course-admin-current button').disabled).toBe(false);
+  });
+
+  test('confirms removals and keeps API errors visible in the dialog', async () => {
+    const adminPayload = payload();
+    adminPayload.viewer.super_role = 'superadmin';
+    adminPayload.users.items.push({
+      user_id: 'user-2', user_name: 'Bob', email: 'bob@example.test', enabled: true,
+      default_course_id: 'BIO-1', super_role: 'none', created_at: 1700000001,
+      last_movie_activity_at: null, courses: [{ course_id: 'BIO-1', is_admin: true }],
+    });
+    fetch
+      .mockResponseOnce(JSON.stringify(adminPayload))
+      .mockResponseOnce(JSON.stringify({
+        error: true, message: 'Administrator assignments changed concurrently; retry the request',
+      }), { status: 409 });
+    window.confirm = jest.fn(() => true);
+
+    await loadAdminSummary();
+    document.querySelector('.course-admin-manage').click();
+    document.querySelector('#course-admin-current button').click();
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
+
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('remain enrolled'));
+    expect(fetch.mock.calls[1][1].method).toBe('DELETE');
+    const status = document.getElementById('course-admin-dialog-status');
+    expect(status.className).toBe('admin-error');
+    expect(status.textContent).toContain('changed concurrently');
   });
 
   test('keeps IDs and operational metadata hidden until verbose details is selected', async () => {

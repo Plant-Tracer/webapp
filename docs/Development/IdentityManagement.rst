@@ -137,7 +137,11 @@ render mail without sending it.
 Operators can add or remove course-admin access for an existing user with
 ``poetry run dbutil add-admin --email teacher@example.edu --course_id BIO101`` and
 ``poetry run dbutil remove-admin --email teacher@example.edu --course_id BIO101``.
-The older ``--admin_email`` spelling is still accepted by both commands.
+The older ``--admin_email`` spelling is still accepted by both commands. Assignment
+also enrolls the user if needed. Removal revokes only course-admin status: it retains
+ordinary course enrollment and the user's default course, and refuses to remove the
+course's final administrator. Browser and CLI changes are atomic and create audit
+events; repeated no-op requests do not create duplicate events.
 
 Operators can grant or remove cross-course roles by email address with
 ``poetry run dbutil add-superadmin --email ops@example.edu``,

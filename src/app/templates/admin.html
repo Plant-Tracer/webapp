@@ -22,6 +22,21 @@
     </div>
   </section>
 
+  <dialog id="course-admin-dialog" aria-labelledby="course-admin-dialog-title">
+    <div class="admin-dialog-heading">
+      <h2 id="course-admin-dialog-title">Course administrators</h2>
+      <button id="course-admin-dialog-close" type="button" aria-label="Close">×</button>
+    </div>
+    <p id="course-admin-dialog-status" aria-live="polite"></p>
+    <h3>Current administrators</h3>
+    <ul id="course-admin-current"></ul>
+    <div id="course-admin-add-controls">
+      <label for="course-admin-user-select">Add an existing enabled user</label>
+      <select id="course-admin-user-select"></select>
+      <button id="course-admin-add" type="button">Add administrator</button>
+    </div>
+  </dialog>
+
   <section class="admin-section">
     <div class="admin-section-heading">
       <h2>Courses</h2>

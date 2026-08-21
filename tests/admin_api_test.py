@@ -1,3 +1,4 @@
+import threading
 import time
 import uuid
 from urllib.parse import parse_qs, urlparse
@@ -515,6 +516,193 @@ def test_admin_course_create_survives_mail_transport_failure(client, new_course,
             odb.delete_course(course_id=course_id)
         except odb.InvalidCourse_Id:
             pass
+
+
+def make_fixture_user_superadmin(client, new_course):
+    """Authenticate the fixture user with cross-course write access."""
+    ddbo = new_course["ddbo"]
+    ddbo.update_table(
+        ddbo.users,
+        new_course[USER_ID],
+        {odb.SUPER_ROLE: odb.SUPER_ROLE_SUPERADMIN},
+    )
+    client.set_cookie(apikey.cookie_name(), new_course[API_KEY])
+
+
+def course_admin_url(course_id, user_id):
+    """Return the admin-assignment endpoint for a course and user."""
+    return f"/api/admin/courses/{course_id}/administrators/{user_id}"
+
+
+def test_superadmin_assigns_and_removes_course_admin_atomically(client, new_course):
+    make_fixture_user_superadmin(client, new_course)
+    ddbo = new_course["ddbo"]
+    course_id = new_course[odb.COURSE_ID]
+    target_id = new_course[USER_ID]
+    before = odb.get_user(target_id)
+
+    assigned = client.put(course_admin_url(course_id, target_id))
+
+    assert assigned.status_code == 200
+    assert assigned.json["assigned"] is True
+    assert assigned.json["changed"] is True
+    user = odb.get_user(target_id)
+    course = odb.lookup_course_by_id(course_id=course_id)
+    assert course_id in user[odb.ADMIN_FOR_COURSES]
+    assert course_id in user[odb.COURSES]
+    assert target_id in course[odb.ADMINS_FOR_COURSE]
+    assert ddbo.course_users.get_item(
+        Key={odb.COURSE_ID: course_id, odb.USER_ID: target_id},
+        ConsistentRead=True,
+    ).get("Item") == {odb.COURSE_ID: course_id, odb.USER_ID: target_id}
+
+    removed = client.delete(course_admin_url(course_id, target_id))
+
+    assert removed.status_code == 200
+    assert removed.json["assigned"] is False
+    assert removed.json["changed"] is True
+    user = odb.get_user(target_id)
+    course = odb.lookup_course_by_id(course_id=course_id)
+    assert course_id not in user[odb.ADMIN_FOR_COURSES]
+    assert target_id not in course[odb.ADMINS_FOR_COURSE]
+    assert course_id in user[odb.COURSES]
+    assert user[odb.DEFAULT_COURSE_ID] == before[odb.DEFAULT_COURSE_ID]
+    assert ddbo.course_users.get_item(
+        Key={odb.COURSE_ID: course_id, odb.USER_ID: target_id},
+        ConsistentRead=True,
+    ).get("Item") is not None
+
+    logs = [
+        item for item in ddbo.logs.scan()["Items"]
+        if item.get("target_user_id") == target_id
+        and item.get("course_id") == course_id
+    ]
+    assert {(item["event_type"], item["user_id"]) for item in logs} == {
+        ("course.admin.assigned", new_course[USER_ID]),
+        ("course.admin.removed", new_course[USER_ID]),
+    }
+
+
+def test_course_admin_mutations_are_idempotent_without_duplicate_audit(client, new_course):
+    make_fixture_user_superadmin(client, new_course)
+    ddbo = new_course["ddbo"]
+    course_id = new_course[odb.COURSE_ID]
+    target_id = new_course[USER_ID]
+    url = course_admin_url(course_id, target_id)
+
+    assert client.put(url).json["changed"] is True
+    assert client.put(url).json["changed"] is False
+    assert client.delete(url).json["changed"] is True
+    assert client.delete(url).json["changed"] is False
+
+    logs = [
+        item for item in ddbo.logs.scan()["Items"]
+        if item.get("target_user_id") == target_id
+        and item.get("course_id") == course_id
+        and item.get("event_type", "").startswith("course.admin.")
+    ]
+    assert len(logs) == 2
+
+
+def test_superadmin_cannot_remove_final_course_admin(client, new_course):
+    make_fixture_user_superadmin(client, new_course)
+    course_id = new_course[odb.COURSE_ID]
+    admin_id = odb.get_user_email(new_course[ADMIN_EMAIL])[odb.USER_ID]
+
+    response = client.delete(course_admin_url(course_id, admin_id))
+
+    assert response.status_code == 409
+    assert response.json == {
+        "error": True,
+        "message": "A course must retain at least one administrator",
+    }
+    assert odb.check_course_admin(user_id=admin_id, course_id=course_id)
+
+
+@pytest.mark.parametrize("role", [odb.SUPER_ROLE_NONE, odb.SUPER_ROLE_SUPERAUDITOR])
+def test_non_superadmin_cannot_change_course_admin(client, new_course, role):
+    ddbo = new_course["ddbo"]
+    ddbo.update_table(ddbo.users, new_course[USER_ID], {odb.SUPER_ROLE: role})
+    client.set_cookie(apikey.cookie_name(), new_course[API_KEY])
+    url = course_admin_url(new_course[odb.COURSE_ID], new_course[USER_ID])
+
+    for method in (client.put, client.delete):
+        response = method(url)
+        assert response.status_code == 403
+        assert response.json == {"error": True, "message": "Superadmin access required"}
+
+
+def test_course_admin_mutation_rejects_invalid_key_and_identifiers(client, new_course):
+    url = course_admin_url(new_course[odb.COURSE_ID], new_course[USER_ID])
+    client.set_cookie(apikey.cookie_name(), "invalid-api-key")
+    response = client.put(url)
+    assert response.status_code == 403
+    assert response.json == {"error": True, "message": "Invalid api_key"}
+
+    make_fixture_user_superadmin(client, new_course)
+    malformed = client.put(course_admin_url(new_course[odb.COURSE_ID], "not-a-user"))
+    assert malformed.status_code == 400
+    assert malformed.json["message"] == "Invalid course-administrator identifier"
+    missing_user = client.put(course_admin_url(new_course[odb.COURSE_ID], "umissing"))
+    assert missing_user.status_code == 404
+    assert missing_user.json["message"] == "User not found"
+    missing_course = client.put(course_admin_url("missing-course", new_course[USER_ID]))
+    assert missing_course.status_code == 404
+    assert missing_course.json["message"] == "Course not found"
+
+
+def test_disabled_user_cannot_be_assigned_course_admin(client, new_course):
+    make_fixture_user_superadmin(client, new_course)
+    ddbo = new_course["ddbo"]
+    target_id = odb.get_user_email(new_course[ADMIN_EMAIL])[odb.USER_ID]
+    ddbo.update_table(ddbo.users, target_id, {odb.ENABLED: 0})
+    try:
+        response = client.put(course_admin_url(new_course[odb.COURSE_ID], target_id))
+        assert response.status_code == 409
+        assert response.json == {
+            "error": True,
+            "message": "Administrator account is disabled",
+        }
+    finally:
+        ddbo.update_table(ddbo.users, target_id, {odb.ENABLED: 1})
+
+
+def test_concurrent_removals_preserve_one_course_admin(new_course):
+    """Real DynamoDB transactions prevent two stale removals from emptying the list."""
+    course_id = new_course[odb.COURSE_ID]
+    original_id = odb.get_user_email(new_course[ADMIN_EMAIL])[odb.USER_ID]
+    second_id = new_course[USER_ID]
+    odb.add_course_admin(admin_id=second_id, course_id=course_id)
+    barrier = threading.Barrier(2)
+    results = []
+
+    def remove_after_barrier(user_id):
+        barrier.wait()
+        try:
+            results.append(odb.remove_course_admin(
+                admin_id=user_id,
+                course_id=course_id,
+                actor_user_id=new_course[USER_ID],
+                protect_last_admin=True,
+            ))
+        except odb.FinalCourseAdmin as exc:
+            results.append(exc)
+
+    threads = [
+        threading.Thread(target=remove_after_barrier, args=(user_id,))
+        for user_id in (original_id, second_id)
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert sum(isinstance(item, odb.CourseAdminChange) for item in results) == 1
+    assert sum(isinstance(item, odb.FinalCourseAdmin) for item in results) == 1
+    course = odb.lookup_course_by_id(course_id=course_id)
+    assert len(course[odb.ADMINS_FOR_COURSE]) == 1
+    remaining_id = course[odb.ADMINS_FOR_COURSE][0]
+    assert odb.check_course_admin(user_id=remaining_id, course_id=course_id)
 
 
 def test_admin_summary_includes_enrollment_memberships_and_movies(client, new_movie):

@@ -111,6 +111,7 @@ receive HTTP 400.
         "user_id": "u...",
         "user_name": "Alice",
         "email": "alice@example.edu",
+        "enabled": true,
         "default_course_id": "PlantTracer 101",
         "super_role": "none",
         "created_at": 1784800100,
@@ -253,6 +254,48 @@ updated but the email was not sent.
   "message": "Course created and administrator email sent"
 }
 ```
+
+Course rows show administrator names and email addresses directly. A
+``superadmin`` also receives a Manage control; ``superauditor`` and course-admin
+viewers see the same names without write controls.
+
+#### `PUT /api/admin/courses/{course_id}/administrators/{user_id}`
+
+Assign an existing enabled user as an administrator of an existing course.
+Only a ``superadmin`` may call this endpoint. The mutation atomically adds the
+course to the user's ``admin_for_courses`` and ``courses`` lists, adds the user
+to the course's ``admins_for_course`` list, ensures the ``course_users``
+membership exists, and writes an attributed ``course.admin.assigned`` audit
+event. Repeating an already-complete assignment succeeds without another audit
+event and returns ``changed: false``.
+
+#### `DELETE /api/admin/courses/{course_id}/administrators/{user_id}`
+
+Remove course-administrator status. Only a ``superadmin`` may call this
+endpoint. The mutation removes the two mirrored administrator references but
+retains course enrollment, the ``course_users`` row, and the user's default
+course. The final administrator cannot be removed. Repeating an already-complete
+removal succeeds without another audit event and returns ``changed: false``.
+
+Both endpoints return:
+
+```json
+{
+  "error": false,
+  "course_id": "PlantTracer 101",
+  "administrator": {
+    "user_id": "u...",
+    "user_name": "Alice",
+    "email": "alice@example.edu"
+  },
+  "assigned": true,
+  "changed": true
+}
+```
+
+Missing records return HTTP 404. Disabled target users, final-administrator
+removal, and repeated concurrent conflicts return HTTP 409. Invalid identifiers
+return HTTP 400; every non-``superadmin`` caller receives HTTP 403.
 
 #### `GET /api/admin/movies/{movie_id}/media`
 
