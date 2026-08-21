@@ -292,12 +292,12 @@ div.mtable td.check {
 }
 
 .admin-section table {
-  min-width: 100%;
+  width: 100% !important;
   table-layout: fixed;
 }
 
 .admin-table-scroll {
-  overflow-x: auto;
+  overflow-x: visible;
 }
 
 .admin-section th {

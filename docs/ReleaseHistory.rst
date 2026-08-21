@@ -77,6 +77,8 @@ Release Notes
 
 Unreleased Summary
 ******************
+    * Admin: fit dashboard tables to the browser width without horizontal
+      table scrollbars.
     * Developer: package the S3 EventBridge configuration utility as
       ``uv run s3_upload_trigger`` and consistently execute Python programs
       from Makefile targets through ``uv run``, with a complete standard
