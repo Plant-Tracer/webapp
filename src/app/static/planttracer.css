@@ -228,6 +228,69 @@ div.mtable td.check {
   margin: 1.5rem 0;
 }
 
+.admin-section-heading {
+  align-items: center;
+  display: flex;
+  gap: 1rem;
+}
+
+.admin-section-heading h2 {
+  margin: 0.83em 0;
+}
+
+#admin-course-dialog {
+  border: 1px solid #aaa;
+  border-radius: 6px;
+  max-width: 28rem;
+  width: calc(100% - 3rem);
+}
+
+#admin-course-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.35);
+}
+
+#admin-course-form {
+  display: grid;
+  gap: 0.5rem;
+}
+
+#admin-course-form h2 {
+  margin-top: 0;
+}
+
+#admin-course-form input {
+  box-sizing: border-box;
+  padding: 0.5rem;
+  width: 100%;
+}
+
+#admin-course-form input[readonly] {
+  background: #eee;
+  color: #444;
+}
+
+.admin-dialog-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.admin-success {
+  background: #effaf4;
+  border: 1px solid #7eb995;
+  border-radius: 4px;
+  color: #185b31;
+  padding: 0.75rem;
+}
+
+.admin-warning {
+  background: #fff8e5;
+  border: 1px solid #d3ac55;
+  border-radius: 4px;
+  color: #6b4a00;
+  padding: 0.75rem;
+}
+
 .admin-section table {
   min-width: 100%;
   table-layout: fixed;

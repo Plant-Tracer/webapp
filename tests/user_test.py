@@ -5,6 +5,8 @@ Test the various functions in the database involving user creation.
 import uuid
 import copy
 
+import pytest
+
 from app import course_management
 from app import odb
 from app import odbmaint
@@ -208,6 +210,7 @@ def test_create_course_with_existing_admin_is_idempotent(new_course):
     assert result.course.course_name == course_name
     assert result.admin_user.email == cfg[ADMIN_EMAIL]
     assert odb.check_course_admin(user_id=result.admin_user.user_id, course_id=course_id)
+    assert result.admin_user.user_id in odb.course_enrollments(course_id)
 
     retry = course_management.create_course_with_admin(
         course_id=course_id,
@@ -225,6 +228,76 @@ def test_create_course_with_existing_admin_is_idempotent(new_course):
 
     odb.remove_course_admin(course_id=course_id, admin_id=result.admin_user.user_id)
     odb.delete_course(course_id=course_id)
+
+
+def test_create_course_with_admin_validates_email_endpoint_before_writes(new_course):
+    cfg = copy.copy(new_course)
+    course_id = "MissingEndpoint-" + str(uuid.uuid4())[0:8]
+
+    with pytest.raises(ValueError, match="planttracer_endpoint is required"):
+        course_management.create_course_with_admin(
+            course_id=course_id,
+            course_name="Missing Endpoint Test",
+            admin_email=cfg[ADMIN_EMAIL],
+            admin_name="Course Admin",
+        )
+
+    with pytest.raises(odb.InvalidCourse_Id):
+        odb.lookup_course_by_id(course_id=course_id)
+
+
+def test_course_notification_replaces_disabled_api_key(new_course, monkeypatch):
+    monkeypatch.setenv("MAILER_DRY_RUN", "true")
+    course_id = "DisabledKey-" + str(uuid.uuid4())[0:8]
+    admin_email = f"disabled-key-{uuid.uuid4()}@example.test"
+    result = course_management.create_course_with_admin(
+        course_id=course_id,
+        course_name="Disabled Key Test",
+        admin_email=admin_email,
+        admin_name="Disabled Key Admin",
+        send_email=False,
+    )
+    disabled_key = odb.make_new_api_key_for_user_id(user_id=result.admin_user.user_id)
+    ddbo = DDBO()
+    ddbo.update_table(ddbo.api_keys, disabled_key, {odb.ENABLED: 0})
+    try:
+        replacement_key = course_management.send_course_created_notification(
+            course=result.course,
+            admin_user=result.admin_user,
+            planttracer_endpoint="https://example.test",
+        )
+
+        assert replacement_key != disabled_key
+        assert ddbo.get_api_key_dict(replacement_key)[odb.ENABLED] == 1
+    finally:
+        odb.remove_course_admin(course_id=course_id, admin_id=result.admin_user.user_id)
+        odb.delete_user(user_id=result.admin_user.user_id)
+        odb.delete_course(course_id=course_id)
+
+
+@pytest.mark.parametrize(("admin_email", "admin_name", "message"), [
+    ("", "Course Admin", "admin_email is required"),
+    (" ", "Course Admin", "admin_email is required"),
+    (None, "", "admin_name is required"),
+    (None, " ", "admin_name is required"),
+])
+def test_create_course_with_admin_validates_administrator_before_writes(
+        new_course, admin_email, admin_name, message):
+    cfg = copy.copy(new_course)
+    course_id = "InvalidAdmin-" + str(uuid.uuid4())[0:8]
+    email = cfg[ADMIN_EMAIL] if admin_email is None else admin_email
+
+    with pytest.raises(ValueError, match=message):
+        course_management.create_course_with_admin(
+            course_id=course_id,
+            course_name="Invalid Administrator Test",
+            admin_email=email,
+            admin_name=admin_name,
+            send_email=False,
+        )
+
+    with pytest.raises(odb.InvalidCourse_Id):
+        odb.lookup_course_by_id(course_id=course_id)
 
 
 def test_list_admins_tolerates_null_course_name(new_course):

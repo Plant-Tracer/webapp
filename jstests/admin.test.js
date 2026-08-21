@@ -1,5 +1,7 @@
 const {
   loadAdminSummary,
+  populateExistingCourseAdmins,
+  syncCourseAdminName,
   state,
 } = require('admin');
 
@@ -10,6 +12,19 @@ function adminDocument() {
     <span id="admin-user-count"></span>
     <span id="admin-movie-count"></span>
     <label><input id="admin-verbose-details" type="checkbox"></label>
+    <button id="admin-new-course" type="button" hidden>New course</button>
+    <dialog id="admin-course-dialog">
+      <form id="admin-course-form">
+        <input id="admin-course-name" name="course_name">
+        <input id="admin-course-id" name="course_id">
+        <input id="admin-course-admin-email" name="admin_email" list="admin-existing-course-admins">
+        <datalist id="admin-existing-course-admins"></datalist>
+        <input id="admin-course-admin-name" name="admin_name">
+        <p id="admin-course-form-status"></p>
+        <button id="admin-course-cancel" type="button">Cancel</button>
+        <button id="admin-course-submit" type="submit">Create course</button>
+      </form>
+    </dialog>
     <table data-resizable-table>
       <thead><tr>
         <th><button class="admin-sort" data-table="courses" data-key="course_name">
@@ -58,7 +73,7 @@ function payload() {
     users: {
       items: [{
         user_id: 'user-1', user_name: 'Ada', email: 'ada@example.test', default_course_id: 'BIO-1',
-        super_role: 'none', created_at: 1700000000, last_movie_activity_at: null,
+        enabled: true, super_role: 'none', created_at: 1700000000, last_movie_activity_at: null,
         courses: [
           { course_id: 'BIO-1', is_admin: true },
           { course_id: 'CHEM-2', is_admin: false },
@@ -124,6 +139,7 @@ describe('admin summary rendering', () => {
     expect(movieRow.querySelector('.admin-actions-menu').textContent).toContain('Download traced');
     expect(movieRow.querySelector('.admin-actions-menu').textContent).not.toContain('Analyze');
     expect(document.querySelectorAll('.admin-resize-handle')).toHaveLength(3);
+    expect(document.getElementById('admin-new-course').hidden).toBe(true);
     const courseLink = document.querySelector('#admin-course-rows a');
     expect(courseLink.href).toContain('/list?course_id=BIO-1');
     expect(courseLink.target).toBe('_blank');
@@ -222,6 +238,154 @@ describe('admin summary rendering', () => {
     const movieRow = document.querySelector('#admin-movie-rows tr');
     expect(movieRow.querySelector('td a').href).toContain('/analyze?movie_id=movie-1');
     expect(movieRow.querySelector('.admin-actions-menu').textContent).toContain('Analyze');
+  });
+
+  test('shows course creation only to superadmins and offers only existing admins', async () => {
+    const adminPayload = payload();
+    adminPayload.viewer.super_role = 'superadmin';
+    adminPayload.users.items.push({
+      user_id: 'user-2', user_name: 'Grace', email: 'grace@example.test',
+      enabled: true, default_course_id: 'BIO-1', super_role: 'none', created_at: 1700000001,
+      last_movie_activity_at: null, courses: [{ course_id: 'BIO-1', is_admin: false }],
+    });
+    adminPayload.users.items.push({
+      user_id: 'user-3', user_name: 'Disabled Admin', email: 'disabled@example.test',
+      enabled: false, default_course_id: 'BIO-1', super_role: 'none', created_at: 1700000002,
+      last_movie_activity_at: null, courses: [{ course_id: 'BIO-1', is_admin: true }],
+    });
+    adminPayload.users.items.push({
+      user_id: 'user-4', user_name: ' ', email: 'nameless@example.test',
+      enabled: true, default_course_id: 'BIO-1', super_role: 'none', created_at: 1700000003,
+      last_movie_activity_at: null, courses: [{ course_id: 'BIO-1', is_admin: true }],
+    });
+    fetch.mockResponseOnce(JSON.stringify(adminPayload));
+
+    await loadAdminSummary();
+    populateExistingCourseAdmins();
+
+    expect(document.getElementById('admin-new-course').hidden).toBe(false);
+    const options = [...document.querySelectorAll('#admin-existing-course-admins option')];
+    expect(options.map((option) => option.value)).toEqual(['ada@example.test']);
+    const email = document.getElementById('admin-course-admin-email');
+    const name = document.getElementById('admin-course-admin-name');
+    email.value = 'ADA@example.test';
+    syncCourseAdminName();
+    expect(name.value).toBe('Ada');
+    expect(name.readOnly).toBe(true);
+    email.value = 'grace@example.test';
+    syncCourseAdminName();
+    expect(name.value).toBe('Grace');
+    expect(name.readOnly).toBe(true);
+    email.value = 'new@example.test';
+    syncCourseAdminName();
+    expect(name.value).toBe('');
+    expect(name.readOnly).toBe(false);
+  });
+
+  test('submits a new course and refreshes the admin summary', async () => {
+    const adminPayload = payload();
+    adminPayload.viewer.super_role = 'superadmin';
+    fetch.mockResponseOnce(JSON.stringify(adminPayload));
+    const dialog = document.getElementById('admin-course-dialog');
+    dialog.showModal = jest.fn();
+    dialog.close = jest.fn();
+
+    await loadAdminSummary();
+    document.getElementById('admin-new-course').click();
+    expect(dialog.showModal).toHaveBeenCalledTimes(1);
+    document.getElementById('admin-course-name').value = 'Botany';
+    document.getElementById('admin-course-id').value = 'BOT-3';
+    document.getElementById('admin-course-admin-email').value = 'new@example.test';
+    document.getElementById('admin-course-admin-name').value = 'New Administrator';
+    fetch.mockResponseOnce(JSON.stringify({
+      error: false, email_sent: true, message: 'Course created and administrator email sent',
+    }), { status: 201 });
+    fetch.mockResponseOnce(JSON.stringify(adminPayload));
+
+    document.getElementById('admin-course-form').dispatchEvent(new Event('submit', {
+      bubbles: true,
+      cancelable: true,
+    }));
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
+
+    const request = fetch.mock.calls[1];
+    expect(request[0]).toBe('/api/admin/courses');
+    expect(request[1].method).toBe('POST');
+    expect(JSON.parse(request[1].body)).toEqual({
+      course_name: 'Botany',
+      course_id: 'BOT-3',
+      admin_email: 'new@example.test',
+      admin_name: 'New Administrator',
+    });
+    expect(dialog.close).toHaveBeenCalledTimes(1);
+    expect(document.getElementById('admin-status').textContent)
+      .toBe('Course created and administrator email sent');
+    expect(document.getElementById('admin-status').className).toBe('admin-success');
+  });
+
+  test('keeps the course dialog open when creation fails', async () => {
+    const adminPayload = payload();
+    adminPayload.viewer.super_role = 'superadmin';
+    fetch.mockResponseOnce(JSON.stringify(adminPayload));
+    const dialog = document.getElementById('admin-course-dialog');
+    dialog.showModal = jest.fn();
+    dialog.close = jest.fn();
+
+    await loadAdminSummary();
+    document.getElementById('admin-course-name').value = 'Conflicting course';
+    document.getElementById('admin-course-id').value = 'BIO-1';
+    document.getElementById('admin-course-admin-email').value = 'ada@example.test';
+    document.getElementById('admin-course-admin-name').value = 'Ada';
+    fetch.mockResponseOnce(JSON.stringify({
+      error: true,
+      message: 'Course ID conflicts with an existing course name',
+    }), { status: 409 });
+
+    document.getElementById('admin-course-form').dispatchEvent(new Event('submit', {
+      bubbles: true,
+      cancelable: true,
+    }));
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
+
+    expect(dialog.close).not.toHaveBeenCalled();
+    expect(document.getElementById('admin-course-form-status').textContent)
+      .toBe('Course ID conflicts with an existing course name');
+    expect(document.getElementById('admin-course-form-status').className).toBe('admin-error');
+    expect(document.getElementById('admin-course-submit').disabled).toBe(false);
+
+    document.getElementById('admin-new-course').click();
+    expect(document.getElementById('admin-course-form-status').textContent).toBe('');
+    expect(document.getElementById('admin-course-form-status').className).toBe('');
+  });
+
+  test('reports a refresh failure visibly after creating a course', async () => {
+    const adminPayload = payload();
+    adminPayload.viewer.super_role = 'superadmin';
+    fetch.mockResponseOnce(JSON.stringify(adminPayload));
+    const dialog = document.getElementById('admin-course-dialog');
+    dialog.showModal = jest.fn();
+    dialog.close = jest.fn();
+
+    await loadAdminSummary();
+    document.getElementById('admin-course-admin-email').value = 'new@example.test';
+    fetch.mockResponseOnce(JSON.stringify({
+      error: false, email_sent: true, message: 'Course created and administrator email sent',
+    }), { status: 201 });
+    fetch.mockRejectOnce(new Error('network unavailable'));
+
+    document.getElementById('admin-course-form').dispatchEvent(new Event('submit', {
+      bubbles: true,
+      cancelable: true,
+    }));
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
+
+    expect(dialog.close).toHaveBeenCalledTimes(1);
+    expect(document.getElementById('admin-status').className).toBe('admin-warning');
+    expect(document.getElementById('admin-status').textContent)
+      .toBe('Course created and administrator email sent. Admin list refresh failed: network unavailable');
+    expect(document.getElementById('admin-course-form-status').className).toBe('');
   });
 
   test('keeps IDs and operational metadata hidden until verbose details is selected', async () => {

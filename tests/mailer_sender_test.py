@@ -1,5 +1,30 @@
+import pytest
+
 from app import mailer
 from app.constants import C
+
+
+@pytest.mark.parametrize("config", [
+    "{",
+    '{"SMTP_PORT": "1025"}',
+    '{"SMTP_HOST": "localhost", "SMTP_USERNAME": "user"}',
+])
+def test_get_smtp_config_normalizes_invalid_json_configuration(monkeypatch, config):
+    monkeypatch.setenv(C.SMTPCONFIG_JSON, config)
+
+    with pytest.raises(mailer.InvalidMailerConfiguration):
+        mailer.get_smtp_config()
+
+
+def test_get_smtp_config_accepts_numeric_json_port(monkeypatch):
+    monkeypatch.setenv(
+        C.SMTPCONFIG_JSON,
+        '{"SMTP_HOST": "localhost", "SMTP_PORT": 1025}',
+    )
+
+    config = mailer.get_smtp_config()
+
+    assert config[mailer.SMTP_PORT] == "1025"
 
 
 def test_server_from_header_defaults(monkeypatch):

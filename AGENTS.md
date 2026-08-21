@@ -36,7 +36,7 @@ Use `@simsong-codex` for all GitHub activity: commits, pushes, issues, pull requ
 
 For that exception only, switch the active GitHub CLI account to `simsong`, request exactly `copilot-pull-request-reviewer[bot]` for the specified Plant-Tracer pull request, and switch immediately back to `simsong-codex`. Restore `simsong-codex` even if the request fails. Verify the resulting review-request event only after restoring `simsong-codex`; do not perform any other GitHub action while `simsong` is active.
 
-### Codex commits and Copilot-to-Ready lifecycle
+### Codex commits and Codex-to-Done lifecycle
 
 GitHub activity authored by Codex must use `@simsong-codex`; do not use the
 personal `@simsong` account for writes, pushes, issues, pull requests, reviews,
@@ -50,32 +50,49 @@ with `git log --format='%G? %GS %an <%ae> %cn <%ce>'`. When correcting an
 existing commit, use `git commit --amend --reset-author -S` rather than only
 amending the signature.
 
-For every Codex-authored pull request, follow the **Copilot-to-Ready lifecycle**
-in order:
+For every Codex-authored issue implementation, follow the **Codex-to-Done
+lifecycle** in order:
 
-1. Push the branch and open the pull request as a draft.
-2. Request the Copilot bot with the exact GitHub API reviewer value
+1. Investigate the issue and current code, write an implementation-ready
+   proposal, and ask the user to review it. Do not implement while proposal
+   approval is pending.
+2. After the user approves the proposal, implement it on a feature branch,
+   including substantive tests and required documentation.
+3. Fetch `origin/main` before committing and merge it into the feature branch,
+   resolving and validating any conflicts. Create a signed Codex commit, push
+   the branch, and open the pull request as a draft.
+4. Request the Copilot bot with the exact GitHub API reviewer value
    `copilot-pull-request-reviewer[bot]`; do not use the incomplete value
    `copilot-pull-request-reviewer`. GitHub's UI Request control for Copilot is
    an equivalent fallback when the API response is ambiguous. Verify a Copilot
    pending-review entry or a `REVIEW_REQUESTED_EVENT`, not merely an HTTP
    success response.
-3. Keep the pull request a draft while monitoring until a Copilot review or
+5. Keep the pull request a draft while monitoring until a Copilot review or
    review thread actually appears. Do not report a request or response based
    only on a CLI command or an `@copilot` comment.
-4. Address every actionable Copilot finding. For each pushed fix, reply on the
+6. Address every actionable Copilot finding. For each pushed fix, reply on the
    exact Copilot thread with the commit and validation evidence, then request
    and monitor Copilot's re-review of that new commit. Do not manually resolve
    the thread; if GitHub resolves it automatically, report that fact.
-5. After Copilot is feedback-free and all required CI checks are green, mark
-   the pull request ready for review and assign it to `@simsong`.
+7. While the pull request is open, repeatedly fetch `origin/main`: after each
+   review or CI waiting interval, before pushing review fixes, and immediately
+   before marking the pull request ready. Merge new mainline commits into the
+   feature branch, resolve conflicts, rerun proportionate validation, and push
+   the merge before continuing.
+8. Keep Codecov passing when practical by testing substantive logic, but do not
+   add pro-forma tests or distort the implementation merely to raise coverage.
+   Treat Codecov as a completion blocker only when repository rules make it a
+   required check.
+9. After Copilot is feedback-free, required CI checks are green, and the branch
+   contains current `origin/main`, mark the pull request ready for review and
+   assign it to `@simsong`.
 
 The lifecycle completes only after the current head's Copilot review and
-required CI are clear, the pull request is ready for review, and `@simsong` is
-assigned. If validation or feedback remains, retain draft status and report the
-exact blocker.
+required CI are clear, the feature branch contains current `origin/main`, the
+pull request is ready for review, and `@simsong` is assigned. If validation or
+feedback remains, retain draft status and report the exact blocker.
 
-When the Copilot-to-Ready timer is active, wake every 20 minutes and reconcile
+When the Codex-to-Done timer is active, wake every 20 minutes and reconcile
 live GitHub state. For the current release milestone, scan its open issues
 assigned to `@simsong-codex`, then resume the highest-priority unblocked work or
 pending pull-request review/CI follow-through. Verify milestone, assignment, PR

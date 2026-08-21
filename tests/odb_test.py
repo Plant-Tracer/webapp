@@ -835,6 +835,32 @@ def test_delete_user_api_keys_pagination(local_ddb, mocker):
     odb.delete_course(course_id=course_id)
 
 
+def test_delete_course_removes_enrollment_and_admin_references(local_ddb):
+    course_id = f"delete-course-{rand8()}"
+    user_email = f"delete-course-{rand8()}@example.com"
+    local_ddb.put_course({
+        COURSE_ID: course_id,
+        'course_name': f"Delete Course {rand8()}",
+        'course_key': f"delete-key-{uuid.uuid4().hex[:16]}",
+        'admins_for_course': [],
+        'max_enrollment': 10,
+    })
+    user_id = odb.register_email(
+        user_email,
+        "Delete Course Admin",
+        course_id=course_id,
+        admin=True,
+    )[USER_ID]
+
+    odb.delete_course(course_id=course_id)
+
+    user = local_ddb.get_user(user_id)
+    assert course_id not in user[odb.COURSES]
+    assert course_id not in user[odb.ADMIN_FOR_COURSES]
+    assert not odb.course_enrollments(course_id=course_id)
+    local_ddb.delete_user(user_id)
+
+
 def test_normalize_fpm_valid_values():
     assert odb.normalize_fpm(None) is None
     assert odb.normalize_fpm('') is None

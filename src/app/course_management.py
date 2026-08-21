@@ -55,6 +55,10 @@ class CourseMembershipRequired(ValueError):
     """Raised when a user selects a course they are not enrolled in."""
 
 
+class CourseNameConflict(ValueError):
+    """Raised when an existing course ID has a different course name."""
+
+
 def generate_course_key():
     """Return a short registration key for a newly created course."""
     return uuid.uuid4().hex[:8]
@@ -165,7 +169,7 @@ def admin_create_for_courses(*, admin_email, admin_name, course_ids,
     if send_email:
         api_key = odb.get_first_api_key_for_user(admin_user.user_id)
         if api_key is None:
-            api_key = odb.make_new_api_key(email=admin_email)
+            api_key = odb.make_new_api_key_for_user_id(user_id=admin_user.user_id)
         for course in added_courses:
             mailer.send_course_created_email(
                 to_addr=admin_email,
@@ -177,6 +181,21 @@ def admin_create_for_courses(*, admin_email, admin_name, course_ids,
     return AdminCreateResult(admin_user=admin_user, added_courses=added_courses, api_key=api_key)
 
 
+def send_course_created_notification(*, course, admin_user, planttracer_endpoint):
+    """Email one course administrator a setup link for a created course."""
+    api_key = odb.get_first_api_key_for_user(admin_user.user_id)
+    if api_key is None:
+        api_key = odb.make_new_api_key_for_user_id(user_id=admin_user.user_id)
+    mailer.send_course_created_email(
+        to_addr=admin_user.email,
+        course_name=course.course_name or course.course_id,
+        course_id=course.course_id,
+        planttracer_endpoint=planttracer_endpoint,
+        api_key=api_key,
+    )
+    return api_key
+
+
 def create_course_with_admin(*, course_id, course_name, admin_email, admin_name,
                              max_enrollment=C.DEFAULT_MAX_ENROLLMENT,
                              planttracer_endpoint=None, send_email=True):
@@ -185,11 +204,17 @@ def create_course_with_admin(*, course_id, course_name, admin_email, admin_name,
         raise ValueError("course_id is required")
     if not course_name:
         raise ValueError("course_name is required")
+    if not isinstance(admin_email, str) or not admin_email.strip():
+        raise ValueError("admin_email is required")
+    if not isinstance(admin_name, str) or not admin_name.strip():
+        raise ValueError("admin_name is required")
+    if send_email and not planttracer_endpoint:
+        raise ValueError("planttracer_endpoint is required when send_email=True")
     created = False
     try:
         course_dict = odb.lookup_course_by_id(course_id=course_id)
         if course_dict.get(COURSE_NAME) != course_name:
-            raise ValueError(
+            raise CourseNameConflict(
                 f"course {course_id} already exists as {course_dict.get(COURSE_NAME)!r}, "
                 f"not {course_name!r}"
             )
@@ -206,14 +231,20 @@ def create_course_with_admin(*, course_id, course_name, admin_email, admin_name,
         admin_email=admin_email,
         admin_name=admin_name,
         course_ids=[course_id],
-        planttracer_endpoint=planttracer_endpoint,
-        send_email=send_email,
+        send_email=False,
     )
     course = Course(**odb.lookup_course_by_id(course_id=course_id))
+    api_key = None
+    if send_email:
+        api_key = send_course_created_notification(
+            course=course,
+            admin_user=admin_result.admin_user,
+            planttracer_endpoint=planttracer_endpoint,
+        )
     return CourseCreateResult(
         course=course,
         admin_user=admin_result.admin_user,
-        api_key=admin_result.api_key,
+        api_key=api_key,
         created=created,
     )
 

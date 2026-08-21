@@ -123,6 +123,7 @@ Unreleased Summary
       automated deployed upload/trace workflow
     * Developer: centralize runtime S3 object-key templates and formatting helpers while preserving legacy movie URNs
     * Admin: add creation, upload, and last-movie-activity dates; FPM-based elapsed time, frame and byte sizes, resizable columns, course links, and a visible movie ``⋮`` action menu
+    * Admin: let superadmins create courses, select or enter the initial administrator, audit the change, and send the administrator a setup email while keeping superauditors and course administrators read-only
     * Movies: distinguish created from successfully uploaded records with ``created_at`` and ``uploaded_at``, highlight pending uploads, verify exact-size direct uploads, and maintain ``last_activity_at`` through ``DDBO.update_movie()``
     * Authorization: give ``superadmin`` and ``superauditor`` cross-course movie
       read access while keeping cross-course movie writes and Analyze unavailable

@@ -4,7 +4,7 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from app import admin_service, apikey, odb, s3_presigned
+from app import admin_service, apikey, course_management, mailer, odb, s3_presigned
 from app.odb import API_KEY, USER_ID
 
 from .constants import ADMIN_EMAIL, MOVIE_TITLE, USER_EMAIL
@@ -149,6 +149,372 @@ def test_admin_summary_allows_superadmin(client, new_course):
 
     assert response.status_code == 200
     assert response.json["viewer"]["super_role"] == odb.SUPER_ROLE_SUPERADMIN
+
+
+def test_superadmin_creates_course_with_existing_admin_and_audit(client, new_course,
+                                                                 monkeypatch):
+    monkeypatch.setenv("MAILER_DRY_RUN", "true")
+    ddbo = new_course["ddbo"]
+    ddbo.update_table(
+        ddbo.users,
+        new_course[USER_ID],
+        {odb.SUPER_ROLE: odb.SUPER_ROLE_SUPERADMIN},
+    )
+    client.set_cookie(apikey.cookie_name(), new_course[API_KEY])
+    course_id = f"AdminCreate-{uuid.uuid4()}"
+    admin = odb.get_user_email(new_course[ADMIN_EMAIL])
+    try:
+        response = client.post("/api/admin/courses", json={
+            "course_id": course_id,
+            "course_name": "Created from admin page",
+            "admin_email": new_course[ADMIN_EMAIL].upper(),
+            "admin_name": "Untrusted replacement name",
+        })
+
+        assert response.status_code == 201
+        assert response.json["created"] is True
+        assert response.json["email_sent"] is True
+        assert response.json["administrator"]["user_name"] == "Course Admin"
+        course = odb.lookup_course_by_id(course_id=course_id)
+        assert admin[odb.USER_NAME] == "Course Admin"
+        assert admin[odb.USER_ID] in course[odb.ADMINS_FOR_COURSE]
+        logs = ddbo.logs.scan()["Items"]
+        matching_logs = [
+            log for log in logs
+            if log["course_id"] == course_id
+            and log["user_id"] == new_course[USER_ID]
+            and log["target_user_id"] == admin[odb.USER_ID]
+        ]
+        assert any(
+            log["course_id"] == course_id
+            and log["event_type"] == "course.created"
+            and log["user_id"] == new_course[USER_ID]
+            and log["target_user_id"] == admin[odb.USER_ID]
+            for log in logs
+        )
+
+        retry = client.post("/api/admin/courses", json={
+            "course_id": course_id,
+            "course_name": "Created from admin page",
+            "admin_email": new_course[ADMIN_EMAIL],
+            "admin_name": "Course Admin",
+        })
+
+        assert retry.status_code == 200
+        assert retry.json["created"] is False
+        retry_logs = [
+            log for log in ddbo.logs.scan()["Items"]
+            if log["course_id"] == course_id
+            and log["user_id"] == new_course[USER_ID]
+            and log["target_user_id"] == admin[odb.USER_ID]
+        ]
+        assert len(retry_logs) == len(matching_logs)
+    finally:
+        try:
+            odb.remove_course_admin(course_id=course_id, admin_id=admin[odb.USER_ID])
+            odb.delete_course(course_id=course_id)
+        except odb.InvalidCourse_Id:
+            pass
+
+
+def test_superadmin_creates_course_with_new_admin_name(client, new_course, monkeypatch):
+    monkeypatch.setenv("MAILER_DRY_RUN", "true")
+    ddbo = new_course["ddbo"]
+    ddbo.update_table(
+        ddbo.users,
+        new_course[USER_ID],
+        {odb.SUPER_ROLE: odb.SUPER_ROLE_SUPERADMIN},
+    )
+    client.set_cookie(apikey.cookie_name(), new_course[API_KEY])
+    course_id = f"AdminCreate-{uuid.uuid4()}"
+    admin_email = f"new-admin-{uuid.uuid4()}@example.test"
+    admin = None
+    try:
+        response = client.post("/api/admin/courses", json={
+            "course_id": course_id,
+            "course_name": "New administrator course",
+            "admin_email": admin_email,
+            "admin_name": "New Course Administrator",
+        })
+
+        assert response.status_code == 201
+        assert response.json["administrator"]["user_name"] == "New Course Administrator"
+        admin = odb.get_user_email(admin_email)
+        assert odb.check_course_admin(user_id=admin[odb.USER_ID], course_id=course_id)
+    finally:
+        if admin is not None:
+            odb.remove_course_admin(course_id=course_id, admin_id=admin[odb.USER_ID])
+            ddbo.course_users.delete_item(
+                Key={odb.COURSE_ID: course_id, odb.USER_ID: admin[odb.USER_ID]}
+            )
+            odb.delete_user(user_id=admin[odb.USER_ID], purge_movies=True)
+        try:
+            odb.delete_course(course_id=course_id)
+        except odb.InvalidCourse_Id:
+            pass
+
+
+@pytest.mark.parametrize("role", [odb.SUPER_ROLE_NONE, odb.SUPER_ROLE_SUPERAUDITOR])
+def test_non_superadmin_cannot_create_course(client, new_course, role):
+    ddbo = new_course["ddbo"]
+    ddbo.update_table(ddbo.users, new_course[USER_ID], {odb.SUPER_ROLE: role})
+    client.set_cookie(apikey.cookie_name(), new_course[API_KEY])
+    course_id = f"Denied-{uuid.uuid4()}"
+
+    response = client.post("/api/admin/courses", json={
+        "course_id": course_id,
+        "course_name": "Must not exist",
+        "admin_email": new_course[ADMIN_EMAIL],
+        "admin_name": "Course Admin",
+    })
+
+    assert response.status_code == 403
+    with pytest.raises(odb.InvalidCourse_Id):
+        odb.lookup_course_by_id(course_id=course_id)
+
+
+def test_admin_course_create_rejects_conflicting_course_id(client, new_course):
+    ddbo = new_course["ddbo"]
+    ddbo.update_table(
+        ddbo.users,
+        new_course[USER_ID],
+        {odb.SUPER_ROLE: odb.SUPER_ROLE_SUPERADMIN},
+    )
+    client.set_cookie(apikey.cookie_name(), new_course[API_KEY])
+
+    response = client.post("/api/admin/courses", json={
+        "course_id": new_course[odb.COURSE_ID],
+        "course_name": "Conflicting replacement name",
+        "admin_email": new_course[ADMIN_EMAIL],
+        "admin_name": "Course Admin",
+    })
+
+    assert response.status_code == 409
+    assert response.json == {
+        "error": True,
+        "message": "Course ID conflicts with an existing course name",
+    }
+    course = odb.lookup_course_by_id(course_id=new_course[odb.COURSE_ID])
+    assert course[odb.COURSE_NAME] == new_course[odb.COURSE_NAME]
+
+
+def test_admin_course_create_returns_safe_validation_error(client, new_course):
+    ddbo = new_course["ddbo"]
+    ddbo.update_table(
+        ddbo.users,
+        new_course[USER_ID],
+        {odb.SUPER_ROLE: odb.SUPER_ROLE_SUPERADMIN},
+    )
+    client.set_cookie(apikey.cookie_name(), new_course[API_KEY])
+
+    response = client.post("/api/admin/courses", json={
+        "course_id": "",
+        "course_name": "Missing fields",
+    })
+
+    assert response.status_code == 400
+    assert response.json == {
+        "error": True,
+        "message": "Invalid course creation request",
+    }
+
+
+def test_admin_course_create_rejects_invalid_api_key(client, new_course):
+    course_id = f"InvalidKey-{uuid.uuid4()}"
+    client.set_cookie(apikey.cookie_name(), "invalid-api-key")
+
+    response = client.post("/api/admin/courses", json={
+        "course_id": course_id,
+        "course_name": "Must not exist",
+        "admin_email": new_course[ADMIN_EMAIL],
+        "admin_name": "Course Admin",
+    })
+
+    assert response.status_code == 403
+    assert response.json == {"error": True, "message": "Invalid api_key"}
+    with pytest.raises(odb.InvalidCourse_Id):
+        odb.lookup_course_by_id(course_id=course_id)
+
+
+def test_admin_course_create_rejects_duplicate_registration_key(client, new_course,
+                                                                 monkeypatch):
+    ddbo = new_course["ddbo"]
+    ddbo.update_table(
+        ddbo.users,
+        new_course[USER_ID],
+        {odb.SUPER_ROLE: odb.SUPER_ROLE_SUPERADMIN},
+    )
+    client.set_cookie(apikey.cookie_name(), new_course[API_KEY])
+    course_id = f"DuplicateKey-{uuid.uuid4()}"
+    monkeypatch.setattr(
+        course_management,
+        "generate_course_key",
+        lambda: new_course[odb.COURSE_KEY],
+    )
+
+    response = client.post("/api/admin/courses", json={
+        "course_id": course_id,
+        "course_name": "Duplicate registration key",
+        "admin_email": new_course[ADMIN_EMAIL],
+        "admin_name": "Course Admin",
+    })
+
+    assert response.status_code == 409
+    assert response.json == {
+        "error": True,
+        "message": "Course identifier or registration key is already in use",
+    }
+    with pytest.raises(odb.InvalidCourse_Id):
+        odb.lookup_course_by_id(course_id=course_id)
+
+
+def test_admin_course_create_survives_invalid_mailer_configuration(client, new_course,
+                                                                    monkeypatch):
+    ddbo = new_course["ddbo"]
+    ddbo.update_table(
+        ddbo.users,
+        new_course[USER_ID],
+        {odb.SUPER_ROLE: odb.SUPER_ROLE_SUPERADMIN},
+    )
+    client.set_cookie(apikey.cookie_name(), new_course[API_KEY])
+    course_id = f"MailerFailure-{uuid.uuid4()}"
+
+    def raise_invalid_mailer_configuration(**_kwargs):
+        assert _kwargs["planttracer_endpoint"] == "http://localhost"
+        raise mailer.InvalidMailerConfiguration("deliberate test failure")
+
+    monkeypatch.setattr(
+        course_management,
+        "send_course_created_notification",
+        raise_invalid_mailer_configuration,
+    )
+    admin = odb.get_user_email(new_course[ADMIN_EMAIL])
+    try:
+        response = client.post("/api/admin/courses", json={
+            "course_id": course_id,
+            "course_name": "Mailer failure course",
+            "admin_email": new_course[ADMIN_EMAIL],
+            "admin_name": "Course Admin",
+        })
+
+        assert response.status_code == 201
+        assert response.json["created"] is True
+        assert response.json["email_sent"] is False
+        assert response.json["message"] == (
+            "Course created, but the administrator email could not be sent"
+        )
+        course = odb.lookup_course_by_id(course_id=course_id)
+        assert admin[odb.USER_ID] in course[odb.ADMINS_FOR_COURSE]
+    finally:
+        try:
+            odb.remove_course_admin(course_id=course_id, admin_id=admin[odb.USER_ID])
+            odb.delete_course(course_id=course_id)
+        except odb.InvalidCourse_Id:
+            pass
+
+
+def test_admin_course_create_rejects_disabled_administrator(client, new_course):
+    ddbo = new_course["ddbo"]
+    ddbo.update_table(
+        ddbo.users,
+        new_course[USER_ID],
+        {odb.SUPER_ROLE: odb.SUPER_ROLE_SUPERADMIN},
+    )
+    admin = odb.get_user_email(new_course[ADMIN_EMAIL])
+    course_id = f"DisabledAdmin-{uuid.uuid4()}"
+    client.set_cookie(apikey.cookie_name(), new_course[API_KEY])
+    ddbo.update_table(ddbo.users, admin[odb.USER_ID], {odb.ENABLED: 0})
+    try:
+        response = client.post("/api/admin/courses", json={
+            "course_id": course_id,
+            "course_name": "Disabled administrator",
+            "admin_email": new_course[ADMIN_EMAIL],
+            "admin_name": "Course Admin",
+        })
+
+        assert response.status_code == 409
+        assert response.json == {
+            "error": True,
+            "message": "Administrator account is disabled",
+        }
+        with pytest.raises(odb.InvalidCourse_Id):
+            odb.lookup_course_by_id(course_id=course_id)
+    finally:
+        ddbo.update_table(ddbo.users, admin[odb.USER_ID], {odb.ENABLED: 1})
+
+
+@pytest.mark.parametrize("stored_name", ["", None])
+def test_admin_course_create_rejects_existing_administrator_without_name(client, new_course,
+                                                                          stored_name):
+    ddbo = new_course["ddbo"]
+    ddbo.update_table(
+        ddbo.users,
+        new_course[USER_ID],
+        {odb.SUPER_ROLE: odb.SUPER_ROLE_SUPERADMIN},
+    )
+    admin = odb.get_user_email(new_course[ADMIN_EMAIL])
+    original_name = admin[odb.USER_NAME]
+    course_id = f"NamelessAdmin-{uuid.uuid4()}"
+    client.set_cookie(apikey.cookie_name(), new_course[API_KEY])
+    ddbo.update_table(ddbo.users, admin[odb.USER_ID], {odb.USER_NAME: stored_name})
+    try:
+        response = client.post("/api/admin/courses", json={
+            "course_id": course_id,
+            "course_name": "Nameless administrator",
+            "admin_email": new_course[ADMIN_EMAIL],
+            "admin_name": "Submitted Name",
+        })
+
+        assert response.status_code == 409
+        assert response.json == {
+            "error": True,
+            "message": "Administrator account has no name",
+        }
+        with pytest.raises(odb.InvalidCourse_Id):
+            odb.lookup_course_by_id(course_id=course_id)
+    finally:
+        ddbo.update_table(ddbo.users, admin[odb.USER_ID], {odb.USER_NAME: original_name})
+
+
+def test_admin_course_create_survives_mail_transport_failure(client, new_course,
+                                                              monkeypatch):
+    ddbo = new_course["ddbo"]
+    ddbo.update_table(
+        ddbo.users,
+        new_course[USER_ID],
+        {odb.SUPER_ROLE: odb.SUPER_ROLE_SUPERADMIN},
+    )
+    client.set_cookie(apikey.cookie_name(), new_course[API_KEY])
+    course_id = f"TransportFailure-{uuid.uuid4()}"
+
+    def raise_transport_failure(**_kwargs):
+        raise OSError("deliberate transport failure")
+
+    monkeypatch.setattr(
+        course_management,
+        "send_course_created_notification",
+        raise_transport_failure,
+    )
+    admin = odb.get_user_email(new_course[ADMIN_EMAIL])
+    try:
+        response = client.post("/api/admin/courses", json={
+            "course_id": course_id,
+            "course_name": "Transport failure course",
+            "admin_email": new_course[ADMIN_EMAIL],
+            "admin_name": "Course Admin",
+        })
+
+        assert response.status_code == 201
+        assert response.json["created"] is True
+        assert response.json["email_sent"] is False
+        course = odb.lookup_course_by_id(course_id=course_id)
+        assert admin[odb.USER_ID] in course[odb.ADMINS_FOR_COURSE]
+    finally:
+        try:
+            odb.remove_course_admin(course_id=course_id, admin_id=admin[odb.USER_ID])
+            odb.delete_course(course_id=course_id)
+        except odb.InvalidCourse_Id:
+            pass
 
 
 def test_admin_summary_includes_enrollment_memberships_and_movies(client, new_movie):

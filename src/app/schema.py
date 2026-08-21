@@ -266,6 +266,7 @@ class LogEntry(BaseModel):
     time_t: Annotated[int, Field(ge=0)]
     event_type: str
     movie_id: str
+    target_user_id: str | None = None
     event_id: str | None = None
     object_key: str | None = None
     sequencer: str | None = None

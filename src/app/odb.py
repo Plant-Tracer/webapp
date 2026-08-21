@@ -564,6 +564,22 @@ class DDBO:
                 raise
         return entry
 
+    def put_admin_log(self, *, event_type, actor_user_id, target_user_id,
+                      course_id, ipaddr):
+        """Persist an administrative course event attributed to its actor."""
+        entry = LogEntry(
+            log_id=f"{int(time.time() * 1000)}-{uuid.uuid4()}",
+            ipaddr=ipaddr or "unknown",
+            user_id=actor_user_id,
+            course_id=course_id,
+            time_t=int(time.time()),
+            event_type=event_type,
+            movie_id="",
+            target_user_id=target_user_id,
+        )
+        self.logs.put_item(Item=entry.model_dump(exclude_none=True))
+        return entry
+
     def put_movie_trace_failure_log(self, *, movie, job_id, error):
         """Persist a safe tracing failure audit record; detailed tracebacks stay in CloudWatch."""
         entry = LogEntry(
@@ -788,15 +804,15 @@ class DDBO:
             raise ValueError(self.api_keys.name) from e
 
     def get_first_api_key_for_user(self, user_id):
-        """Return one api_key for the user, or None if they have none."""
+        """Return one enabled api_key for the user, or None if they have none."""
         response = self.api_keys.query(
             IndexName='user_id_idx',
             KeyConditionExpression=Key(USER_ID).eq(user_id),
-            ProjectionExpression=API_KEY,
-            Limit=1,
+            ProjectionExpression=f'{API_KEY}, {ENABLED}',
         )
         items = response.get('Items', [])
-        return items[0][API_KEY] if items else None
+        enabled_items = [item for item in items if item.get(ENABLED) == 1]
+        return enabled_items[0][API_KEY] if enabled_items else None
 
     def get_user_login_times(self, user_id):
         """Return (first_used_at, last_used_at) for a user by aggregating across all their api_keys.
@@ -1089,6 +1105,24 @@ class DDBO:
         # delete the course
         self.courses.delete_item(Key = { COURSE_ID :course_id})
 
+        last_evaluated_key = None
+        while True:
+            query_kwargs = {
+                'KeyConditionExpression': Key(COURSE_ID).eq(course_id),
+                'ProjectionExpression': USER_ID,
+            }
+            if last_evaluated_key:
+                query_kwargs['ExclusiveStartKey'] = last_evaluated_key
+            response = self.course_users.query(**query_kwargs)
+            for enrollment in response.get('Items', []):
+                self.course_users.delete_item(Key={
+                    COURSE_ID: course_id,
+                    USER_ID: enrollment[USER_ID],
+                })
+            last_evaluated_key = response.get('LastEvaluatedKey')
+            if not last_evaluated_key:
+                break
+
         logger.warning("scan the users and remove the course from every user that has it.")
         logger.warning("eliminate this scan by having the courses track their users.")
         last_evaluated_key = None
@@ -1098,17 +1132,20 @@ class DDBO:
                 scan_kwargs['ExclusiveStartKey'] = last_evaluated_key
             response = self.users.scan(**scan_kwargs)
             for user in response.get('Items'):
-                courses = user[ COURSES ]
+                courses = user.get(COURSES, [])
+                admin_for_courses = user.get(ADMIN_FOR_COURSES, [])
+                updates = {}
                 if course_id in courses:
                     courses.remove(course_id)
-                    self.update_table(
-                        self.users,
-                        user[USER_ID],
-                        {
-                            COURSES: courses,
-                            **repaired_default_course_updates(self, user, courses),
-                        },
-                    )
+                    updates.update({
+                        COURSES: courses,
+                        **repaired_default_course_updates(self, user, courses),
+                    })
+                if course_id in admin_for_courses:
+                    admin_for_courses.remove(course_id)
+                    updates[ADMIN_FOR_COURSES] = admin_for_courses
+                if updates:
+                    self.update_table(self.users, user[USER_ID], updates)
             last_evaluated_key = response.get('LastEvaluatedKey')
             if not last_evaluated_key:
                 break
@@ -1627,7 +1664,7 @@ def get_user_email(email):
 
 
 def get_first_api_key_for_user(user_id):
-    """Return one api_key for the user, or None if they have none."""
+    """Return one enabled api_key for the user, or None if they have none."""
     return DDBO().get_first_api_key_for_user(user_id)
 
 
@@ -1710,7 +1747,7 @@ def delete_course(*,course_id):
 
 def add_course_admin(*, admin_id, course_id):
     """Promotes the user to be an administrator and makes them an administrator of a specific course.
-    :param email: email address of the administrator
+    :param admin_id: user ID of the administrator
     :param course_id: - if specified, use this course_id
     :returns {'user_id':admin_id, 'admin_id':admin_id, 'course_id':course_id }
     """
@@ -1732,6 +1769,7 @@ def add_course_admin(*, admin_id, course_id):
 
     ddbo.update_table(ddbo.courses, course_id,
                       { ADMINS_FOR_COURSE:list(set(course[ ADMINS_FOR_COURSE ] + [admin_id]))})
+    ddbo.course_users.put_item(Item={COURSE_ID:course_id, USER_ID:admin_id})
 
     return { USER_ID :admin_id, 'admin_id':admin_id, COURSE_ID :course_id}
 
@@ -1780,6 +1818,7 @@ def remove_course_admin(*, course_id, admin_id):
 
     except ValueError:
         logger.warning("course admin remove fail: admin %s from course %s",admin_id,course_id)
+    ddbo.course_users.delete_item(Key={COURSE_ID:course_id, USER_ID:admin_id})
 
 
 def check_course_admin(*, user_id, course_id):
