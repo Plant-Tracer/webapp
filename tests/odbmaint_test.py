@@ -54,21 +54,28 @@ def test_create_tables_reports_creation_progress(local_ddb, monkeypatch):
     try:
         odbmaint.create_tables(status=messages.append)
 
+        table_names = [config[odbmaint.TableName] for config in odbmaint.load_table_configurations()]
+        table_count = len(table_names)
         assert messages[:2] == [
-            f"Creating 8 DynamoDB tables with prefix '{prefix}'. "
+            f"Creating {table_count} DynamoDB tables with prefix '{prefix}'. "
             "This usually takes 1-3 minutes in AWS.",
             "Tables are created sequentially; DynamoDB status checks may be 20 seconds apart.",
         ]
-        table_names = [config[odbmaint.TableName] for config in odbmaint.load_table_configurations()]
         for table_number, table_name in enumerate(table_names, start=1):
             full_name = prefix + table_name
-            assert f"[{table_number}/8] Creating {full_name}..." in messages
-            assert f"[{table_number}/8] Waiting for {full_name} to become ACTIVE..." in messages
-            assert f"[{table_number}/8] Ready: {full_name}" in messages
+            assert f"[{table_number}/{table_count}] Creating {full_name}..." in messages
+            assert (
+                f"[{table_number}/{table_count}] Waiting for {full_name} to become ACTIVE..."
+                in messages
+            )
+            assert f"[{table_number}/{table_count}] Ready: {full_name}" in messages
 
         messages.clear()
         odbmaint.create_tables(ignore_table_exists=True, status=messages.append)
         for table_number, table_name in enumerate(table_names, start=1):
-            assert f"[{table_number}/8] Already exists: {prefix + table_name}" in messages
+            assert (
+                f"[{table_number}/{table_count}] Already exists: {prefix + table_name}"
+                in messages
+            )
     finally:
         odbmaint.drop_tables(silent_warnings=True)

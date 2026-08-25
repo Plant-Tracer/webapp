@@ -78,7 +78,6 @@ def create_tables(*, ignore_table_exists=False, status: Callable[[str], None] | 
     :param status: Optional callback for user-visible progress messages
     :raises ClientError: If a DynamoDB client-side error occurs (e.g., table already exists).
     :raises Exception: For any unexpected errors during creation.
-    :return: the connected ddbo object
     """
     table_prefix = table_prefix_from_env()
     dynamodb = DDBO.resource()
