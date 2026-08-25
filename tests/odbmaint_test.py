@@ -1,3 +1,4 @@
+import logging
 import uuid
 
 from app import odbmaint
@@ -44,7 +45,7 @@ def test_load_table_configurations_returns_independent_copies():
     assert fresh_configs[0][odbmaint.TableName] == "users"
 
 
-def test_create_tables_reports_creation_progress(local_ddb, monkeypatch):
+def test_create_tables_reports_creation_progress(local_ddb, monkeypatch, caplog):
     del local_ddb
     prefix = f"status-{uuid.uuid4()}-"
     messages = []
@@ -71,11 +72,18 @@ def test_create_tables_reports_creation_progress(local_ddb, monkeypatch):
             assert f"[{table_number}/{table_count}] Ready: {full_name}" in messages
 
         messages.clear()
-        odbmaint.create_tables(ignore_table_exists=True, status=messages.append)
+        caplog.clear()
+        ignored_table = prefix + table_names[0]
+        with caplog.at_level(logging.WARNING):
+            odbmaint.create_tables(ignore_table_exists={ignored_table}, status=messages.append)
         for table_number, table_name in enumerate(table_names, start=1):
             assert (
                 f"[{table_number}/{table_count}] Already exists: {prefix + table_name}"
                 in messages
             )
+        warning_messages = [record.getMessage() for record in caplog.records]
+        assert f"Table {ignored_table} already exists." not in warning_messages
+        for table_name in table_names[1:]:
+            assert f"Table {prefix + table_name} already exists." in warning_messages
     finally:
         odbmaint.drop_tables(silent_warnings=True)

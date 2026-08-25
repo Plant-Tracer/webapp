@@ -116,9 +116,10 @@ def create_tables(*, ignore_table_exists=False, status: Callable[[str], None] | 
         except ClientError as e:
             if e.response['Error']['Code'] in ('TableAlreadyExistsException','ResourceInUseException'):
                 # ignore_table_exists can be a bool or a collection of table names to ignore
-                should_warn = not ignore_table_exists
-                if isinstance(ignore_table_exists, (list, tuple, set)) and table_name in ignore_table_exists:
-                    should_warn = False
+                if isinstance(ignore_table_exists, (list, tuple, set)):
+                    should_warn = table_name not in ignore_table_exists
+                else:
+                    should_warn = not ignore_table_exists
                 if status:
                     status(f"[{table_number}/{table_count}] Already exists: {table_name}")
                 if should_warn:
