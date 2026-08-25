@@ -74,10 +74,12 @@ def create_tables(*, ignore_table_exists=False, status: Callable[[str], None] | 
     """Creates DynamoDB tables based on etc/dynamodb_tables.json.
     Connects to the local DynamoDB instance using AWS_ENDPOINT_URL_DYNAMODB.
 
-    :param ignore_table_exists: Tables to ignore if they already exist
+    :param ignore_table_exists: ``True`` to suppress warnings for all existing tables,
+        or a list, tuple, or set of fully prefixed table names whose warnings should
+        be suppressed. ``False`` warns for every existing table.
     :param status: Optional callback for user-visible progress messages
-    :raises ClientError: If a DynamoDB client-side error occurs (e.g., table already exists).
-    :raises Exception: For any unexpected errors during creation.
+    :raises Exception: Unexpected errors other than ``ClientError``. DynamoDB
+        ``ClientError`` responses are logged and not re-raised.
     """
     table_prefix = table_prefix_from_env()
     dynamodb = DDBO.resource()
