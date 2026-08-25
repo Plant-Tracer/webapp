@@ -85,5 +85,10 @@ def test_create_tables_reports_creation_progress(local_ddb, monkeypatch, caplog)
         assert f"Table {ignored_table} already exists." not in warning_messages
         for table_name in table_names[1:]:
             assert f"Table {prefix + table_name} already exists." in warning_messages
+
+        caplog.clear()
+        with caplog.at_level(logging.WARNING):
+            odbmaint.create_tables(ignore_table_exists=True)
+        assert not any(record.getMessage().startswith("Table ") for record in caplog.records)
     finally:
         odbmaint.drop_tables(silent_warnings=True)
