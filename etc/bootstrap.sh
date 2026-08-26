@@ -101,7 +101,12 @@ export PATH="$HOME/.local/bin:$PATH"
 
 # Install uv even when the old section-2 guard exists from an earlier bootstrap.
 if ! command -v uv >/dev/null 2>&1; then
-  curl -LsSf https://astral.sh/uv/install.sh | sh
+  uv_installer_dir="$(mktemp -d)"
+  trap 'rm -rf -- "$uv_installer_dir"' EXIT
+  curl -LsSf --output "$uv_installer_dir/install.sh" https://astral.sh/uv/install.sh
+  sh "$uv_installer_dir/install.sh"
+  rm -rf -- "$uv_installer_dir"
+  trap - EXIT
 fi
 uv --version
 
