@@ -31,8 +31,10 @@
     <h3>Current administrators</h3>
     <ul id="course-admin-current"></ul>
     <div id="course-admin-add-controls">
-      <label for="course-admin-user-select">Add an existing enabled user</label>
-      <select id="course-admin-user-select"></select>
+      <label for="course-admin-user-email">Add an existing enabled user by email</label>
+      <input id="course-admin-user-email" type="email" list="course-admin-user-choices"
+             maxlength="320" autocomplete="email">
+      <datalist id="course-admin-user-choices"></datalist>
       <button id="course-admin-add" type="button">Add administrator</button>
     </div>
   </dialog>

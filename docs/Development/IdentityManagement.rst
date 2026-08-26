@@ -86,6 +86,10 @@ A course administrator can:
 * receive course setup/login email through the configured Plant Tracer sender.
 * open the Admin panel with courses, users, and movies limited to the courses
   they administer.
+* add or remove administrators for those courses. An exact registered email
+  may be added even when that user is not already enrolled; assignment enrolls
+  the user automatically. An administrator may remove their own role when
+  another administrator remains, but the final administrator is protected.
 
 Course administrators can be created or updated by a ``superadmin`` in the
 Admin panel or through ``dbutil`` and operator Makefile targets. They should not
@@ -113,6 +117,19 @@ editable. ``superauditor`` and course-administrator views do not show the
 button, and the API independently rejects their requests. Successful creation
 assigns the administrator, records the acting superadmin in the audit log, and
 sends the administrator a course setup/login email.
+
+The course table's ``Manage`` control is shown to superadmins and to course
+administrators for each course they administer. Removing course-admin status
+retains ordinary enrollment and the user's default course. Course-admin
+changes are atomic, condition the write on the actor's current authority, and
+write attributed audit events. This prevents an authority change racing with
+the administrator update.
+
+The Admin page's user table gives ``superadmin`` users controls to grant or
+remove ``superadmin`` from any registered user. A superadmin may remove their own
+role when another superadmin remains. The final superadmin cannot be removed.
+These browser operations use the same ``app.super_roles`` transaction service
+as ``dbutil``, including the versioned registry and attributed audit records.
 
 Operators can list all registered users with ``make user-list``. The target
 runs ``poetry run dbutil user-list`` and prints each user's display name, email
@@ -152,10 +169,10 @@ general ``poetry run dbutil set-super-role --email ops@example.edu --role supera
 command accepts ``none``, ``superauditor``, or ``superadmin``. The CLI refuses
 to demote or remove the last remaining ``superadmin``. Role mutations update a
 versioned singleton in the ``unique_emails`` table in the same DynamoDB
-transaction as the user record. Concurrent operator commands therefore cannot
-both pass the last-superadmin check. The CLI reconciles that singleton from the
-users table before each mutation so older databases are initialized on first
-use. Users can be
+transaction as the user record. Concurrent browser or operator commands
+therefore cannot both pass the last-superadmin check. The shared service
+reconciles that singleton from the users table before each mutation so older
+databases are initialized on first use. Users can be
 ``superadmin`` or ``superauditor``, but not both, because ``super_role`` is a
 single enum field. Course-admin status grants Admin-panel access only for
 administered courses; it never grants cross-course access. This scoped access

@@ -324,6 +324,10 @@ class DisabledCourseAdmin(ODB_Errors):
     """A disabled user cannot be assigned as a course administrator."""
 
 
+class UnauthorizedCourseAdminChange(ODB_Errors):
+    """The acting user cannot manage administrators for this course."""
+
+
 class CourseAdminChange(BaseModel):
     """Result of an idempotent course-administrator mutation."""
 
@@ -1721,6 +1725,14 @@ def admin_read_access(user) -> AdminReadAccess:
     )
 
 
+def can_manage_course_administrators(user, course_id):
+    """Return whether a user may change administrators for one course."""
+    return (
+        normalize_super_role(user) == SUPER_ROLE_SUPERADMIN
+        or course_id in user.get(ADMIN_FOR_COURSES, [])
+    )
+
+
 #########################
 ### Course Management ###
 #########################
@@ -1763,8 +1775,34 @@ def delete_course(*,course_id):
     """
     DDBO().del_course(course_id)
 
+def _course_admin_actor_condition(actor, course_id):
+    """Build a condition that preserves the actor's checked authority."""
+    if normalize_super_role(actor) == SUPER_ROLE_SUPERADMIN:
+        if SUPER_ROLE in actor:
+            return (
+                '#actor_role=:actor_role',
+                {'#actor_role': SUPER_ROLE},
+                {':actor_role': actor[SUPER_ROLE]},
+            )
+        return (
+            'attribute_not_exists(#actor_role) '
+            'AND #legacy_superadmin=:legacy_superadmin',
+            {
+                '#actor_role': SUPER_ROLE,
+                '#legacy_superadmin': LEGACY_SUPER_ROLE_ADMIN,
+            },
+            {':legacy_superadmin': actor[LEGACY_SUPER_ROLE_ADMIN]},
+        )
+    return (
+        '#actor_admin_courses=:actor_admin_courses',
+        {'#actor_admin_courses': ADMIN_FOR_COURSES},
+        {':actor_admin_courses': actor.get(ADMIN_FOR_COURSES, [])},
+    )
+
+
 def _course_admin_transaction(*, admin_id, course_id, assigned,
-                              actor_user_id, ipaddr, protect_last_admin):
+                              actor_user_id, ipaddr, protect_last_admin,
+                              authorize_actor):
     """Atomically maintain the mirrored course-administrator relationship."""
     if not is_user_id(admin_id) or not isinstance(course_id, str) or not course_id:
         raise ValueError("Invalid course-administrator identifier")
@@ -1772,6 +1810,11 @@ def _course_admin_transaction(*, admin_id, course_id, assigned,
     for _attempt in range(4):
         admin = ddbo.get_user(admin_id)
         course = ddbo.get_course(course_id)
+        actor = None
+        if authorize_actor:
+            actor = ddbo.get_user(actor_user_id)
+            if not can_manage_course_administrators(actor, course_id):
+                raise UnauthorizedCourseAdminChange(course_id)
         old_admin_courses = list(admin.get(ADMIN_FOR_COURSES, []))
         old_courses = list(admin.get(COURSES, []))
         old_course_admins = list(course.get(ADMINS_FOR_COURSE, []))
@@ -1864,6 +1907,24 @@ def _course_admin_transaction(*, admin_id, course_id, assigned,
                 },
             },
         ]
+        if actor is not None:
+            actor_condition, actor_names, actor_values = _course_admin_actor_condition(
+                actor, course_id,
+            )
+            if actor_user_id == admin_id:
+                transaction[0]['Update']['ConditionExpression'] += f' AND {actor_condition}'
+                transaction[0]['Update']['ExpressionAttributeNames'].update(actor_names)
+                transaction[0]['Update']['ExpressionAttributeValues'].update(actor_values)
+            else:
+                actor_check = {
+                    'TableName': ddbo.users.name,
+                    'Key': {USER_ID: actor_user_id},
+                    'ConditionExpression': actor_condition,
+                    'ExpressionAttributeNames': actor_names,
+                }
+                if actor_values:
+                    actor_check['ExpressionAttributeValues'] = actor_values
+                transaction.append({'ConditionCheck': actor_check})
         if actor_user_id is not None:
             log_entry = LogEntry(
                 log_id=f"{int(time.time() * 1000)}-{uuid.uuid4()}",
@@ -1914,21 +1975,25 @@ def _course_admin_transaction(*, admin_id, course_id, assigned,
     )
 
 
-def add_course_admin(*, admin_id, course_id, actor_user_id=None, ipaddr="system"):
+def add_course_admin(*, admin_id, course_id, actor_user_id=None,
+                     ipaddr="system", authorize_actor=False):
     """Assign an existing user as a course administrator, idempotently."""
     return _course_admin_transaction(
         admin_id=admin_id, course_id=course_id, assigned=True,
         actor_user_id=actor_user_id, ipaddr=ipaddr, protect_last_admin=False,
+        authorize_actor=authorize_actor,
     )
 
 
 def remove_course_admin(*, course_id, admin_id, actor_user_id=None,
-                        ipaddr="system", protect_last_admin=False):
+                        ipaddr="system", protect_last_admin=False,
+                        authorize_actor=False):
     """Remove only course-admin status, retaining enrollment and default course."""
     return _course_admin_transaction(
         admin_id=admin_id, course_id=course_id, assigned=False,
         actor_user_id=actor_user_id, ipaddr=ipaddr,
         protect_last_admin=protect_last_admin,
+        authorize_actor=authorize_actor,
     )
 
 

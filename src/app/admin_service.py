@@ -150,38 +150,16 @@ class AdminCourseAdministrator(BaseModel):
     user_name: str
 
 
-class AdminCourseCreateResponse(BaseModel):
-    """Safe result returned after an admin course-creation request."""
+class AdminCourseAdministratorRequest(BaseModel):
+    """Exact registered user selected for a course-administrator assignment."""
 
-    error: bool = False
-    course: Course
-    administrator: AdminCourseAdministrator
-    created: bool
-    email_sent: bool
-    message: str
+    email: Annotated[str, Field(min_length=3, max_length=320)]
 
-
-class AdminCourseAdministratorChange(BaseModel):
-    """Result returned by a course-administrator mutation."""
-
-    error: bool = False
-    course_id: str
-    administrator: AdminCourseAdministrator
-    assigned: bool
-    changed: bool
-
-
-class AdminCourseSummary(BaseModel):
-    """Course row shown by the minimal admin interface."""
-
-    course_id: str
-    course_key: str
-    course_name: str
-    enrollment_count: int
-    max_enrollment: int
-    admin_count: int
-    created_at: int | None = None
-    last_movie_activity_at: int | None = None
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value):
+        """Normalize email before lookup."""
+        return odb.normalize_email(value) if isinstance(value, str) else value
 
 
 class AdminUserCourseSummary(BaseModel):
@@ -201,6 +179,50 @@ class AdminUserSummary(BaseModel):
     default_course_id: str | None
     super_role: str
     courses: list[AdminUserCourseSummary]
+    created_at: int | None = None
+    last_movie_activity_at: int | None = None
+
+
+class AdminCourseCreateResponse(BaseModel):
+    """Safe result returned after an admin course-creation request."""
+
+    error: bool = False
+    course: Course
+    administrator: AdminCourseAdministrator
+    created: bool
+    email_sent: bool
+    message: str
+
+
+class AdminCourseAdministratorChange(BaseModel):
+    """Result returned by a course-administrator mutation."""
+
+    error: bool = False
+    course_id: str
+    administrator: AdminUserSummary
+    assigned: bool
+    changed: bool
+
+
+class AdminSuperadminChange(BaseModel):
+    """Safe result returned after a superadmin role mutation."""
+
+    error: bool = False
+    user: AdminUserSummary
+    old_super_role: str
+    new_super_role: str
+    changed: bool
+
+
+class AdminCourseSummary(BaseModel):
+    """Course row shown by the minimal admin interface."""
+
+    course_id: str
+    course_key: str
+    course_name: str
+    enrollment_count: int
+    max_enrollment: int
+    admin_count: int
     created_at: int | None = None
     last_movie_activity_at: int | None = None
 
