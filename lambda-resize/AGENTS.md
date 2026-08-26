@@ -5,12 +5,12 @@ The function ZIP and every attached layer count toward that limit.
 
 ## Dependency boundary
 
-`lambda-resize/src/requirements.txt` must be exported from only Poetry's
-`lambda` group:
+`lambda-resize/src/requirements.txt` must be exported from only the root uv
+project's `lambda` dependency group:
 
 ```console
-poetry export --only lambda --format=requirements.txt \
-  --output lambda-resize/src/requirements.txt --without-hashes
+uv export --locked --only-group lambda --no-emit-project --no-hashes \
+  --output-file lambda-resize/src/requirements.txt
 ```
 
 Do not add these packages to the lambda-resize ZIP:

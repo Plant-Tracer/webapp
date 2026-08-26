@@ -38,13 +38,13 @@ separate subcommands:
 
 .. code-block:: text
 
-   poetry run dbbackup backup --table-prefix PREFIX --output file.ptb [--all | --course-id C | --user-email E | --movie-id M] [--include-deleted]
-   poetry run dbbackup restore --table-prefix PREFIX file.ptb [--all | --course-id C | --user-email E | --movie-id M] [--commit] [--threads N] [--regenerate-zips]
-   poetry run dbbackup inspect file.ptb [--verbose]
-   poetry run dbbackup list-prefixes
-   poetry run dbutil list-prefixes
-   poetry run dbbackup send-restore-links --table-prefix PREFIX file.ptb [--all | --course-id C | --user-email E] [--send]
-   poetry run dbbackup migrate-course --table-prefix PREFIX --from-course-id A --to-course-id B [--user-email E] [--commit]
+   uv run dbbackup backup --table-prefix PREFIX --output file.ptb [--all | --course-id C | --user-email E | --movie-id M] [--include-deleted]
+   uv run dbbackup restore --table-prefix PREFIX file.ptb [--all | --course-id C | --user-email E | --movie-id M] [--commit] [--threads N] [--regenerate-zips]
+   uv run dbbackup inspect file.ptb [--verbose]
+   uv run dbbackup list-prefixes
+   uv run dbutil list-prefixes
+   uv run dbbackup send-restore-links --table-prefix PREFIX file.ptb [--all | --course-id C | --user-email E] [--send]
+   uv run dbbackup migrate-course --table-prefix PREFIX --from-course-id A --to-course-id B [--user-email E] [--commit]
 
 ``--table-prefix`` is the authoritative table prefix for commands that touch
 DynamoDB. It overrides ``DYNAMODB_TABLE_PREFIX`` if that environment variable is

@@ -50,7 +50,7 @@ export ADMIN_EMAIL COURSE_ID ADMIN_NAME COURSE_NAME SERVER_EMAIL LAMBDA_RESIZE_A
 if ! run_section 1 "Shell config (.bashrc, .bash_profile)"; then
   if ! grep -q planttracer "$HOME/.bashrc" 2>/dev/null; then
     echo '# source planttracer
-# Prefer pipx-installed tools like Poetry over distro packages in /usr/bin.
+# Prefer user-installed tools such as uv over distro packages in /usr/bin.
 export PATH="$HOME/.local/bin:$PATH"
 # get specific environment variables
 set -a
@@ -96,20 +96,14 @@ BASHPROFILE
   end_section 1
 fi
 
-# Make pipx-installed tools visible for this bootstrap run.
+# Make user-installed tools visible for this bootstrap run.
 export PATH="$HOME/.local/bin:$PATH"
 
-# --- Section 2: pipx and poetry ---
-if ! run_section 2 "pipx and poetry"; then
-  sudo apt-get update -y
-  sudo apt-get install -y python3-pip pipx
-  pipx ensurepath
-  sudo apt-get remove --purge -y poetry 2>/dev/null || true
-  pipx install poetry --force 2>/dev/null || pipx upgrade poetry
-  poetry --version
-  poetry self add poetry-plugin-export
-  end_section 2
+# Install uv even when the old section-2 guard exists from an earlier bootstrap.
+if ! command -v uv >/dev/null 2>&1; then
+  curl -LsSf https://astral.sh/uv/install.sh | sh
 fi
+uv --version
 
 # --- Section 3: nginx and hostname ---
 if ! run_section 3 "nginx and hostname"; then
@@ -175,23 +169,23 @@ if ! run_section 6 "nginx config (patch, reload, systemd unit)"; then
   end_section 6
 fi
 
-# --- Section 7: app install (venv, poetry install) ---
-if ! run_section 7 "app install (make install-ubuntu, poetry install)"; then
+# --- Section 7: app install (uv-managed venv) ---
+if ! run_section 7 "app install (make install-ubuntu, uv sync)"; then
   make install-ubuntu
-  poetry install
+  uv sync --locked --no-dev
   end_section 7
 fi
 
 # --- Section 8: demos (dbutil create_demos) ---
 if ! run_section 8 "demos (dbutil create_demos)"; then
-  poetry run python src/dbutil.py create_demos
+  uv run --locked --no-dev python src/dbutil.py create_demos
   end_section 8
 fi
 
 # --- Section 9: S3 (CORS) ---
 if ! run_section 9 "S3 (CORS)"; then
   if [ -n "${PLANTTRACER_S3_BUCKET:-}" ]; then
-    poetry run python -m app.s3_presigned "$PLANTTRACER_S3_BUCKET" || true
+    uv run --locked --no-dev python -m app.s3_presigned "$PLANTTRACER_S3_BUCKET" || true
   fi
   end_section 9
 fi
@@ -199,7 +193,7 @@ fi
 # --- Section 10: create_course (idempotent) ---
 if ! run_section 10 "create_course"; then
   if [ -n "${COURSE_ID:-}" ] && [ -n "${COURSE_NAME:-}" ] && [ -n "${ADMIN_EMAIL:-}" ] && [ -n "${ADMIN_NAME:-}" ]; then
-    poetry run python src/dbutil.py create-course \
+    uv run --locked --no-dev python src/dbutil.py create-course \
       --course_id "$COURSE_ID" \
       --course_name "$COURSE_NAME" \
       --admin_email "$ADMIN_EMAIL" \

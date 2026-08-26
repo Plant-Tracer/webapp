@@ -22,7 +22,7 @@ Use the Makefile target for your platform:
    make install-ubuntu
    make install-macos
 
-The Makefile installs Python dependencies with Poetry into ``.venv`` and runs
+The Makefile installs Python dependencies with uv into ``.venv`` and runs
 ``npm ci`` for JavaScript dependencies.
 
 Local Application
@@ -45,7 +45,7 @@ Create a course with ``dbutil``:
 
 .. code-block:: bash
 
-   AWS_REGION=local poetry run dbutil create-course \
+   AWS_REGION=local uv run dbutil create-course \
      --course_name "My Course Name" \
      --course_id "Plant101" \
      --admin_email your_admin_email@example.com \

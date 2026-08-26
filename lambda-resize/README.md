@@ -70,7 +70,8 @@ called directly without the full ImageIO or Pillow packages.
 
 The Lambda ZIP relies on the Python runtime's Boto3 and Botocore and on the
 configured Powertools layer. Its generated requirements intentionally contain
-none of those packages and are exported from only Poetry's `lambda` group.
+none of those packages and are exported from only the root uv project's
+`lambda` dependency group.
 
 Tracing writes:
 

@@ -46,8 +46,8 @@ def test_lambda_requirements_include_tracer_deps():
         assert pkg in content, (
             f"lambda-resize/src/requirements.txt must contain '{pkg}' "
             "(needed by tracer.py / trace-movie). "
-            "Run: poetry export --only lambda --format=requirements.txt "
-            "--output lambda-resize/src/requirements.txt --without-hashes"
+            "Run: uv export --locked --only-group lambda --no-emit-project "
+            "--no-hashes --output-file lambda-resize/src/requirements.txt"
         )
     normalized_content = content.lower()
     for pkg in FORBIDDEN_PACKAGES:

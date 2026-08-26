@@ -9,7 +9,7 @@ Plant Tracer is a Flask-based web application that lets students upload, track, 
 - **Python**: 3.12+ (required; see `pyproject.toml`)
 - **Framework**: Flask (web), gunicorn (production), or AWS Lambda
 - **Storage**: Amazon S3 (movies, frames, zip files), Amazon DynamoDB (courses, users, annotations)
-- **Package manager**: Poetry
+- **Package manager**: uv
 - **Frontend**: JavaScript in `src/app/static/`; variables and templates in `src/app/templates/`
 - **Key dependencies**: boto3, flask, jinja2, opencv-python-headless, requests; see `pyproject.toml` for full list
 
@@ -33,7 +33,7 @@ webapp/
 │   ├── dbutil.py               # CLI: createdb, makelink, course creation, etc.
 │   ├── demo.py                 # Demo mode helpers
 │   └── lambda_handler.py       # Lambda entry (if used)
-├── lambda-resize/              # Optional Lambda for image resizing (separate Poetry project)
+├── lambda-resize/              # Video-processing Lambda; deps exported from root uv project
 ├── tests/
 │   ├── conftest.py            # Pytest fixtures (local_ddb, local_s3, new_course, api_key, new_movie, client, live_server)
 │   ├── fixtures/              # local_aws.py, app_client.py, localmail_config.py
@@ -41,7 +41,7 @@ webapp/
 │   └── jstests/               # JavaScript tests (e.g. npm test)
 ├── etc/                        # Config and ops (bootstrap.sh, service files, credentials stubs)
 ├── docs/                       # RST and MD docs (EnvironmentVariables.rst, DeveloperSetup*.md)
-├── pyproject.toml             # Poetry config, pylint, pytest, pyright
+├── pyproject.toml             # uv config, pylint, pytest, pyright
 └── Makefile                    # install-ubuntu, install-macos, lint, pytest, run-local-*, etc.
 ```
 
@@ -56,7 +56,7 @@ make install-ubuntu
 # System deps (macOS)
 make install-macos
 
-# Creates .venv (Poetry in-project), installs deps, and on Linux sets up DynamoDB Local + Minio deps
+# Creates .venv (uv in-project), installs deps, and on Linux sets up DynamoDB Local + Minio deps
 # Then for local backend: install Minio and DynamoDB Local (see Makefile targets below)
 ```
 
@@ -177,7 +177,7 @@ Tests are pytest function-style (`def test_*()`); no test classes. Fixtures from
 
 ## Resources
 
-- **Poetry / tooling**: `pyproject.toml` (pylint, pytest, pyright, pytest options).
+- **uv / tooling**: `pyproject.toml` (pylint, pytest, pyright, pytest options).
 - **Make targets**: `Makefile` (no `make help`; read the file for targets like `install-macos`, `lint`, `pytest`, `run-local-debug`, `make-local-bucket`, `start_local_minio`, `start_local_dynamodb`).
 - **Cursor rules**: `.cursor/rules/*.mdc` (e.g. Corridor MCP usage; no source changes unless requested).
 - **Fixtures and auth**: `.github/agents/FIXTURES_REFERENCE.md`.

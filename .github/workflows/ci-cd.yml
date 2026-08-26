@@ -43,11 +43,6 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3-pip pipx
-          pipx ensurepath
-          export PATH="$PATH:$HOME/.local/bin"
-          pipx install poetry --force || pipx upgrade poetry
-          poetry --version
           make install-ubuntu
 
       - name: "Configure macOS"

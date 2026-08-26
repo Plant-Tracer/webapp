@@ -1,0 +1,18 @@
+---
+description: Keep pyproject metadata and dependency groups standards-based
+globs: pyproject.toml
+alwaysApply: false
+---
+
+# pyproject.toml packaging rules
+
+- Store package metadata and runtime dependencies in the PEP 621 `[project]`
+  table.
+- Store development and deployment dependency sets in PEP 735
+  `[dependency-groups]`.
+- Use uv for locking, environment synchronization, command execution, builds,
+  and requirements exports.
+- Use Hatchling only as the PEP 517 build backend. Keep the wheel package and
+  forced-module mappings in `[tool.hatch.build.targets.wheel]`.
+- Keep console entry points in `[project.scripts]`.
+- Commit the single `uv.lock` file and use `--locked` in reproducible workflows.
