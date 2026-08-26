@@ -725,11 +725,14 @@ def test_course_admin_assignment_by_email_validates_target(client, new_course):
 
     missing = client.put(url, json={"email": "missing@example.test"})
     malformed = client.put(url, json={"email": "not-an-email"})
+    invalid_payload = client.put(url, json={"email": 42})
 
     assert missing.status_code == 404
     assert missing.json["message"] == "User not found"
     assert malformed.status_code == 400
     assert malformed.json["message"] == "Administrator email is invalid"
+    assert invalid_payload.status_code == 400
+    assert invalid_payload.json["message"] == "Invalid administrator assignment request"
 
 
 def superadmin_url(user_id):

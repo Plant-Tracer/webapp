@@ -74,7 +74,10 @@ def _change_course_administrator(course_id, *, assigned, user_id=None,
     except InvalidAPI_Key:
         return jsonify({"error": True, "message": "Invalid api_key"}), 403
     except ValidationError:
-        return jsonify({"error": True, "message": "Administrator email is required"}), 400
+        return jsonify({
+            "error": True,
+            "message": "Invalid administrator assignment request",
+        }), 400
     except (odb.InvalidUser_Id, odb.InvalidUser_Email):
         return jsonify({"error": True, "message": "User not found"}), 404
     except odb.InvalidCourse_Id:
