@@ -3,10 +3,8 @@ Shared logic for viewing and setting research-attribution comment metadata in MP
 Used by the etc/mp4_metadata.py CLI and by lambda-resize when processing uploaded videos.
 Uses mutagen only; no external OS tools.
 """
-import io
 from typing import Optional
 
-from PIL import Image
 from mutagen.mp4 import MP4, MP4Tags, MP4FreeForm
 
 COMMENT_ATOM = "\xa9cmt"
@@ -92,13 +90,11 @@ def set_fpm(path: str, fpm: str) -> None:
 
 
 def add_comment_to_jpeg(jpeg_bytes: bytes, comment: str, quality: int = 60) -> bytes:
-    """Add a JPEG comment (COM segment) to JPEG bytes. Returns new bytes.
-    Used so every frame in the tracking zip carries the research-attribution metadata.
-    """
-    img = Image.open(io.BytesIO(jpeg_bytes))
-    if img.mode != "RGB":
-        img = img.convert("RGB")
-    img.info["comment"] = comment.encode("utf-8") if isinstance(comment, str) else comment
-    buf = io.BytesIO()
-    img.save(buf, "JPEG", quality=quality, optimize=True)
-    return buf.getvalue()
+    """Inject a JPEG COM segment without decoding or recompressing the image."""
+    del quality  # Retained for API compatibility; no recompression is performed.
+    if not jpeg_bytes.startswith(b"\xff\xd8"):
+        return jpeg_bytes
+    comment_bytes = comment.encode("utf-8")[:65533]
+    segment_length = len(comment_bytes) + 2
+    comment_segment = b"\xff\xfe" + segment_length.to_bytes(2, "big") + comment_bytes
+    return jpeg_bytes[:2] + comment_segment + jpeg_bytes[2:]

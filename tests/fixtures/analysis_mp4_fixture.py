@@ -2,8 +2,9 @@
 
 from pathlib import Path
 
-import imageio
 import numpy as np
+
+from resize_app.video_writer import H264Writer
 
 
 FRAME_COLORS = (
@@ -16,7 +17,7 @@ FRAME_COLORS = (
 
 def write_four_color_movie(path: Path, *, fps: int = 4) -> None:
     """Write a deterministic 96x48, four-frame MP4."""
-    writer = imageio.get_writer(path, format="FFMPEG", mode="I", fps=fps, codec="libx264")
+    writer = H264Writer(path, fps=fps)
     try:
         for color in FRAME_COLORS:
             writer.append_data(np.full((48, 96, 3), color, dtype=np.uint8))

@@ -77,6 +77,10 @@ Release Notes
 
 Unreleased Summary
 ******************
+    * Deployment: reduce the lambda-resize ZIP by exporting only its dedicated
+      dependency group, relying on the managed Boto3/Botocore runtime and
+      Powertools layer, replacing Requests and Pillow paths, and calling the
+      bundled H.264 encoder without the full ImageIO package.
     * Admin: load movies with numeric research-attribution choices without
       failing the dashboard summary.
     * Build: refresh Python and JavaScript dependencies and require Node.js

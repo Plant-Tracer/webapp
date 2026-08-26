@@ -82,7 +82,7 @@ def test_trace_movie_v2_clips_traced_mp4_to_output_range(monkeypatch):
             pass
 
     monkeypatch.setattr(tracer, "cv2_trace_frame", fake_trace_frame)
-    monkeypatch.setattr(tracer.imageio, "get_writer", lambda *_args, **_kwargs: FakeWriter())
+    monkeypatch.setattr(tracer, "H264Writer", lambda *_args, **_kwargs: FakeWriter())
 
     tracer.trace_movie_v2(
         movie_url="https://example.com/movie.mp4",

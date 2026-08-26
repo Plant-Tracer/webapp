@@ -681,7 +681,7 @@ lambda-web-check: lambda-web-lint
 
 .PHONY: lambda-resize/src/requirements.txt lambda-web/src/requirements.txt template-lint sam-config-show sam-config-path-safety-check sam-config-sync sam-config-path-check sam-config-check sam-config-guided-bootstrap sam-version-check sam-source-commit-check stamp-lambda-web-source-commit lambda-web-source-commit-check sam-deploy-version-check stamp-sam-deploy-metadata sam-storage-configure sam-status
 lambda-resize/src/requirements.txt:
-	poetry export --with lambda --without dev --without vm --format=requirements.txt --output lambda-resize/src/requirements.txt --without-hashes
+	poetry export --only lambda --format=requirements.txt --output lambda-resize/src/requirements.txt --without-hashes
 
 lambda-web/src/requirements.txt:
 	poetry export --with lambda-web --without dev --without lambda --without vm --format=requirements.txt --output lambda-web/src/requirements.txt --without-hashes
@@ -801,6 +801,7 @@ sam-build: $(REQ)
 	AWS_REGION=us-east-1 uv run cfn-lint template.yaml
 	@# Do not add --parallel here; SAM emits urllib3 cleanup tracebacks during parallel container builds.
 	DOCKER_DEFAULT_PLATFORM=linux/arm64 sam build --use-container
+	$(MAKE) sam-resize-artifact-test
 	@echo "========================================"
 	@echo "Checking unzipped artifact sizes..."
 	@for dir in .aws-sam/build/*/ ; do \
@@ -814,6 +815,21 @@ sam-build: $(REQ)
 		fi; \
 	done
 	@echo "Size check passed! All functions are under 250MB."
+
+.PHONY: sam-resize-artifact-test
+sam-resize-artifact-test:
+	find .aws-sam/build/LambdaResizeFunction -name .DS_Store -delete
+	@FFMPEG_BINARY=$$(find .aws-sam/build/LambdaResizeFunction/imageio_ffmpeg/binaries -type f -name 'ffmpeg-*' -print -quit); \
+	  if [ -z "$$FFMPEG_BINARY" ]; then \
+	    echo "ERROR: packaged imageio-ffmpeg executable not found"; \
+	    exit 1; \
+	  fi; \
+	  chmod 755 "$$FFMPEG_BINARY"
+	finch run --rm --platform linux/arm64 \
+	  -v "$(CURDIR)/.aws-sam/build/LambdaResizeFunction:/var/task:ro" \
+	  -v "$(CURDIR)/etc/lambda_resize_artifact_test.py:/tmp/lambda_resize_artifact_test.py:ro" \
+	  public.ecr.aws/sam/build-python3.12:latest-arm64 \
+	  python /tmp/lambda_resize_artifact_test.py /var/task
 
 sam-audit-size:
 	@echo "========================================"

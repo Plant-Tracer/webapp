@@ -110,6 +110,8 @@ on port 9811 and the local retrace/post-upload worker.
 Video Processing Library
 ------------------------
 
-Current lambda-resize frame extraction, scaling, JPEG generation, and tracing
-use OpenCV (``cv2``) and Pillow. ffmpeg is legacy/local tooling, not the
-Lambda runtime path.
+Lambda-resize uses OpenCV (``cv2``) for frame extraction, scaling, JPEG
+generation, and optical-flow tracing. OpenCV's embedded FFmpeg libraries decode
+the source movie. The traced H.264 derivative is encoded by the standalone
+``libx264`` executable bundled with ``imageio-ffmpeg`` because the OpenCV wheel
+does not contain a software H.264 encoder.

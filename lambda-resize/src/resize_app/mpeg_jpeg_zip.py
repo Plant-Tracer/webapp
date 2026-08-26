@@ -7,8 +7,6 @@ import tempfile
 import os
 from contextlib import closing
 from typing import Any, TypeAlias,Generator
-import io
-from PIL import Image, ImageDraw, ImageFont
 import cv2
 import numpy as np
 # pylint: disable=no-member  # cv2 exposes C extension members pylint cannot see
@@ -28,35 +26,27 @@ def generate_test_jpeg(n: int) -> Jpeg:
     Generates a red 640x480 rectangle with centered text,
     rotates it by n degrees, and returns it as a binary JPEG string.
     """
-    # 1. Create the base 640x480 red image
-    img = Image.new('RGB', (640, 480), color='red')
-    draw = ImageDraw.Draw(img)
-
-    text = f"red rectangle rotated {n}º"
-
-    font = ImageFont.load_default(size=24)
-
-    # 3. Calculate text bounding box to perfectly center it
-    bbox = draw.textbbox((0, 0), text, font=font)
-    text_width = bbox[2] - bbox[0]
-    text_height = bbox[3] - bbox[1]
-
-    x = (640 - text_width) / 2
-    y = (480 - text_height) / 2
-
-    # Draw the text (using white for contrast against the red background)
-    draw.text((x, y), text, font=font, fill='white')
-
-    # 4. Rotate the image
-    # expand=True resizes the canvas, changing 640x480 to 480x640 for 90/270 degrees
-    if n != 0:
-        img = img.rotate(n, expand=True)
-
-    # 5. Compress to JPEG and return the binary string
-    img_byte_arr = io.BytesIO()
-    img.save(img_byte_arr, format='JPEG', quality=85)
-
-    return img_byte_arr.getvalue()
+    img = np.full((480, 640, 3), (0, 0, 255), dtype=np.uint8)
+    text = f"red rectangle rotated {n} degrees"
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale = 0.75
+    thickness = 2
+    (text_width, text_height), _ = cv2.getTextSize(text, font, font_scale, thickness)
+    origin = ((640 - text_width) // 2, (480 + text_height) // 2)
+    cv2.putText(img, text, origin, font, font_scale, (255, 255, 255), thickness, cv2.LINE_AA)
+    rotations = {
+        0: None,
+        90: cv2.ROTATE_90_COUNTERCLOCKWISE,
+        180: cv2.ROTATE_180,
+        270: cv2.ROTATE_90_CLOCKWISE,
+    }
+    try:
+        rotation = rotations[n % 360]
+    except KeyError as exc:
+        raise ValueError("rotation must be a multiple of 90 degrees") from exc
+    if rotation is not None:
+        img = cv2.rotate(img, rotation)
+    return convert_frame_to_jpeg(img, quality=85)
 
 ################################################################
 ## jpeg analysis

@@ -7,12 +7,9 @@ Frame serving (get-frame API) runs in this Lambda (resize); the VM uses this mod
 run_tracing and for api_get_movie_data (full movie download).
 Lives in lambda-resize.
 
-All production paths use cv2 + Pillow only (no ffmpeg). cleanup_mp4, rotate_movie, and
-prepare_movie_for_tracking are LEGACY: they require an ffmpeg binary and are kept for
-optional/local use (e.g. CLI render_movie_traced, tests). run_tracing always uses
-prepare_movie_for_tracking_cv2 (rotate_zip) for rotate+scale.
-
-Uses imageio to write tracked movie, which does not have H.264 licensing issues
+OpenCV decodes, transforms, annotates, and traces frames. The traced H.264 derivative is
+encoded with the libx264 executable bundled by imageio-ffmpeg because the OpenCV wheel's
+embedded FFmpeg libraries do not include a software H.264 encoder.
 
 """
 
@@ -28,19 +25,15 @@ import zipfile
 from pathlib import Path
 
 import cv2
-import imageio
 import numpy as np
 
 from .src.app.schema import Trackpoint
-from .src.app import paths
 from .src.app.constants import C
 from .mpeg_jpeg_zip import convert_frame_to_jpeg,add_jpeg_comment,get_frames_from_url
-
+from .video_writer import H264Writer
 
 logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
 logger = logging.getLogger(__name__)
-# Legacy: only used by cleanup_mp4, rotate_movie, prepare_movie_for_tracking. run_tracing uses cv2 only.
-FFMPEG_PATH = paths.ffmpeg_path()
 POINT_ARRAY_OUT = 'point_array_out'
 RED = (0, 0, 255)
 ORANGE = (0, 165, 255)
@@ -322,10 +315,11 @@ def trace_movie_v2(*, movie_url,
     # Check to see if we are making a movie_traced
     movie_traced_writer = None
     if movie_traced_path is not None:
-        movie_traced_writer = imageio.get_writer(movie_traced_path, format='FFMPEG', mode='I',
-                                                  fps=15, codec='libx264',
-                                                  macro_block_size=None,
-                                                  output_params=['-metadata', f'comment={comment}'])
+        movie_traced_writer = H264Writer(
+            movie_traced_path,
+            fps=15,
+            output_params=['-metadata', f'comment={comment}'],
+        )
     trackpoints_prev = None
     gray_frame_prev = None
     trackpoints_this = None
@@ -370,7 +364,7 @@ def trace_movie_v2(*, movie_url,
                             frame_label=frame_number,
                             trackpoint_segments=trackpoint_segments,
                             colors_by_label=colors_by_label)
-            # IMPORTANT: OpenCV uses BGR colors, but ImageIO expects RGB!
+            # IMPORTANT: OpenCV uses BGR colors, but the H.264 writer expects RGB.
             frame_rgb = cv2.cvtColor(frame_to_label, cv2.COLOR_BGR2RGB)
             movie_traced_writer.append_data(frame_rgb)
 

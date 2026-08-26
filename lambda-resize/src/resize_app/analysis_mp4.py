@@ -7,10 +7,10 @@ import shutil
 from pathlib import Path
 
 import cv2
-import imageio
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from .video_writer import H264Writer
 
 DEFAULT_ANALYSIS_WIDTH = 640
 DEFAULT_ANALYSIS_HEIGHT = 480
@@ -142,18 +142,14 @@ def encode_analysis_mp4(*, source_path: Path, output_path: Path, options: Analys
     height = 0
     writer = None
     try:
-        writer = imageio.get_writer(
+        writer = H264Writer(
             output_path,
-            format="FFMPEG",
-            mode="I",
             fps=fps,
-            codec="libx264",
-            pixelformat="yuv420p",
-            macro_block_size=None,
             output_params=[
                 *H264_OUTPUT_PARAMETERS,
                 "-metadata", "comment=PlantTracer analysis MP4",
             ],
+            quality=None,
         )
         while True:
             success, frame = capture.read()
