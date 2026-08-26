@@ -769,6 +769,33 @@ def test_delete_user_removes_course_enrollment(local_ddb):
     odb.delete_course(course_id=course_id)
 
 
+def test_delete_user_removes_course_admin_reference(local_ddb):
+    course_id = f"delete-admin-{rand8()}"
+    local_ddb.put_course({
+        COURSE_ID: course_id,
+        'course_name': f"Delete Admin Course {rand8()}",
+        'course_key': f"delete-admin-key-{uuid.uuid4().hex[:16]}",
+        odb.ADMINS_FOR_COURSE: [],
+        'max_enrollment': 10,
+    })
+    user_id = odb.register_email(
+        f"delete-admin-{uuid.uuid4().hex[:8]}@example.com",
+        "Delete Course Admin",
+        course_id=course_id,
+        admin=True,
+    )[USER_ID]
+
+    assert user_id in local_ddb.get_course(course_id)[odb.ADMINS_FOR_COURSE]
+
+    local_ddb.delete_user(user_id)
+
+    with pytest.raises(InvalidUser_Id):
+        local_ddb.get_user(user_id)
+    assert user_id not in local_ddb.get_course(course_id)[odb.ADMINS_FOR_COURSE]
+    assert user_id not in odb.course_enrollments(course_id=course_id)
+    odb.delete_course(course_id=course_id)
+
+
 def test_delete_user_raises_if_no_email(local_ddb):
     """delete_user raises RuntimeError when the user record has no email attribute (line 577 coverage)."""
     ddbo = local_ddb
