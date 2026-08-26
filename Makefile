@@ -827,7 +827,7 @@ sam-resize-artifact-test:
 	finch run --rm --platform linux/arm64 \
 	  -v "$(CURDIR)/.aws-sam/build/LambdaResizeFunction:/var/task:ro" \
 	  -v "$(CURDIR)/etc/lambda_resize_artifact_test.py:/tmp/lambda_resize_artifact_test.py:ro" \
-	  public.ecr.aws/sam/build-python3.12:latest-arm64 \
+	  public.ecr.aws/sam/build-python3.12:1.163.0 \
 	  python /tmp/lambda_resize_artifact_test.py /var/task
 
 sam-audit-size:

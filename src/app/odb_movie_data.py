@@ -43,7 +43,8 @@ def read_object(urn):
             with request.urlopen(urn, timeout=C.DEFAULT_GET_TIMEOUT) as response:
                 return response.read()
         except OSError as ex:
-            logger.info("HTTP read failed: %s  urn=%s", ex, urn)
+            safe_urn = parse.urlunparse((o.scheme, o.netloc, o.path, "", "", ""))
+            logger.info("HTTP read failed: %s  urn=%s", ex, safe_urn)
             return None
     else:
         raise ValueError("Unknown schema: "+urn)
