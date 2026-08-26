@@ -152,7 +152,7 @@ receive HTTP 400.
         "trim_end_frame": 1440,
         "needs_retracing": false,
         "research_use": 1,
-        "credit_by_name": "Alice",
+        "credit_by_name": 1,
         "attribution_name": "Alice"
       }
     ],

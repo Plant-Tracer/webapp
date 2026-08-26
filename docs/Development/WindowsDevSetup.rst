@@ -16,7 +16,7 @@ Native Windows prerequisites, if attempted:
 * Make
 * Python 3.12
 * Poetry
-* Node.js 20.8.1 or newer and npm
+* Node.js 22.18.0 or newer and npm
 * Java runtime for DynamoDB Local
 * Chrome or Chromium
 

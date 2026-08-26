@@ -1,4 +1,7 @@
 # https://coverage.readthedocs.io/en/latest/excluding.html
+[run]
+patch = subprocess
+
 [report]
 exclude_also =
     def __repr__

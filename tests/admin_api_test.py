@@ -718,45 +718,69 @@ def test_concurrent_removals_preserve_one_course_admin(new_course):
 def test_admin_summary_includes_enrollment_memberships_and_movies(client, new_movie):
     ddbo = new_movie["ddbo"]
     ddbo.update_table(ddbo.users, new_movie[USER_ID], {odb.SUPER_ROLE: odb.SUPER_ROLE_SUPERAUDITOR})
+    ddbo.update_movie(
+        new_movie[odb.MOVIE_ID],
+        {
+            odb.RESEARCH_USE: 1,
+            odb.CREDIT_BY_NAME: 1,
+            odb.ATTRIBUTION_NAME: "Alyssa P. Hacker",
+        },
+    )
+    nullable_movie_id = odb.create_new_movie(
+        user_id=new_movie[USER_ID],
+        course_id=new_movie[odb.COURSE_ID],
+        title="Nullable research choices",
+        description="Research choices were not answered",
+    )
     client.set_cookie(apikey.cookie_name(), new_movie[API_KEY])
+    try:
+        response = client.get("/api/admin/summary")
 
-    response = client.get("/api/admin/summary")
+        assert response.status_code == 200
+        payload = response.json
+        course = next(item for item in payload["courses"]["items"]
+                      if item["course_id"] == new_movie[odb.COURSE_ID])
+        assert course["course_key"] == new_movie[odb.COURSE_KEY]
+        assert course["enrollment_count"] == 2
+        assert course["max_enrollment"] >= course["enrollment_count"]
+        assert course["created_at"] is not None
 
-    assert response.status_code == 200
-    payload = response.json
-    course = next(item for item in payload["courses"]["items"]
-                  if item["course_id"] == new_movie[odb.COURSE_ID])
-    assert course["course_key"] == new_movie[odb.COURSE_KEY]
-    assert course["enrollment_count"] == 2
-    assert course["max_enrollment"] >= course["enrollment_count"]
-    assert course["created_at"] is not None
+        user = next(item for item in payload["users"]["items"]
+                    if item["user_id"] == new_movie[USER_ID])
+        assert user["courses"] == [{
+            "course_id": new_movie[odb.COURSE_ID],
+            "is_admin": False,
+        }]
+        assert user["created_at"] is not None
+        admin = next(item for item in payload["users"]["items"]
+                     if item["email"] == new_movie[ADMIN_EMAIL])
+        assert admin["courses"][0]["is_admin"] is True
 
-    user = next(item for item in payload["users"]["items"]
-                if item["user_id"] == new_movie[USER_ID])
-    assert user["courses"] == [{
-        "course_id": new_movie[odb.COURSE_ID],
-        "is_admin": False,
-    }]
-    assert user["created_at"] is not None
-    admin = next(item for item in payload["users"]["items"]
-                 if item["email"] == new_movie[ADMIN_EMAIL])
-    assert admin["courses"][0]["is_admin"] is True
+        movie = next(item for item in payload["movies"]["items"]
+                     if item["movie_id"] == new_movie[odb.MOVIE_ID])
+        assert movie["title"] == new_movie[MOVIE_TITLE]
+        assert movie["course_id"] == new_movie[odb.COURSE_ID]
+        assert movie["owner_name"] == "Course User"
+        assert movie["state"] == "published"
+        assert movie["user_id"] == new_movie[USER_ID]
+        assert movie["created_at"] is not None
+        assert movie["uploaded_at"] is not None
+        assert movie["last_activity_at"] >= movie["uploaded_at"]
+        assert movie["total_bytes"] > 0
+        assert movie["description"] == "Description"
+        assert movie["needs_retracing"] is False
+        assert "original_object_state" not in movie
+        assert movie["research_use"] == 1
+        assert movie["credit_by_name"] == 1
+        assert movie["attribution_name"] == "Alyssa P. Hacker"
 
-    movie = next(item for item in payload["movies"]["items"]
-                 if item["movie_id"] == new_movie[odb.MOVIE_ID])
-    assert movie["title"] == new_movie[MOVIE_TITLE]
-    assert movie["course_id"] == new_movie[odb.COURSE_ID]
-    assert movie["owner_name"] == "Course User"
-    assert movie["state"] == "published"
-    assert movie["user_id"] == new_movie[USER_ID]
-    assert movie["created_at"] is not None
-    assert movie["uploaded_at"] is not None
-    assert movie["last_activity_at"] >= movie["uploaded_at"]
-    assert movie["total_bytes"] > 0
-    assert movie["description"] == "Description"
-    assert movie["needs_retracing"] is False
-    assert "original_object_state" not in movie
-    assert "research_use" in movie
+        nullable_movie = next(item for item in payload["movies"]["items"]
+                              if item["movie_id"] == nullable_movie_id)
+        assert nullable_movie["research_use"] is None
+        assert nullable_movie["credit_by_name"] is None
+        assert nullable_movie["attribution_name"] is None
+    finally:
+        ddbo.batch_delete_movie_ids([nullable_movie_id])
 
 
 def test_admin_summary_reports_hidden_movie(client, new_movie):

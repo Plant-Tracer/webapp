@@ -12,7 +12,7 @@ Base Packages
    sudo dnf update -y
    sudo dnf install -y git make nodejs npm python3.12 java-21-amazon-corretto-headless curl lsof zip
 
-Use Node.js 20.8.1 or newer. Verify the installed version before continuing:
+Use Node.js 22.18.0 or newer. Verify the installed version before continuing:
 
 .. code-block:: bash
 

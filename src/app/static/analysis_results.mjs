@@ -1,7 +1,6 @@
 "use strict";
 
-/* eslint-env es6 */
-/* see eslint.config for globals */
+/* see eslint.config.js for globals */
 /* jshint esversion: 8 */
 
 /*

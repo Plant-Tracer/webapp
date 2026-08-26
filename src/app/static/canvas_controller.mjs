@@ -1,7 +1,5 @@
 "use strict";
 /* jshint esversion: 8 */
-/* eslint-env es6 */
-/* eslint parserOptions: { "sourceType": "module" } */
 import { $ } from "./utils.js";
 
 // code for /analyze
@@ -435,7 +433,7 @@ class CanvasItem {
     }
 
     // default - subclasses should override this
-    draw(ctx, selected) {
+    draw(ctx, _selected) {
         ctx.save();
         ctx.fillText(this.name, this.x, this.y);
         ctx.restore();
@@ -531,7 +529,7 @@ class Line extends CanvasItem {
         this.color = color;
     }
 
-    draw(ctx, selected) {
+    draw(ctx, _selected) {
         ctx.save();
         ctx.beginPath();
         ctx.lineWidth = this.width;
@@ -551,7 +549,7 @@ class Text extends CanvasItem {
         this.color = color;
     }
 
-    draw(ctx, selected) {
+    draw(ctx, _selected) {
         ctx.save();
         ctx.font = this.font;
         ctx.fillText(this.name, this.x, this.y);

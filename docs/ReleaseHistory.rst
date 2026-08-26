@@ -77,6 +77,10 @@ Release Notes
 
 Unreleased Summary
 ******************
+    * Admin: load movies with numeric research-attribution choices without
+      failing the dashboard summary.
+    * Build: refresh Python and JavaScript dependencies and require Node.js
+      22.18.0 or newer for the JavaScript toolchain.
     * Admin: fit dashboard tables to the browser width without horizontal
       table scrollbars.
     * Developer: package the S3 EventBridge configuration utility as

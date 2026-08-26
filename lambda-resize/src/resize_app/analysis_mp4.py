@@ -17,6 +17,10 @@ DEFAULT_ANALYSIS_HEIGHT = 480
 DEFAULT_ANALYSIS_FPS = 15.0
 ANALYSIS_PLAYER_FILENAME = "index.html"
 ANALYSIS_PLAYER_LIBRARY_FILENAME = "mp4box.all.js"
+ANALYSIS_PLAYER_LIBRARY_DEPENDENCIES = (
+    "rolldown-runtime-w6R9maHv.mjs",
+    "styp-9TIZZDLN.mjs",
+)
 ANALYSIS_MANIFEST_FILENAME = "analysis-mp4.json"
 H264_OUTPUT_PARAMETERS = (
     "-profile:v", "baseline",
@@ -183,10 +187,6 @@ def copy_player_bundle(*, bundle_dir: Path, movie_name: str) -> Path:
     """Copy the WebCodecs player and its local MP4 demuxer into a bundle."""
     root = project_root()
     player_source = root / "src/app/static/mp4player-demo3.html"
-    library_source = require_file(
-        root / "src/app/static" / ANALYSIS_PLAYER_LIBRARY_FILENAME,
-        missing_message="the vendored mp4box browser module is missing",
-    )
     player_text = player_source.read_text(encoding="utf-8")
     player_text = player_text.replace(
         "https://simson.net/plantmovie.mp4",
@@ -194,7 +194,12 @@ def copy_player_bundle(*, bundle_dir: Path, movie_name: str) -> Path:
     )
     player_path = bundle_dir / ANALYSIS_PLAYER_FILENAME
     player_path.write_text(player_text, encoding="utf-8")
-    shutil.copyfile(library_source, bundle_dir / ANALYSIS_PLAYER_LIBRARY_FILENAME)
+    for filename in (ANALYSIS_PLAYER_LIBRARY_FILENAME, *ANALYSIS_PLAYER_LIBRARY_DEPENDENCIES):
+        source = require_file(
+            root / "src/app/static" / filename,
+            missing_message=f"the vendored mp4box browser module {filename} is missing",
+        )
+        shutil.copyfile(source, bundle_dir / filename)
     (bundle_dir / "README.txt").write_text(
         "Serve this directory over HTTP or HTTPS, then open index.html.\n"
         "For a local check: python3 -m http.server --directory .\n"

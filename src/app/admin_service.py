@@ -231,7 +231,7 @@ class AdminMovieSummary(BaseModel):
     trim_end_frame: int | None = None
     needs_retracing: bool = False
     research_use: int | None = None
-    credit_by_name: str | None = None
+    credit_by_name: Annotated[int, Field(ge=0, le=1)] | None = None
     attribution_name: str | None = None
 
 
