@@ -124,5 +124,7 @@ def test_trace_movie_v2_closes_outputs_when_callback_fails(monkeypatch, tmp_path
         assert archive.testzip() is None
         assert archive.namelist() == ["frame_0000.jpeg"]
     capture = cv2.VideoCapture(str(movie_path))
-    assert capture.grab()
-    capture.release()
+    try:
+        assert capture.grab()
+    finally:
+        capture.release()
