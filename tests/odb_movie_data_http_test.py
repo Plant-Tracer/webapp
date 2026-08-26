@@ -17,6 +17,7 @@ def test_http_read_and_streaming_copy_use_real_local_server(tmp_path):
     try:
         url = f"http://127.0.0.1:{server.server_port}/{source.name}"
         assert odb_movie_data.read_object(url) == source.read_bytes()
+        assert odb_movie_data.read_object(f"{url}.missing") is None
         destination = tmp_path / "destination.bin"
         odb_movie_data.copy_object_to_path(url, str(destination))
         assert destination.read_bytes() == source.read_bytes()

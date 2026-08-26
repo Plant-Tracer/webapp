@@ -39,8 +39,12 @@ def read_object(urn):
             logger.info("ClientError: %s  Bucket=%s  Key=%s",ex,o.netloc,o.path[1:])
             return None
     elif o.scheme in ['http','https']:
-        with request.urlopen(urn, timeout=C.DEFAULT_GET_TIMEOUT) as response:
-            return response.read()
+        try:
+            with request.urlopen(urn, timeout=C.DEFAULT_GET_TIMEOUT) as response:
+                return response.read()
+        except OSError as ex:
+            logger.info("HTTP read failed: %s  urn=%s", ex, urn)
+            return None
     else:
         raise ValueError("Unknown schema: "+urn)
 

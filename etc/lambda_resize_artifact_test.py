@@ -1,6 +1,7 @@
 """Smoke-test the built lambda-resize ARM64 media stack inside its build container."""
 
 import argparse
+import importlib
 import os
 from pathlib import Path
 import sys
@@ -13,9 +14,9 @@ def main() -> int:
     args = parser.parse_args()
     sys.path.insert(0, str(args.artifact))
 
-    import cv2  # pylint: disable=import-outside-toplevel
-    import imageio_ffmpeg  # pylint: disable=import-outside-toplevel
-    import numpy as np  # pylint: disable=import-outside-toplevel
+    cv2 = importlib.import_module("cv2")
+    imageio_ffmpeg = importlib.import_module("imageio_ffmpeg")
+    np = importlib.import_module("numpy")
 
     executable = Path(imageio_ffmpeg.get_ffmpeg_exe())
     if not os.access(executable, os.X_OK):
