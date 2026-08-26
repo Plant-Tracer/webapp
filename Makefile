@@ -118,7 +118,7 @@ endif
 	uv sync --locked
 
 dist: pyproject.toml
-	@echo building the deloy wheel
+	@echo building the deploy wheel
 	uv build --wheel
 	ls -l dist/
 

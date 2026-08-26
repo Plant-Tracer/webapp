@@ -24,7 +24,7 @@ ImgArray: TypeAlias = np.ndarray
 def generate_test_jpeg(n: int) -> Jpeg:
     """
     Generates a red 640x480 rectangle with centered text,
-    rotates it by n degrees, and returns it as a binary JPEG string.
+    rotates it by n degrees (a multiple of 90), and returns it as a binary JPEG string.
     """
     img = np.full((480, 640, 3), (0, 0, 255), dtype=np.uint8)
     text = f"red rectangle rotated {n} degrees"
