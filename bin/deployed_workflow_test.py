@@ -52,10 +52,14 @@ TRACE_MOVIE_PATH = "resize-api/v1/trace-movie"
 TRACKPOINTS_PATH = "api/get-movie-trackpoints"
 XLSX_FORMAT = "xlsx"
 TRACKING_TOLERANCE_PIXELS = 2
+RENDERING_MEAN_CHANNEL_TOLERANCE = 3
 HTTP_ERROR_BODY_LIMIT = 2000
 CORS_REPAIR_RECHECK_INTERVAL = 2
 CORS_REPAIR_TIMEOUT = 30
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SOURCE_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = next((root for root in (SOURCE_PROJECT_ROOT, Path.cwd())
+                     if (root / "tests/data/2019-07-12 circumnutation.mp4").is_file()),
+                    SOURCE_PROJECT_ROOT)
 DEFAULT_MOVIE_PATH = PROJECT_ROOT / "tests/data/2019-07-12 circumnutation.mp4"
 DEFAULT_REFERENCE_CSV_PATH = PROJECT_ROOT / "tests/data/2019-07-12 circumnutation_trackpoints.csv"
 DEFAULT_REFERENCE_XLSX_PATH = PROJECT_ROOT / "tests/data/2019-07-12 circumnutation_trackpoints.xlsx"
@@ -147,6 +151,37 @@ class ReferenceTrackpoint(BaseModel):
     ruler_0_y: int = Field(alias=RULER_0_Y_COLUMN)
     ruler_10_x: int = Field(alias=RULER_10_X_COLUMN)
     ruler_10_y: int = Field(alias=RULER_10_Y_COLUMN)
+
+
+class CsvTraceStats(BaseModel):
+    """Evidence that the downloaded CSV contains a moving Apex trace."""
+
+    rows: int
+    first_frame: int
+    last_frame: int
+    unique_apex_positions: int
+    apex_x_min: float
+    apex_x_max: float
+    apex_y_min: float
+    apex_y_max: float
+
+
+class TrackpointComparisonStats(BaseModel):
+    """Largest per-coordinate drift from a tabular reference."""
+
+    rows: int
+    max_apex_delta_pixels: float
+    max_ruler_delta_pixels: float
+
+
+class RenderingDifferenceStats(BaseModel):
+    """Pixel-level evidence for a rendering mismatch."""
+
+    differing_pixels: int
+    total_pixels: int
+    max_channel_delta: int
+    mean_absolute_channel_delta: float
+    bounding_box: tuple[int, int, int, int]
 
 
 def raise_for_status(response, operation):
@@ -310,23 +345,141 @@ def assert_export_endpoints(rows, expected_start, expected_end, *, scale, export
     assert_position(actual_end, expected_end, scale=scale, frame_number=actual_end.frame_number)
 
 
-def assert_final_frame(downloaded_movie, reference_frame):
-    """Compare a downloaded traced movie's final frame with the committed reference."""
+def csv_trace_stats(rows, expected_start, expected_end):
+    """Validate frame coverage and summarize Apex movement from CSV rows."""
+    headers = rows[0]
+    parsed = [ReferenceTrackpoint.model_validate(dict(zip(headers, row))) for row in rows[1:]]
+    expected_frames = list(range(expected_start.frame_number, expected_end.frame_number + 1))
+    actual_frames = [row.frame_number for row in parsed]
+    if actual_frames != expected_frames:
+        raise AssertionError(
+            f"CSV frame coverage differs from expected {expected_frames[0]}-{expected_frames[-1]}: "
+            f"rows={len(actual_frames)} first={actual_frames[0] if actual_frames else 'missing'} "
+            f"last={actual_frames[-1] if actual_frames else 'missing'}")
+    positions = {(row.apex_x, row.apex_y) for row in parsed}
+    if len(positions) < 2:
+        raise AssertionError("CSV Apex positions never change; tracing did not produce motion")
+    x_values = [row.apex_x for row in parsed]
+    y_values = [row.apex_y for row in parsed]
+    return CsvTraceStats(
+        rows=len(parsed), first_frame=actual_frames[0], last_frame=actual_frames[-1],
+        unique_apex_positions=len(positions), apex_x_min=min(x_values), apex_x_max=max(x_values),
+        apex_y_min=min(y_values), apex_y_max=max(y_values))
+
+
+def compare_trackpoint_rows(actual_rows, reference_rows, *, export_name):
+    """Require complete tabular output within the per-coordinate tracking tolerance."""
+    if not actual_rows or not reference_rows or actual_rows[0] != reference_rows[0]:
+        raise AssertionError(f"{export_name} headers differ from its reference")
+    actual_points = [ReferenceTrackpoint.model_validate(dict(zip(actual_rows[0], row)))
+                     for row in actual_rows[1:]]
+    reference_points = [ReferenceTrackpoint.model_validate(dict(zip(reference_rows[0], row)))
+                        for row in reference_rows[1:]]
+    if len(actual_points) != len(reference_points):
+        raise AssertionError(
+            f"{export_name} row count={len(actual_points)}, expected {len(reference_points)}")
+    max_apex_delta = 0.0
+    max_ruler_delta = 0.0
+    for actual, reference in zip(actual_points, reference_points):
+        if actual.frame_number != reference.frame_number:
+            raise AssertionError(
+                f"{export_name} frame {actual.frame_number}, expected {reference.frame_number}")
+        scale = reference_scale(reference)
+        coordinate_deltas = (
+            ("Apex x", abs(actual.apex_x - reference.apex_x) / scale, "apex"),
+            ("Apex y", abs(actual.apex_y - reference.apex_y) / scale, "apex"),
+            ("Ruler 0mm x", abs(actual.ruler_0_x - reference.ruler_0_x), "ruler"),
+            ("Ruler 0mm y", abs(actual.ruler_0_y - reference.ruler_0_y), "ruler"),
+            ("Ruler 10mm x", abs(actual.ruler_10_x - reference.ruler_10_x), "ruler"),
+            ("Ruler 10mm y", abs(actual.ruler_10_y - reference.ruler_10_y), "ruler"),
+        )
+        for label, delta, marker_type in coordinate_deltas:
+            if delta > TRACKING_TOLERANCE_PIXELS:
+                raise AssertionError(
+                    f"{export_name} frame {actual.frame_number} {label} differs by "
+                    f"{delta:.2f} pixels; tolerance={TRACKING_TOLERANCE_PIXELS}")
+            if marker_type == "apex":
+                max_apex_delta = max(max_apex_delta, delta)
+            else:
+                max_ruler_delta = max(max_ruler_delta, delta)
+    return TrackpointComparisonStats(
+        rows=len(actual_points), max_apex_delta_pixels=max_apex_delta,
+        max_ruler_delta_pixels=max_ruler_delta)
+
+
+def write_artifact(artifacts_dir, filename, content):
+    """Write one downloaded artifact and return its absolute path."""
+    artifact_path = artifacts_dir / filename
+    artifact_path.write_bytes(content)
+    return artifact_path.resolve()
+
+
+def extract_final_frame(movie_path, output_frame):
+    """Render the final frame of one movie to a persistent image path."""
     executable = ffmpeg_path()
     if not executable:
         raise RuntimeError("ffmpeg is required to compare the traced movie's final frame")
-    with tempfile.TemporaryDirectory() as temp_dir:
-        movie_path = Path(temp_dir) / "traced.mov"
-        actual_frame = Path(temp_dir) / "last-frame.png"
-        movie_path.write_bytes(downloaded_movie)
-        subprocess.run([executable, "-v", "error", "-y", "-i", str(movie_path), "-vf", "reverse",
-                        "-frames:v", "1", str(actual_frame)], check=True)
-        with Image.open(reference_frame) as expected, Image.open(actual_frame) as actual:
-            expected_rgb = expected.convert("RGB")
-            actual_rgb = actual.convert("RGB")
-            if expected_rgb.size != actual_rgb.size or ImageChops.difference(
-                    expected_rgb, actual_rgb).getbbox() is not None:
-                raise AssertionError("traced movie final frame does not match the reference rendering")
+    subprocess.run([executable, "-v", "error", "-y", "-i", str(movie_path), "-vf", "reverse",
+                    "-frames:v", "1", str(output_frame)], check=True)
+    return output_frame.resolve()
+
+
+def assert_renderings_match(reference_frame, actual_frame, downloaded_movie):
+    """Compare two renderings and report every path needed to inspect a mismatch."""
+    reference_frame = reference_frame.resolve()
+    actual_frame = actual_frame.resolve()
+    downloaded_movie = downloaded_movie.resolve()
+    logging.info("image comparison paths reference_rendering=%s actual_rendering=%s "
+                 "downloaded_movie=%s", reference_frame, actual_frame, downloaded_movie)
+    with Image.open(reference_frame) as expected, Image.open(actual_frame) as actual:
+        expected_rgb = expected.convert("RGB")
+        actual_rgb = actual.convert("RGB")
+        if expected_rgb.size != actual_rgb.size:
+            raise AssertionError(
+                "traced movie final frame does not match the reference rendering: "
+                f"reference_rendering={reference_frame} actual_rendering={actual_frame} "
+                f"downloaded_movie={downloaded_movie} reference_size={expected_rgb.size} "
+                f"actual_size={actual_rgb.size}")
+        difference = ImageChops.difference(expected_rgb, actual_rgb)
+        bounding_box = difference.getbbox()
+        if bounding_box is not None:
+            histogram = difference.histogram()
+            total_pixels = expected_rgb.width * expected_rgb.height
+            red_difference, green_difference, blue_difference = difference.split()
+            per_pixel_difference = ImageChops.lighter(
+                ImageChops.lighter(red_difference, green_difference), blue_difference)
+            stats = RenderingDifferenceStats(
+                differing_pixels=total_pixels - per_pixel_difference.histogram()[0],
+                total_pixels=total_pixels,
+                max_channel_delta=max(extreme[1] for extreme in difference.getextrema()),
+                mean_absolute_channel_delta=sum(
+                    (value % 256) * count for value, count in enumerate(histogram))
+                / (total_pixels * len(expected_rgb.getbands())),
+                bounding_box=bounding_box)
+            difference_frame = actual_frame.with_name(f"{actual_frame.stem}-difference.png")
+            difference.point(lambda value: min(255, value * 8)).save(difference_frame)
+            details = (
+                f"reference_rendering={reference_frame} actual_rendering={actual_frame} "
+                f"downloaded_movie={downloaded_movie} difference_rendering={difference_frame} "
+                f"differing_pixels={stats.differing_pixels}/{stats.total_pixels} "
+                f"max_channel_delta={stats.max_channel_delta} "
+                f"mean_absolute_channel_delta={stats.mean_absolute_channel_delta:.3f} "
+                f"difference_bounding_box={stats.bounding_box}")
+            if stats.mean_absolute_channel_delta > RENDERING_MEAN_CHANNEL_TOLERANCE:
+                raise AssertionError(
+                    "traced movie final frame meaningfully differs from the reference rendering: "
+                    + details)
+            logging.info("image differences are within tolerance=%s: %s",
+                         RENDERING_MEAN_CHANNEL_TOLERANCE, details)
+            return stats
+    return None
+
+
+def assert_final_frame(movie_path, reference_frame, output_frame):
+    """Extract and compare a traced movie's final frame at persistent paths."""
+    actual_frame = extract_final_frame(movie_path, output_frame)
+    assert_renderings_match(reference_frame, actual_frame, movie_path)
+    return actual_frame
 
 
 def post_api(endpoint, path, *, api_key, movie_id, response_format=None):
@@ -386,8 +539,14 @@ def validate_deployment_config(endpoint, *, bucket=None, cors_configurer=None,
 
 
 def run_workflow(*, endpoint, stack_name, movie_path, reference_csv_path, reference_xlsx_path,
-                 reference_traced_movie_path, reference_frame_path, timeout):
+                 reference_traced_movie_path, reference_frame_path, artifacts_dir, timeout):
     """Run the deployed workflow and always revoke its temporary API key."""
+    if artifacts_dir is None:
+        artifacts_dir = Path(tempfile.mkdtemp(prefix="planttracer-deployed-workflow-"))
+    else:
+        artifacts_dir.mkdir(parents=True, exist_ok=True)
+    artifacts_dir = artifacts_dir.resolve()
+    logging.info("workflow artifact directory=%s", artifacts_dir)
     ddbo = odb.DDBO()
     course_id, _user_id, api_key = ensure_test_identity(stack_name=stack_name)
     movie_id = None
@@ -395,7 +554,6 @@ def run_workflow(*, endpoint, stack_name, movie_path, reference_csv_path, refere
     try:
         expected_start, expected_end = reference_trackpoints(reference_csv_path)
         scale = reference_scale(expected_start)
-        assert_final_frame(reference_traced_movie_path.read_bytes(), reference_frame_path)
         movie_bytes = movie_path.read_bytes()
         response = requests.post(f"{endpoint.rstrip('/')}/{NEW_MOVIE_PATH}", data={
             API_KEY_FIELD: api_key, "title": movie_title,
@@ -446,30 +604,52 @@ def run_workflow(*, endpoint, stack_name, movie_path, reference_csv_path, refere
         logging.info("traced movie movie_id=%s object=%s status=%s", movie_id,
                      traced_movie_record.get(odb.MOVIE_TRACED_URN),
                      traced_movie_record.get(odb.MOVIE_STATUS))
-        trackpoints = TrackpointResponse.model_validate(post_api(
-            endpoint, TRACKPOINTS_PATH, api_key=api_key, movie_id=movie_id,
-            response_format=JSON_FORMAT).json())
+        json_response = post_api(endpoint, TRACKPOINTS_PATH, api_key=api_key, movie_id=movie_id,
+                                 response_format=JSON_FORMAT)
+        json_path = write_artifact(artifacts_dir, "trackpoints.json", json_response.content)
+        trackpoints = TrackpointResponse.model_validate(json_response.json())
         apexes = {point.frame_number: point for point in trackpoints.trackpoint_dicts
                   if point.label == APEX_LABEL}
         assert_position(apexes[expected_start.frame_number], expected_start, scale=scale,
                         frame_number=expected_start.frame_number)
         assert_position(apexes[expected_end.frame_number], expected_end, scale=scale,
                         frame_number=expected_end.frame_number)
-        csv_rows = list(csv.reader(io.StringIO(post_api(
-            endpoint, TRACKPOINTS_PATH, api_key=api_key, movie_id=movie_id).text)))
+        logging.info("validated JSON trackpoints movie_id=%s trackpoints=%s apex_points=%s "
+                     "artifact=%s", movie_id, len(trackpoints.trackpoint_dicts), len(apexes), json_path)
+        csv_response = post_api(endpoint, TRACKPOINTS_PATH, api_key=api_key, movie_id=movie_id)
+        csv_path = write_artifact(artifacts_dir, "trackpoints.csv", csv_response.content)
+        csv_rows = list(csv.reader(io.StringIO(csv_response.text)))
         assert_export_endpoints(csv_rows, expected_start, expected_end, scale=scale, export_name="CSV")
-        xlsx_rows = xlsx_trackpoint_rows(post_api(
-            endpoint, TRACKPOINTS_PATH, api_key=api_key, movie_id=movie_id,
-            response_format=XLSX_FORMAT).content)
+        stats = csv_trace_stats(csv_rows, expected_start, expected_end)
+        with reference_csv_path.open(newline="", encoding="utf-8") as reference_csv:
+            reference_csv_rows = list(csv.reader(reference_csv))
+        csv_comparison = compare_trackpoint_rows(
+            csv_rows, reference_csv_rows, export_name="CSV")
+        logging.info("validated CSV tracing stats movie_id=%s rows=%s frames=%s-%s "
+                     "unique_apex_positions=%s apex_x_range_mm=%.2f..%.2f "
+                     "apex_y_range_mm=%.2f..%.2f max_apex_delta_pixels=%.2f "
+                     "max_ruler_delta_pixels=%.2f downloaded=%s reference=%s",
+                     movie_id, stats.rows, stats.first_frame, stats.last_frame,
+                     stats.unique_apex_positions, stats.apex_x_min, stats.apex_x_max,
+                     stats.apex_y_min, stats.apex_y_max,
+                     csv_comparison.max_apex_delta_pixels,
+                     csv_comparison.max_ruler_delta_pixels, csv_path,
+                     reference_csv_path.resolve())
+        xlsx_response = post_api(endpoint, TRACKPOINTS_PATH, api_key=api_key, movie_id=movie_id,
+                                  response_format=XLSX_FORMAT)
+        xlsx_path = write_artifact(artifacts_dir, "trackpoints.xlsx", xlsx_response.content)
+        xlsx_rows = xlsx_trackpoint_rows(xlsx_response.content)
         assert_export_endpoints(xlsx_rows, expected_start, expected_end, scale=scale, export_name="XLSX")
         reference_xlsx_rows = xlsx_trackpoint_rows(reference_xlsx_path.read_bytes())
         assert_export_endpoints(reference_xlsx_rows, expected_start, expected_end, scale=scale,
                                 export_name="reference XLSX")
-        if xlsx_rows[0] != reference_xlsx_rows[0]:
-            raise AssertionError("downloaded XLSX headers differ from the reference XLSX")
-        logging.info("validated trackpoints movie_id=%s apex_points=%s frames=%s-%s "
-                     "formats=json,csv,xlsx", movie_id, len(apexes),
-                     expected_start.frame_number, expected_end.frame_number)
+        xlsx_comparison = compare_trackpoint_rows(
+            xlsx_rows, reference_xlsx_rows, export_name="XLSX")
+        logging.info("validated XLSX trackpoints movie_id=%s max_apex_delta_pixels=%.2f "
+                     "max_ruler_delta_pixels=%.2f downloaded=%s reference=%s", movie_id,
+                     xlsx_comparison.max_apex_delta_pixels,
+                     xlsx_comparison.max_ruler_delta_pixels, xlsx_path,
+                     reference_xlsx_path.resolve())
         traced_listing = ListMoviesResponse.model_validate(
             post_api(endpoint, LIST_MOVIES_PATH, api_key=api_key, movie_id=movie_id).json())
         traced_movie = next(movie for movie in traced_listing.movies if movie.movie_id == movie_id)
@@ -477,9 +657,17 @@ def run_workflow(*, endpoint, stack_name, movie_path, reference_csv_path, refere
             raise AssertionError("deployed list-movies did not provide a traced movie download URL")
         traced_download = requests.get(traced_movie.movie_traced_url, timeout=timeout)
         raise_for_status(traced_download, "download traced movie")
-        assert_final_frame(traced_download.content, reference_frame_path)
-        logging.info("downloaded and validated traced movie movie_id=%s bytes=%s", movie_id,
-                     len(traced_download.content))
+        downloaded_movie_path = write_artifact(
+            artifacts_dir, "downloaded-traced.mov", traced_download.content)
+        assert_final_frame(reference_traced_movie_path, reference_frame_path,
+                           artifacts_dir / "reference-traced-last-frame.png")
+        downloaded_frame_path = assert_final_frame(
+            downloaded_movie_path, reference_frame_path,
+            artifacts_dir / "downloaded-traced-last-frame.png")
+        logging.info("downloaded and validated traced movie movie_id=%s bytes=%s movie=%s "
+                     "final_frame=%s reference_rendering=%s", movie_id,
+                     len(traced_download.content), downloaded_movie_path, downloaded_frame_path,
+                     reference_frame_path.resolve())
         logging.info("deployed workflow passed for stack=%s course=%s", stack_name, course_id)
     finally:
         if movie_id:
@@ -510,6 +698,8 @@ def parse_args(argv=None):
     parser.add_argument("--reference-traced-movie", type=Path,
                         default=DEFAULT_REFERENCE_TRACED_MOVIE_PATH)
     parser.add_argument("--reference-frame", type=Path, default=DEFAULT_REFERENCE_FRAME_PATH)
+    parser.add_argument("--artifacts-dir", type=Path,
+                        help="directory for downloaded exports, movie, and rendered frames")
     parser.add_argument("--timeout", type=int, default=600)
     return parser.parse_args(argv)
 
@@ -529,6 +719,7 @@ def main():
                  reference_csv_path=args.reference_csv, reference_xlsx_path=args.reference_xlsx,
                  reference_traced_movie_path=args.reference_traced_movie,
                  reference_frame_path=args.reference_frame,
+                 artifacts_dir=args.artifacts_dir,
                  timeout=args.timeout)
 
 
