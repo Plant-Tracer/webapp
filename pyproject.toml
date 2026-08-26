@@ -248,6 +248,9 @@ reportMissingTypeStubs = "warning"
 root = "."
 extraPaths = ["src", "lambda-web/src", "lambda-resize/src"]
 
+[tool.coverage.run]
+patch = ["subprocess"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra -q"
