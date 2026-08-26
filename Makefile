@@ -681,10 +681,10 @@ lambda-web-check: lambda-web-lint
 
 .PHONY: lambda-resize/src/requirements.txt lambda-web/src/requirements.txt template-lint sam-config-show sam-config-path-safety-check sam-config-sync sam-config-path-check sam-config-check sam-config-guided-bootstrap sam-version-check sam-source-commit-check stamp-lambda-web-source-commit lambda-web-source-commit-check sam-deploy-version-check stamp-sam-deploy-metadata sam-storage-configure sam-status
 lambda-resize/src/requirements.txt:
-	uv export --locked --only-group lambda --no-emit-project --no-hashes --output-file lambda-resize/src/requirements.txt
+	@uv export --quiet --locked --only-group lambda --no-emit-project --no-hashes --output-file lambda-resize/src/requirements.txt
 
 lambda-web/src/requirements.txt:
-	uv export --locked --only-group lambda-web --no-emit-project --no-hashes --output-file lambda-web/src/requirements.txt
+	@uv export --quiet --locked --only-group lambda-web --no-emit-project --no-hashes --output-file lambda-web/src/requirements.txt
 
 template-lint: .venv/pyvenv.cfg
 	sam validate --lint
