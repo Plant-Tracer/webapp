@@ -5,7 +5,7 @@ import { activeCourseId } from "./course_context.js";
 //code for /analyze
 
 /* eslint-env es6 */
-/* see eslint.config for globals */
+/* see eslint.config.js for globals */
 
 /* jshint esversion: 8 */
 

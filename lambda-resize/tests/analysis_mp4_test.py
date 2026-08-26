@@ -19,13 +19,16 @@ def test_project_root_contains_bundle_assets():
     root = analysis_mp4.project_root()
 
     player = root / "src/app/static/mp4player-demo3.html"
-    vendored_library = root / "src/app/static/mp4box.all.js"
-    installed_library = root / "node_modules/mp4box/dist/mp4box.all.js"
-
     assert player.is_file()
-    installed_text = installed_library.read_text(encoding="utf-8")
-    normalized_installed_text = "\n".join(line.rstrip() for line in installed_text.splitlines()) + "\n"
-    assert vendored_library.read_text(encoding="utf-8") == normalized_installed_text
+    installed_modules = {
+        "mp4box.all.js": "mp4box.all.mjs",
+        **{filename: filename for filename in analysis_mp4.ANALYSIS_PLAYER_LIBRARY_DEPENDENCIES},
+    }
+    for vendored_name, installed_name in installed_modules.items():
+        installed_text = (root / "node_modules/mp4box/dist" / installed_name).read_text(encoding="utf-8")
+        normalized_installed_text = "\n".join(line.rstrip() for line in installed_text.splitlines()) + "\n"
+        vendored_library = root / "src/app/static" / vendored_name
+        assert vendored_library.read_text(encoding="utf-8") == normalized_installed_text
 
 
 def test_require_file_validates_bundle_assets(tmp_path):
@@ -65,6 +68,8 @@ def test_cli_uses_shared_encoder_and_creates_portable_bundle(tmp_path, capsys):
     assert movie_path.is_file()
     assert (output_dir / "index.html").is_file()
     assert (output_dir / "mp4box.all.js").is_file()
+    for filename in analysis_mp4.ANALYSIS_PLAYER_LIBRARY_DEPENDENCIES:
+        assert (output_dir / filename).is_file()
     assert (output_dir / "analysis-mp4.json").is_file()
     assert "source_scaled.mp4" in result_text
     assert "cdn.jsdelivr.net" not in (output_dir / "index.html").read_text(encoding="utf-8")

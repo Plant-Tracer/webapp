@@ -2,30 +2,28 @@
   "name": "planttracer-webapp",
   "private": true,
   "dependencies": {
-    "crypto-js": "^4.2.0",
-    "jslint": "^0.12.1",
-    "mp4box": "2.3.0"
+    "mp4box": "^2.4.1"
   },
   "engines": {
-    "node": ">=20.8.1"
+    "node": ">=22.18.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.25.8",
-    "@babel/preset-env": "^7.25.8",
-    "@html-eslint/eslint-plugin": "^0.24.0",
-    "@html-eslint/parser": "^0.24.0",
-    "@testing-library/jest-dom": "^6.6.2",
-    "babel-jest": "^29.7.0",
-    "babel-plugin-istanbul": "^6.1.1",
-    "babel-preset-airbnb": "^5.0.0",
-    "baseline-browser-mapping": "^2.10.10",
-    "eslint": "^8.57.0",
+    "@babel/core": "^7.29.7",
+    "@babel/preset-env": "^7.29.7",
+    "@html-eslint/eslint-plugin": "^0.65.0",
+    "@html-eslint/parser": "^0.65.0",
+    "@testing-library/jest-dom": "^7.0.1",
+    "babel-jest": "^30.4.1",
+    "babel-plugin-istanbul": "^8.0.0",
+    "baseline-browser-mapping": "^2.11.19",
+    "eslint": "^10.9.1",
     "eslint-formatter-friendly": "^7.0.0",
-    "jest": "^29.7.0",
-    "jest-canvas-mock": "^2.5.2",
-    "jest-environment-jsdom": "^30.3.0",
-    "jest-fail-on-console": "^3.3.1",
-    "jest-fetch-mock": "^3.0.3",
+    "globals": "^17.11.0",
+    "jest": "^30.4.2",
+    "jest-canvas-mock": "^2.5.8",
+    "jest-environment-jsdom": "^30.4.1",
+    "jest-fail-on-console": "^3.3.4",
+    "jest-fetch-mock": "^4.2.0",
     "regenerator-runtime": "^0.14.1"
   },
   "scripts": {

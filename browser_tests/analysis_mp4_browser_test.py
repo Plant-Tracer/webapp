@@ -32,12 +32,12 @@ def analysis_bundle_server(tmp_path) -> str:
     thread.join()
 
 
-def canvas_center(driver) -> list[int]:
-    """Read the current canvas center pixel regardless of derivative dimensions."""
+def canvas_sample(driver) -> list[int]:
+    """Read a canvas pixel away from the burned-in frame number."""
     return driver.execute_script(
         "const canvas = document.getElementById('movie-canvas');"
         "return Array.from(canvas.getContext('2d').getImageData("
-        "Math.floor(canvas.width / 2), Math.floor(canvas.height / 2), 1, 1).data);"
+        "Math.floor(canvas.width / 4), Math.floor(canvas.height * 3 / 4), 1, 1).data);"
     )
 
 
@@ -47,10 +47,10 @@ def test_generated_bundle_steps_all_frames_forward_then_reverse(chrome_driver, a
     chrome_driver.get(f"{analysis_bundle_server}/index.html")
     status = wait_for_decoded_frames(chrome_driver)
     assert status.startswith("Decoded 4 frames"), status
-    samples = [canvas_center(chrome_driver)]
+    samples = [canvas_sample(chrome_driver)]
     for button_id in ("next-frame-button",) * 3 + ("previous-frame-button",) * 3:
         chrome_driver.find_element(By.ID, button_id).click()
-        samples.append(canvas_center(chrome_driver))
+        samples.append(canvas_sample(chrome_driver))
     samples.insert(4, samples[3])
     for sample, frame_index in zip(samples, FRAME_SEQUENCE):
         assert matches_color(sample, FRAME_COLORS[frame_index]), (

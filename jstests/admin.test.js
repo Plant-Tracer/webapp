@@ -97,7 +97,7 @@ function payload() {
         total_bytes: 2500000, fpm: '60', has_traced_movie: true,
         description: 'Daily bean measurement', fps: '30', width: 640, height: 480,
         rotation: 0, trim_start_frame: 0, trim_end_frame: 120, needs_retracing: false,
-        research_use: 1, credit_by_name: 'Ada', attribution_name: 'Ada Lovelace',
+        research_use: 1, credit_by_name: 1, attribution_name: 'Ada Lovelace',
       }],
       restart_marker: null,
     },

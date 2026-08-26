@@ -6,7 +6,7 @@ Requirements
 
 * Python 3.12
 * Poetry
-* Node.js 20.8.1 or newer and npm
+* Node.js 22.18.0 or newer and npm
 * Java runtime for DynamoDB Local
 * Git and GitHub CLI (``gh``)
 * Chrome or Chromium for browser tests
