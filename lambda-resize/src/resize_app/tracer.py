@@ -325,58 +325,64 @@ def trace_movie_v2(*, movie_url,
     trackpoints_this = None
     trackpoint_segments:list[TrackpointSegment] = []
     colors_by_label = trackpoint_colors(trackpoints)
-    for (frame_number, frame) in enumerate(get_frames_from_url(movie_url, rotation)):
-        # Trace only in the requested range; outside it use existing trackpoints for rendering/callbacks.
-        gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        if frame_number >= frame_start and (frame_end is None or frame_number <= frame_end):
-            trackpoints_this = cv2_trace_frame(
-                gray_frame_prev = gray_frame_prev,
-                gray_frame = gray_frame,
-                trackpoints = trackpoints_prev,
-                frame_number=frame_number,
+    try:
+        for (frame_number, frame) in enumerate(get_frames_from_url(movie_url, rotation)):
+            # Trace only in the requested range; outside it use existing trackpoints for rendering/callbacks.
+            gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            if frame_number >= frame_start and (frame_end is None or frame_number <= frame_end):
+                trackpoints_this = cv2_trace_frame(
+                    gray_frame_prev = gray_frame_prev,
+                    gray_frame = gray_frame,
+                    trackpoints = trackpoints_prev,
+                    frame_number=frame_number,
+                )
+                trackpoints_output.extend(trackpoints_this) # add to the output
+            else:
+                trackpoints_this = [tp for tp in trackpoints if tp.frame_number == frame_number]
+
+            frame_in_traced_movie = (
+                frame_number >= movie_traced_frame_start
+                and (movie_traced_frame_end is None or frame_number <= movie_traced_frame_end)
             )
-            trackpoints_output.extend(trackpoints_this) # add to the output
-        else:
-            trackpoints_this = [tp for tp in trackpoints if tp.frame_number == frame_number]
+            prior_frame_in_traced_movie = frame_number > movie_traced_frame_start
+            if frame_in_traced_movie and prior_frame_in_traced_movie:
+                update_trackpoint_segments(previous_trackpoints=trackpoints_prev,
+                                           current_trackpoints=trackpoints_this,
+                                           segments=trackpoint_segments)
 
-        frame_in_traced_movie = (
-            frame_number >= movie_traced_frame_start
-            and (movie_traced_frame_end is None or frame_number <= movie_traced_frame_end)
-        )
-        prior_frame_in_traced_movie = frame_number > movie_traced_frame_start
-        if frame_in_traced_movie and prior_frame_in_traced_movie:
-            update_trackpoint_segments(previous_trackpoints=trackpoints_prev,
-                                       current_trackpoints=trackpoints_this,
-                                       segments=trackpoint_segments)
+            # Create the movie_zipfile if asked
+            if zf is not None:
+                jpeg = convert_frame_to_jpeg(frame)
+                if comment is not None:
+                    jpeg = add_jpeg_comment(jpeg, comment)
+                zf.writestr(f"frame_{frame_number:04d}.jpeg", jpeg)
 
-        # Create the movie_zipfile if asked
-        if zf is not None:
-            jpeg = convert_frame_to_jpeg(frame)
-            if comment is not None:
-                jpeg = add_jpeg_comment(jpeg, comment)
-            zf.writestr(f"frame_{frame_number:04d}.jpeg", jpeg)
+            # Label the frame and write to the mp4 output if we are doing that
+            if movie_traced_writer and frame_in_traced_movie:
+                frame_to_label = frame.copy()
+                cv2_label_frame(frame=frame_to_label,
+                                trackpoints=trackpoints_this,
+                                frame_label=frame_number,
+                                trackpoint_segments=trackpoint_segments,
+                                colors_by_label=colors_by_label)
+                # IMPORTANT: OpenCV uses BGR colors, but the H.264 writer expects RGB.
+                frame_rgb = cv2.cvtColor(frame_to_label, cv2.COLOR_BGR2RGB)
+                movie_traced_writer.append_data(frame_rgb)
 
-        # Label the frame and write to the mp4 output if we are doing that
-        if movie_traced_writer and frame_in_traced_movie:
-            frame_to_label = frame.copy()
-            cv2_label_frame(frame=frame_to_label,
-                            trackpoints=trackpoints_this,
-                            frame_label=frame_number,
-                            trackpoint_segments=trackpoint_segments,
-                            colors_by_label=colors_by_label)
-            # IMPORTANT: OpenCV uses BGR colors, but the H.264 writer expects RGB.
-            frame_rgb = cv2.cvtColor(frame_to_label, cv2.COLOR_BGR2RGB)
-            movie_traced_writer.append_data(frame_rgb)
+            if callback is not None:
+                callback(TracerCallbackArg(frame_number=frame_number, frame_data=frame,
+                                           frame_trackpoints=trackpoints_this))
 
-        if callback is not None:
-            callback(TracerCallbackArg(frame_number=frame_number, frame_data=frame, frame_trackpoints=trackpoints_this))
-
-        # Advance
-        trackpoints_prev = trackpoints_this
-        gray_frame_prev = gray_frame
-    # Done
-    if movie_traced_writer:
-        movie_traced_writer.close()
+            # Advance
+            trackpoints_prev = trackpoints_this
+            gray_frame_prev = gray_frame
+    finally:
+        try:
+            if movie_traced_writer:
+                movie_traced_writer.close()
+        finally:
+            if zf:
+                zf.close()
     return trackpoints_output
 
 
