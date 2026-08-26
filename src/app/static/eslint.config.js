@@ -5,6 +5,8 @@ module.exports = [
         ignores: [
             "unzipit-worker.module.mjs",
             "unzipit.module.mjs",
+            "rolldown-runtime-*.mjs",
+            "styp-*.mjs",
             "jquery-3.7.1.min.js",
             "mp4box.all.js",
             "*.min.js",
@@ -13,7 +15,7 @@ module.exports = [
     {
         files: ["**/*.js", "**/*.mjs"],
         languageOptions: {
-            ecmaVersion: 2020,
+            ecmaVersion: 2022,
             sourceType: "module",
             parserOptions: {
                 allowImportExportEverywhere: true,
