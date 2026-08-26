@@ -2,7 +2,7 @@
 
 import base64
 from functools import partial
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from http.server import ThreadingHTTPServer
 import os
 from pathlib import Path
 import threading
@@ -10,6 +10,7 @@ from urllib.parse import quote
 
 import pytest
 from selenium.webdriver.common.by import By
+from browser_tests.static_server import JavaScriptModuleHandler
 from browser_tests.video_probe import FRAME_SEQUENCE, matches_color, wait_for_decoded_frames
 
 
@@ -22,7 +23,7 @@ MOVIE_PATH = FIXTURE_DIR / "four-frame-probe.mp4"
 def frame_step_server() -> str:
     """Serve the static demo without requiring application services."""
     static_root = Path(__file__).resolve().parents[1] / "src" / "app" / "static"
-    handler = partial(SimpleHTTPRequestHandler, directory=static_root)
+    handler = partial(JavaScriptModuleHandler, directory=static_root)
     server = ThreadingHTTPServer(("0.0.0.0", 0), handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()

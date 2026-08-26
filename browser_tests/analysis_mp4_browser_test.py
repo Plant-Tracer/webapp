@@ -1,13 +1,14 @@
 """Browser test for a portable analysis-MP4 player bundle."""
 
 from functools import partial
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from http.server import ThreadingHTTPServer
 import threading
 
 import pytest
 from selenium.webdriver.common.by import By
 
 from resize_app.analysis_mp4 import AnalysisMp4Options, create_analysis_bundle
+from browser_tests.static_server import JavaScriptModuleHandler
 from browser_tests.video_probe import FRAME_SEQUENCE, matches_color, wait_for_decoded_frames
 from tests.fixtures.analysis_mp4_fixture import FRAME_COLORS, write_four_color_movie
 
@@ -23,7 +24,7 @@ def analysis_bundle_server(tmp_path) -> str:
         output_dir=bundle_path,
         options=AnalysisMp4Options(rotation=90, max_width=64, max_height=48),
     )
-    handler = partial(SimpleHTTPRequestHandler, directory=bundle_path)
+    handler = partial(JavaScriptModuleHandler, directory=bundle_path)
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
