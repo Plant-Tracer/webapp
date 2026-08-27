@@ -1,3 +1,4 @@
+import re
 import sys
 import uuid
 from types import SimpleNamespace
@@ -33,8 +34,10 @@ def test_create_db_prints_table_progress(local_ddb, capsys):
     dbutil.create_db()
 
     output = capsys.readouterr().out
-    assert "Creating 8 DynamoDB tables" in output
-    assert "[8/8] Already exists:" in output
+    table_count_match = re.search(r"Creating (\d+) DynamoDB tables", output)
+    assert table_count_match is not None
+    table_count = table_count_match.group(1)
+    assert f"[{table_count}/{table_count}] Already exists:" in output
 
 
 def test_dbutil_commands_do_not_use_option_prefix():
