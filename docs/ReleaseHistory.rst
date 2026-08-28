@@ -159,6 +159,7 @@ Unreleased Summary
     * Authorization: give course administrators the Admin panel while limiting courses, users, movies, counts, memberships, and per-movie media checks to their administered courses
     * Admin: show course registration keys behind per-row reveal controls and current/max enrollment, named user memberships with course-admin emphasis, and cross-course movies; load bounded pages and sort complete tables in the browser
     * Admin: let ``superadmin`` users atomically add or remove course administrators with explicit names, confirmations, final-administrator protection, retained enrollment, and attributed audit records
+    * Admin: let course administrators manage administrators for their own courses and let superadmins grant or remove superadmin access, with automatic enrollment and final-role protection
     * Navigation: make the current course a membership-validated selector that reloads the page in the selected course context
     * Developer: add ``dbutil`` commands to list users and super-role users, and to grant or remove course-admin, ``superadmin``, and ``superauditor`` access by email
     * Developer: bind admin restart markers to their DynamoDB table and serialize super-role mutations so concurrent commands cannot remove the final ``superadmin``

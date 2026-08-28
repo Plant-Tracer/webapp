@@ -534,6 +534,14 @@ def course_admin_url(course_id, user_id):
     return f"/api/admin/courses/{course_id}/administrators/{user_id}"
 
 
+def authenticate_fixture_course_admin(client, new_course):
+    """Authenticate the fixture course's original administrator."""
+    admin = odb.get_user_email(new_course[ADMIN_EMAIL])
+    admin_api_key = odb.make_new_api_key(email=new_course[ADMIN_EMAIL])
+    client.set_cookie(apikey.cookie_name(), admin_api_key)
+    return admin
+
+
 def test_superadmin_assigns_and_removes_course_admin_atomically(client, new_course):
     make_fixture_user_superadmin(client, new_course)
     ddbo = new_course["ddbo"]
@@ -629,6 +637,72 @@ def test_superadmin_cannot_remove_final_course_admin(client, new_course):
     assert odb.check_course_admin(user_id=admin_id, course_id=course_id)
 
 
+def test_course_admin_assigns_exact_email_and_enrolls_user(client, new_course):
+    ddbo = new_course["ddbo"]
+    course_id = new_course[odb.COURSE_ID]
+    target_id = new_course[USER_ID]
+    odb.unregister_from_course(course_id=course_id, user_id=target_id)
+    actor = authenticate_fixture_course_admin(client, new_course)
+
+    response = client.put(
+        f"/api/admin/courses/{course_id}/administrators",
+        json={"email": new_course[USER_EMAIL].upper()},
+    )
+
+    assert response.status_code == 200
+    assert response.json["assigned"] is True
+    assert response.json["administrator"]["email"] == new_course[USER_EMAIL]
+    assert response.json["administrator"]["courses"] == [{
+        "course_id": course_id,
+        "is_admin": True,
+    }]
+    target = odb.get_user(target_id)
+    course = odb.lookup_course_by_id(course_id=course_id)
+    assert course_id in target[odb.COURSES]
+    assert course_id in target[odb.ADMIN_FOR_COURSES]
+    assert target_id in course[odb.ADMINS_FOR_COURSE]
+    assert ddbo.course_users.get_item(
+        Key={odb.COURSE_ID: course_id, odb.USER_ID: target_id},
+        ConsistentRead=True,
+    ).get("Item") is not None
+    logs = [
+        item for item in ddbo.logs.scan()["Items"]
+        if item.get("event_type") == "course.admin.assigned"
+        and item.get("target_user_id") == target_id
+    ]
+    assert len(logs) == 1
+    assert logs[0]["user_id"] == actor[odb.USER_ID]
+
+
+def test_course_admin_can_remove_self_when_another_admin_remains(client, new_course):
+    course_id = new_course[odb.COURSE_ID]
+    actor = authenticate_fixture_course_admin(client, new_course)
+    second_admin_id = new_course[USER_ID]
+    odb.add_course_admin(admin_id=second_admin_id, course_id=course_id)
+
+    response = client.delete(course_admin_url(course_id, actor[odb.USER_ID]))
+
+    assert response.status_code == 200
+    assert response.json["changed"] is True
+    assert response.json["assigned"] is False
+    updated_actor = odb.get_user(actor[odb.USER_ID])
+    assert course_id not in updated_actor[odb.ADMIN_FOR_COURSES]
+    assert course_id in updated_actor[odb.COURSES]
+    assert odb.check_course_admin(user_id=second_admin_id, course_id=course_id)
+
+
+def test_course_admin_cannot_change_another_courses_admins(client, new_course):
+    authenticate_fixture_course_admin(client, new_course)
+
+    response = client.put(course_admin_url("other-course", new_course[USER_ID]))
+
+    assert response.status_code == 403
+    assert response.json == {
+        "error": True,
+        "message": "Course administrator access required",
+    }
+
+
 @pytest.mark.parametrize("role", [odb.SUPER_ROLE_NONE, odb.SUPER_ROLE_SUPERAUDITOR])
 def test_non_superadmin_cannot_change_course_admin(client, new_course, role):
     ddbo = new_course["ddbo"]
@@ -638,6 +712,101 @@ def test_non_superadmin_cannot_change_course_admin(client, new_course, role):
 
     for method in (client.put, client.delete):
         response = method(url)
+        assert response.status_code == 403
+        assert response.json == {
+            "error": True,
+            "message": "Course administrator access required",
+        }
+
+
+def test_course_admin_assignment_by_email_validates_target(client, new_course):
+    authenticate_fixture_course_admin(client, new_course)
+    url = f"/api/admin/courses/{new_course[odb.COURSE_ID]}/administrators"
+
+    missing = client.put(url, json={"email": "missing@example.test"})
+    malformed = client.put(url, json={"email": "not-an-email"})
+    invalid_payload = client.put(url, json={"email": 42})
+
+    assert missing.status_code == 404
+    assert missing.json["message"] == "User not found"
+    assert malformed.status_code == 400
+    assert malformed.json["message"] == "Administrator email is invalid"
+    assert invalid_payload.status_code == 400
+    assert invalid_payload.json["message"] == "Invalid administrator assignment request"
+
+
+def superadmin_url(user_id):
+    """Return the global superadmin-assignment endpoint for a user."""
+    return f"/api/admin/users/{user_id}/superadmin"
+
+
+def test_superadmin_grants_and_revokes_superadmin_with_audit(client, new_course):
+    make_fixture_user_superadmin(client, new_course)
+    ddbo = new_course["ddbo"]
+    actor_id = new_course[USER_ID]
+    target_id = odb.get_user_email(new_course[ADMIN_EMAIL])[odb.USER_ID]
+    url = superadmin_url(target_id)
+
+    assigned = client.put(url)
+    assigned_noop = client.put(url)
+    removed = client.delete(url)
+    removed_noop = client.delete(url)
+
+    assert assigned.status_code == 200
+    assert assigned.json["changed"] is True
+    assert assigned.json["old_super_role"] == odb.SUPER_ROLE_NONE
+    assert assigned.json["new_super_role"] == odb.SUPER_ROLE_SUPERADMIN
+    assert assigned_noop.json["changed"] is False
+    assert removed.status_code == 200
+    assert removed.json["changed"] is True
+    assert removed.json["new_super_role"] == odb.SUPER_ROLE_NONE
+    assert removed_noop.json["changed"] is False
+    assert odb.normalize_super_role(odb.get_user(target_id)) == odb.SUPER_ROLE_NONE
+    logs = [
+        item for item in ddbo.logs.scan()["Items"]
+        if item.get("event_type", "").startswith("user.superadmin.")
+        and item.get("target_user_id") == target_id
+    ]
+    assert {(item["event_type"], item["user_id"]) for item in logs} == {
+        ("user.superadmin.assigned", actor_id),
+        ("user.superadmin.removed", actor_id),
+    }
+
+
+def test_superadmin_cannot_remove_final_superadmin(client, new_course):
+    make_fixture_user_superadmin(client, new_course)
+
+    response = client.delete(superadmin_url(new_course[USER_ID]))
+
+    assert response.status_code == 409
+    assert response.json == {
+        "error": True,
+        "message": "The final superadmin cannot be removed",
+    }
+    assert odb.normalize_super_role(odb.get_user(new_course[USER_ID])) == odb.SUPER_ROLE_SUPERADMIN
+
+
+def test_superadmin_can_remove_self_when_another_superadmin_remains(client, new_course):
+    make_fixture_user_superadmin(client, new_course)
+    other_id = odb.get_user_email(new_course[ADMIN_EMAIL])[odb.USER_ID]
+    assert client.put(superadmin_url(other_id)).status_code == 200
+
+    response = client.delete(superadmin_url(new_course[USER_ID]))
+
+    assert response.status_code == 200
+    assert response.json["changed"] is True
+    assert odb.normalize_super_role(odb.get_user(new_course[USER_ID])) == odb.SUPER_ROLE_NONE
+    assert odb.normalize_super_role(odb.get_user(other_id)) == odb.SUPER_ROLE_SUPERADMIN
+
+
+@pytest.mark.parametrize("role", [odb.SUPER_ROLE_NONE, odb.SUPER_ROLE_SUPERAUDITOR])
+def test_non_superadmin_cannot_change_superadmin(client, new_course, role):
+    ddbo = new_course["ddbo"]
+    ddbo.update_table(ddbo.users, new_course[USER_ID], {odb.SUPER_ROLE: role})
+    client.set_cookie(apikey.cookie_name(), new_course[API_KEY])
+
+    for method in (client.put, client.delete):
+        response = method(superadmin_url(new_course[USER_ID]))
         assert response.status_code == 403
         assert response.json == {"error": True, "message": "Superadmin access required"}
 

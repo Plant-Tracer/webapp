@@ -256,26 +256,39 @@ updated but the email was not sent.
 ```
 
 Course rows show administrator names and email addresses directly. A
-``superadmin`` also receives a Manage control; ``superauditor`` and course-admin
-viewers see the same names without write controls.
+``superadmin`` receives a Manage control for every course. Course
+administrators receive the control for courses they administer;
+``superauditor`` viewers have no write controls.
+
+#### `PUT /api/admin/courses/{course_id}/administrators`
+
+Assign a registered user by exact email address. This form lets a course
+administrator add a registered user who is not yet enrolled and therefore is
+not visible in that administrator's scoped user table.
+
+```json
+{ "email": "alice@example.edu" }
+```
 
 #### `PUT /api/admin/courses/{course_id}/administrators/{user_id}`
 
-Assign an existing enabled user as an administrator of an existing course.
-Only a ``superadmin`` may call this endpoint. The mutation atomically adds the
-course to the user's ``admin_for_courses`` and ``courses`` lists, adds the user
-to the course's ``admins_for_course`` list, ensures the ``course_users``
-membership exists, and writes an attributed ``course.admin.assigned`` audit
-event. Repeating an already-complete assignment succeeds without another audit
-event and returns ``changed: false``.
+Assign an existing enabled user by ID. For both assignment forms, the caller
+must be a ``superadmin`` or an administrator of the identified course. The
+mutation atomically adds the course to the user's ``admin_for_courses`` and
+``courses`` lists, adds the user to the course's ``admins_for_course`` list,
+ensures the ``course_users`` membership exists, and writes an attributed
+``course.admin.assigned`` audit event. Repeating an already-complete assignment
+succeeds without another audit event and returns ``changed: false``.
 
 #### `DELETE /api/admin/courses/{course_id}/administrators/{user_id}`
 
-Remove course-administrator status. Only a ``superadmin`` may call this
-endpoint. The mutation removes the two mirrored administrator references but
-retains course enrollment, the ``course_users`` row, and the user's default
-course. The final administrator cannot be removed. Repeating an already-complete
-removal succeeds without another audit event and returns ``changed: false``.
+Remove course-administrator status. The caller must be a ``superadmin`` or an
+administrator of the identified course. Administrators may remove themselves
+when another administrator remains. The mutation removes the two mirrored
+administrator references but retains course enrollment, the ``course_users``
+row, and the user's default course. The final administrator cannot be removed.
+Repeating an already-complete removal succeeds without another audit event and
+returns ``changed: false``.
 
 Both endpoints return:
 
@@ -286,7 +299,15 @@ Both endpoints return:
   "administrator": {
     "user_id": "u...",
     "user_name": "Alice",
-    "email": "alice@example.edu"
+    "email": "alice@example.edu",
+    "enabled": true,
+    "default_course_id": "PlantTracer 101",
+    "super_role": "none",
+    "courses": [
+      { "course_id": "PlantTracer 101", "is_admin": true }
+    ],
+    "created_at": 1784800100,
+    "last_movie_activity_at": null
   },
   "assigned": true,
   "changed": true
@@ -295,7 +316,31 @@ Both endpoints return:
 
 Missing records return HTTP 404. Disabled target users, final-administrator
 removal, and repeated concurrent conflicts return HTTP 409. Invalid identifiers
-return HTTP 400; every non-``superadmin`` caller receives HTTP 403.
+or assignment email payloads return HTTP 400. Callers who are neither a
+``superadmin`` nor an administrator of the identified course receive HTTP 403.
+The actor's authority is included in the DynamoDB transaction condition so a
+concurrent role removal cannot authorize a stale request.
+
+#### `PUT /api/admin/users/{user_id}/superadmin`
+
+Grant ``superadmin`` to any registered user. Only a current ``superadmin`` may
+call this endpoint.
+
+#### `DELETE /api/admin/users/{user_id}/superadmin`
+
+Remove ``superadmin`` from a registered user. A superadmin may remove their own
+role when another superadmin remains; removing the final superadmin returns
+HTTP 409. Removing the role from a user who is not currently a superadmin is an
+idempotent no-op and does not remove ``superauditor``.
+
+Both endpoints update the user and versioned superadmin registry atomically,
+condition the write on the actor's current authority, and write an attributed
+``user.superadmin.assigned`` or ``user.superadmin.removed`` audit event in the
+reserved ``global`` audit scope. Successful responses contain the complete
+admin user summary plus ``old_super_role``, ``new_super_role``, and ``changed``.
+Repeated no-op requests do not create audit events. Missing users return HTTP
+404, stale concurrent changes return HTTP 409, and non-superadmins receive
+HTTP 403.
 
 #### `GET /api/admin/movies/{movie_id}/media`
 

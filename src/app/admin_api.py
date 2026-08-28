@@ -6,7 +6,7 @@ from flask import Blueprint, jsonify, request
 from pydantic import ValidationError
 from validate_email_address import validate_email
 
-from . import admin_service, course_management, mailer, odb
+from . import admin_service, course_management, mailer, odb, super_roles
 from .apikey import get_user_dict
 from .constants import logger
 from .odb import InvalidAPI_Key
@@ -14,12 +14,34 @@ from .odb import InvalidAPI_Key
 admin_api_bp = Blueprint("admin_api", __name__)
 
 
-def _change_course_administrator(course_id, user_id, *, assigned):
-    """Apply one authenticated superadmin course-administrator mutation."""
+def _admin_user_summary(user, viewer_user):
+    """Return a target user limited to the acting administrator's scope."""
+    access = odb.admin_read_access(viewer_user)
+    visible_course_ids = None if access.all_courses else set(access.course_ids)
+    return admin_service.user_summary(user, visible_course_ids=visible_course_ids)
+
+
+def _change_course_administrator(course_id, *, assigned, user_id=None,
+                                 email_payload=None):
+    """Apply one authorized course-administrator mutation."""
     try:
         viewer_user = get_user_dict()
-        if odb.normalize_super_role(viewer_user) != odb.SUPER_ROLE_SUPERADMIN:
-            return jsonify({"error": True, "message": "Superadmin access required"}), 403
+        if not odb.can_manage_course_administrators(viewer_user, course_id):
+            return jsonify({
+                "error": True,
+                "message": "Course administrator access required",
+            }), 403
+        if email_payload is not None:
+            email_request = admin_service.AdminCourseAdministratorRequest.model_validate(
+                email_payload
+            )
+            if not validate_email(email_request.email, check_mx=False):
+                return jsonify({
+                    "error": True,
+                    "message": "Administrator email is invalid",
+                }), 400
+            target_user = odb.get_user_email(email_request.email)
+            user_id = target_user[odb.USER_ID]
         if not odb.is_user_id(user_id) or not course_id:
             return jsonify({
                 "error": True,
@@ -31,6 +53,7 @@ def _change_course_administrator(course_id, user_id, *, assigned):
                 course_id=course_id,
                 actor_user_id=viewer_user[odb.USER_ID],
                 ipaddr=request.remote_addr,
+                authorize_actor=True,
             )
         else:
             change = odb.remove_course_admin(
@@ -39,21 +62,23 @@ def _change_course_administrator(course_id, user_id, *, assigned):
                 actor_user_id=viewer_user[odb.USER_ID],
                 ipaddr=request.remote_addr,
                 protect_last_admin=True,
+                authorize_actor=True,
             )
         target_user = odb.get_user(user_id)
         response = admin_service.AdminCourseAdministratorChange(
             course_id=course_id,
-            administrator=admin_service.AdminCourseAdministrator(
-                user_id=user_id,
-                user_name=target_user.get(odb.USER_NAME, ""),
-                email=target_user.get(odb.EMAIL, ""),
-            ),
+            administrator=_admin_user_summary(target_user, viewer_user),
             assigned=change.assigned,
             changed=change.changed,
         )
     except InvalidAPI_Key:
         return jsonify({"error": True, "message": "Invalid api_key"}), 403
-    except odb.InvalidUser_Id:
+    except ValidationError:
+        return jsonify({
+            "error": True,
+            "message": "Invalid administrator assignment request",
+        }), 400
+    except (odb.InvalidUser_Id, odb.InvalidUser_Email):
         return jsonify({"error": True, "message": "User not found"}), 404
     except odb.InvalidCourse_Id:
         return jsonify({"error": True, "message": "Course not found"}), 404
@@ -68,6 +93,56 @@ def _change_course_administrator(course_id, user_id, *, assigned):
         return jsonify({
             "error": True,
             "message": "Administrator assignments changed concurrently; retry the request",
+        }), 409
+    except odb.UnauthorizedCourseAdminChange:
+        return jsonify({
+            "error": True,
+            "message": "Course administrator access required",
+        }), 403
+    return jsonify(response.model_dump())
+
+
+def _change_superadmin(user_id, *, assigned):
+    """Grant or revoke superadmin with atomic final-role protection."""
+    try:
+        viewer_user = get_user_dict()
+        if odb.normalize_super_role(viewer_user) != odb.SUPER_ROLE_SUPERADMIN:
+            return jsonify({"error": True, "message": "Superadmin access required"}), 403
+        if not odb.is_user_id(user_id):
+            return jsonify({
+                "error": True,
+                "message": "Invalid user identifier",
+            }), 400
+        change = super_roles.set_super_role(
+            user_id,
+            odb.SUPER_ROLE_SUPERADMIN if assigned else odb.SUPER_ROLE_NONE,
+            expected_old_role=None if assigned else odb.SUPER_ROLE_SUPERADMIN,
+            mismatch_is_noop=not assigned,
+            actor_user_id=viewer_user[odb.USER_ID],
+            ipaddr=request.remote_addr,
+        )
+        target_user = odb.get_user(user_id)
+        response = admin_service.AdminSuperadminChange(
+            user=admin_service.user_summary(target_user),
+            old_super_role=change.old_super_role,
+            new_super_role=change.new_super_role,
+            changed=change.changed,
+        )
+    except InvalidAPI_Key:
+        return jsonify({"error": True, "message": "Invalid api_key"}), 403
+    except odb.InvalidUser_Id:
+        return jsonify({"error": True, "message": "User not found"}), 404
+    except super_roles.FinalSuperadmin:
+        return jsonify({
+            "error": True,
+            "message": "The final superadmin cannot be removed",
+        }), 409
+    except super_roles.UnauthorizedSuperRoleChange:
+        return jsonify({"error": True, "message": "Superadmin access required"}), 403
+    except super_roles.ConcurrentSuperRoleChange:
+        return jsonify({
+            "error": True,
+            "message": "Superadmin assignments changed concurrently; retry the request",
         }), 409
     return jsonify(response.model_dump())
 
@@ -191,13 +266,35 @@ def api_admin_create_course():
 @admin_api_bp.put("/courses/<course_id>/administrators/<user_id>")
 def api_admin_assign_course_administrator(course_id, user_id):
     """Assign an existing user as a course administrator."""
-    return _change_course_administrator(course_id, user_id, assigned=True)
+    return _change_course_administrator(course_id, assigned=True, user_id=user_id)
+
+
+@admin_api_bp.put("/courses/<course_id>/administrators")
+def api_admin_assign_course_administrator_by_email(course_id):
+    """Assign an exact registered email as a course administrator."""
+    return _change_course_administrator(
+        course_id,
+        assigned=True,
+        email_payload=request.get_json(silent=True) or {},
+    )
 
 
 @admin_api_bp.delete("/courses/<course_id>/administrators/<user_id>")
 def api_admin_remove_course_administrator(course_id, user_id):
     """Remove course-admin status while retaining course membership."""
-    return _change_course_administrator(course_id, user_id, assigned=False)
+    return _change_course_administrator(course_id, assigned=False, user_id=user_id)
+
+
+@admin_api_bp.put("/users/<user_id>/superadmin")
+def api_admin_assign_superadmin(user_id):
+    """Grant superadmin to an existing registered user."""
+    return _change_superadmin(user_id, assigned=True)
+
+
+@admin_api_bp.delete("/users/<user_id>/superadmin")
+def api_admin_remove_superadmin(user_id):
+    """Remove superadmin while protecting the final assignment."""
+    return _change_superadmin(user_id, assigned=False)
 
 
 @admin_api_bp.get("/movies/<movie_id>/media")

@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from app import odb
+from app import odb, super_roles
 from app.dynamodb_prefixes import PrefixSummary
 from app import odb_movie_data
 from app.odb import MOVIE_ID
@@ -273,6 +273,42 @@ def test_stale_super_role_transaction_cannot_remove_final_superadmin(new_course)
 
     assert odb.normalize_super_role(ddbo.get_user(user[dbutil.USER_ID])) == odb.SUPER_ROLE_NONE
     assert odb.normalize_super_role(ddbo.get_user(admin[dbutil.USER_ID])) == odb.SUPER_ROLE_SUPERADMIN
+
+
+def test_super_role_transaction_rejects_stale_actor_authority(new_course):
+    dbutil.set_super_role_by_email(new_course[ADMIN_EMAIL], odb.SUPER_ROLE_SUPERADMIN)
+    ddbo = new_course["ddbo"]
+    stale_state = dbutil.reconcile_super_role_state(ddbo)
+    stale_actor = ddbo.get_user_email(new_course[ADMIN_EMAIL])
+    target = ddbo.get_user_email(new_course[USER_EMAIL])
+    ddbo.update_table(
+        ddbo.users,
+        stale_actor[dbutil.USER_ID],
+        {odb.SUPER_ROLE: odb.SUPER_ROLE_NONE},
+    )
+
+    with pytest.raises(dbutil.ConcurrentSuperRoleChange, match="concurrently"):
+        dbutil.transact_super_role_change(
+            ddbo,
+            target,
+            stale_state,
+            odb.SUPER_ROLE_SUPERADMIN,
+            actor_user=stale_actor,
+        )
+
+    assert odb.normalize_super_role(ddbo.get_user(target[dbutil.USER_ID])) == odb.SUPER_ROLE_NONE
+
+
+def test_super_role_noop_still_requires_current_actor_authority(new_course):
+    target = odb.get_user_email(new_course[USER_EMAIL])
+    actor = odb.get_user_email(new_course[ADMIN_EMAIL])
+
+    with pytest.raises(super_roles.UnauthorizedSuperRoleChange):
+        super_roles.set_super_role(
+            target[dbutil.USER_ID],
+            odb.SUPER_ROLE_NONE,
+            actor_user_id=actor[dbutil.USER_ID],
+        )
 
 
 def test_demo_movie_seeding_is_idempotent(local_ddb, capsys):

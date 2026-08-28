@@ -54,14 +54,18 @@ function adminDocument() {
         <button id="course-admin-dialog-close" type="button">×</button></div>
       <p id="course-admin-dialog-status"></p>
       <ul id="course-admin-current"></ul>
-      <select id="course-admin-user-select"></select>
+      <input id="course-admin-user-email" list="course-admin-user-choices">
+      <datalist id="course-admin-user-choices"></datalist>
       <button id="course-admin-add" type="button">Add administrator</button>
     </dialog>`;
 }
 
 function payload() {
   return {
-    viewer: { user_name: 'Root Reader', super_role: 'superauditor' },
+    viewer: {
+      user_id: 'root-user', user_name: 'Root Reader', super_role: 'superauditor',
+      course_ids: [], all_courses: true,
+    },
     counts: { courses: 2, users: 1, movies: 1 },
     courses: {
       items: [
@@ -113,6 +117,8 @@ describe('admin summary rendering', () => {
     state.users = [];
     state.movies = [];
     state.viewerRole = 'none';
+    state.viewerUserId = null;
+    state.viewerCourseIds = [];
     state.sort.courses = { key: 'course_name', direction: 1 };
     state.sort.users = { key: 'user_name', direction: 1 };
     state.sort.movies = { key: 'title', direction: 1 };
@@ -416,7 +422,15 @@ describe('admin summary rendering', () => {
       .mockResponseOnce(JSON.stringify(adminPayload))
       .mockResponseOnce(JSON.stringify({
         error: false, course_id: 'BIO-1', assigned: true, changed: true,
-        administrator: { user_id: 'user-2', user_name: 'Bob', email: 'bob@example.test' },
+        administrator: {
+          user_id: 'user-2', user_name: 'Bob', email: 'bob@example.test', enabled: true,
+          default_course_id: 'CHEM-2', super_role: 'none', created_at: 1700000001,
+          last_movie_activity_at: null,
+          courses: [
+            { course_id: 'BIO-1', is_admin: true },
+            { course_id: 'CHEM-2', is_admin: false },
+          ],
+        },
       }));
 
     await loadAdminSummary();
@@ -426,19 +440,103 @@ describe('admin summary rendering', () => {
     expect(document.getElementById('course-admin-dialog-title').textContent)
       .toBe('Administrators for Biology');
     expect(document.querySelector('#course-admin-current button').disabled).toBe(true);
-    expect(document.getElementById('course-admin-user-select').textContent)
-      .toContain('Bob (bob@example.test)');
+    expect([...document.getElementById('course-admin-user-choices').options]
+      .map((option) => option.value)).toContain('bob@example.test');
 
+    const input = document.getElementById('course-admin-user-email');
+    input.value = 'bob@example.test';
+    input.dispatchEvent(new Event('input'));
     document.getElementById('course-admin-add').click();
     await new Promise((resolve) => { setTimeout(resolve, 0); });
 
-    expect(fetch.mock.calls[1][0]).toContain('/api/admin/courses/BIO-1/administrators/user-2');
+    expect(fetch.mock.calls[1][0]).toContain('/api/admin/courses/BIO-1/administrators');
     expect(fetch.mock.calls[1][1].method).toBe('PUT');
+    expect(JSON.parse(fetch.mock.calls[1][1].body)).toEqual({ email: 'bob@example.test' });
     expect(document.getElementById('course-admin-dialog-status').textContent)
       .toBe('Bob (bob@example.test) added.');
     expect(document.getElementById('course-admin-current').textContent).toContain('Bob');
     expect(document.getElementById('admin-course-rows').textContent).toContain('Bob');
     expect(document.querySelector('#course-admin-current button').disabled).toBe(false);
+  });
+
+  test('course admin manages only administered courses and can add an exact email', async () => {
+    const adminPayload = payload();
+    adminPayload.viewer = {
+      user_id: 'user-1', user_name: 'Ada', super_role: 'none',
+      course_ids: ['BIO-1'], all_courses: false,
+    };
+    fetch
+      .mockResponseOnce(JSON.stringify(adminPayload))
+      .mockResponseOnce(JSON.stringify({
+        error: false, course_id: 'BIO-1', assigned: true, changed: true,
+        administrator: {
+          user_id: 'user-2', user_name: 'Bob', email: 'bob@example.test', enabled: true,
+          default_course_id: null, super_role: 'none', created_at: 1700000001,
+          last_movie_activity_at: null, courses: [{ course_id: 'BIO-1', is_admin: true }],
+        },
+      }));
+
+    await loadAdminSummary();
+
+    const manage = document.querySelectorAll('.course-admin-manage');
+    expect(manage).toHaveLength(1);
+    expect(manage[0].closest('tr').textContent).toContain('Biology');
+    manage[0].click();
+    const input = document.getElementById('course-admin-user-email');
+    input.value = 'bob@example.test';
+    input.dispatchEvent(new Event('input'));
+    document.getElementById('course-admin-add').click();
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
+
+    expect(fetch.mock.calls[1][0]).toContain('/api/admin/courses/BIO-1/administrators');
+    expect(JSON.parse(fetch.mock.calls[1][1].body)).toEqual({ email: 'bob@example.test' });
+    expect(state.users.find((user) => user.user_id === 'user-2').courses).toEqual([
+      { course_id: 'BIO-1', course_name: 'Biology', is_admin: true },
+    ]);
+    expect(document.getElementById('course-admin-current').textContent).toContain('Bob');
+  });
+
+  test('superadmin grants roles and cannot remove the final superadmin in the UI', async () => {
+    const adminPayload = payload();
+    adminPayload.viewer = {
+      user_id: 'user-1', user_name: 'Ada', super_role: 'superadmin',
+      course_ids: [], all_courses: true,
+    };
+    adminPayload.users.items[0].super_role = 'superadmin';
+    adminPayload.users.items.push({
+      user_id: 'user-2', user_name: 'Bob', email: 'bob@example.test', enabled: true,
+      default_course_id: 'BIO-1', super_role: 'none', created_at: 1700000001,
+      last_movie_activity_at: null, courses: [{ course_id: 'BIO-1', is_admin: false }],
+    });
+    fetch
+      .mockResponseOnce(JSON.stringify(adminPayload))
+      .mockResponseOnce(JSON.stringify({
+        error: false, old_super_role: 'none', new_super_role: 'superadmin', changed: true,
+        user: {
+          ...adminPayload.users.items[1],
+          super_role: 'superadmin',
+        },
+      }));
+    window.confirm = jest.fn(() => true);
+
+    await loadAdminSummary();
+
+    const buttons = document.querySelectorAll('.admin-super-role');
+    expect(buttons).toHaveLength(2);
+    expect(buttons[0].textContent).toBe('Remove');
+    expect(buttons[0].disabled).toBe(true);
+    expect(buttons[0].title).toContain('final superadmin');
+    expect(buttons[1].textContent).toBe('Make superadmin');
+    buttons[1].click();
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
+
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('cross-course'));
+    expect(fetch.mock.calls[1][0]).toContain('/api/admin/users/user-2/superadmin');
+    expect(fetch.mock.calls[1][1].method).toBe('PUT');
+    expect(state.users.find((user) => user.user_id === 'user-2').super_role).toBe('superadmin');
+    expect(document.querySelectorAll('.admin-super-role')[0].disabled).toBe(false);
+    expect(document.getElementById('admin-status').textContent)
+      .toContain('Bob (bob@example.test) is now a superadmin');
   });
 
   test('confirms removals and keeps API errors visible in the dialog', async () => {
