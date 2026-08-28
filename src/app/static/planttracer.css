@@ -432,6 +432,11 @@ div.mtable td.check {
   margin-top: 0.35rem;
 }
 
+.admin-super-role {
+  display: block;
+  margin-top: 0.35rem;
+}
+
 #course-admin-dialog {
   border: 1px solid #777;
   border-radius: 6px;

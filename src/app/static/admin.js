@@ -18,6 +18,8 @@ const state = {
   users: [],
   movies: [],
   viewerRole: "none",
+  viewerUserId: null,
+  viewerCourseIds: [],
   verboseDetails: false,
   sort: Object.fromEntries(TABLE_NAMES.map((table) => [
     table,
@@ -147,7 +149,10 @@ function courseAdministratorCell(course) {
     ? administrators.map(administratorLabel).join(", ")
     : "none";
   cell.append(names);
-  if (state.viewerRole === "superadmin") {
+  if (
+    state.viewerRole === "superadmin"
+    || state.viewerCourseIds.includes(course.course_id)
+  ) {
     const manage = document.createElement("button");
     manage.type = "button";
     manage.className = "course-admin-manage";
@@ -190,20 +195,17 @@ function selectedCourseAdminDialogCourse() {
 }
 
 function applyCourseAdministratorChange(payload) {
-  const user = state.users.find((item) => item.user_id === payload.administrator.user_id);
-  if (!user) {
-    throw new Error("The changed user is missing from the loaded Admin data");
-  }
-  let membership = user.courses.find((item) => item.course_id === payload.course_id);
-  if (payload.assigned && !membership) {
-    membership = { course_id: payload.course_id, is_admin: true };
-    user.courses.push(membership);
-  } else if (membership) {
-    membership.is_admin = payload.assigned;
+  let user = state.users.find((item) => item.user_id === payload.administrator.user_id);
+  if (user) {
+    Object.assign(user, payload.administrator);
+  } else {
+    user = payload.administrator;
+    state.users.push(user);
   }
   enrichCourseNames();
   renderTable("courses");
   renderTable("users");
+  return user;
 }
 
 async function changeCourseAdministrator(course, user, assigned) {
@@ -216,21 +218,31 @@ async function changeCourseAdministrator(course, user, assigned) {
   const status = document.getElementById("course-admin-dialog-status");
   status.className = "";
   status.textContent = assigned ? "Adding administrator..." : "Removing administrator...";
-  const url = `${API_BASE}api/admin/courses/${encodeURIComponent(course.course_id)}`
-    + `/administrators/${encodeURIComponent(user.user_id)}`;
+  const baseUrl = `${API_BASE}api/admin/courses/${encodeURIComponent(course.course_id)}`
+    + "/administrators";
+  const url = assigned
+    ? baseUrl
+    : `${baseUrl}/${encodeURIComponent(user.user_id)}`;
+  const options = { method: assigned ? "PUT" : "DELETE" };
+  if (assigned) {
+    options.headers = { "Content-Type": "application/json" };
+    options.body = JSON.stringify({ email: user.email });
+  }
   try {
-    const response = await fetch(url, {
-      method: assigned ? "PUT" : "DELETE",
-      credentials: "same-origin",
-    });
-    const payload = await response.json();
-    if (!response.ok || payload.error) {
-      throw new Error(payload.message || `Administrator update failed with HTTP ${response.status}`);
+    const payload = await fetchAdminJson(url, "Administrator update", options);
+    const changedUser = applyCourseAdministratorChange(payload);
+    if (
+      !assigned
+      && changedUser.user_id === state.viewerUserId
+      && state.viewerRole !== "superadmin"
+    ) {
+      document.getElementById("course-admin-dialog").close();
+      await reloadAdminSummary();
+      return;
     }
-    applyCourseAdministratorChange(payload);
     renderCourseAdminDialog(
       selectedCourseAdminDialogCourse(),
-      `${administratorLabel(user)} ${assigned ? "added" : "removed"}.`,
+      `${administratorLabel(changedUser)} ${assigned ? "added" : "removed"}.`,
     );
   } catch (error) {
     status.className = "admin-error";
@@ -240,7 +252,8 @@ async function changeCourseAdministrator(course, user, assigned) {
 
 function renderCourseAdminDialog(course, message = "") {
   const list = document.getElementById("course-admin-current");
-  const select = document.getElementById("course-admin-user-select");
+  const input = document.getElementById("course-admin-user-email");
+  const choices = document.getElementById("course-admin-user-choices");
   const add = document.getElementById("course-admin-add");
   const status = document.getElementById("course-admin-dialog-status");
   const administrators = course.administrators || [];
@@ -262,18 +275,18 @@ function renderCourseAdminDialog(course, message = "") {
     item.append(label, remove);
     list.append(item);
   });
-  select.replaceChildren();
+  choices.replaceChildren();
   const administratorIds = new Set(administrators.map((user) => user.user_id));
   const candidates = state.users.filter((user) => user.enabled && !administratorIds.has(user.user_id));
   candidates.sort((left, right) => administratorLabel(left).localeCompare(administratorLabel(right)));
   candidates.forEach((user) => {
     const option = document.createElement("option");
-    option.value = user.user_id;
-    option.textContent = administratorLabel(user);
-    select.append(option);
+    option.value = user.email;
+    option.label = administratorLabel(user);
+    choices.append(option);
   });
-  add.disabled = candidates.length === 0;
-  select.disabled = candidates.length === 0;
+  input.value = "";
+  add.disabled = true;
 }
 
 function openCourseAdminDialog(course) {
@@ -290,12 +303,14 @@ function bindCourseAdminDialog() {
   }
   dialog.dataset.bound = "true";
   document.getElementById("course-admin-dialog-close").addEventListener("click", () => dialog.close());
+  document.getElementById("course-admin-user-email").addEventListener("input", (event) => {
+    document.getElementById("course-admin-add").disabled = !event.target.value.trim();
+  });
   document.getElementById("course-admin-add").addEventListener("click", () => {
     const course = selectedCourseAdminDialogCourse();
-    const userId = document.getElementById("course-admin-user-select").value;
-    const user = state.users.find((item) => item.user_id === userId);
-    if (course && user) {
-      changeCourseAdministrator(course, user, true);
+    const email = document.getElementById("course-admin-user-email").value.trim();
+    if (course && email) {
+      changeCourseAdministrator(course, { email }, true);
     }
   });
 }
@@ -313,6 +328,63 @@ function coursesCell(courses) {
   return cell;
 }
 
+
+function superadminCount() {
+  return state.users.filter((user) => user.super_role === "superadmin").length;
+}
+
+
+async function changeSuperadmin(user, assigned) {
+  const label = administratorLabel(user);
+  const action = assigned ? "Make" : "Remove";
+  const warning = assigned
+    ? `Make ${label} a superadmin? This grants cross-course administrative access.`
+    : `Remove superadmin status from ${label}?`;
+  if (!window.confirm(warning)) {
+    return;
+  }
+  const status = document.getElementById("admin-status");
+  status.className = "";
+  status.textContent = `${action} ${label} ${assigned ? "a superadmin" : "from superadmins"}...`;
+  const url = `${API_BASE}api/admin/users/${encodeURIComponent(user.user_id)}/superadmin`;
+  try {
+    const payload = await fetchAdminJson(url, "Superadmin update", {
+      method: assigned ? "PUT" : "DELETE",
+    });
+    Object.assign(user, payload.user);
+    if (!assigned && user.user_id === state.viewerUserId) {
+      await reloadAdminSummary();
+      return;
+    }
+    renderTable("users");
+    status.textContent = `${administratorLabel(user)} ${assigned ? "is now" : "is no longer"} a superadmin.`;
+  } catch (error) {
+    reportAdminError(error);
+  }
+}
+
+
+function superRoleCell(user) {
+  const cell = document.createElement("td");
+  const role = document.createElement("span");
+  role.textContent = user.super_role === "none" ? "no" : user.super_role;
+  cell.append(role);
+  if (state.viewerRole !== "superadmin") {
+    return cell;
+  }
+  const assigned = user.super_role === "superadmin";
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "admin-super-role";
+  button.textContent = assigned ? "Remove" : "Make superadmin";
+  button.disabled = assigned && superadminCount() === 1;
+  button.title = button.disabled ? "The final superadmin cannot be removed" : "";
+  button.addEventListener("click", () => changeSuperadmin(user, !assigned));
+  cell.append(button);
+  return cell;
+}
+
+
 function appendUserRows(users) {
   const tbody = document.getElementById("admin-user-rows");
   for (const user of users) {
@@ -321,7 +393,7 @@ function appendUserRows(users) {
       textCell(user.user_name),
       textCell(user.email),
       textCell(user.default_course_id),
-      textCell(user.super_role === "none" ? "no" : user.super_role),
+      superRoleCell(user),
       coursesCell(user.courses),
       dateCell(user.created_at),
       dateCell(user.last_movie_activity_at),
@@ -870,6 +942,27 @@ async function loadRemainingPages(table, marker) {
   }
 }
 
+
+async function reloadAdminSummary() {
+  state.viewerRole = "none";
+  state.viewerUserId = null;
+  state.viewerCourseIds = [];
+  const newCourse = document.getElementById("admin-new-course");
+  if (newCourse) {
+    newCourse.hidden = true;
+  }
+  TABLE_NAMES.forEach((table) => {
+    state[table] = [];
+    renderTable(table);
+  });
+  try {
+    await loadAdminSummary();
+  } catch (error) {
+    reportAdminError(error);
+  }
+}
+
+
 async function loadAdminSummary() {
   bindSortButtons();
   bindVerboseDetails();
@@ -881,6 +974,8 @@ async function loadAdminSummary() {
   status.textContent = "Loading all admin records...";
   const payload = await fetchAdminPage("all");
   state.viewerRole = payload.viewer.super_role;
+  state.viewerUserId = payload.viewer.user_id;
+  state.viewerCourseIds = [...(payload.viewer.course_ids || [])];
   setText("admin-course-count", payload.counts.courses);
   setText("admin-user-count", payload.counts.users);
   setText("admin-movie-count", payload.counts.movies);
