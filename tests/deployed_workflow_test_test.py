@@ -7,6 +7,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 import requests
+from PIL import Image
 
 import deployed_workflow_test
 from app.schema import Trackpoint
@@ -155,3 +156,92 @@ def test_assert_position_accepts_dynamodb_decimals_and_enforces_tolerance():
             scale=1,
             frame_number=0,
         )
+
+
+def test_csv_trace_stats_requires_full_frame_coverage_and_motion():
+    headers = ["frame_number", deployed_workflow_test.APEX_X_COLUMN,
+               deployed_workflow_test.APEX_Y_COLUMN, deployed_workflow_test.RULER_0_X_COLUMN,
+               deployed_workflow_test.RULER_0_Y_COLUMN,
+               deployed_workflow_test.RULER_10_X_COLUMN,
+               deployed_workflow_test.RULER_10_Y_COLUMN]
+    rows = [headers, ["0", "10", "20", "0", "0", "10", "0"],
+            ["1", "11", "21", "0", "0", "10", "0"],
+            ["2", "12", "20", "0", "0", "10", "0"]]
+    expected_start = deployed_workflow_test.ReferenceTrackpoint.model_validate(
+        dict(zip(headers, rows[1])))
+    expected_end = deployed_workflow_test.ReferenceTrackpoint.model_validate(
+        dict(zip(headers, rows[-1])))
+
+    stats = deployed_workflow_test.csv_trace_stats(rows, expected_start, expected_end)
+
+    assert stats.rows == 3
+    assert stats.first_frame == 0
+    assert stats.last_frame == 2
+    assert stats.unique_apex_positions == 3
+    assert stats.apex_x_min == 10
+    assert stats.apex_x_max == 12
+    static_rows = [headers, rows[1], ["1", "10", "20", "0", "0", "10", "0"],
+                   ["2", "10", "20", "0", "0", "10", "0"]]
+    with pytest.raises(AssertionError, match="tracing did not produce motion"):
+        deployed_workflow_test.csv_trace_stats(static_rows, expected_start, expected_end)
+
+
+def test_trackpoint_comparison_accepts_small_drift_and_rejects_large_drift():
+    headers = ["frame_number", deployed_workflow_test.APEX_X_COLUMN,
+               deployed_workflow_test.APEX_Y_COLUMN, deployed_workflow_test.RULER_0_X_COLUMN,
+               deployed_workflow_test.RULER_0_Y_COLUMN,
+               deployed_workflow_test.RULER_10_X_COLUMN,
+               deployed_workflow_test.RULER_10_Y_COLUMN]
+    reference = [headers, ["0", "10", "20", "0", "0", "10", "0"],
+                 ["1", "11", "21", "0", "0", "10", "0"]]
+    within_tolerance = [headers, ["0", "11.5", "19", "1", "0", "11", "0"],
+                        ["1", "12", "22", "1", "0", "11", "0"]]
+
+    stats = deployed_workflow_test.compare_trackpoint_rows(
+        within_tolerance, reference, export_name="CSV")
+
+    assert stats.rows == 2
+    assert stats.max_apex_delta_pixels == 1.5
+    assert stats.max_ruler_delta_pixels == 1
+    outside_tolerance = [headers, ["0", "12.1", "20", "0", "0", "10", "0"],
+                         reference[2]]
+    with pytest.raises(AssertionError, match="differs by 2.10 pixels"):
+        deployed_workflow_test.compare_trackpoint_rows(
+            outside_tolerance, reference, export_name="CSV")
+
+
+def test_rendering_comparison_accepts_small_mean_channel_drift(tmp_path):
+    reference = tmp_path / "reference.png"
+    actual = tmp_path / "actual.png"
+    movie = tmp_path / "downloaded.mov"
+    Image.new("RGB", (2, 2), (100, 100, 100)).save(reference)
+    Image.new("RGB", (2, 2), (98, 98, 98)).save(actual)
+    movie.write_bytes(b"movie")
+
+    stats = deployed_workflow_test.assert_renderings_match(reference, actual, movie)
+
+    assert stats.mean_absolute_channel_delta == 2
+    assert (tmp_path / "actual-difference.png").is_file()
+
+
+def test_rendering_mismatch_reports_reference_actual_and_movie_paths(tmp_path):
+    reference = tmp_path / "reference.png"
+    actual = tmp_path / "actual.png"
+    movie = tmp_path / "downloaded.mov"
+    Image.new("RGB", (2, 2), "white").save(reference)
+    Image.new("RGB", (2, 2), "black").save(actual)
+    movie.write_bytes(b"movie")
+
+    with pytest.raises(AssertionError) as raised:
+        deployed_workflow_test.assert_renderings_match(reference, actual, movie)
+
+    message = str(raised.value)
+    assert "meaningfully differs" in message
+    assert f"reference_rendering={reference.resolve()}" in message
+    assert f"actual_rendering={actual.resolve()}" in message
+    assert f"downloaded_movie={movie.resolve()}" in message
+    assert f"difference_rendering={tmp_path / 'actual-difference.png'}" in message
+    assert "differing_pixels=4/4" in message
+    assert "max_channel_delta=255" in message
+    assert "mean_absolute_channel_delta=255.000" in message
+    assert (tmp_path / "actual-difference.png").is_file()

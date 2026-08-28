@@ -77,6 +77,13 @@ Release Notes
 
 Unreleased Summary
 ******************
+    * Developer: complete the uv-only Python workflow with one ``uv.lock``,
+      standard dependency groups, locked Lambda requirement exports, and
+      Hatchling as the wheel build backend.
+    * Deployment: reduce the lambda-resize ZIP by exporting only its dedicated
+      dependency group, relying on the managed Boto3/Botocore runtime and
+      Powertools layer, replacing Requests and Pillow paths, and calling the
+      bundled H.264 encoder without the full ImageIO package.
     * Admin: load movies with numeric research-attribution choices without
       failing the dashboard summary.
     * Build: refresh Python and JavaScript dependencies and require Node.js
@@ -262,7 +269,7 @@ Unreleased Summary
     * Infra: replace MySQL with Amazon DynamoDB
     * Infra: build and deploy using AWS Cloud Formation and SAM
     * Infra: make local development environment easier to work with
-    * Infra: migrate to poetry and improve test coverage
+    * Infra: migrate to uv and improve test coverage
 
 0.9.6 Summary
 *************

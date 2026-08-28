@@ -71,9 +71,9 @@ is running in demo mode":
 
 * ``make make-local-demo``
   Seeds the local database and bucket with the demo course, demo user, and demo
-  movies. Internally this is an explicit sequence: ``poetry run dbutil createdb``
-  creates tables, ``poetry run dbutil create-demo-course`` ensures the demo
-  course/admin/demo user/API key, and ``poetry run dbutil seed-demo-movies`` loads
+  movies. Internally this is an explicit sequence: ``uv run dbutil createdb``
+  creates tables, ``uv run dbutil create-demo-course`` ensures the demo
+  course/admin/demo user/API key, and ``uv run dbutil seed-demo-movies`` loads
   local sample movies without recreating movie rows whose demo titles already
   exist.
 

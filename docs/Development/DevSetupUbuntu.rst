@@ -11,10 +11,11 @@ Install OS packages:
    curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
    sudo apt install nodejs
 
-Install Poetry if it is not already available, then clone and install:
+Install uv if it is not already available, then clone and install:
 
 .. code-block:: bash
 
+   curl -LsSf https://astral.sh/uv/install.sh | sh
    git clone https://github.com/Plant-Tracer/webapp.git webapp
    cd webapp
    make install-ubuntu

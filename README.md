@@ -17,7 +17,7 @@ Production app: <https://prod.planttracer.com/>
 - Flask backend: `src/app/`
 - Browser JavaScript and static assets: `src/app/static/`
 - Jinja templates: `src/app/templates/`
-- DynamoDB/S3 maintenance CLI: `poetry run dbutil`
+- DynamoDB/S3 maintenance CLI: `uv run dbutil`
 - Lambda video/frame/tracking service: `lambda-resize/`
 - Python tests: `tests/` and `lambda-resize/tests/`
 - JavaScript tests: `jstests/`
@@ -46,7 +46,7 @@ other guided parameters are available. Replace the angle-bracketed values.
 Create a new stack with a new, stack-specific DynamoDB database:
 
 ```bash
-DYNAMODB_TABLE_PREFIX=<stack>- poetry run dbutil createdb && STACK=<stack> make sam-build sam-deploy-guided
+DYNAMODB_TABLE_PREFIX=<stack>- uv run dbutil createdb && STACK=<stack> make sam-build sam-deploy-guided
 ```
 
 The first deployment must use `sam-deploy-guided`. It collects required values
@@ -159,7 +159,7 @@ Common local values are supplied by the Makefile:
 Build docs after editing anything under `docs/`:
 
 ```bash
-poetry run sphinx-build -W --keep-going -b html docs docs/_build/html
+uv run sphinx-build -W --keep-going -b html docs docs/_build/html
 ```
 
 Developer entry points:

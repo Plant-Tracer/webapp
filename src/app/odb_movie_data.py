@@ -1,15 +1,14 @@
 """
 Routines for reading and writing movie data.
-Requires requests.
+Uses only the standard library for HTTP reads.
 Moved to a separate python file so that it doesn't need to be loaded for python camera, in the interest of keeping the lambda small.
 """
 
 #pylint: disable=too-many-lines
 import time
-import urllib
-import urllib.parse
+import shutil
+from urllib import parse, request
 
-import requests
 from botocore.exceptions import ClientError,ParamValidationError
 
 from .s3_presigned import frame_object_key, make_urn, movie_object_key, s3_client
@@ -30,44 +29,45 @@ from .odb import (
 
 def read_object(urn):
     """Returns object as a byte array"""
-    o = urllib.parse.urlparse(urn)
-    logger.debug("urn=%s o=%s",urn,o)
+    o = parse.urlparse(urn)
+    logger.debug("read_object")
     if o.scheme == C.SCHEME_S3 :
         # We are getting the object, so we do not need a presigned url
         try:
             return s3_client().get_object(Bucket=o.netloc, Key=o.path[1:])["Body"].read()
         except ClientError as ex:
-            logger.info("ClientError: %s  Bucket=%s  Key=%s",ex,o.netloc,o.path[1:])
+            logger.info("S3 read failed: %s", ex)
             return None
     elif o.scheme in ['http','https']:
-        r = requests.get(urn, timeout=C.DEFAULT_GET_TIMEOUT)
-        return r.content
+        try:
+            with request.urlopen(urn, timeout=C.DEFAULT_GET_TIMEOUT) as response:
+                return response.read()
+        except OSError as ex:
+            logger.info("HTTP read failed: %s", ex)
+            return None
     else:
         raise ValueError("Unknown schema: "+urn)
 
 def copy_object_to_path(urn, path: str):
     """Copy an object from S3 to a local file path without buffering it all."""
-    o = urllib.parse.urlparse(urn)
-    logger.debug("urn=%s o=%s",urn,o)
+    o = parse.urlparse(urn)
+    logger.debug("copy_object_to_path")
     if o.scheme == C.SCHEME_S3:
         try:
             s3_client().download_file(Bucket=o.netloc, Key=o.path[1:], Filename=path)
         except ClientError as ex:
-            logger.info("ClientError: %s  Bucket=%s  Key=%s",ex,o.netloc,o.path[1:])
+            logger.info("S3 copy failed: %s", ex)
     elif o.scheme in ['http','https']:
-        with requests.get(urn, timeout=C.DEFAULT_GET_TIMEOUT, stream=True) as r:
-            r.raise_for_status()
+        with request.urlopen(urn, timeout=C.DEFAULT_GET_TIMEOUT) as response:
             with open(path, "wb") as f:
-                for chunk in r.iter_content(chunk_size=1024 * 1024):
-                    if chunk:
-                        f.write(chunk)
+                shutil.copyfileobj(response, f, length=1024 * 1024)
     else:
         raise ValueError("Unknown schema: "+urn)
 
 def write_object(urn, object_data):
     logger.info("write_object(%s,len=%s)",urn,len(object_data))
     assert "s3://s3://" not in urn
-    o = urllib.parse.urlparse(urn)
+    o = parse.urlparse(urn)
     if o.scheme== C.SCHEME_S3:
         try:
             s3_client().put_object(Bucket=o.netloc, Key=o.path[1:], Body=object_data)
@@ -89,7 +89,7 @@ def write_object(urn, object_data):
 def write_object_from_path(urn, path: str) -> None:
     """Upload object from a file path (streaming). Avoids loading entire file into RAM."""
     assert "s3://s3://" not in urn
-    o = urllib.parse.urlparse(urn)
+    o = parse.urlparse(urn)
     if o.scheme == C.SCHEME_S3:
         try:
             with open(path, "rb") as f:
@@ -102,7 +102,7 @@ def write_object_from_path(urn, path: str) -> None:
 
 def delete_object(urn):
     logger.debug("delete_object(%s)",urn)
-    o = urllib.parse.urlparse(urn)
+    o = parse.urlparse(urn)
     if o.scheme== C.SCHEME_S3:
         s3_client().delete_object(Bucket=o.netloc, Key=o.path[1:])
     else:

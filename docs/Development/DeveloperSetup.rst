@@ -5,7 +5,7 @@ Requirements
 ------------
 
 * Python 3.12
-* Poetry
+* uv
 * Node.js 22.18.0 or newer and npm
 * Java runtime for DynamoDB Local
 * Git and GitHub CLI (``gh``)
@@ -28,7 +28,7 @@ Clone And Install
    make install-macos      # macOS
    make install-ubuntu     # Ubuntu
 
-The Makefile creates an in-project Poetry environment at ``.venv``.
+The Makefile creates an in-project uv environment at ``.venv``.
 
 Local Services
 --------------
@@ -73,7 +73,7 @@ Local storage mode is the default. Leave ``AWS_REGION`` unset, or set it to
 
 ``show-local-vars`` prints shell commands for the complete non-demo local debug
 environment. Evaluating its output configures subsequent direct commands, such
-as ``poetry run dbutil report``, to use DynamoDB Local and MinIO. It also clears
+as ``uv run dbutil report``, to use DynamoDB Local and MinIO. It also clears
 AWS profiles and demo-mode variables so they cannot override the local setup.
 
 Remote storage mode runs local Flask and, if needed, the local lambda debug
@@ -145,7 +145,7 @@ Create A Course
 
 .. code-block:: bash
 
-   AWS_REGION=local poetry run dbutil create-course \
+   AWS_REGION=local uv run dbutil create-course \
      --course_name "Test Course" \
      --course_id "test" \
      --admin_email admin@example.com \

@@ -7,12 +7,9 @@ Frame serving (get-frame API) runs in this Lambda (resize); the VM uses this mod
 run_tracing and for api_get_movie_data (full movie download).
 Lives in lambda-resize.
 
-All production paths use cv2 + Pillow only (no ffmpeg). cleanup_mp4, rotate_movie, and
-prepare_movie_for_tracking are LEGACY: they require an ffmpeg binary and are kept for
-optional/local use (e.g. CLI render_movie_traced, tests). run_tracing always uses
-prepare_movie_for_tracking_cv2 (rotate_zip) for rotate+scale.
-
-Uses imageio to write tracked movie, which does not have H.264 licensing issues
+OpenCV decodes, transforms, annotates, and traces frames. The traced H.264 derivative is
+encoded with the libx264 executable bundled by imageio-ffmpeg because the OpenCV wheel's
+embedded FFmpeg libraries do not include a software H.264 encoder.
 
 """
 
@@ -28,19 +25,15 @@ import zipfile
 from pathlib import Path
 
 import cv2
-import imageio
 import numpy as np
 
 from .src.app.schema import Trackpoint
-from .src.app import paths
 from .src.app.constants import C
 from .mpeg_jpeg_zip import convert_frame_to_jpeg,add_jpeg_comment,get_frames_from_url
-
+from .video_writer import H264Writer
 
 logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
 logger = logging.getLogger(__name__)
-# Legacy: only used by cleanup_mp4, rotate_movie, prepare_movie_for_tracking. run_tracing uses cv2 only.
-FFMPEG_PATH = paths.ffmpeg_path()
 POINT_ARRAY_OUT = 'point_array_out'
 RED = (0, 0, 255)
 ORANGE = (0, 165, 255)
@@ -322,67 +315,74 @@ def trace_movie_v2(*, movie_url,
     # Check to see if we are making a movie_traced
     movie_traced_writer = None
     if movie_traced_path is not None:
-        movie_traced_writer = imageio.get_writer(movie_traced_path, format='FFMPEG', mode='I',
-                                                  fps=15, codec='libx264',
-                                                  macro_block_size=None,
-                                                  output_params=['-metadata', f'comment={comment}'])
+        movie_traced_writer = H264Writer(
+            movie_traced_path,
+            fps=15,
+            output_params=['-metadata', f'comment={comment}'],
+        )
     trackpoints_prev = None
     gray_frame_prev = None
     trackpoints_this = None
     trackpoint_segments:list[TrackpointSegment] = []
     colors_by_label = trackpoint_colors(trackpoints)
-    for (frame_number, frame) in enumerate(get_frames_from_url(movie_url, rotation)):
-        # Trace only in the requested range; outside it use existing trackpoints for rendering/callbacks.
-        gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        if frame_number >= frame_start and (frame_end is None or frame_number <= frame_end):
-            trackpoints_this = cv2_trace_frame(
-                gray_frame_prev = gray_frame_prev,
-                gray_frame = gray_frame,
-                trackpoints = trackpoints_prev,
-                frame_number=frame_number,
+    try:
+        for (frame_number, frame) in enumerate(get_frames_from_url(movie_url, rotation)):
+            # Trace only in the requested range; outside it use existing trackpoints for rendering/callbacks.
+            gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            if frame_number >= frame_start and (frame_end is None or frame_number <= frame_end):
+                trackpoints_this = cv2_trace_frame(
+                    gray_frame_prev = gray_frame_prev,
+                    gray_frame = gray_frame,
+                    trackpoints = trackpoints_prev,
+                    frame_number=frame_number,
+                )
+                trackpoints_output.extend(trackpoints_this) # add to the output
+            else:
+                trackpoints_this = [tp for tp in trackpoints if tp.frame_number == frame_number]
+
+            frame_in_traced_movie = (
+                frame_number >= movie_traced_frame_start
+                and (movie_traced_frame_end is None or frame_number <= movie_traced_frame_end)
             )
-            trackpoints_output.extend(trackpoints_this) # add to the output
-        else:
-            trackpoints_this = [tp for tp in trackpoints if tp.frame_number == frame_number]
+            prior_frame_in_traced_movie = frame_number > movie_traced_frame_start
+            if frame_in_traced_movie and prior_frame_in_traced_movie:
+                update_trackpoint_segments(previous_trackpoints=trackpoints_prev,
+                                           current_trackpoints=trackpoints_this,
+                                           segments=trackpoint_segments)
 
-        frame_in_traced_movie = (
-            frame_number >= movie_traced_frame_start
-            and (movie_traced_frame_end is None or frame_number <= movie_traced_frame_end)
-        )
-        prior_frame_in_traced_movie = frame_number > movie_traced_frame_start
-        if frame_in_traced_movie and prior_frame_in_traced_movie:
-            update_trackpoint_segments(previous_trackpoints=trackpoints_prev,
-                                       current_trackpoints=trackpoints_this,
-                                       segments=trackpoint_segments)
+            # Create the movie_zipfile if asked
+            if zf is not None:
+                jpeg = convert_frame_to_jpeg(frame)
+                if comment is not None:
+                    jpeg = add_jpeg_comment(jpeg, comment)
+                zf.writestr(f"frame_{frame_number:04d}.jpeg", jpeg)
 
-        # Create the movie_zipfile if asked
-        if zf is not None:
-            jpeg = convert_frame_to_jpeg(frame)
-            if comment is not None:
-                jpeg = add_jpeg_comment(jpeg, comment)
-            zf.writestr(f"frame_{frame_number:04d}.jpeg", jpeg)
+            # Label the frame and write to the mp4 output if we are doing that
+            if movie_traced_writer and frame_in_traced_movie:
+                frame_to_label = frame.copy()
+                cv2_label_frame(frame=frame_to_label,
+                                trackpoints=trackpoints_this,
+                                frame_label=frame_number,
+                                trackpoint_segments=trackpoint_segments,
+                                colors_by_label=colors_by_label)
+                # IMPORTANT: OpenCV uses BGR colors, but the H.264 writer expects RGB.
+                frame_rgb = cv2.cvtColor(frame_to_label, cv2.COLOR_BGR2RGB)
+                movie_traced_writer.append_data(frame_rgb)
 
-        # Label the frame and write to the mp4 output if we are doing that
-        if movie_traced_writer and frame_in_traced_movie:
-            frame_to_label = frame.copy()
-            cv2_label_frame(frame=frame_to_label,
-                            trackpoints=trackpoints_this,
-                            frame_label=frame_number,
-                            trackpoint_segments=trackpoint_segments,
-                            colors_by_label=colors_by_label)
-            # IMPORTANT: OpenCV uses BGR colors, but ImageIO expects RGB!
-            frame_rgb = cv2.cvtColor(frame_to_label, cv2.COLOR_BGR2RGB)
-            movie_traced_writer.append_data(frame_rgb)
+            if callback is not None:
+                callback(TracerCallbackArg(frame_number=frame_number, frame_data=frame,
+                                           frame_trackpoints=trackpoints_this))
 
-        if callback is not None:
-            callback(TracerCallbackArg(frame_number=frame_number, frame_data=frame, frame_trackpoints=trackpoints_this))
-
-        # Advance
-        trackpoints_prev = trackpoints_this
-        gray_frame_prev = gray_frame
-    # Done
-    if movie_traced_writer:
-        movie_traced_writer.close()
+            # Advance
+            trackpoints_prev = trackpoints_this
+            gray_frame_prev = gray_frame
+    finally:
+        try:
+            if movie_traced_writer:
+                movie_traced_writer.close()
+        finally:
+            if zf:
+                zf.close()
     return trackpoints_output
 
 

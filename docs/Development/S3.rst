@@ -245,10 +245,21 @@ After deploying a stack, authenticate with ``aws sso login`` and run:
 The target uploads the circumnutation fixture through the deployed presigned
 POST, verifies S3-to-EventBridge processing, deployed movie listing, original
 movie download, calibrated start/end tracking positions, CSV and XLSX exports,
-and the final rendered frame of the traced movie. It does not validate ZIP
-downloads. It then removes the test movie and always revokes the temporary API
-key it creates. The underlying verifier declares its runtime dependencies as
-inline script metadata, and the project exposes it as a command, so
+and the final rendered frame of the traced movie. Post-trace validation runs in
+JSON, CSV, XLSX, then image order. The CSV gate reports frame coverage and Apex
+movement statistics before comparing every CSV and XLSX frame and marker
+coordinate with its reference using the two-pixel tracking tolerance.
+Downloaded exports, the traced movie, and its final frame remain in the logged
+artifact directory. Image comparison requires matching dimensions and a mean
+absolute channel difference no greater than 3 out of 255, avoiding failures on
+lossy video re-encoding noise. It logs both rendering paths and includes them
+in mismatch errors. Use ``--artifacts-dir`` to select that directory.
+Differences also retain an amplified image and report the differing-pixel
+count, maximum channel delta, mean absolute channel delta, and bounding box.
+The test does not validate ZIP downloads. It then removes the deployed test
+movie and always revokes the temporary API key it creates. The underlying
+verifier declares its runtime dependencies as inline script metadata, and the
+project exposes it as a command, so
 ``uv run deployed_workflow_test --endpoint https://prod.planttracer.com/``
 runs in an isolated environment without a pre-populated project virtualenv.
 The command reads the stack name and DynamoDB table prefix from ``/api/ver``

@@ -17,7 +17,7 @@ If any screenshots in `docs/tutorial_images/` may be affected, flag them for the
 
 **`docs/Development/FlaskAPI.md` must be updated in the same commit or PR whenever `src/app/flask_api.py` changes** — document any new endpoints, changed parameters, or behavioral side effects.
 
-After editing any file under `docs/`, always build and verify: `poetry run sphinx-build -W --keep-going -b html docs docs/_build/html`
+After editing any file under `docs/`, always build and verify: `uv run sphinx-build -W --keep-going -b html docs docs/_build/html`
 
 ## Git Workflow
 
@@ -135,7 +135,7 @@ npm test           # JS tests directly
 npm run test-debug # JS tests with verbose output
 
 # Run a single Python test module
-env -u AWS_PROFILE -u AWS_DEFAULT_PROFILE AWS_REGION=local PYTHONPATH=".:src:lambda-web/src:lambda-resize/src" poetry run pytest tests/endpoint_test.py -v
+env -u AWS_PROFILE -u AWS_DEFAULT_PROFILE AWS_REGION=local PYTHONPATH=".:src:lambda-web/src:lambda-resize/src" uv run pytest tests/endpoint_test.py -v
 
 # Local development
 python3 bin/local_services.py minio start       # Start Minio (S3 emulator, ports 9000/9001)
@@ -166,14 +166,18 @@ Route handlers should be thin; put business logic in `odb.py`, `mailer.py`, `s3_
 
 ### Data Storage
 - **S3**: movies, frames, ZIP files. The bucket is always **pre-existing** and **outlives the CloudFormation stack** as the long-term archive. Because the bucket outlives DynamoDB, research/attribution metadata must also be written **into the MP4 file** (see `src/app/mp4_metadata_lib.py`, `docs/Development/MOVIE_METADATA.rst`).
-- **DynamoDB**: tables prefixed by `DYNAMODB_TABLE_PREFIX` (e.g. `demo-`). Schema in `src/app/schema.py`; creation in `src/app/odbmaint.py`. CLI: `poetry run dbutil` (`createdb`, `makelink`, etc.).
+- **DynamoDB**: tables prefixed by `DYNAMODB_TABLE_PREFIX` (e.g. `demo-`). Schema in `src/app/schema.py`; creation in `src/app/odbmaint.py`. CLI: `uv run dbutil` (`createdb`, `makelink`, etc.).
 - Lambda is invoked through its HTTP API and SQS. S3 Object Created events also
   reach lambda-resize through EventBridge rules filtered to each stack's
   ``uploads/{stack}/`` prefix; do not attach direct Lambda notifications to the
   shared bucket.
 
 ### Lambda (`lambda-resize/`)
-A separate Poetry project. App code from the main package is vendored into `resize_app/src/app/` via `make -C lambda-resize vend-app` before linting/testing. Imports in Lambda code use `from .src.app import odb` style — do not change these to import the top-level `app` package.
+A separate Lambda package whose dependencies are exported from the root uv
+project. App code from the main package is vendored into
+`resize_app/src/app/` via `make vend-lambda-resize` before linting/testing.
+Imports in Lambda code use `from .src.app import odb` style — do not change
+these to import the top-level `app` package.
 
 ### Lambda-only Migration
 
@@ -185,7 +189,7 @@ The accepted migration goal for #450/#699 is a lambda-only distribution with no 
 - Remove VM resources and parameters from the SAM path, including EC2, VPC/subnet/route-table resources, security groups, EIP, instance profile, SSH/reload workflows, `GitRepoUrl`, and `GitBranch`.
 - Deploy current built artifacts from the current checkout/branch; do not rely on instance boot-time `git clone` or branch checkout.
 - Keep application static assets served by `lambda-web` for the initial migration, as Flask serves them now. Do not move static assets to S3/CloudFront until there is a versioned filename or asset-manifest plan.
-- Keep the movie S3 bucket pre-existing and long-lived. Keep DynamoDB tables external to CloudFormation and created through `poetry run dbutil` from `etc/dynamodb_tables.json`.
+- Keep the movie S3 bucket pre-existing and long-lived. Keep DynamoDB tables external to CloudFormation and created through `uv run dbutil` from `etc/dynamodb_tables.json`.
 - Keep path routing explicit on that single front door: `/resize-api/*` goes to `lambda-resize`; HTML, Flask `/api/*`, and `/static/*` go to `lambda-web`. Movie-data is resize-owned and lives at `/resize-api/v1/movie-data`; do not reintroduce `/api/v1/movie-data` compatibility.
 - `lambda-web` uses SnapStart on the published `live` alias. `lambda-resize` does not use SnapStart unless measured and deliberately enabled later.
 - `make sam-deploy` and `make sam-deploy-guided` refuse redeploying the same app version to the same stack; bump `pyproject.toml` before deploying again.
@@ -206,13 +210,15 @@ Tests run against **real local services** (DynamoDB Local + Minio), not mocks. F
 ## Coding Standards
 
 ### Python
-- Python 3.12+; Pylint must pass at threshold 10.0 before committing (`poetry run pylint src/app/...`).
+- Python 3.12+; Pylint must pass at threshold 10.0 before committing (`uv run pylint src/app/...`).
 - No Python autoformatter target is configured; follow existing local style and keep Pylint clean.
 - All imports at the **top level** of the file — never inside functions (except `if __name__ == "__main__":` blocks). Never add `# pylint: disable=import-outside-toplevel`.
 - Prefix intentionally unused parameters with `_` (e.g. `_event`); do not use `# pylint: disable=unused-argument`.
 - Logging: `logger.info("msg %s", var)` style, not f-strings.
 - Prefer minimal, focused diffs. Avoid duplicating existing logic or large-scale rewrites when making a targeted fix.
-- `pyproject.toml` uses PEP 621 `[project]` table — do not use deprecated `[tool.poetry]` keys for name/version/description/authors/scripts.
+- `pyproject.toml` uses standard PEP 621 `[project]` metadata and PEP 735
+  dependency groups. uv is the only project/dependency frontend; Hatchling is
+  used only as the PEP 517 wheel build backend.
 
 ### JavaScript
 - `src/app/static/utils.js` is a shim that re-exports the global jQuery instance for ES modules.

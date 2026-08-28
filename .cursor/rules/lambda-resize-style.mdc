@@ -21,7 +21,7 @@ alwaysApply: true
     - `vend-app` has been run first so `resize_app/src/app` exists.  
     - `PYTHONPATH` includes `lambda-resize/src` so imports like `resize_app.src.app` resolve correctly.
   - **Local testing with AWS (DynamoDB, S3):** Use `AWS_REGION=local` so the app and Lambda code use local endpoints (e.g. DynamoDB Local, local S3). Example:  
-    `AWS_REGION=local PYTHONPATH="lambda-resize/src:src" poetry run pytest tests/movie_test.py::test_new_movie -v`
+    `AWS_REGION=local PYTHONPATH="lambda-resize/src:src" uv run --locked pytest tests/movie_test.py::test_new_movie -v`
   - The main `Makefile` should reflect this by:  
     - Running `make -C lambda-resize vend-app` before Lambda lint/test targets.  
     - Using `PYTHONPATH=lambda-resize/src` when invoking pylint or pytest on `lambda-resize` modules.
@@ -29,4 +29,3 @@ alwaysApply: true
 - **CI consistency**  
   - CI jobs (e.g., `make lint`, `make sam-build`) must match the same ordering and paths used locally:  
     - Vendoring first, then lint/build, with `PYTHONPATH` set appropriately for lambda-resize.
-

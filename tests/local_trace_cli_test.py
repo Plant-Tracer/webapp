@@ -1,5 +1,7 @@
 from pathlib import Path
+import zipfile
 
+import cv2
 import numpy as np
 import pytest
 
@@ -7,6 +9,7 @@ from resize_app import movie_glue
 from resize_app import tracer
 from resize_app.src.app.schema import Trackpoint
 
+# pylint: disable=no-member
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -82,7 +85,7 @@ def test_trace_movie_v2_clips_traced_mp4_to_output_range(monkeypatch):
             pass
 
     monkeypatch.setattr(tracer, "cv2_trace_frame", fake_trace_frame)
-    monkeypatch.setattr(tracer.imageio, "get_writer", lambda *_args, **_kwargs: FakeWriter())
+    monkeypatch.setattr(tracer, "H264Writer", lambda *_args, **_kwargs: FakeWriter())
 
     tracer.trace_movie_v2(
         movie_url="https://example.com/movie.mp4",
@@ -96,3 +99,32 @@ def test_trace_movie_v2_clips_traced_mp4_to_output_range(monkeypatch):
 
     assert len(appended_frames) == 2
     assert [int(frame[0, 0, 2]) for frame in appended_frames] == [1, 2]
+
+
+def test_trace_movie_v2_closes_outputs_when_callback_fails(monkeypatch, tmp_path):
+    frames = [np.zeros((16, 16, 3), dtype=np.uint8)]
+    monkeypatch.setattr(tracer, "get_frames_from_url", lambda _movie_url, _rotation: frames)
+    zip_path = tmp_path / "frames.zip"
+    movie_path = tmp_path / "traced.mp4"
+
+    def fail_callback(_arg):
+        raise RuntimeError("stop tracing")
+
+    with pytest.raises(RuntimeError, match="stop tracing"):
+        tracer.trace_movie_v2(
+            movie_url="https://example.com/movie.mp4",
+            frame_start=1,
+            trackpoints=[Trackpoint(x=1, y=1, label="apex", frame_number=0)],
+            movie_zipfile_path=zip_path,
+            movie_traced_path=movie_path,
+            callback=fail_callback,
+        )
+
+    with zipfile.ZipFile(zip_path) as archive:
+        assert archive.testzip() is None
+        assert archive.namelist() == ["frame_0000.jpeg"]
+    capture = cv2.VideoCapture(str(movie_path))
+    try:
+        assert capture.grab()
+    finally:
+        capture.release()

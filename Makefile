@@ -115,12 +115,11 @@ endif
 
 .venv/pyvenv.cfg:
 	@echo install .venv for the development environment
-	poetry config virtualenvs.in-project true
-	poetry install
+	uv sync --locked
 
 dist: pyproject.toml
-	@echo building the deloy wheel
-	poetry build --format=wheel
+	@echo building the deploy wheel
+	uv build --wheel
 	ls -l dist/
 
 distclean:
@@ -509,9 +508,10 @@ make-local-bucket:
 ################################################################
 # Includes ubuntu dependencies
 # Note: on GitHub, install ffmpeg first with https://github.com/marketplace/actions/setup-ffmpeg
-# Note: installing pipx and poetry may have problems here. It's better to install outside of the Makefile
+# Install uv before using this target: https://docs.astral.sh/uv/getting-started/installation/
 install-ubuntu:
 	@echo install-ubuntu
+	command -v uv >/dev/null || { echo "uv is required; install it from https://docs.astral.sh/uv/getting-started/installation/"; exit 1; }
 	sudo apt-get update
 	which aws      || sudo snap install aws-cli --classic | cat # cat suppresses TTY junk
 	which chromium || sudo apt-get install -y -qq chromium-browser chromium-chromedriver
@@ -544,8 +544,8 @@ install-macos:
 	command -v lsof >/dev/null || $(BREW_INSTALL) lsof
 	command -v node >/dev/null || $(BREW_INSTALL) node
 	command -v npm >/dev/null || $(BREW_INSTALL) node
-	command -v poetry >/dev/null || $(BREW_INSTALL) poetry
 	command -v python3 >/dev/null || $(BREW_INSTALL) python
+	command -v uv >/dev/null || $(BREW_INSTALL) uv
 	npm ci
 	npm install -g typescript webpack webpack-cli
 	$(MAKE) $(REQ)
@@ -559,7 +559,7 @@ install-windows: .venv/pyvenv.cfg
 	choco install -y ffmpeg
 	choco install -y nodejs
 	choco install -y chromium
-	choco install -y poetry
+	choco install -y uv
 	npm ci
 	npm install -g typescript webpack webpack-cli
 	$(MAKE) $(REQ)
@@ -640,9 +640,9 @@ vend-lambda-resize:
 		lambda-resize/src/resize_app/src/app/
 	cp pyproject.toml lambda-resize/src/resize_app/src/app/pyproject.toml
 
-# Install lambda group so root venv can run lambda-resize lint/tests (single pyproject).
+# Install the lambda group so the root environment can run lambda-resize checks.
 install-lambda-deps: $(REQ)
-	poetry install --with lambda
+	uv sync --locked --group lambda
 
 # lambda-resize: lint and test from root using root venv (deps from pyproject group lambda).
 # install-lambda-deps ensures av (and other lambda deps) are in the venv so pylint can import them.
@@ -667,9 +667,9 @@ vend-lambda-web:
 		src/app/ lambda-web/src/app/
 	cp pyproject.toml lambda-web/src/app/pyproject.toml
 
-# Install lambda-web group so root venv can run lambda-web lint/tests.
+# Install the lambda-web group so the root environment can run lambda-web checks.
 install-lambda-web-deps: $(REQ)
-	poetry install --with lambda-web
+	uv sync --locked --group lambda-web
 
 lambda-web-lint: install-lambda-web-deps
 	uv run ruff check --fix lambda-web/src/lambda_web lambda-web/tests
@@ -681,10 +681,10 @@ lambda-web-check: lambda-web-lint
 
 .PHONY: lambda-resize/src/requirements.txt lambda-web/src/requirements.txt template-lint sam-config-show sam-config-path-safety-check sam-config-sync sam-config-path-check sam-config-check sam-config-guided-bootstrap sam-version-check sam-source-commit-check stamp-lambda-web-source-commit lambda-web-source-commit-check sam-deploy-version-check stamp-sam-deploy-metadata sam-storage-configure sam-status
 lambda-resize/src/requirements.txt:
-	poetry export --with lambda --without dev --without vm --format=requirements.txt --output lambda-resize/src/requirements.txt --without-hashes
+	@uv export --quiet --locked --only-group lambda --no-emit-project --no-hashes --output-file lambda-resize/src/requirements.txt
 
 lambda-web/src/requirements.txt:
-	poetry export --with lambda-web --without dev --without lambda --without vm --format=requirements.txt --output lambda-web/src/requirements.txt --without-hashes
+	@uv export --quiet --locked --only-group lambda-web --no-emit-project --no-hashes --output-file lambda-web/src/requirements.txt
 
 template-lint: .venv/pyvenv.cfg
 	sam validate --lint
@@ -793,7 +793,6 @@ sam-build: $(REQ)
 	$(MAKE) vend-lambda-resize
 	uv run pylint $(PYLINT_OPTS) lambda-web/src/lambda_web
 	uv run pylint $(PYLINT_OPTS) lambda-resize/src
-	poetry check --lock
 	uv lock --check
 	finch vm start || echo AWS finch is already running
 	sam validate --lint
@@ -801,6 +800,7 @@ sam-build: $(REQ)
 	AWS_REGION=us-east-1 uv run cfn-lint template.yaml
 	@# Do not add --parallel here; SAM emits urllib3 cleanup tracebacks during parallel container builds.
 	DOCKER_DEFAULT_PLATFORM=linux/arm64 sam build --use-container
+	$(MAKE) sam-resize-artifact-test
 	@echo "========================================"
 	@echo "Checking unzipped artifact sizes..."
 	@for dir in .aws-sam/build/*/ ; do \
@@ -814,6 +814,21 @@ sam-build: $(REQ)
 		fi; \
 	done
 	@echo "Size check passed! All functions are under 250MB."
+
+.PHONY: sam-resize-artifact-test
+sam-resize-artifact-test:
+	find .aws-sam/build/LambdaResizeFunction -name .DS_Store -delete
+	@FFMPEG_BINARY=$$(find .aws-sam/build/LambdaResizeFunction/imageio_ffmpeg/binaries -type f -name 'ffmpeg-*' -print -quit); \
+	  if [ -z "$$FFMPEG_BINARY" ]; then \
+	    echo "ERROR: packaged imageio-ffmpeg executable not found"; \
+	    exit 1; \
+	  fi; \
+	  chmod 755 "$$FFMPEG_BINARY"
+	finch run --rm --platform linux/arm64 \
+	  -v "$(CURDIR)/.aws-sam/build/LambdaResizeFunction:/var/task:ro" \
+	  -v "$(CURDIR)/etc/lambda_resize_artifact_test.py:/tmp/lambda_resize_artifact_test.py:ro" \
+	  public.ecr.aws/sam/build-python3.12:1.163.0 \
+	  python /tmp/lambda_resize_artifact_test.py /var/task
 
 sam-audit-size:
 	@echo "========================================"
@@ -1014,6 +1029,7 @@ sam-deployed-workflow-test: sam-config-check
 	env -u AWS_ENDPOINT_URL_DYNAMODB -u AWS_ENDPOINT_URL_S3 \
 		DYNAMODB_TABLE_PREFIX="$$DDB_PREFIX" PLANTTRACER_S3_BUCKET="$$BUCKET" \
 		PLANTTRACER_STACK_NAME="$(EFFECTIVE_STACK_NAME)" \
+		PYTHONPATH="bin:etc:src:$${PYTHONPATH:-}" \
 		uv run deployed_workflow_test \
 			--endpoint "https://$(EFFECTIVE_STACK_NAME).planttracer.com/"
 

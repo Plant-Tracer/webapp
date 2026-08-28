@@ -1,10 +1,14 @@
 from pathlib import Path
+import subprocess
 
+import cv2
+import imageio_ffmpeg
 import numpy as np
 
 from resize_app import tracer
 from resize_app.src.app.schema import Trackpoint
 
+# pylint: disable=no-member
 
 TEST_MOVIE = Path(__file__).resolve().parents[2] / "tests/data/2019-07-31 plantmovie short.mov"
 ANALYSIS_FRAME_HEIGHT = 480
@@ -49,6 +53,33 @@ def test_trace_movie_moves_known_plant_feature():
     final_apex = frame_trackpoints[max(frame_trackpoints)][0]
     assert final_apex.x < 365
     assert final_apex.y < 292
+
+
+def test_trace_movie_writes_a_decodable_h264_derivative(tmp_path):
+    output_path = tmp_path / "traced.mp4"
+
+    tracer.trace_movie_v2(
+        movie_url=TEST_MOVIE,
+        frame_start=0,
+        trackpoints=[Trackpoint(x=370, y=298, label="Apex", frame_number=0)],
+        movie_traced_path=output_path,
+        callback=None,
+    )
+
+    capture = cv2.VideoCapture(str(output_path))
+    try:
+        success, frame = capture.read()
+    finally:
+        capture.release()
+    assert success
+    assert frame is not None
+    description = subprocess.run(
+        [imageio_ffmpeg.get_ffmpeg_exe(), "-hide_banner", "-i", str(output_path)],
+        check=False,
+        capture_output=True,
+        text=True,
+    ).stderr
+    assert "Video: h264" in description
 
 
 def test_preserve_missing_trackpoints_copies_every_missing_marker():

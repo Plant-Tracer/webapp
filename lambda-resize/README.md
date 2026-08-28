@@ -62,8 +62,16 @@ Lambda imports those files with `from .src.app ...`.
 
 ## Video Processing
 
-Frame extraction, scaling, JPEG generation, and tracing use OpenCV (`cv2`) and
-Pillow. ffmpeg is legacy/local tooling and is not the Lambda runtime path.
+OpenCV (`cv2`) decodes movies, transforms frames, generates JPEGs, and performs
+optical-flow tracing. OpenCV's embedded FFmpeg libraries provide movie decoding,
+but the Linux wheel does not provide a software H.264 encoder. Traced H.264 MP4s
+therefore use the standalone `libx264` executable bundled by `imageio-ffmpeg`,
+called directly without the full ImageIO or Pillow packages.
+
+The Lambda ZIP relies on the Python runtime's Boto3 and Botocore and on the
+configured Powertools layer. Its generated requirements intentionally contain
+none of those packages and are exported from only the root uv project's
+`lambda` dependency group.
 
 Tracing writes:
 

@@ -15,7 +15,7 @@ Native Windows prerequisites, if attempted:
 * GitHub CLI
 * Make
 * Python 3.12
-* Poetry
+* uv
 * Node.js 22.18.0 or newer and npm
 * Java runtime for DynamoDB Local
 * Chrome or Chromium

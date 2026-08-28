@@ -53,5 +53,5 @@ This document is the repository-wide coding standard for Plant Tracer.
 - After editing docs, verify with:
 
 ```bash
-poetry run sphinx-build -W --keep-going -b html docs docs/_build/html
+uv run sphinx-build -W --keep-going -b html docs docs/_build/html
 ```

@@ -226,7 +226,7 @@ def func_config_error():
         error_title = "S3 CORS misconfigured"
         error_message = (
             "The S3 bucket CORS policy does not allow this site to load or upload movie data. "
-            "Run on the server: poetry run python -m app.s3_presigned <bucket>"
+            "Run on the server: uv run python -m app.s3_presigned <bucket>"
         )
         last_msg = _CONFIG_CHECK_CACHE.get("c_msg")
         if last_msg:

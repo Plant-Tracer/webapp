@@ -9,7 +9,31 @@ authors = [
     { name = "Steve Barber", email = "sbarber2@gmail.com" }
 ]
 requires-python = ">=3.12,<3.13"
-dynamic = ["dependencies"]
+dependencies = [
+    "apig-wsgi>=2.20,<3",
+    "boto3>=1.42.72,<2",
+    "crossplane",
+    "cryptography",
+    "dnspython>=2.7,<3",
+    "email-validator>=2.2,<3",
+    "filetype",
+    "flask",
+    "gunicorn",
+    "html5lib>=1.1,<2",
+    "html5validate>=0.0.2,<0.1",
+    "itsdangerous>=2.2,<3",
+    "jinja2>=3.1.6,<4",
+    "magnum",
+    "mutagen",
+    "pillow>=12.3,<13",
+    "pydantic",
+    "pyjwt>=2.10.1,<3",
+    "python-magic",
+    "requests>=2.32.4,<3",
+    "tabulate",
+    "validate-email-address",
+    "xlsxwriter>=3.2.9,<4",
+]
 
 [project.scripts]
 sam-config-tool = "sam_config_tool:main"
@@ -20,113 +44,6 @@ dbbackup = "dbbackup:main"
 deployed_workflow_test = "deployed_workflow_test:main"
 s3_upload_trigger = "s3_upload_trigger:main"
 
-[tool.poetry]
-packages = [
-    { include = "app", from = "src" },
-    { include = "sam_config_tool.py", from = "etc" },
-    { include = "dbutil.py", from = "src" },
-    { include = "dbbackup.py", from = "src" },
-    { include = "lambda_resize_cli.py", from = "lambda-resize/src" },
-    { include = "deployed_workflow_test.py", from = "bin" },
-    { include = "s3_upload_trigger.py", from = "etc" },
-]
-
-[tool.poetry.dependencies]
-python = ">=3.12,<3.13"
-apig-wsgi = "^2.20.0"
-boto3 = "^1.42.72"
-Pillow = "^12.3.0"
-pydantic = "*"
-requests = ">=2.32.4,<3.0.0"
-
-[tool.poetry.requires-plugins]
-poetry-plugin-export = ">=1.8"
-
-[tool.poetry.group.vm.dependencies]
-crossplane = "*"
-cryptography = "*"
-dnspython = ">=2.7.0,<3.0.0"
-email-validator = ">=2.2.0,<3.0.0"
-filetype = "*"
-flask = "*"
-gunicorn = "*"
-itsdangerous = ">=2.2.0,<3.0.0"
-jinja2 = ">=3.1.6,<4.0.0"
-magnum = "*"
-pydantic = "*"
-pyjwt = ">=2.10.1,<3.0.0"
-python-magic = "*"
-requests = ">=2.32.4,<3.0.0"
-tabulate = "*"
-validate_email_address = "*"
-html5lib = "^1.1"
-html5validate = "^0.0.2"
-boto3 = "^1.42.72"
-xlsxwriter = "^3.2.9"
-
-
-[tool.poetry.group.lambda.dependencies]
-# Dependencies only needed for the Lambda / lambda-resize (single source of truth)
-# Pillow: resizing/rotate_zip; mutagen: MP4 metadata; pydantic: vendored app/schema; opencv: video/frames/tracking
-Pillow = "^12.3.0"
-mutagen = "*"
-pydantic = "*"
-opencv-python-headless = "*"
-requests = ">=2.32.4,<3.0.0"
-imageio = {extras = ["ffmpeg"], version = "^2.37.3"}
-
-[tool.poetry.group.lambda-web.dependencies]
-# Dependencies only needed for the Flask web Lambda package.
-boto3 = "^1.42.72"
-email-validator = ">=2.2.0,<3.0.0"
-filetype = "*"
-flask = "*"
-html5lib = "^1.1"
-itsdangerous = ">=2.2.0,<3.0.0"
-jinja2 = ">=3.1.6,<4.0.0"
-mutagen = "*"
-Pillow = "^12.3.0"
-pydantic = "*"
-aws-lambda-powertools = {extras = ["utilities"], version = "*"}
-pyjwt = ">=2.10.1,<3.0.0"
-python-magic = "*"
-requests = ">=2.32.4,<3.0.0"
-tabulate = "*"
-validate_email_address = "*"
-xlsxwriter = "^3.2.9"
-
-[tool.poetry.group.dev.dependencies]
-setuptools = ">=30,<82"  # pkg_resources removed in 82; required by localmail
-tomlkit = "^0.15.0"
-mutagen = "*"  # MP4 metadata for etc/mp4_metadata.py and tests
-aws-lambda-powertools = {extras = ["utilities", "pydantic"], version = "*"}
-boto3-stubs = {extras = ["essential"], version = "*"}
-codecov = "*"
-myst-parser = "*"
-pylint = ">=3.3.8"
-pyright = "*"
-pytest-cov = ">=7.1.0,<8.0.0"
-pytest = ">=9.1.1,<10.0.0"
-sphinx = "*"
-sphinx-book-theme = "*"
-sphinx-copybutton = "*"
-sphinx-design = "*"
-sphinx-togglebutton = "*"
-types-requests = "*"
-localmail = "^0.5.0"
-selenium = "^4.38.0"
-pytest-mock = "^3.15.1"
-pytest-env = "^1.7.0"
-service_identity = "*"
-filetype = "^1.2.0"
-cfn-lint = "^1.43.4"
-botocore = {extras = ["crt"], version = "^1.42.63"}
-boto3 = "^1.42.72"
-ruff = "*"
-
-# uv uses the standard dependency-groups table rather than Poetry's groups.
-# Keep this development environment complete because Makefile validation uses
-# uv run from clean checkouts and imports all Flask and Lambda packages.
 [dependency-groups]
 dev = [
     "aws-lambda-powertools",
@@ -144,7 +61,7 @@ dev = [
     "gunicorn",
     "html5lib>=1.1,<2",
     "html5validate",
-    "imageio[ffmpeg]>=2.37.3,<3",
+    "imageio-ffmpeg>=0.6,<0.7",
     "itsdangerous>=2.2.0,<3",
     "jinja2>=3.1.6,<4",
     "localmail>=0.5.0,<0.6",
@@ -178,11 +95,52 @@ dev = [
     "validate-email-address",
     "xlsxwriter>=3.2.9,<4",
 ]
-
-
+lambda = [
+    "imageio-ffmpeg>=0.6,<0.7",
+    "mutagen",
+    "opencv-python-headless",
+    "pydantic",
+]
+lambda-web = [
+    "apig-wsgi>=2.20,<3",
+    "aws-lambda-powertools",
+    "boto3>=1.42.72,<2",
+    "email-validator>=2.2,<3",
+    "filetype",
+    "flask",
+    "html5lib>=1.1,<2",
+    "itsdangerous>=2.2,<3",
+    "jinja2>=3.1.6,<4",
+    "mutagen",
+    "pillow>=12.3,<13",
+    "pydantic",
+    "pyjwt>=2.10.1,<3",
+    "python-magic",
+    "requests>=2.32.4,<3",
+    "tabulate",
+    "validate-email-address",
+    "xlsxwriter>=3.2.9,<4",
+]
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+only-include = [
+    "bin/deployed_workflow_test.py",
+    "etc/s3_upload_trigger.py",
+    "etc/sam_config_tool.py",
+    "lambda-resize/src/lambda_resize_cli.py",
+    "src/app",
+    "src/dbbackup.py",
+    "src/dbutil.py",
+]
+
+[tool.hatch.build.targets.wheel.sources]
+"bin" = ""
+"etc" = ""
+"lambda-resize/src" = ""
+"src" = ""
 
 [tool.pylint.main]
 # Specify the Python version Pylint should assume for syntax checking.

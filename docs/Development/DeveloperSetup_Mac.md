@@ -9,7 +9,7 @@ Install Xcode command-line tools, Homebrew, and required packages:
 ```bash
 xcode-select --install
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-brew install awscli ffmpeg lsof node poetry python openjdk
+brew install awscli ffmpeg lsof node uv python openjdk
 brew install --cask google-chrome
 ```
 
@@ -29,7 +29,7 @@ cd webapp
 make install-macos
 ```
 
-The Makefile creates `.venv` through Poetry and installs JavaScript dependencies
+The Makefile creates `.venv` through uv and installs JavaScript dependencies
 with `npm ci`.
 
 ## Local Services
@@ -88,7 +88,7 @@ make check
 ```bash
 make list-local-buckets
 make dump-demo-tables
-AWS_REGION=local poetry run dbutil report
+AWS_REGION=local uv run dbutil report
 ```
 
 ## Cleanup
