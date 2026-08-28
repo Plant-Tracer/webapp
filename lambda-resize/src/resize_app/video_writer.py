@@ -11,9 +11,9 @@ import numpy as np
 class H264Writer:
     """Stream RGB uint8 frames to a libx264 MP4 without importing ImageIO."""
 
-    def __init__(self, path: Path, *, fps: float, output_params: Sequence[str] = (),
+    def __init__(self, path: str | Path, *, fps: float, output_params: Sequence[str] = (),
                  quality: float | None = 5):
-        self.path = path
+        self.path = Path(path)
         self.fps = fps
         self.output_params = list(output_params)
         self.quality = quality

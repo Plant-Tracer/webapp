@@ -511,7 +511,7 @@ make-local-bucket:
 # Install uv before using this target: https://docs.astral.sh/uv/getting-started/installation/
 install-ubuntu:
 	@echo install-ubuntu
-	command -v uv >/dev/null
+	command -v uv >/dev/null || { echo "uv is required; install it from https://docs.astral.sh/uv/getting-started/installation/"; exit 1; }
 	sudo apt-get update
 	which aws      || sudo snap install aws-cli --classic | cat # cat suppresses TTY junk
 	which chromium || sudo apt-get install -y -qq chromium-browser chromium-chromedriver

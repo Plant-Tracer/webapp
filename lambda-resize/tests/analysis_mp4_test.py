@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 
 from resize_app import analysis_mp4, analysis_mp4_cli
+from resize_app.video_writer import H264Writer
 from tests.fixtures.analysis_mp4_fixture import write_four_color_movie
 
 
@@ -39,6 +40,15 @@ def test_require_file_validates_bundle_assets(tmp_path):
     assert analysis_mp4.require_file(asset, missing_message="missing asset") == asset
     with pytest.raises(FileNotFoundError, match="missing asset"):
         analysis_mp4.require_file(tmp_path / "missing.js", missing_message="missing asset")
+
+
+def test_h264_writer_normalizes_string_path(tmp_path):
+    """String call sites use the same Path representation as Path call sites."""
+    movie_path = tmp_path / "movie.mp4"
+
+    writer = H264Writer(str(movie_path), fps=8)
+
+    assert writer.path == movie_path
 
 
 def ffmpeg_description(path: Path) -> str:
