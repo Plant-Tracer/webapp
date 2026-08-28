@@ -114,18 +114,6 @@ user-visible behavior, build or platform-support, packaging, or documentation
 change. Do not add release-history entries for test-only or purely internal
 refactors.
 
-## Beads Workflow
-
-This repository uses Beads for local/agent task tracking. Beads issue data is stored in a Dolt database and syncs separately from normal Git commits.
-
-- Before starting issue work, run `bd ready` or `bd list`, then inspect the relevant issue with `bd show <id>`.
-- For the lambda-only migration, use epic `webapp-cgr` and its child issues (`webapp-cgr.1`, etc.) as the Beads work breakdown. Keep GitHub references (`gh-450`, `gh-699`, `gh-1110`) in Beads `external_ref` or metadata.
-- Claim work with `bd update <id> --claim`; update status/comments as work progresses.
-- Pull and push Beads data with `bd dolt pull` and `bd dolt push`. A normal `git push` is not enough unless the installed Beads hook successfully auto-pushes Dolt data; when in doubt, run `bd dolt push` explicitly.
-- Commit only lightweight Beads project files such as `.beads/config.yaml`, `.beads/metadata.json`, `.beads/README.md`, `.beads/hooks/*`, `.beads/.gitignore`, `.beads/interactions.jsonl`, and optionally `.beads/issues.jsonl`.
-- Do **not** commit live/runtime Beads data such as `.beads/embeddeddolt/`, `.beads/dolt/`, `.beads/backup/`, lock files, sockets, `export-state.json`, `last-touched`, or `.beadso/`.
-- Beads issues complement GitHub Issues; commit messages and PR bodies must still reference GitHub Issue or PR numbers per the Git workflow above.
-
 ## Common Commands
 
 ```bash
