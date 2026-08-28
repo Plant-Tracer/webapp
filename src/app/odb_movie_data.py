@@ -30,21 +30,20 @@ from .odb import (
 def read_object(urn):
     """Returns object as a byte array"""
     o = parse.urlparse(urn)
-    logger.debug("urn=%s o=%s",urn,o)
+    logger.debug("read_object")
     if o.scheme == C.SCHEME_S3 :
         # We are getting the object, so we do not need a presigned url
         try:
             return s3_client().get_object(Bucket=o.netloc, Key=o.path[1:])["Body"].read()
         except ClientError as ex:
-            logger.info("ClientError: %s  Bucket=%s  Key=%s",ex,o.netloc,o.path[1:])
+            logger.info("S3 read failed: %s", ex)
             return None
     elif o.scheme in ['http','https']:
         try:
             with request.urlopen(urn, timeout=C.DEFAULT_GET_TIMEOUT) as response:
                 return response.read()
         except OSError as ex:
-            safe_urn = parse.urlunparse((o.scheme, o.netloc, o.path, "", "", ""))
-            logger.info("HTTP read failed: %s  urn=%s", ex, safe_urn)
+            logger.info("HTTP read failed: %s", ex)
             return None
     else:
         raise ValueError("Unknown schema: "+urn)
@@ -52,12 +51,12 @@ def read_object(urn):
 def copy_object_to_path(urn, path: str):
     """Copy an object from S3 to a local file path without buffering it all."""
     o = parse.urlparse(urn)
-    logger.debug("urn=%s o=%s",urn,o)
+    logger.debug("copy_object_to_path")
     if o.scheme == C.SCHEME_S3:
         try:
             s3_client().download_file(Bucket=o.netloc, Key=o.path[1:], Filename=path)
         except ClientError as ex:
-            logger.info("ClientError: %s  Bucket=%s  Key=%s",ex,o.netloc,o.path[1:])
+            logger.info("S3 copy failed: %s", ex)
     elif o.scheme in ['http','https']:
         with request.urlopen(urn, timeout=C.DEFAULT_GET_TIMEOUT) as response:
             with open(path, "wb") as f:

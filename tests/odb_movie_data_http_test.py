@@ -2,6 +2,7 @@
 
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+import logging
 import threading
 
 from app import odb_movie_data
@@ -16,14 +17,16 @@ def test_http_read_and_streaming_copy_use_real_local_server(tmp_path, caplog):
     thread.start()
     try:
         url = f"http://127.0.0.1:{server.server_port}/{source.name}"
-        assert odb_movie_data.read_object(url) == source.read_bytes()
-        caplog.set_level("INFO")
         secret = "do-not-log-this-signature"
+        signed_url = f"{url}?X-Amz-Signature={secret}"
+        caplog.set_level(logging.DEBUG)
+        assert odb_movie_data.read_object(signed_url) == source.read_bytes()
         assert odb_movie_data.read_object(f"{url}.missing?X-Amz-Signature={secret}") is None
         assert secret not in caplog.text
         destination = tmp_path / "destination.bin"
-        odb_movie_data.copy_object_to_path(url, str(destination))
+        odb_movie_data.copy_object_to_path(signed_url, str(destination))
         assert destination.read_bytes() == source.read_bytes()
+        assert secret not in caplog.text
     finally:
         server.shutdown()
         thread.join(timeout=5)
