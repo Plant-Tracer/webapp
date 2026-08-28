@@ -74,11 +74,12 @@ def create_tables(*, ignore_table_exists=False, status: Callable[[str], None] | 
     """Creates DynamoDB tables based on etc/dynamodb_tables.json.
     Connects to the local DynamoDB instance using AWS_ENDPOINT_URL_DYNAMODB.
 
-    :param ignore_table_exists: Tables to ignore if they already exist
+    :param ignore_table_exists: ``True`` to suppress warnings for all existing tables,
+        or a list, tuple, or set of fully prefixed table names whose warnings should
+        be suppressed. ``False`` warns for every existing table.
     :param status: Optional callback for user-visible progress messages
-    :raises ClientError: If a DynamoDB client-side error occurs (e.g., table already exists).
-    :raises Exception: For any unexpected errors during creation.
-    :return: the connected ddbo object
+    :raises Exception: Unexpected errors other than ``ClientError``. DynamoDB
+        ``ClientError`` responses are logged and not re-raised.
     """
     table_prefix = table_prefix_from_env()
     dynamodb = DDBO.resource()
@@ -115,9 +116,10 @@ def create_tables(*, ignore_table_exists=False, status: Callable[[str], None] | 
         except ClientError as e:
             if e.response['Error']['Code'] in ('TableAlreadyExistsException','ResourceInUseException'):
                 # ignore_table_exists can be a bool or a collection of table names to ignore
-                should_warn = not ignore_table_exists
-                if isinstance(ignore_table_exists, (list, tuple, set)) and table_name in ignore_table_exists:
-                    should_warn = False
+                if isinstance(ignore_table_exists, (list, tuple, set)):
+                    should_warn = table_name not in ignore_table_exists
+                else:
+                    should_warn = not ignore_table_exists
                 if status:
                     status(f"[{table_number}/{table_count}] Already exists: {table_name}")
                 if should_warn:
