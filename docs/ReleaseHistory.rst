@@ -77,6 +77,8 @@ Release Notes
 
 Unreleased Summary
 ******************
+    * Deployment: advance the application version to 0.9.9.8 for the next
+      development deployment.
     * Developer: complete the uv-only Python workflow with one ``uv.lock``,
       standard dependency groups, locked Lambda requirement exports, and
       Hatchling as the wheel build backend.
