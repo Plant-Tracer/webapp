@@ -105,9 +105,32 @@ blocker.
 Do not approve or merge a pull request unless explicitly asked. Do not close
 GitHub issues unless the repository owner explicitly instructs you to do so.
 
-Delete a local branch once it has merged into `main`, but first verify it is an
-ancestor of the current `main`; preserve unmerged branches and linked-worktree
-files.
+### Post-merge branch and worktree cleanup
+
+Post-merge cleanup is part of completing every pull request; do not wait for a
+separate user request. At the beginning and end of each repository task, and
+whenever a monitored pull request becomes merged:
+
+1. Run `git fetch --prune origin`, then inspect `git branch -vv` and
+   `git worktree list --porcelain` for local topic branches and linked
+   worktrees.
+2. For every non-`main` local branch whose pull request is merged or whose
+   upstream is marked `[gone]`, prove that its exact tip is represented in
+   current `origin/main`. `[gone]` alone is not evidence of a merge. Normally
+   use `git merge-base --is-ancestor`; for squash or rebase merges, verify
+   patch equivalence and preserve the branch if the result is uncertain.
+3. Before removal, require an empty
+   `git status --porcelain --untracked-files=all` in its linked worktree and
+   inspect recursive submodule status. Preserve and report dirty worktrees.
+4. Remove each clean, verified-merged linked worktree with
+   `git worktree remove`, delete its local branch with `git branch -d`, and
+   finish with `git worktree prune`. Never use forced branch deletion or
+   forced worktree removal for routine cleanup.
+5. Report every branch and worktree removed, and list any preserved item with
+   the exact reason it could not be removed safely.
+
+Do not remove a deployment or currently active pull-request branch until its
+pull request is merged and the branch is no longer needed for deployment.
 
 Update `docs/ReleaseHistory.rst` in the same pull request for every
 user-visible behavior, build or platform-support, packaging, or documentation
