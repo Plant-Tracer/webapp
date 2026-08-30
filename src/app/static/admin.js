@@ -140,6 +140,91 @@ function administratorLabel(user) {
   return user.email && user.email !== name ? `${name} (${user.email})` : name;
 }
 
+function closeActionMenus(exceptMenu = null) {
+  document.querySelectorAll(".admin-actions-menu:not([hidden])").forEach((menu) => {
+    if (menu === exceptMenu) {
+      return;
+    }
+    menu.hidden = true;
+    menu.previousElementSibling?.setAttribute("aria-expanded", "false");
+  });
+}
+
+function positionActionMenu(button, menu) {
+  const buttonRect = button.getBoundingClientRect();
+  const margin = 8;
+  let left = Math.min(
+    buttonRect.right - menu.offsetWidth,
+    window.innerWidth - menu.offsetWidth - margin,
+  );
+  left = Math.max(margin, left);
+  let top = buttonRect.bottom + 2;
+  if (top + menu.offsetHeight > window.innerHeight - margin) {
+    top = Math.max(margin, buttonRect.top - menu.offsetHeight - 2);
+  }
+  menu.style.left = `${Math.round(left)}px`;
+  menu.style.top = `${Math.round(top)}px`;
+}
+
+function actionsMenuCell(ariaLabel, actions) {
+  const cell = document.createElement("td");
+  cell.className = "admin-actions-cell";
+  if (!actions.length) {
+    cell.textContent = "—";
+    return cell;
+  }
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "admin-actions-toggle";
+  button.textContent = "⋮";
+  button.setAttribute("aria-label", ariaLabel);
+  button.setAttribute("aria-expanded", "false");
+  const menu = document.createElement("div");
+  menu.className = "admin-actions-menu";
+  menu.hidden = true;
+  actions.forEach((item) => {
+    const actionButton = document.createElement("button");
+    actionButton.type = "button";
+    actionButton.textContent = item.label;
+    actionButton.disabled = Boolean(item.disabled);
+    actionButton.title = item.title || "";
+    actionButton.addEventListener("click", async () => {
+      menu.hidden = true;
+      button.setAttribute("aria-expanded", "false");
+      try {
+        await item.action();
+      } catch (error) {
+        reportAdminError(error);
+      }
+    });
+    menu.append(actionButton);
+  });
+  button.addEventListener("click", () => {
+    const opening = menu.hidden;
+    closeActionMenus(opening ? menu : null);
+    menu.hidden = !opening;
+    button.setAttribute("aria-expanded", String(opening));
+    if (opening) {
+      positionActionMenu(button, menu);
+    }
+  });
+  cell.append(button, menu);
+  return cell;
+}
+
+function bindActionMenuDismissal() {
+  if (document.body.dataset.adminActionDismissalBound) {
+    return;
+  }
+  document.body.dataset.adminActionDismissalBound = "true";
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest(".admin-actions-toggle, .admin-actions-menu")) {
+      closeActionMenus();
+    }
+  });
+  window.addEventListener("scroll", () => closeActionMenus(), true);
+}
+
 function courseAdministratorCell(course) {
   const cell = document.createElement("td");
   const administrators = course.administrators || [];
@@ -149,18 +234,17 @@ function courseAdministratorCell(course) {
     ? administrators.map(administratorLabel).join(", ")
     : "none";
   cell.append(names);
-  if (
-    state.viewerRole === "superadmin"
-    || state.viewerCourseIds.includes(course.course_id)
-  ) {
-    const manage = document.createElement("button");
-    manage.type = "button";
-    manage.className = "course-admin-manage";
-    manage.textContent = "Manage";
-    manage.addEventListener("click", () => openCourseAdminDialog(course));
-    cell.append(manage);
-  }
   return cell;
+}
+
+function courseActionsCell(course) {
+  const canManage = state.viewerRole === "superadmin"
+    || state.viewerCourseIds.includes(course.course_id);
+  const actions = canManage ? [{
+    label: "Manage",
+    action: async () => openCourseAdminDialog(course),
+  }] : [];
+  return actionsMenuCell(`Actions for ${course.course_name}`, actions);
 }
 
 function appendCourseRows(courses) {
@@ -178,6 +262,7 @@ function appendCourseRows(courses) {
         course.created_at ? "Course creation time" : "First movie upload; course creation time unavailable",
       ),
       dateCell(course.last_movie_activity_at),
+      courseActionsCell(course),
     );
     tbody.append(row);
     if (state.verboseDetails) {
@@ -329,35 +414,46 @@ function coursesCell(courses) {
 }
 
 
-function superadminCount() {
-  return state.users.filter((user) => user.super_role === "superadmin").length;
+function superRoleLabel(role) {
+  return {
+    none: "None",
+    superadmin: "Super Admin",
+    superauditor: "Super Auditor",
+  }[role] || role;
 }
 
 
-async function changeSuperadmin(user, assigned) {
+async function changeSuperRole(user, newRole) {
   const label = administratorLabel(user);
-  const action = assigned ? "Make" : "Remove";
-  const warning = assigned
-    ? `Make ${label} a superadmin? This grants cross-course administrative access.`
-    : `Remove superadmin status from ${label}?`;
+  const oldRole = user.super_role;
+  const removing = newRole === "none";
+  let warning;
+  if (removing) {
+    warning = `Remove ${superRoleLabel(oldRole)} status from ${label}?`;
+  } else if (newRole === "superadmin") {
+    warning = `Make ${label} a Super Admin? This grants cross-course administrative access.`;
+  } else {
+    warning = `Make ${label} a Super Auditor? This grants read-only cross-course access.`;
+  }
   if (!window.confirm(warning)) {
     return;
   }
   const status = document.getElementById("admin-status");
   status.className = "";
-  status.textContent = `${action} ${label} ${assigned ? "a superadmin" : "from superadmins"}...`;
-  const url = `${API_BASE}api/admin/users/${encodeURIComponent(user.user_id)}/superadmin`;
+  status.textContent = `Changing ${label} from ${superRoleLabel(oldRole)} to ${superRoleLabel(newRole)}...`;
+  const endpointRole = removing ? oldRole : newRole;
+  const url = `${API_BASE}api/admin/users/${encodeURIComponent(user.user_id)}/${endpointRole}`;
   try {
-    const payload = await fetchAdminJson(url, "Superadmin update", {
-      method: assigned ? "PUT" : "DELETE",
+    const payload = await fetchAdminJson(url, "Super role update", {
+      method: removing ? "DELETE" : "PUT",
     });
     Object.assign(user, payload.user);
-    if (!assigned && user.user_id === state.viewerUserId) {
+    if (user.user_id === state.viewerUserId) {
       await reloadAdminSummary();
       return;
     }
     renderTable("users");
-    status.textContent = `${administratorLabel(user)} ${assigned ? "is now" : "is no longer"} a superadmin.`;
+    status.textContent = `${administratorLabel(user)} is now ${superRoleLabel(user.super_role)}.`;
   } catch (error) {
     reportAdminError(error);
   }
@@ -365,23 +461,34 @@ async function changeSuperadmin(user, assigned) {
 
 
 function superRoleCell(user) {
-  const cell = document.createElement("td");
-  const role = document.createElement("span");
-  role.textContent = user.super_role === "none" ? "no" : user.super_role;
-  cell.append(role);
+  return textCell(superRoleLabel(user.super_role));
+}
+
+
+function userRoleActionsCell(user) {
   if (state.viewerRole !== "superadmin") {
-    return cell;
+    return actionsMenuCell(`Actions for ${administratorLabel(user)}`, []);
   }
-  const assigned = user.super_role === "superadmin";
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "admin-super-role";
-  button.textContent = assigned ? "Remove" : "Make superadmin";
-  button.disabled = assigned && superadminCount() === 1;
-  button.title = button.disabled ? "The final superadmin cannot be removed" : "";
-  button.addEventListener("click", () => changeSuperadmin(user, !assigned));
-  cell.append(button);
-  return cell;
+  const actions = [];
+  if (user.super_role !== "superadmin") {
+    actions.push({
+      label: "Make Super Admin",
+      action: async () => changeSuperRole(user, "superadmin"),
+    });
+  }
+  if (user.super_role !== "superauditor") {
+    actions.push({
+      label: "Make Super Auditor",
+      action: async () => changeSuperRole(user, "superauditor"),
+    });
+  }
+  if (user.super_role !== "none") {
+    actions.push({
+      label: `Remove ${superRoleLabel(user.super_role)}`,
+      action: async () => changeSuperRole(user, "none"),
+    });
+  }
+  return actionsMenuCell(`Actions for ${administratorLabel(user)}`, actions);
 }
 
 
@@ -397,6 +504,7 @@ function appendUserRows(users) {
       coursesCell(user.courses),
       dateCell(user.created_at),
       dateCell(user.last_movie_activity_at),
+      userRoleActionsCell(user),
     );
     tbody.append(row);
     if (state.verboseDetails) {
@@ -441,7 +549,12 @@ function movieSizeText(movie) {
 
 async function fetchAdminJson(url, failureLabel, options = {}) {
   const response = await fetch(url, { ...options, credentials: "same-origin" });
-  const payload = await response.json();
+  let payload;
+  try {
+    payload = await response.json();
+  } catch (_error) {
+    throw new Error(`${failureLabel} failed with HTTP ${response.status}`);
+  }
   if (!response.ok || payload.error) {
     throw new Error(payload.message || `${failureLabel} failed with HTTP ${response.status}`);
   }
@@ -489,62 +602,30 @@ function downloadUrl(url) {
 }
 
 function movieActionsCell(movie) {
-  const cell = document.createElement("td");
-  cell.className = "admin-actions-cell";
   if (!epochSeconds(movie.uploaded_at)) {
-    cell.textContent = "—";
-    return cell;
+    return actionsMenuCell(`Actions for ${movie.title}`, []);
   }
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "admin-actions-toggle";
-  button.textContent = "⋮";
-  button.setAttribute("aria-label", `Actions for ${movie.title}`);
-  button.setAttribute("aria-expanded", "false");
-  const menu = document.createElement("div");
-  menu.className = "admin-actions-menu";
-  menu.hidden = true;
   const actions = [
-    ["Play", async () => {
+    { label: "Play", action: async () => {
       const media = await fetchMovieMedia(movie.movie_id);
       window.open(media.play_url, "_blank", "noopener");
-    }],
+    } },
   ];
   if (movie.has_traced_movie) {
-    actions.push(["Download traced", async () => {
+    actions.push({ label: "Download traced", action: async () => {
       const media = await fetchMovieMedia(movie.movie_id);
       if (!media.traced_download_url) {
         throw new Error("Traced movie is not available");
       }
       downloadUrl(media.traced_download_url);
-    }]);
+    } });
   }
   if (state.viewerRole === "superadmin") {
-    actions.push(["Analyze", async () => {
+    actions.push({ label: "Analyze", action: async () => {
       window.location.assign(`/analyze?movie_id=${encodeURIComponent(movie.movie_id)}`);
-    }]);
+    } });
   }
-  for (const [label, action] of actions) {
-    const actionButton = document.createElement("button");
-    actionButton.type = "button";
-    actionButton.textContent = label;
-    actionButton.addEventListener("click", async () => {
-      menu.hidden = true;
-      button.setAttribute("aria-expanded", "false");
-      try {
-        await action();
-      } catch (error) {
-        reportAdminError(error);
-      }
-    });
-    menu.append(actionButton);
-  }
-  button.addEventListener("click", () => {
-    menu.hidden = !menu.hidden;
-    button.setAttribute("aria-expanded", String(!menu.hidden));
-  });
-  cell.append(button, menu);
-  return cell;
+  return actionsMenuCell(`Actions for ${movie.title}`, actions);
 }
 
 function appendMovieRows(movies) {
@@ -789,17 +870,86 @@ function initializeColumnWidths(table) {
     columns[index].style.width = `${width}px`;
     totalWidth += width;
   });
-  table.style.width = `${totalWidth}px`;
+  const containerWidth = table.closest(".admin-table-scroll")?.clientWidth || 0;
+  table.style.width = `${Math.max(totalWidth, containerWidth)}px`;
+}
+
+function configuredColumnWidths(table) {
+  return [...table.querySelectorAll("col")].map((column) => (
+    Number.parseFloat(column.style.width) || 80
+  ));
+}
+
+function positionTableWidthHandle(table) {
+  const handle = table.closest(".admin-table-scroll")
+    ?.querySelector(".admin-table-width-handle");
+  if (!handle) {
+    return;
+  }
+  const width = Number.parseFloat(table.style.width)
+    || table.getBoundingClientRect().width;
+  handle.style.left = `${Math.max(0, Math.round(width))}px`;
+}
+
+function applyTableWidth(table, widths) {
+  const columns = table.querySelectorAll("col");
+  widths.forEach((width, index) => {
+    columns[index].style.width = `${Math.max(80, Math.round(width))}px`;
+  });
+  const total = widths.reduce((sum, width) => sum + Math.max(80, Math.round(width)), 0);
+  table.style.width = `${total}px`;
+  positionTableWidthHandle(table);
+}
+
+function resizeWholeTable(table, requestedWidth) {
+  const widths = configuredColumnWidths(table);
+  const currentWidth = widths.reduce((sum, width) => sum + width, 0);
+  if (!widths.length || !currentWidth) {
+    return;
+  }
+  const containerWidth = table.closest(".admin-table-scroll")?.clientWidth || 0;
+  const targetWidth = Math.max(
+    containerWidth,
+    widths.length * 80,
+    Math.round(requestedWidth),
+  );
+  const scale = targetWidth / currentWidth;
+  const scaled = widths.map((width) => Math.max(80, Math.round(width * scale)));
+  const scaledTotal = scaled.reduce((sum, width) => sum + width, 0);
+  let adjustment = targetWidth - scaledTotal;
+  if (adjustment >= 0) {
+    scaled[scaled.length - 1] += adjustment;
+  } else {
+    for (let index = scaled.length - 1; index >= 0 && adjustment < 0; index -= 1) {
+      const reduction = Math.min(scaled[index] - 80, -adjustment);
+      scaled[index] -= reduction;
+      adjustment += reduction;
+    }
+  }
+  applyTableWidth(table, scaled);
+}
+
+function fitTableToContainer(table) {
+  const containerWidth = table.closest(".admin-table-scroll")?.clientWidth || 0;
+  const tableWidth = Number.parseFloat(table.style.width)
+    || table.getBoundingClientRect().width;
+  if (containerWidth > tableWidth) {
+    resizeWholeTable(table, containerWidth);
+  } else {
+    positionTableWidthHandle(table);
+  }
 }
 
 function resizeColumn(table, index, width) {
-  const columns = table.querySelectorAll("col");
-  const currentWidths = [...columns].map((column) => (
-    Number.parseFloat(column.style.width) || 80
-  ));
+  const currentWidths = configuredColumnWidths(table);
   currentWidths[index] = Math.max(80, Math.round(width));
-  columns[index].style.width = `${currentWidths[index]}px`;
-  table.style.width = `${currentWidths.reduce((total, value) => total + value, 0)}px`;
+  const containerWidth = table.closest(".admin-table-scroll")?.clientWidth || 0;
+  const totalWidth = currentWidths.reduce((total, value) => total + value, 0);
+  if (totalWidth < containerWidth) {
+    const fillIndex = index === currentWidths.length - 1 ? 0 : currentWidths.length - 1;
+    currentWidths[fillIndex] += containerWidth - totalWidth;
+  }
+  applyTableWidth(table, currentWidths);
 }
 
 function bindResizableTables() {
@@ -809,6 +959,49 @@ function bindResizableTables() {
     }
     table.dataset.resizeBound = "true";
     initializeColumnWidths(table);
+    const container = table.closest(".admin-table-scroll");
+    if (container) {
+      const tableHandle = document.createElement("span");
+      tableHandle.className = "admin-table-width-handle";
+      tableHandle.tabIndex = 0;
+      tableHandle.setAttribute("role", "separator");
+      tableHandle.setAttribute("aria-orientation", "vertical");
+      tableHandle.setAttribute("aria-label", "Resize entire table");
+      tableHandle.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        const startX = event.clientX;
+        const startWidth = Number.parseFloat(table.style.width)
+          || table.getBoundingClientRect().width;
+        tableHandle.setPointerCapture(event.pointerId);
+        const move = (moveEvent) => {
+          resizeWholeTable(table, startWidth + moveEvent.clientX - startX);
+        };
+        const finish = () => {
+          tableHandle.removeEventListener("pointermove", move);
+          tableHandle.removeEventListener("pointerup", finish);
+          tableHandle.removeEventListener("pointercancel", finish);
+        };
+        tableHandle.addEventListener("pointermove", move);
+        tableHandle.addEventListener("pointerup", finish);
+        tableHandle.addEventListener("pointercancel", finish);
+      });
+      tableHandle.addEventListener("keydown", (event) => {
+        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
+          return;
+        }
+        event.preventDefault();
+        const direction = event.key === "ArrowLeft" ? -20 : 20;
+        const width = Number.parseFloat(table.style.width)
+          || table.getBoundingClientRect().width;
+        resizeWholeTable(table, width + direction);
+      });
+      container.append(tableHandle);
+      positionTableWidthHandle(table);
+      if (typeof ResizeObserver !== "undefined") {
+        const observer = new ResizeObserver(() => fitTableToContainer(table));
+        observer.observe(container);
+      }
+    }
     table.querySelectorAll("thead th").forEach((header, index) => {
       const handle = document.createElement("span");
       handle.className = "admin-resize-handle";
@@ -967,6 +1160,7 @@ async function loadAdminSummary() {
   bindSortButtons();
   bindVerboseDetails();
   bindResizableTables();
+  bindActionMenuDismissal();
   bindCourseCreate();
   bindCourseAdminDialog();
   const status = document.getElementById("admin-status");
@@ -1001,7 +1195,9 @@ export {
   appendUserRows,
   applyCourseAdministratorChange,
   changeSort,
+  fitTableToContainer,
   populateExistingCourseAdmins,
+  resizeWholeTable,
   syncCourseAdminName,
   openCourseAdminDialog,
   loadAdminSummary,

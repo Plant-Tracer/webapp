@@ -155,7 +155,8 @@ def _stored_role_condition(user):
     return condition, names, values
 
 
-def _audit_transaction(ddbo, *, actor_user_id, target_user_id, new_role, ipaddr):
+def _audit_transaction(ddbo, *, actor_user_id, target_user_id,
+                       old_role, new_role, ipaddr):
     """Build an attributed audit write for a browser role mutation."""
     if actor_user_id is None:
         return None
@@ -165,13 +166,12 @@ def _audit_transaction(ddbo, *, actor_user_id, target_user_id, new_role, ipaddr)
         user_id=actor_user_id,
         course_id=GLOBAL_AUDIT_COURSE_ID,
         time_t=int(time.time()),
-        event_type=(
-            "user.superadmin.assigned"
-            if new_role == odb.SUPER_ROLE_SUPERADMIN
-            else "user.superadmin.removed"
-        ),
+        event_type=f"user.{new_role if new_role != odb.SUPER_ROLE_NONE else old_role}."
+                   f"{'removed' if new_role == odb.SUPER_ROLE_NONE else 'assigned'}",
         movie_id="",
         target_user_id=target_user_id,
+        old_super_role=old_role,
+        new_super_role=new_role,
     ).model_dump(exclude_none=True)
     return {
         "Put": {
@@ -244,6 +244,7 @@ def transact_super_role_change(ddbo, user, state, new_role, *,
         ddbo,
         actor_user_id=actor_user_id,
         target_user_id=user_id,
+        old_role=old_role,
         new_role=new_role,
         ipaddr=ipaddr,
     )

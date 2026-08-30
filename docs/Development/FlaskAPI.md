@@ -194,10 +194,14 @@ clients must treat restart markers as opaque. Course rows include the registrati
 `course_key`; callers must treat it as a secret because anyone with the key can
 request enrollment in that course. The admin page masks each course key by default;
 its per-row eye control reveals or hides the value without changing it.
-Admin table columns have visible drag/keyboard resize handles. Course links open
+Admin tables fill the available page width without a scrollbar when the page is
+wide enough. Each column has a drag/keyboard resize handle, and the table's
+right edge is a drag/keyboard handle that proportionally resizes the whole
+table; widening beyond the available page width enables a table-local
+horizontal scrollbar. Course links open
 `/list?course_id=...` in a new tab without changing the user's persisted default
-course. Movie rows use a visible `⋮` menu for play, traced download, and—for
-`superadmin` only—Analyze.
+course. Course, user, and movie rows use a visible `⋮` Actions menu for their
+authorized operations.
 
 #### `POST /api/admin/courses`
 
@@ -256,9 +260,9 @@ updated but the email was not sent.
 ```
 
 Course rows show administrator names and email addresses directly. A
-``superadmin`` receives a Manage control for every course. Course
-administrators receive the control for courses they administer;
-``superauditor`` viewers have no write controls.
+``superadmin`` receives a Manage action for every course. Course administrators
+receive the action for courses they administer; ``superauditor`` viewers have
+no write actions.
 
 #### `PUT /api/admin/courses/{course_id}/administrators`
 
@@ -333,14 +337,27 @@ role when another superadmin remains; removing the final superadmin returns
 HTTP 409. Removing the role from a user who is not currently a superadmin is an
 idempotent no-op and does not remove ``superauditor``.
 
-Both endpoints update the user and versioned superadmin registry atomically,
-condition the write on the actor's current authority, and write an attributed
-``user.superadmin.assigned`` or ``user.superadmin.removed`` audit event in the
-reserved ``global`` audit scope. Successful responses contain the complete
-admin user summary plus ``old_super_role``, ``new_super_role``, and ``changed``.
-Repeated no-op requests do not create audit events. Missing users return HTTP
-404, stale concurrent changes return HTTP 409, and non-superadmins receive
-HTTP 403.
+#### `PUT /api/admin/users/{user_id}/superauditor`
+
+Grant ``superauditor`` to any registered user. Only a current ``superadmin``
+may call this endpoint. Granting either super role replaces the other because
+the roles are mutually exclusive.
+
+#### `DELETE /api/admin/users/{user_id}/superauditor`
+
+Remove ``superauditor`` from a registered user. Removing the role from a user
+who is not currently a superauditor is an idempotent no-op and does not remove
+``superadmin``.
+
+All four role endpoints update the user and versioned superadmin registry
+atomically, condition the write on the actor's current authority, and write an
+attributed ``user.superadmin.*`` or ``user.superauditor.*`` audit event in the
+reserved ``global`` audit scope. Each event records ``old_super_role`` and
+``new_super_role``. Successful responses contain the complete admin user
+summary plus those role values and ``changed``. Repeated no-op requests do not
+create audit events. Missing users return HTTP 404, stale concurrent changes
+return HTTP 409, and non-superadmins receive HTTP 403. Switching or removing
+the final superadmin returns HTTP 409.
 
 #### `GET /api/admin/movies/{movie_id}/media`
 

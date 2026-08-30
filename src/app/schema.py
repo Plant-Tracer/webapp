@@ -267,6 +267,8 @@ class LogEntry(BaseModel):
     event_type: str
     movie_id: str
     target_user_id: str | None = None
+    old_super_role: Literal["none", "superauditor", "superadmin"] | None = None
+    new_super_role: Literal["none", "superauditor", "superadmin"] | None = None
     event_id: str | None = None
     object_key: str | None = None
     sequencer: str | None = None

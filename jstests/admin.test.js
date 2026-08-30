@@ -1,6 +1,8 @@
 const {
   loadAdminSummary,
+  fitTableToContainer,
   populateExistingCourseAdmins,
+  resizeWholeTable,
   syncCourseAdminName,
   state,
 } = require('admin');
@@ -25,30 +27,30 @@ function adminDocument() {
         <button id="admin-course-submit" type="submit">Create course</button>
       </form>
     </dialog>
-    <table data-resizable-table>
+    <div class="admin-table-scroll"><table data-resizable-table>
       <thead><tr>
         <th><button class="admin-sort" data-table="courses" data-key="course_name">
           Name <span class="admin-sort-indicator"></span>
         </button></th>
       </tr></thead>
       <tbody id="admin-course-rows"></tbody>
-    </table>
-    <table data-resizable-table>
+    </table></div>
+    <div class="admin-table-scroll"><table data-resizable-table>
       <thead><tr>
         <th><button class="admin-sort" data-table="users" data-key="user_name">
           Name <span class="admin-sort-indicator"></span>
         </button></th>
       </tr></thead>
       <tbody id="admin-user-rows"></tbody>
-    </table>
-    <table data-resizable-table>
+    </table></div>
+    <div class="admin-table-scroll"><table data-resizable-table>
       <thead><tr>
         <th><button class="admin-sort" data-table="movies" data-key="title">
           Title <span class="admin-sort-indicator"></span>
         </button></th>
       </tr></thead>
       <tbody id="admin-movie-rows"></tbody>
-    </table>
+    </table></div>
     <dialog id="course-admin-dialog">
       <div><h2 id="course-admin-dialog-title"></h2>
         <button id="course-admin-dialog-close" type="button">×</button></div>
@@ -149,7 +151,7 @@ describe('admin summary rendering', () => {
     expect(keyToggle.querySelector('.admin-eye-slash')).not.toBeNull();
     expect(document.getElementById('admin-course-rows').textContent).toContain('7 / 10');
     expect(document.getElementById('admin-course-rows').textContent).toContain('Ada (ada@example.test)');
-    expect(document.querySelector('.course-admin-manage')).toBeNull();
+    expect(document.querySelector('#admin-course-rows .admin-actions-toggle')).toBeNull();
     const userRow = document.getElementById('admin-user-rows');
     expect(userRow.textContent).toContain('Biology, Chemistry');
     expect(userRow.querySelector('strong').textContent).toBe('Biology');
@@ -160,7 +162,23 @@ describe('admin summary rendering', () => {
     expect(movieRow.querySelector('.admin-actions-menu').textContent).toContain('Play');
     expect(movieRow.querySelector('.admin-actions-menu').textContent).toContain('Download traced');
     expect(movieRow.querySelector('.admin-actions-menu').textContent).not.toContain('Analyze');
+    const movieMenu = movieRow.querySelector('.admin-actions-menu');
+    movieRow.querySelector('.admin-actions-toggle').click();
+    expect(movieMenu.hidden).toBe(false);
+    document.querySelector('#admin-course-rows .admin-actions-cell').click();
+    expect(movieMenu.hidden).toBe(true);
     expect(document.querySelectorAll('.admin-resize-handle')).toHaveLength(3);
+    const firstTable = document.querySelector('[data-resizable-table]');
+    const tableWidthHandle = firstTable.parentElement.querySelector('.admin-table-width-handle');
+    const initialTableWidth = Number.parseFloat(firstTable.style.width);
+    tableWidthHandle.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'PageDown', bubbles: true, cancelable: true,
+    }));
+    expect(Number.parseFloat(firstTable.style.width)).toBe(initialTableWidth);
+    tableWidthHandle.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'ArrowRight', bubbles: true, cancelable: true,
+    }));
+    expect(Number.parseFloat(firstTable.style.width)).toBe(initialTableWidth + 20);
     expect(document.getElementById('admin-new-course').hidden).toBe(true);
     const courseLink = document.querySelector('#admin-course-rows a');
     expect(courseLink.href).toContain('/list?course_id=BIO-1');
@@ -434,7 +452,11 @@ describe('admin summary rendering', () => {
       }));
 
     await loadAdminSummary();
-    document.querySelector('.course-admin-manage').click();
+    const courseActions = document.querySelector('#admin-course-rows .admin-actions-toggle');
+    courseActions.click();
+    const manage = document.querySelector('#admin-course-rows .admin-actions-menu button');
+    expect(manage.textContent).toBe('Manage');
+    manage.click();
 
     expect(document.getElementById('course-admin-dialog').open).toBe(true);
     expect(document.getElementById('course-admin-dialog-title').textContent)
@@ -478,10 +500,12 @@ describe('admin summary rendering', () => {
 
     await loadAdminSummary();
 
-    const manage = document.querySelectorAll('.course-admin-manage');
-    expect(manage).toHaveLength(1);
-    expect(manage[0].closest('tr').textContent).toContain('Biology');
-    manage[0].click();
+    const courseRows = [...document.querySelectorAll('#admin-course-rows tr')];
+    const managedRow = courseRows.find((row) => row.textContent.includes('Biology'));
+    managedRow.querySelector('.admin-actions-toggle').click();
+    const manage = managedRow.querySelector('.admin-actions-menu button');
+    expect(manage.textContent).toBe('Manage');
+    manage.click();
     const input = document.getElementById('course-admin-user-email');
     input.value = 'bob@example.test';
     input.dispatchEvent(new Event('input'));
@@ -496,7 +520,7 @@ describe('admin summary rendering', () => {
     expect(document.getElementById('course-admin-current').textContent).toContain('Bob');
   });
 
-  test('superadmin grants roles and cannot remove the final superadmin in the UI', async () => {
+  test('superadmin grants roles without inferring the final superadmin from one page', async () => {
     const adminPayload = payload();
     adminPayload.viewer = {
       user_id: 'user-1', user_name: 'Ada', super_role: 'superadmin',
@@ -521,22 +545,117 @@ describe('admin summary rendering', () => {
 
     await loadAdminSummary();
 
-    const buttons = document.querySelectorAll('.admin-super-role');
-    expect(buttons).toHaveLength(2);
-    expect(buttons[0].textContent).toBe('Remove');
-    expect(buttons[0].disabled).toBe(true);
-    expect(buttons[0].title).toContain('final superadmin');
-    expect(buttons[1].textContent).toBe('Make superadmin');
-    buttons[1].click();
+    const userRows = [...document.querySelectorAll('#admin-user-rows tr')];
+    const adaMenu = userRows[0].querySelector('.admin-actions-menu');
+    expect([...adaMenu.querySelectorAll('button')].map((button) => button.textContent))
+      .toEqual(['Make Super Auditor', 'Remove Super Admin']);
+    expect([...adaMenu.querySelectorAll('button')].every((button) => button.disabled)).toBe(false);
+    const bobMenu = userRows[1].querySelector('.admin-actions-menu');
+    expect([...bobMenu.querySelectorAll('button')].map((button) => button.textContent))
+      .toEqual(['Make Super Admin', 'Make Super Auditor']);
+    const adaToggle = userRows[0].querySelector('.admin-actions-toggle');
+    const bobToggle = userRows[1].querySelector('.admin-actions-toggle');
+    adaToggle.click();
+    expect(adaMenu.hidden).toBe(false);
+    bobToggle.click();
+    expect(adaMenu.hidden).toBe(true);
+    expect(adaToggle.getAttribute('aria-expanded')).toBe('false');
+    bobMenu.querySelector('button').click();
     await new Promise((resolve) => { setTimeout(resolve, 0); });
 
     expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('cross-course'));
     expect(fetch.mock.calls[1][0]).toContain('/api/admin/users/user-2/superadmin');
     expect(fetch.mock.calls[1][1].method).toBe('PUT');
     expect(state.users.find((user) => user.user_id === 'user-2').super_role).toBe('superadmin');
-    expect(document.querySelectorAll('.admin-super-role')[0].disabled).toBe(false);
     expect(document.getElementById('admin-status').textContent)
-      .toContain('Bob (bob@example.test) is now a superadmin');
+      .toContain('Bob (bob@example.test) is now Super Admin');
+  });
+
+  test('offers mutually exclusive Super Auditor actions', async () => {
+    const adminPayload = payload();
+    adminPayload.viewer.super_role = 'superadmin';
+    adminPayload.users.items[0].super_role = 'superauditor';
+    fetch
+      .mockResponseOnce(JSON.stringify(adminPayload))
+      .mockResponseOnce(JSON.stringify({
+        error: false, old_super_role: 'superauditor', new_super_role: 'none', changed: true,
+        user: { ...adminPayload.users.items[0], super_role: 'none' },
+      }));
+    window.confirm = jest.fn(() => true);
+
+    await loadAdminSummary();
+
+    const row = document.querySelector('#admin-user-rows tr');
+    expect(row.children[3].textContent).toBe('Super Auditor');
+    const menuButtons = [...row.querySelectorAll('.admin-actions-menu button')];
+    expect(menuButtons.map((button) => button.textContent))
+      .toEqual(['Make Super Admin', 'Remove Super Auditor']);
+    menuButtons[1].click();
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
+
+    expect(fetch.mock.calls[1][0]).toContain('/api/admin/users/user-1/superauditor');
+    expect(fetch.mock.calls[1][1].method).toBe('DELETE');
+    expect(state.users[0].super_role).toBe('none');
+  });
+
+  test('reports the HTTP status for a non-JSON role error', async () => {
+    const adminPayload = payload();
+    adminPayload.viewer.super_role = 'superadmin';
+    fetch
+      .mockResponseOnce(JSON.stringify(adminPayload))
+      .mockResponseOnce('<html>Internal Server Error</html>', {
+        status: 500,
+        headers: { 'Content-Type': 'text/html' },
+      });
+    window.confirm = jest.fn(() => true);
+
+    await loadAdminSummary();
+
+    const userRow = document.querySelector('#admin-user-rows tr');
+    userRow.querySelector('.admin-actions-toggle').click();
+    userRow.querySelector('.admin-actions-menu button').click();
+    await new Promise((resolve) => { setTimeout(resolve, 0); });
+
+    expect(document.getElementById('admin-status').textContent)
+      .toContain('Super role update failed with HTTP 500');
+  });
+
+  test('expands tables to their container and resizes the whole table proportionally', () => {
+    const container = document.createElement('div');
+    container.className = 'admin-table-scroll';
+    Object.defineProperty(container, 'clientWidth', { configurable: true, value: 600 });
+    const table = document.createElement('table');
+    table.innerHTML = '<colgroup><col><col><col></colgroup>';
+    [...table.querySelectorAll('col')].forEach((column) => {
+      column.style.width = '100px';
+    });
+    table.style.width = '300px';
+    const handle = document.createElement('span');
+    handle.className = 'admin-table-width-handle';
+    container.append(table, handle);
+
+    fitTableToContainer(table);
+    expect(table.style.width).toBe('600px');
+    expect([...table.querySelectorAll('col')].map((column) => column.style.width))
+      .toEqual(['200px', '200px', '200px']);
+
+    resizeWholeTable(table, 900);
+    expect(table.style.width).toBe('900px');
+    fitTableToContainer(table);
+    expect(table.style.width).toBe('900px');
+    expect(handle.style.left).toBe('900px');
+    expect([...table.querySelectorAll('col')].map((column) => column.style.width))
+      .toEqual(['300px', '300px', '300px']);
+
+    Object.defineProperty(container, 'clientWidth', { value: 240 });
+    const columns = [...table.querySelectorAll('col')];
+    columns[0].style.width = '1000px';
+    columns[1].style.width = '80px';
+    columns[2].style.width = '80px';
+    resizeWholeTable(table, 240);
+    expect(table.style.width).toBe('240px');
+    expect(columns.map((column) => column.style.width))
+      .toEqual(['80px', '80px', '80px']);
   });
 
   test('confirms removals and keeps API errors visible in the dialog', async () => {
@@ -555,7 +674,9 @@ describe('admin summary rendering', () => {
     window.confirm = jest.fn(() => true);
 
     await loadAdminSummary();
-    document.querySelector('.course-admin-manage').click();
+    const courseRow = document.querySelector('#admin-course-rows tr');
+    courseRow.querySelector('.admin-actions-toggle').click();
+    courseRow.querySelector('.admin-actions-menu button').click();
     document.querySelector('#course-admin-current button').click();
     await new Promise((resolve) => { setTimeout(resolve, 0); });
 

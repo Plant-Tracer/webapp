@@ -740,6 +740,11 @@ def superadmin_url(user_id):
     return f"/api/admin/users/{user_id}/superadmin"
 
 
+def superauditor_url(user_id):
+    """Return the global superauditor-assignment endpoint for a user."""
+    return f"/api/admin/users/{user_id}/superauditor"
+
+
 def test_superadmin_grants_and_revokes_superadmin_with_audit(client, new_course):
     make_fixture_user_superadmin(client, new_course)
     ddbo = new_course["ddbo"]
@@ -771,6 +776,43 @@ def test_superadmin_grants_and_revokes_superadmin_with_audit(client, new_course)
         ("user.superadmin.assigned", actor_id),
         ("user.superadmin.removed", actor_id),
     }
+    assert {(item["old_super_role"], item["new_super_role"]) for item in logs} == {
+        (odb.SUPER_ROLE_NONE, odb.SUPER_ROLE_SUPERADMIN),
+        (odb.SUPER_ROLE_SUPERADMIN, odb.SUPER_ROLE_NONE),
+    }
+
+
+def test_superadmin_assigns_switches_and_removes_superauditor(client, new_course):
+    make_fixture_user_superadmin(client, new_course)
+    ddbo = new_course["ddbo"]
+    target_id = odb.get_user_email(new_course[ADMIN_EMAIL])[odb.USER_ID]
+
+    assigned = client.put(superauditor_url(target_id))
+    promoted = client.put(superadmin_url(target_id))
+    switched = client.put(superauditor_url(target_id))
+    removed = client.delete(superauditor_url(target_id))
+
+    assert assigned.status_code == 200
+    assert assigned.json["old_super_role"] == odb.SUPER_ROLE_NONE
+    assert assigned.json["new_super_role"] == odb.SUPER_ROLE_SUPERAUDITOR
+    assert promoted.json["old_super_role"] == odb.SUPER_ROLE_SUPERAUDITOR
+    assert promoted.json["new_super_role"] == odb.SUPER_ROLE_SUPERADMIN
+    assert switched.json["old_super_role"] == odb.SUPER_ROLE_SUPERADMIN
+    assert switched.json["new_super_role"] == odb.SUPER_ROLE_SUPERAUDITOR
+    assert removed.json["new_super_role"] == odb.SUPER_ROLE_NONE
+    assert odb.normalize_super_role(odb.get_user(target_id)) == odb.SUPER_ROLE_NONE
+    logs = [
+        item for item in ddbo.logs.scan()["Items"]
+        if item.get("target_user_id") == target_id
+        and item.get("event_type", "").startswith("user.super")
+    ]
+    assert {(item["event_type"], item["old_super_role"], item["new_super_role"])
+            for item in logs} == {
+        ("user.superauditor.assigned", odb.SUPER_ROLE_NONE, odb.SUPER_ROLE_SUPERAUDITOR),
+        ("user.superadmin.assigned", odb.SUPER_ROLE_SUPERAUDITOR, odb.SUPER_ROLE_SUPERADMIN),
+        ("user.superauditor.assigned", odb.SUPER_ROLE_SUPERADMIN, odb.SUPER_ROLE_SUPERAUDITOR),
+        ("user.superauditor.removed", odb.SUPER_ROLE_SUPERAUDITOR, odb.SUPER_ROLE_NONE),
+    }
 
 
 def test_superadmin_cannot_remove_final_superadmin(client, new_course):
@@ -784,6 +826,10 @@ def test_superadmin_cannot_remove_final_superadmin(client, new_course):
         "message": "The final superadmin cannot be removed",
     }
     assert odb.normalize_super_role(odb.get_user(new_course[USER_ID])) == odb.SUPER_ROLE_SUPERADMIN
+
+    switched = client.put(superauditor_url(new_course[USER_ID]))
+    assert switched.status_code == 409
+    assert switched.json["message"] == "The final superadmin cannot be removed"
 
 
 def test_superadmin_can_remove_self_when_another_superadmin_remains(client, new_course):
@@ -800,15 +846,16 @@ def test_superadmin_can_remove_self_when_another_superadmin_remains(client, new_
 
 
 @pytest.mark.parametrize("role", [odb.SUPER_ROLE_NONE, odb.SUPER_ROLE_SUPERAUDITOR])
-def test_non_superadmin_cannot_change_superadmin(client, new_course, role):
+def test_non_superadmin_cannot_change_super_roles(client, new_course, role):
     ddbo = new_course["ddbo"]
     ddbo.update_table(ddbo.users, new_course[USER_ID], {odb.SUPER_ROLE: role})
     client.set_cookie(apikey.cookie_name(), new_course[API_KEY])
 
-    for method in (client.put, client.delete):
-        response = method(superadmin_url(new_course[USER_ID]))
-        assert response.status_code == 403
-        assert response.json == {"error": True, "message": "Superadmin access required"}
+    for url in (superadmin_url(new_course[USER_ID]), superauditor_url(new_course[USER_ID])):
+        for method in (client.put, client.delete):
+            response = method(url)
+            assert response.status_code == 403
+            assert response.json == {"error": True, "message": "Superadmin access required"}
 
 
 def test_course_admin_mutation_rejects_invalid_key_and_identifiers(client, new_course):
@@ -1177,6 +1224,18 @@ def test_admin_page_loads_for_superauditor(client, new_course):
     assert response.status_code == 200
     assert "admin.js" in response.text
     assert "Admin" in response.text
+    assert "(Super Auditor)" in response.text
+
+
+def test_admin_page_labels_superadmin(client, new_course):
+    ddbo = new_course["ddbo"]
+    ddbo.update_table(ddbo.users, new_course[USER_ID], {odb.SUPER_ROLE: odb.SUPER_ROLE_SUPERADMIN})
+    client.set_cookie(apikey.cookie_name(), new_course[API_KEY])
+
+    response = client.get("/admin")
+
+    assert response.status_code == 200
+    assert "(Super Admin)" in response.text
 
 
 def test_admin_page_loads_for_course_admin_without_super_role(client, new_course):

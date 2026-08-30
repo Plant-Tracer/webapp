@@ -102,8 +102,8 @@ def _change_course_administrator(course_id, *, assigned, user_id=None,
     return jsonify(response.model_dump())
 
 
-def _change_superadmin(user_id, *, assigned):
-    """Grant or revoke superadmin with atomic final-role protection."""
+def _change_super_role(user_id, role, *, removing=False):
+    """Grant, replace, or revoke one super role with atomic protection."""
     try:
         viewer_user = get_user_dict()
         if odb.normalize_super_role(viewer_user) != odb.SUPER_ROLE_SUPERADMIN:
@@ -115,14 +115,14 @@ def _change_superadmin(user_id, *, assigned):
             }), 400
         change = super_roles.set_super_role(
             user_id,
-            odb.SUPER_ROLE_SUPERADMIN if assigned else odb.SUPER_ROLE_NONE,
-            expected_old_role=None if assigned else odb.SUPER_ROLE_SUPERADMIN,
-            mismatch_is_noop=not assigned,
+            odb.SUPER_ROLE_NONE if removing else role,
+            expected_old_role=role if removing else None,
+            mismatch_is_noop=removing,
             actor_user_id=viewer_user[odb.USER_ID],
             ipaddr=request.remote_addr,
         )
         target_user = odb.get_user(user_id)
-        response = admin_service.AdminSuperadminChange(
+        response = admin_service.AdminSuperRoleChange(
             user=admin_service.user_summary(target_user),
             old_super_role=change.old_super_role,
             new_super_role=change.new_super_role,
@@ -142,7 +142,7 @@ def _change_superadmin(user_id, *, assigned):
     except super_roles.ConcurrentSuperRoleChange:
         return jsonify({
             "error": True,
-            "message": "Superadmin assignments changed concurrently; retry the request",
+            "message": "Super role assignments changed concurrently; retry the request",
         }), 409
     return jsonify(response.model_dump())
 
@@ -288,13 +288,25 @@ def api_admin_remove_course_administrator(course_id, user_id):
 @admin_api_bp.put("/users/<user_id>/superadmin")
 def api_admin_assign_superadmin(user_id):
     """Grant superadmin to an existing registered user."""
-    return _change_superadmin(user_id, assigned=True)
+    return _change_super_role(user_id, odb.SUPER_ROLE_SUPERADMIN)
 
 
 @admin_api_bp.delete("/users/<user_id>/superadmin")
 def api_admin_remove_superadmin(user_id):
     """Remove superadmin while protecting the final assignment."""
-    return _change_superadmin(user_id, assigned=False)
+    return _change_super_role(user_id, odb.SUPER_ROLE_SUPERADMIN, removing=True)
+
+
+@admin_api_bp.put("/users/<user_id>/superauditor")
+def api_admin_assign_superauditor(user_id):
+    """Grant superauditor to an existing registered user."""
+    return _change_super_role(user_id, odb.SUPER_ROLE_SUPERAUDITOR)
+
+
+@admin_api_bp.delete("/users/<user_id>/superauditor")
+def api_admin_remove_superauditor(user_id):
+    """Remove superauditor from an existing registered user."""
+    return _change_super_role(user_id, odb.SUPER_ROLE_SUPERAUDITOR, removing=True)
 
 
 @admin_api_bp.get("/movies/<movie_id>/media")
