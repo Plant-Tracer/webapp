@@ -601,7 +601,7 @@ describe('admin summary rendering', () => {
   test('expands tables to their container and resizes the whole table proportionally', () => {
     const container = document.createElement('div');
     container.className = 'admin-table-scroll';
-    Object.defineProperty(container, 'clientWidth', { value: 600 });
+    Object.defineProperty(container, 'clientWidth', { configurable: true, value: 600 });
     const table = document.createElement('table');
     table.innerHTML = '<colgroup><col><col><col></colgroup>';
     [...table.querySelectorAll('col')].forEach((column) => {
@@ -619,6 +619,16 @@ describe('admin summary rendering', () => {
     expect(table.style.width).toBe('900px');
     expect([...table.querySelectorAll('col')].map((column) => column.style.width))
       .toEqual(['300px', '300px', '300px']);
+
+    Object.defineProperty(container, 'clientWidth', { value: 240 });
+    const columns = [...table.querySelectorAll('col')];
+    columns[0].style.width = '1000px';
+    columns[1].style.width = '80px';
+    columns[2].style.width = '80px';
+    resizeWholeTable(table, 240);
+    expect(table.style.width).toBe('240px');
+    expect(columns.map((column) => column.style.width))
+      .toEqual(['80px', '80px', '80px']);
   });
 
   test('confirms removals and keeps API errors visible in the dialog', async () => {

@@ -348,7 +348,7 @@ div.mtable td.check {
 }
 
 .admin-section th:last-child .admin-resize-handle {
-  right: 0;
+  right: 0.75rem;
 }
 
 .admin-upload-pending td {

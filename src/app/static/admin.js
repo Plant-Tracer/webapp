@@ -926,7 +926,16 @@ function resizeWholeTable(table, requestedWidth) {
   const scale = targetWidth / currentWidth;
   const scaled = widths.map((width) => Math.max(80, Math.round(width * scale)));
   const scaledTotal = scaled.reduce((sum, width) => sum + width, 0);
-  scaled[scaled.length - 1] += targetWidth - scaledTotal;
+  let adjustment = targetWidth - scaledTotal;
+  if (adjustment >= 0) {
+    scaled[scaled.length - 1] += adjustment;
+  } else {
+    for (let index = scaled.length - 1; index >= 0 && adjustment < 0; index -= 1) {
+      const reduction = Math.min(scaled[index] - 80, -adjustment);
+      scaled[index] -= reduction;
+      adjustment += reduction;
+    }
+  }
   applyTableWidth(table, scaled);
 }
 
