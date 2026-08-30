@@ -898,7 +898,7 @@ function positionTableWidthHandle(table) {
   }
   const width = Number.parseFloat(table.style.width)
     || table.getBoundingClientRect().width;
-  handle.style.left = `${Math.max(0, Math.round(width) - 12)}px`;
+  handle.style.left = `${Math.max(0, Math.round(width))}px`;
 }
 
 function applyTableWidth(table, widths) {

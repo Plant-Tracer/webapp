@@ -638,7 +638,7 @@ describe('admin summary rendering', () => {
     expect(table.style.width).toBe('900px');
     fitTableToContainer(table);
     expect(table.style.width).toBe('900px');
-    expect(handle.style.left).toBe('888px');
+    expect(handle.style.left).toBe('900px');
     expect([...table.querySelectorAll('col')].map((column) => column.style.width))
       .toEqual(['300px', '300px', '300px']);
 

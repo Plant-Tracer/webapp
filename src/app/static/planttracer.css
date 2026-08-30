@@ -313,6 +313,7 @@ div.mtable td.check {
   position: absolute;
   top: 0;
   touch-action: none;
+  transform: translateX(-100%);
   width: 0.75rem;
   z-index: 2;
 }
