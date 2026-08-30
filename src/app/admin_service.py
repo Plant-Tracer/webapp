@@ -204,8 +204,8 @@ class AdminCourseAdministratorChange(BaseModel):
     changed: bool
 
 
-class AdminSuperadminChange(BaseModel):
-    """Safe result returned after a superadmin role mutation."""
+class AdminSuperRoleChange(BaseModel):
+    """Safe result returned after a mutually exclusive super-role mutation."""
 
     error: bool = False
     user: AdminUserSummary

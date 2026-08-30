@@ -77,8 +77,15 @@ Release Notes
 
 Unreleased Summary
 ******************
-    * Deployment: advance the application version to 0.9.9.8 for the next
+    * Deployment: advance the application version to 0.9.9.9 for the next
       development deployment.
+    * Admin: fill available browser width, add whole-table resize handles with
+      table-local overflow, identify Super Admin and Super Auditor sessions,
+      and move course and mutually exclusive user-role operations into row
+      Actions menus.
+    * Deployment: align both Lambda DynamoDB policies with the complete audited
+      runtime action set, including ``ConditionCheckItem`` for transactional
+      actor authorization checks.
     * Developer: complete the uv-only Python workflow with one ``uv.lock``,
       standard dependency groups, locked Lambda requirement exports, and
       Hatchling as the wheel build backend.

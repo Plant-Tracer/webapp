@@ -152,10 +152,10 @@ That record stores a version and the sorted set of current superadmin user IDs;
 ``app.super_roles`` updates it transactionally with user role changes so
 concurrent browser or operator requests cannot remove the final superadmin.
 Browser changes also condition the transaction on the acting user's current
-superadmin role and write an attributed ``user.superadmin.assigned`` or
-``user.superadmin.removed`` audit record in the reserved ``global`` audit
-scope. The shared service reconciles the singleton from a consistent
-users-table scan before each role mutation.
+superadmin role and write an attributed ``user.superadmin.*`` or
+``user.superauditor.*`` audit record in the reserved ``global`` audit scope.
+The shared service reconciles the singleton from a consistent users-table scan
+before each role mutation.
 
 
 api_keys
@@ -258,6 +258,12 @@ The ``logs`` table records ``movie.upload.completed``,
 ``movie.resize.started``, and ``movie.resize.completed``. Entries identify the
 movie, user, course, and event time. Upload records may include EventBridge and
 S3 details; resize completion includes elapsed seconds.
+
+Super-role changes use ``user.superadmin.assigned``,
+``user.superadmin.removed``, ``user.superauditor.assigned``, or
+``user.superauditor.removed``. They include the target user and the canonical
+``old_super_role`` and ``new_super_role`` values so a mutually exclusive role
+replacement is explicit in the audit record.
 
 See ``src/app/schema.py`` ``Movie`` class for the full schema and constraints.
 

@@ -143,7 +143,9 @@
     {% if logged_in %}
     <div>
       {% if demo_mode %}<b>DEMO MODE:</b> {% endif %}
-      Logged in as <b>{{user_name}}</b>. Current course:
+      Logged in as <b>{{user_name}}</b>{% if super_role == 'superadmin' %}
+      <span class="logged-in-super-role">(Super Admin)</span>{% elif super_role == 'superauditor' %}
+      <span class="logged-in-super-role">(Super Auditor)</span>{% endif %}. Current course:
       <select id="current-course-select" data-current-course-id="{{user_default_course_id}}"
               data-default-course-id="{{user_default_course_id}}"
               aria-label="Current course">

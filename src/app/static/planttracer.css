@@ -201,7 +201,10 @@ div.mtable td.check {
 /* Admin summary. */
 
 .admin-summary {
-  max-width: 1100px;
+  box-sizing: border-box;
+  max-width: none;
+  min-width: 0;
+  width: 100%;
 }
 
 .admin-kpis {
@@ -292,16 +295,41 @@ div.mtable td.check {
 }
 
 .admin-section table {
-  width: 100% !important;
+  min-width: 100%;
   table-layout: fixed;
+  width: 100%;
 }
 
 .admin-table-scroll {
-  overflow-x: visible;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  position: relative;
+}
+
+.admin-table-width-handle {
+  bottom: 0;
+  cursor: ew-resize;
+  position: absolute;
+  top: 0;
+  touch-action: none;
+  width: 0.75rem;
+  z-index: 2;
+}
+
+.admin-table-width-handle:focus,
+.admin-table-width-handle:hover {
+  background: rgba(44, 122, 102, 0.18);
+  outline: 2px solid #2c7a66;
+  outline-offset: -2px;
 }
 
 .admin-section th {
   position: relative;
+}
+
+.admin-section td {
+  overflow-wrap: anywhere;
 }
 
 .admin-resize-handle {
@@ -317,6 +345,10 @@ div.mtable td.check {
 .admin-resize-handle:focus {
   background: rgba(0, 0, 0, 0.12);
   outline: 2px solid #2c7a66;
+}
+
+.admin-section th:last-child .admin-resize-handle {
+  right: 0;
 }
 
 .admin-upload-pending td {
@@ -343,9 +375,8 @@ div.mtable td.check {
   box-shadow: 0 2px 7px rgba(0, 0, 0, 0.2);
   min-width: 10rem;
   padding: 0.25rem;
-  position: absolute;
-  right: 0.25rem;
-  z-index: 3;
+  position: fixed;
+  z-index: 10;
 }
 
 .admin-actions-menu button {
@@ -426,15 +457,6 @@ div.mtable td.check {
 
 .course-admin-names {
   display: block;
-}
-
-.course-admin-manage {
-  margin-top: 0.35rem;
-}
-
-.admin-super-role {
-  display: block;
-  margin-top: 0.35rem;
 }
 
 #course-admin-dialog {

@@ -118,18 +118,21 @@ button, and the API independently rejects their requests. Successful creation
 assigns the administrator, records the acting superadmin in the audit log, and
 sends the administrator a course setup/login email.
 
-The course table's ``Manage`` control is shown to superadmins and to course
+The course table's Actions menu offers ``Manage`` to superadmins and to course
 administrators for each course they administer. Removing course-admin status
 retains ordinary enrollment and the user's default course. Course-admin
 changes are atomic, condition the write on the actor's current authority, and
 write attributed audit events. This prevents an authority change racing with
 the administrator update.
 
-The Admin page's user table gives ``superadmin`` users controls to grant or
-remove ``superadmin`` from any registered user. A superadmin may remove their own
-role when another superadmin remains. The final superadmin cannot be removed.
-These browser operations use the same ``app.super_roles`` transaction service
-as ``dbutil``, including the versioned registry and attributed audit records.
+The Admin page identifies the current ``Super Admin`` or ``Super Auditor``
+beside their name. Its user-row Actions menu lets ``superadmin`` users grant,
+replace, or remove either mutually exclusive super role for any registered
+user. A superadmin may remove or replace their own role when another
+superadmin remains. The final superadmin cannot be removed or changed to
+superauditor. These browser operations use the same ``app.super_roles``
+transaction service as ``dbutil``, including the versioned registry and
+attributed audit records with old and new role values.
 
 Operators can list all registered users with ``make user-list``. The target
 runs ``uv run dbutil user-list`` and prints each user's display name, email

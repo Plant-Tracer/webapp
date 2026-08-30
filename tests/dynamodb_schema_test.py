@@ -181,6 +181,7 @@ def test_persisted_pydantic_models_round_trip_through_dynamodb_local(local_ddb):
             object_key="movie.mp4", sequencer="001", total_bytes=1234,
             elapsed_seconds=Decimal("1.25"), trace_job_id="trace-job",
             error_type="RuntimeError", error_summary="test failure",
+            old_super_role="none", new_super_role="superauditor",
         ),
     )
 

@@ -166,6 +166,17 @@ the table prefix and grants prefix-scoped permissions, but table creation and
 schema maintenance remain handled by repository tooling such as
 ``uv run dbutil`` and ``etc/dynamodb_tables.json``.
 
+Both Lambda runtime roles grant the same audited DynamoDB data-plane actions:
+``BatchGetItem``, ``BatchWriteItem``, ``ConditionCheckItem``, ``DeleteItem``,
+``DescribeTable``, ``GetItem``, ``PutItem``, ``Query``, ``Scan``, and
+``UpdateItem``. Except for the retained ``BatchGetItem`` capability, these map
+to the runtime source's table reads and writes, batch writers, initialization
+checks, and transaction members. DynamoDB ``TransactWriteItems`` authorization
+is evaluated through its member operations; transactions containing an actor
+``ConditionCheck`` therefore require the permission-only
+``ConditionCheckItem`` action. Tests keep both role policies equal to this
+inventory.
+
 The migration must not make stack deletion delete the long-lived S3 archive or
 the DynamoDB data model.
 

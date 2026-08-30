@@ -131,6 +131,7 @@ Resources:
                 Action:
                   - dynamodb:BatchGetItem
                   - dynamodb:BatchWriteItem
+                  - dynamodb:ConditionCheckItem
                   - dynamodb:DeleteItem
                   - dynamodb:DescribeTable
                   - dynamodb:GetItem
@@ -191,6 +192,7 @@ Resources:
                 Action:
                   - dynamodb:BatchGetItem
                   - dynamodb:BatchWriteItem
+                  - dynamodb:ConditionCheckItem
                   - dynamodb:DeleteItem
                   - dynamodb:DescribeTable
                   - dynamodb:GetItem
