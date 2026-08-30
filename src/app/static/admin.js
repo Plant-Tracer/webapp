@@ -966,7 +966,10 @@ function resizeColumn(table, index, width) {
   const currentWidths = configuredColumnWidths(table);
   currentWidths[index] = Math.max(80, Math.round(width));
   const containerWidth = table.closest(".admin-table-scroll")?.clientWidth || 0;
-  const containerFitWidth = Math.max(0, containerWidth - ADMIN_TABLE_FIT_ALLOWANCE);
+  const containerFitWidth = Math.max(
+    ADMIN_TABLE_MIN_WIDTH,
+    containerWidth - ADMIN_TABLE_FIT_ALLOWANCE,
+  );
   const totalWidth = currentWidths.reduce((total, value) => total + value, 0);
   if (totalWidth < containerFitWidth) {
     const fillIndex = index === currentWidths.length - 1 ? 0 : currentWidths.length - 1;

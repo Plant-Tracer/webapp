@@ -175,6 +175,11 @@ describe('admin summary rendering', () => {
     const firstTable = document.querySelector('[data-resizable-table]');
     const tableWidthHandle = firstTable.parentElement.querySelector('.admin-table-width-handle');
     const initialTableWidth = Number.parseFloat(firstTable.style.width);
+    firstTable.querySelector('.admin-resize-handle').dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'ArrowLeft', bubbles: true, cancelable: true,
+    }));
+    expect(Number.parseFloat(firstTable.style.width)).toBe(initialTableWidth);
+    expect(tableWidthHandle.style.left).toBe(`${initialTableWidth}px`);
     tableWidthHandle.dispatchEvent(new KeyboardEvent('keydown', {
       key: 'PageDown', bubbles: true, cancelable: true,
     }));
