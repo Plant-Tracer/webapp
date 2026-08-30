@@ -162,6 +162,11 @@ describe('admin summary rendering', () => {
     expect(movieRow.querySelector('.admin-actions-menu').textContent).toContain('Play');
     expect(movieRow.querySelector('.admin-actions-menu').textContent).toContain('Download traced');
     expect(movieRow.querySelector('.admin-actions-menu').textContent).not.toContain('Analyze');
+    const movieMenu = movieRow.querySelector('.admin-actions-menu');
+    movieRow.querySelector('.admin-actions-toggle').click();
+    expect(movieMenu.hidden).toBe(false);
+    document.querySelector('#admin-course-rows .admin-actions-cell').click();
+    expect(movieMenu.hidden).toBe(true);
     expect(document.querySelectorAll('.admin-resize-handle')).toHaveLength(3);
     const firstTable = document.querySelector('[data-resizable-table]');
     const tableWidthHandle = firstTable.parentElement.querySelector('.admin-table-width-handle');

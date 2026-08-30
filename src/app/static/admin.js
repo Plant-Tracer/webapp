@@ -218,7 +218,7 @@ function bindActionMenuDismissal() {
   }
   document.body.dataset.adminActionDismissalBound = "true";
   document.addEventListener("click", (event) => {
-    if (!event.target.closest(".admin-actions-cell")) {
+    if (!event.target.closest(".admin-actions-toggle, .admin-actions-menu")) {
       closeActionMenus();
     }
   });
