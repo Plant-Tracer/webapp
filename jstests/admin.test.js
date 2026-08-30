@@ -157,7 +157,11 @@ describe('admin summary rendering', () => {
     expect(userRow.querySelector('strong').textContent).toBe('Biology');
     const movieRow = document.querySelector('#admin-movie-rows tr');
     expect(movieRow.textContent).toContain('Bean Growth');
-    expect(movieRow.textContent).toContain('121 frames · 2 min elapsed · 2.5 MB');
+    expect(movieRow.textContent).toContain('121 / 2.5MB / 2 min');
+    expect(movieRow.children[0].classList).toContain('admin-movie-title');
+    expect(movieRow.children[0].title).toBe('Bean Growth');
+    expect(movieRow.children[3].textContent).not.toMatch(/\b(?:AM|PM)\b/);
+    expect(movieRow.children[4].textContent).not.toMatch(/\b(?:AM|PM)\b/);
     expect(movieRow.querySelector('.admin-actions-toggle').textContent).toBe('⋮');
     expect(movieRow.querySelector('.admin-actions-menu').textContent).toContain('Play');
     expect(movieRow.querySelector('.admin-actions-menu').textContent).toContain('Download traced');
@@ -171,6 +175,11 @@ describe('admin summary rendering', () => {
     const firstTable = document.querySelector('[data-resizable-table]');
     const tableWidthHandle = firstTable.parentElement.querySelector('.admin-table-width-handle');
     const initialTableWidth = Number.parseFloat(firstTable.style.width);
+    firstTable.querySelector('.admin-resize-handle').dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'ArrowLeft', bubbles: true, cancelable: true,
+    }));
+    expect(Number.parseFloat(firstTable.style.width)).toBe(initialTableWidth);
+    expect(tableWidthHandle.style.left).toBe(`${initialTableWidth}px`);
     tableWidthHandle.dispatchEvent(new KeyboardEvent('keydown', {
       key: 'PageDown', bubbles: true, cancelable: true,
     }));
@@ -183,6 +192,42 @@ describe('admin summary rendering', () => {
     const courseLink = document.querySelector('#admin-course-rows a');
     expect(courseLink.href).toContain('/list?course_id=BIO-1');
     expect(courseLink.target).toBe('_blank');
+  });
+
+  test('renders each course administrator on a separate line', async () => {
+    const adminPayload = payload();
+    adminPayload.users.items.push({
+      user_id: 'user-2', user_name: 'Grace', email: 'grace@example.test',
+      default_course_id: 'BIO-1', enabled: true, super_role: 'none', created_at: 1700000001,
+      last_movie_activity_at: null,
+      courses: [{ course_id: 'BIO-1', is_admin: true }],
+    });
+    fetch.mockResponseOnce(JSON.stringify(adminPayload));
+
+    await loadAdminSummary();
+
+    const names = [...document.querySelectorAll(
+      '#admin-course-rows tr:first-child .course-admin-name',
+    )];
+    expect(names.map((name) => name.textContent)).toEqual([
+      'Ada (ada@example.test)',
+      'Grace (grace@example.test)',
+    ]);
+  });
+
+  test('formats movie measurements compactly', async () => {
+    const adminPayload = payload();
+    Object.assign(adminPayload.movies.items[0], {
+      total_frames: 6362,
+      total_bytes: 164900000,
+      fpm: '2',
+    });
+    fetch.mockResponseOnce(JSON.stringify(adminPayload));
+
+    await loadAdminSummary();
+
+    expect(document.querySelector('#admin-movie-rows tr').children[5].textContent)
+      .toBe('6,362 / 165MB / 3181 min');
   });
 
   test('loads every table page and globally sorts movies', async () => {
@@ -620,42 +665,60 @@ describe('admin summary rendering', () => {
       .toContain('Super role update failed with HTTP 500');
   });
 
-  test('expands tables to their container and resizes the whole table proportionally', () => {
+  test('follows the container width down to a 1024px table minimum', () => {
     const container = document.createElement('div');
     container.className = 'admin-table-scroll';
-    Object.defineProperty(container, 'clientWidth', { configurable: true, value: 600 });
+    Object.defineProperty(container, 'clientWidth', { configurable: true, value: 1600 });
     const table = document.createElement('table');
-    table.innerHTML = '<colgroup><col><col><col></colgroup>';
+    table.innerHTML = '<colgroup><col><col><col><col></colgroup>';
     [...table.querySelectorAll('col')].forEach((column) => {
-      column.style.width = '100px';
+      column.style.width = '256px';
     });
-    table.style.width = '300px';
+    table.style.width = '1024px';
     const handle = document.createElement('span');
     handle.className = 'admin-table-width-handle';
     container.append(table, handle);
 
     fitTableToContainer(table);
-    expect(table.style.width).toBe('600px');
+    expect(table.style.width).toBe('1599px');
     expect([...table.querySelectorAll('col')].map((column) => column.style.width))
-      .toEqual(['200px', '200px', '200px']);
+      .toEqual(['400px', '400px', '400px', '399px']);
 
-    resizeWholeTable(table, 900);
-    expect(table.style.width).toBe('900px');
+    Object.defineProperty(container, 'clientWidth', { value: 1200 });
     fitTableToContainer(table);
-    expect(table.style.width).toBe('900px');
-    expect(handle.style.left).toBe('900px');
+    expect(table.style.width).toBe('1199px');
     expect([...table.querySelectorAll('col')].map((column) => column.style.width))
-      .toEqual(['300px', '300px', '300px']);
+      .toEqual(['300px', '300px', '300px', '299px']);
 
-    Object.defineProperty(container, 'clientWidth', { value: 240 });
+    Object.defineProperty(container, 'clientWidth', { value: 900 });
+    fitTableToContainer(table);
+    expect(table.style.width).toBe('1024px');
+    expect(handle.style.left).toBe('1024px');
+    expect([...table.querySelectorAll('col')].map((column) => column.style.width))
+      .toEqual(['256px', '256px', '256px', '256px']);
+
+    resizeWholeTable(table, 800);
+    expect(table.style.width).toBe('1024px');
+  });
+
+  test('distributes shrink adjustments without violating column minimums', () => {
+    const container = document.createElement('div');
+    container.className = 'admin-table-scroll';
+    Object.defineProperty(container, 'clientWidth', { value: 900 });
+    const table = document.createElement('table');
+    table.innerHTML = '<colgroup><col><col><col></colgroup>';
     const columns = [...table.querySelectorAll('col')];
     columns[0].style.width = '1000px';
     columns[1].style.width = '80px';
     columns[2].style.width = '80px';
-    resizeWholeTable(table, 240);
-    expect(table.style.width).toBe('240px');
+    table.style.width = '1160px';
+    container.append(table);
+
+    resizeWholeTable(table, 900);
+
+    expect(table.style.width).toBe('1024px');
     expect(columns.map((column) => column.style.width))
-      .toEqual(['80px', '80px', '80px']);
+      .toEqual(['864px', '80px', '80px']);
   });
 
   test('confirms removals and keeps API errors visible in the dialog', async () => {
@@ -700,6 +763,7 @@ describe('admin summary rendering', () => {
     document.getElementById('admin-verbose-details').click();
     await new Promise((resolve) => { setTimeout(resolve, 0); });
     expect(document.body.textContent).toContain('Movie ID: movie-1');
+    expect(document.body.textContent).toContain('Title: Bean Growth');
     expect(document.body.textContent).toContain('Description: Daily bean measurement');
     expect(document.body.textContent).toContain('Original object: present');
     expect(document.body.textContent).toContain('Traced object: missing');

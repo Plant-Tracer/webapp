@@ -13,6 +13,8 @@ const TABLE_CONFIG = {
   },
 };
 const TABLE_NAMES = Object.keys(TABLE_CONFIG);
+const ADMIN_TABLE_MIN_WIDTH = 1024;
+const ADMIN_TABLE_FIT_ALLOWANCE = 1;
 const state = {
   courses: [],
   users: [],
@@ -38,13 +40,14 @@ function epochSeconds(value) {
   return Number.isFinite(epoch) && epoch > 0 ? epoch : null;
 }
 
-function formatDate(value) {
+function formatDate(value, hour12 = undefined) {
   const epoch = epochSeconds(value);
-  return epoch === null ? "—" : new Date(epoch * 1000).toLocaleString();
+  const options = hour12 === undefined ? undefined : { hour12 };
+  return epoch === null ? "—" : new Date(epoch * 1000).toLocaleString(undefined, options);
 }
 
-function dateCell(value, title = "") {
-  const cell = textCell(formatDate(value));
+function dateCell(value, title = "", hour12 = undefined) {
+  const cell = textCell(formatDate(value, hour12));
   cell.dataset.sortValue = epochSeconds(value) || 0;
   if (title) {
     cell.title = title;
@@ -228,11 +231,18 @@ function bindActionMenuDismissal() {
 function courseAdministratorCell(course) {
   const cell = document.createElement("td");
   const administrators = course.administrators || [];
-  const names = document.createElement("span");
+  const names = document.createElement("div");
   names.className = "course-admin-names";
-  names.textContent = administrators.length
-    ? administrators.map(administratorLabel).join(", ")
-    : "none";
+  if (administrators.length) {
+    administrators.forEach((administrator) => {
+      const name = document.createElement("span");
+      name.className = "course-admin-name";
+      name.textContent = administratorLabel(administrator);
+      names.append(name);
+    });
+  } else {
+    names.textContent = "none";
+  }
   cell.append(names);
   return cell;
 }
@@ -518,6 +528,8 @@ function appendUserRows(users) {
 
 function movieTitleCell(movie) {
   const cell = document.createElement("td");
+  cell.className = "admin-movie-title";
+  cell.title = movie.title;
   if (state.viewerRole === "superadmin" && epochSeconds(movie.uploaded_at)) {
     const link = document.createElement("a");
     link.href = `/analyze?movie_id=${encodeURIComponent(movie.movie_id)}`;
@@ -533,18 +545,20 @@ function movieSizeText(movie) {
   const details = [];
   const frames = Number(movie.total_frames);
   if (Number.isFinite(frames) && frames >= 0) {
-    details.push(`${frames.toLocaleString()} frames`);
+    details.push(frames.toLocaleString());
+  }
+  const bytes = Number(movie.total_bytes);
+  if (Number.isFinite(bytes) && bytes > 0) {
+    const megabytes = bytes / 1000000;
+    const maximumFractionDigits = megabytes < 10 ? 1 : 0;
+    details.push(`${megabytes.toLocaleString(undefined, { maximumFractionDigits })}MB`);
   }
   const fpm = Number(movie.fpm);
   if (Number.isFinite(frames) && frames > 0 && Number.isFinite(fpm) && fpm > 0) {
     const minutes = Math.max(0, frames - 1) / fpm;
-    details.push(`${minutes.toLocaleString(undefined, { maximumFractionDigits: 2 })} min elapsed`);
+    details.push(`${Math.round(minutes)} min`);
   }
-  const bytes = Number(movie.total_bytes);
-  if (Number.isFinite(bytes) && bytes > 0) {
-    details.push(`${(bytes / 1000000).toLocaleString(undefined, { maximumFractionDigits: 1 })} MB`);
-  }
-  return details.length ? details.join(" · ") : "—";
+  return details.length ? details.join(" / ") : "—";
 }
 
 async function fetchAdminJson(url, failureLabel, options = {}) {
@@ -642,8 +656,8 @@ function appendMovieRows(movies) {
       movieTitleCell(movie),
       courseCell,
       textCell(movie.owner_name),
-      dateCell(movie.uploaded_at),
-      dateCell(movie.last_activity_at),
+      dateCell(movie.uploaded_at, "", false),
+      dateCell(movie.last_activity_at, "", false),
       textCell(movieSizeText(movie)),
       textCell(movie.state),
       textCell(movie.status),
@@ -653,7 +667,8 @@ function appendMovieRows(movies) {
     if (state.verboseDetails) {
       const dimensions = movie.width && movie.height ? `${movie.width} × ${movie.height}` : null;
       tbody.append(verboseRow(compactDetails([
-        ["Movie ID", movie.movie_id], ["Description", movie.description],
+        ["Title", movie.title], ["Movie ID", movie.movie_id],
+        ["Description", movie.description],
         ["Dimensions", dimensions], ["FPS", movie.fps], ["FPM", movie.fpm],
         ["Rotation", movie.rotation], ["Trim start", movie.trim_start_frame],
         ["Trim end", movie.trim_end_frame], ["Retrace required", movie.needs_retracing ? "yes" : "no"],
@@ -871,7 +886,8 @@ function initializeColumnWidths(table) {
     totalWidth += width;
   });
   const containerWidth = table.closest(".admin-table-scroll")?.clientWidth || 0;
-  table.style.width = `${Math.max(totalWidth, containerWidth)}px`;
+  table.style.width = `${totalWidth}px`;
+  resizeWholeTable(table, Math.max(containerWidth - ADMIN_TABLE_FIT_ALLOWANCE, ADMIN_TABLE_MIN_WIDTH));
 }
 
 function configuredColumnWidths(table) {
@@ -908,8 +924,10 @@ function resizeWholeTable(table, requestedWidth) {
     return;
   }
   const containerWidth = table.closest(".admin-table-scroll")?.clientWidth || 0;
+  const containerFitWidth = Math.max(0, containerWidth - ADMIN_TABLE_FIT_ALLOWANCE);
   const targetWidth = Math.max(
-    containerWidth,
+    ADMIN_TABLE_MIN_WIDTH,
+    containerFitWidth,
     widths.length * 80,
     Math.round(requestedWidth),
   );
@@ -933,8 +951,12 @@ function fitTableToContainer(table) {
   const containerWidth = table.closest(".admin-table-scroll")?.clientWidth || 0;
   const tableWidth = Number.parseFloat(table.style.width)
     || table.getBoundingClientRect().width;
-  if (containerWidth > tableWidth) {
-    resizeWholeTable(table, containerWidth);
+  const targetWidth = Math.max(
+    containerWidth - ADMIN_TABLE_FIT_ALLOWANCE,
+    ADMIN_TABLE_MIN_WIDTH,
+  );
+  if (Math.round(tableWidth) !== Math.round(targetWidth)) {
+    resizeWholeTable(table, targetWidth);
   } else {
     positionTableWidthHandle(table);
   }
@@ -944,10 +966,14 @@ function resizeColumn(table, index, width) {
   const currentWidths = configuredColumnWidths(table);
   currentWidths[index] = Math.max(80, Math.round(width));
   const containerWidth = table.closest(".admin-table-scroll")?.clientWidth || 0;
+  const containerFitWidth = Math.max(
+    ADMIN_TABLE_MIN_WIDTH,
+    containerWidth - ADMIN_TABLE_FIT_ALLOWANCE,
+  );
   const totalWidth = currentWidths.reduce((total, value) => total + value, 0);
-  if (totalWidth < containerWidth) {
+  if (totalWidth < containerFitWidth) {
     const fillIndex = index === currentWidths.length - 1 ? 0 : currentWidths.length - 1;
-    currentWidths[fillIndex] += containerWidth - totalWidth;
+    currentWidths[fillIndex] += containerFitWidth - totalWidth;
   }
   applyTableWidth(table, currentWidths);
 }

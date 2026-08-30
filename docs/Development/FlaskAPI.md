@@ -194,14 +194,16 @@ clients must treat restart markers as opaque. Course rows include the registrati
 `course_key`; callers must treat it as a secret because anyone with the key can
 request enrollment in that course. The admin page masks each course key by default;
 its per-row eye control reveals or hides the value without changing it.
-Admin tables fill the available page width without a scrollbar when the page is
-wide enough. Each column has a drag/keyboard resize handle, and the table's
-right edge is a drag/keyboard handle that proportionally resizes the whole
-table; widening beyond the available page width enables a table-local
-horizontal scrollbar. Course links open
+Admin tables grow and shrink with the available page width down to a 1024-pixel
+minimum. Narrower pages keep the table at that minimum and enable a table-local
+horizontal scrollbar. Each column has a drag/keyboard resize handle, and the
+table's right edge is a drag/keyboard handle that proportionally resizes the
+whole table. Course administrators appear one per line. Course links open
 `/list?course_id=...` in a new tab without changing the user's persisted default
 course. Course, user, and movie rows use a visible `⋮` Actions menu for their
-authorized operations.
+authorized operations. Movie rows use one-line ellipsized titles, 24-hour
+timestamps, and compact `frames / MB / min` measurements; verbose details
+retain the complete title.
 
 #### `POST /api/admin/courses`
 
