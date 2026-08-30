@@ -163,6 +163,17 @@ describe('admin summary rendering', () => {
     expect(movieRow.querySelector('.admin-actions-menu').textContent).toContain('Download traced');
     expect(movieRow.querySelector('.admin-actions-menu').textContent).not.toContain('Analyze');
     expect(document.querySelectorAll('.admin-resize-handle')).toHaveLength(3);
+    const firstTable = document.querySelector('[data-resizable-table]');
+    const tableWidthHandle = firstTable.parentElement.querySelector('.admin-table-width-handle');
+    const initialTableWidth = Number.parseFloat(firstTable.style.width);
+    tableWidthHandle.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'PageDown', bubbles: true, cancelable: true,
+    }));
+    expect(Number.parseFloat(firstTable.style.width)).toBe(initialTableWidth);
+    tableWidthHandle.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'ArrowRight', bubbles: true, cancelable: true,
+    }));
+    expect(Number.parseFloat(firstTable.style.width)).toBe(initialTableWidth + 20);
     expect(document.getElementById('admin-new-course').hidden).toBe(true);
     const courseLink = document.querySelector('#admin-course-rows a');
     expect(courseLink.href).toContain('/list?course_id=BIO-1');
@@ -537,7 +548,13 @@ describe('admin summary rendering', () => {
     const bobMenu = userRows[1].querySelector('.admin-actions-menu');
     expect([...bobMenu.querySelectorAll('button')].map((button) => button.textContent))
       .toEqual(['Make Super Admin', 'Make Super Auditor']);
-    userRows[1].querySelector('.admin-actions-toggle').click();
+    const adaToggle = userRows[0].querySelector('.admin-actions-toggle');
+    const bobToggle = userRows[1].querySelector('.admin-actions-toggle');
+    adaToggle.click();
+    expect(adaMenu.hidden).toBe(false);
+    bobToggle.click();
+    expect(adaMenu.hidden).toBe(true);
+    expect(adaToggle.getAttribute('aria-expanded')).toBe('false');
     bobMenu.querySelector('button').click();
     await new Promise((resolve) => { setTimeout(resolve, 0); });
 
@@ -608,7 +625,9 @@ describe('admin summary rendering', () => {
       column.style.width = '100px';
     });
     table.style.width = '300px';
-    container.append(table);
+    const handle = document.createElement('span');
+    handle.className = 'admin-table-width-handle';
+    container.append(table, handle);
 
     fitTableToContainer(table);
     expect(table.style.width).toBe('600px');
@@ -617,6 +636,9 @@ describe('admin summary rendering', () => {
 
     resizeWholeTable(table, 900);
     expect(table.style.width).toBe('900px');
+    fitTableToContainer(table);
+    expect(table.style.width).toBe('900px');
+    expect(handle.style.left).toBe('888px');
     expect([...table.querySelectorAll('col')].map((column) => column.style.width))
       .toEqual(['300px', '300px', '300px']);
 
