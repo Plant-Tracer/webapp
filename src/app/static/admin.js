@@ -414,11 +414,6 @@ function coursesCell(courses) {
 }
 
 
-function superadminCount() {
-  return state.users.filter((user) => user.super_role === "superadmin").length;
-}
-
-
 function superRoleLabel(role) {
   return {
     none: "None",
@@ -474,7 +469,6 @@ function userRoleActionsCell(user) {
   if (state.viewerRole !== "superadmin") {
     return actionsMenuCell(`Actions for ${administratorLabel(user)}`, []);
   }
-  const finalSuperadmin = user.super_role === "superadmin" && superadminCount() === 1;
   const actions = [];
   if (user.super_role !== "superadmin") {
     actions.push({
@@ -486,16 +480,12 @@ function userRoleActionsCell(user) {
     actions.push({
       label: "Make Super Auditor",
       action: async () => changeSuperRole(user, "superauditor"),
-      disabled: finalSuperadmin,
-      title: finalSuperadmin ? "The final Super Admin cannot be replaced" : "",
     });
   }
   if (user.super_role !== "none") {
     actions.push({
       label: `Remove ${superRoleLabel(user.super_role)}`,
       action: async () => changeSuperRole(user, "none"),
-      disabled: finalSuperadmin,
-      title: finalSuperadmin ? "The final Super Admin cannot be removed" : "",
     });
   }
   return actionsMenuCell(`Actions for ${administratorLabel(user)}`, actions);

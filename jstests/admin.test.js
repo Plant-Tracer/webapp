@@ -520,7 +520,7 @@ describe('admin summary rendering', () => {
     expect(document.getElementById('course-admin-current').textContent).toContain('Bob');
   });
 
-  test('superadmin grants roles and cannot remove the final superadmin in the UI', async () => {
+  test('superadmin grants roles without inferring the final superadmin from one page', async () => {
     const adminPayload = payload();
     adminPayload.viewer = {
       user_id: 'user-1', user_name: 'Ada', super_role: 'superadmin',
@@ -549,7 +549,7 @@ describe('admin summary rendering', () => {
     const adaMenu = userRows[0].querySelector('.admin-actions-menu');
     expect([...adaMenu.querySelectorAll('button')].map((button) => button.textContent))
       .toEqual(['Make Super Auditor', 'Remove Super Admin']);
-    expect([...adaMenu.querySelectorAll('button')].every((button) => button.disabled)).toBe(true);
+    expect([...adaMenu.querySelectorAll('button')].every((button) => button.disabled)).toBe(false);
     const bobMenu = userRows[1].querySelector('.admin-actions-menu');
     expect([...bobMenu.querySelectorAll('button')].map((button) => button.textContent))
       .toEqual(['Make Super Admin', 'Make Super Auditor']);
