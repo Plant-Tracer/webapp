@@ -295,7 +295,8 @@ div.mtable td.check {
 }
 
 .admin-section table {
-  min-width: 100%;
+  box-sizing: border-box;
+  min-width: 1024px;
   table-layout: fixed;
   width: 100%;
 }
@@ -331,6 +332,21 @@ div.mtable td.check {
 
 .admin-section td {
   overflow-wrap: anywhere;
+}
+
+.course-admin-name {
+  display: block;
+}
+
+.admin-movie-title,
+.admin-movie-title a {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-movie-title a {
+  display: block;
 }
 
 .admin-resize-handle {

@@ -77,8 +77,13 @@ Release Notes
 
 Unreleased Summary
 ******************
-    * Deployment: advance the application version to 0.9.9.9 for the next
+    * Deployment: advance the application version to 0.9.9.10 for the next
       development deployment.
+    * Admin: shrink dashboard tables with the browser down to a 1024-pixel
+      minimum before enabling table-local horizontal scrolling, and display
+      each course administrator on a separate line; compact Movies with
+      ellipsized titles, 24-hour timestamps, concise measurements, and complete
+      titles in verbose details.
     * Admin: fill available browser width, add whole-table resize handles with
       table-local overflow, identify Super Admin and Super Auditor sessions,
       and move course and mutually exclusive user-role operations into row
