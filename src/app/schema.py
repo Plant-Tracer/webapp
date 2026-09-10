@@ -168,7 +168,6 @@ class Movie(BaseModel):
     height: Annotated[int | None, Field(ge=0, le=10000)] = None
     trackpoint_origin: Literal["bottom-left"] | None = None
     frame_height_px: Annotated[int | None, Field(gt=0)] = None
-    legacy_frame_height_invalidated: bool = False
 
     total_frames: Annotated[int | None, Field(ge=0, le=999999)] = None
     trim_start_frame: Annotated[int | None, Field(ge=0, le=999999)] = None

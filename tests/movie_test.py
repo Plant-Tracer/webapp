@@ -225,6 +225,26 @@ def test_new_movie_stores_fpm_and_signs_metadata(client, new_course, local_s3):
     odb_movie_data.purge_movie(movie_id=res['movie_id'])
 
 
+@pytest.mark.parametrize('rotation', [None, 0, 90, 180, 270, 45, 'invalid', ''])
+def test_new_movie_rotation_is_set_before_upload(client, new_course, rotation):
+    response = client.post('/api/new-movie', data={
+        API_KEY: new_course[API_KEY], 'title': 'orientation test', 'description': 'new upload',
+        'movie_data_sha256': 'a' * 64, 'movie_data_length': 4,
+        **({odb.MOVIE_ROTATION: rotation} if rotation is not None else {}),
+    })
+    if rotation in (45, 'invalid', ''):
+        assert response.status_code == 400
+        assert response.get_json()['error'] is True
+        return
+    assert response.status_code == 200
+    movie_id = response.get_json()[MOVIE_ID]
+    movie = odb.get_movie(movie_id=movie_id)
+    assert movie[odb.MOVIE_ROTATION] == (rotation or 0)
+    assert movie[odb.MOVIE_STATUS] == odb.MOVIE_STATE_UPLOADING
+    assert not movie.get(odb.RESIZED_AT)
+    odb_movie_data.purge_movie(movie_id=movie_id)
+
+
 def test_new_movie_rejects_invalid_fpm(client, new_course):
     """new-movie with an invalid fpm returns an error and does not create the movie."""
     api_key = copy.copy(new_course)[API_KEY]
@@ -566,8 +586,7 @@ def test_set_research_metadata(client, new_course):
 
 
 def test_api_edit_movie(new_movie, client):
-    """Verify edit-movie: invalid action/auth fail; valid rotate90cw updates rotation_steps and triggers Lambda.
-    VM only updates rotation_steps and clears tracking; rotation/zip run in Lambda."""
+    """Only valid, authenticated pre-processing rotation changes are accepted."""
     api_key = new_movie[API_KEY]
     movie_id = new_movie[MOVIE_ID]
 
@@ -592,14 +611,14 @@ def test_api_edit_movie(new_movie, client):
     resp = client.post('/api/rotate-movie', data=data)
     assert resp.json['error'] is True, f"resp.json={resp.json} data={data}"
 
-    # Success: rotation_steps omitted => 1 step
+    # Success: rotation before processing
     data = {'api_key': api_key, 'movie_id': movie_id, 'rotation': '90'}
     resp = client.post('/api/rotate-movie', data=data)
     assert resp.json['error'] is False, f"resp.json={resp.json} data={data}"
     movie = odb.get_movie(movie_id=movie_id)
     assert movie.get('rotation') == 90, f"{movie}"
 
-    # Success: rotation_steps=2
+    # Success: revise orientation before processing
     data = {'api_key': api_key, 'movie_id': movie_id, 'rotation': '180'}
     resp = client.post('/api/rotate-movie', data=data)
     assert resp.json['error'] is False, f"resp.json={resp.json} data={data}"

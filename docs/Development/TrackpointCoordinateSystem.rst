@@ -273,36 +273,25 @@ rather than replaced automatically.
 Persisted frame height and downloads
 ------------------------------------
 
-Upload processing and tracing measure the actual analysis-frame height and store
-``frame_height_px`` on the movie. Legacy JPEG/ZIP height recovery also caches its
-result, conditional on the source, rotation, version, dimensions, invalidation
-state, and previously cached height remaining unchanged. A failed conditional
-write aborts recovery before coordinate migration; API callers receive HTTP 409
-and can retry. An older measurement cannot overwrite a concurrently cached height.
-Migration uses the same movie geometry snapshot as height recovery. Each frame
-conversion transaction checks that snapshot and the unchanged original points,
-and the final movie-origin update is conditional on that geometry. This preserves
-the existing protection against double conversion while rejecting geometry
-changes after height recovery or during migration.
-Source, version, rotation, or dimension updates invalidate a cached height unless
-they explicitly supply its replacement. These updates also persist
-``legacy_frame_height_invalidated=true``: retained JPEG/ZIP artifacts have no
-geometry provenance and must never refill the cache after such an update.
-This flag remains set even after a fresh measurement; a later cache invalidation
-must not revive old artifacts. Legacy records without the flag retain height
-recovery until their geometry changes. Metadata-only requests use stored height
-or source dimensions without JPEG/ZIP recovery or cache writes.
-The original source dimensions remain
-separate. When both legacy source dimensions are available, the fallback applies the
-current tracer maximum-dimension scaling and rotation. A height-only legacy
-record retains its historical interpretation, including 90/270-degree rotation,
-until analysis pixels are measured or its geometry is updated. After a geometry
-update, both source dimensions are required to infer the scaled height.
+Rotation is chosen before upload. Once processing begins, the API rejects
+rotation changes with HTTP 409 and leaves existing tracking intact. Processing
+stores source dimensions, measured ``frame_height_px``, and completion state in
+one update. The processed movie geometry is immutable; changing orientation
+requires a new upload. Tracing measures the same fixed coordinate space.
 
-Upload retries remeasure height when ``resized_at`` exists but ``frame_height_px``
-is missing, so a concurrent geometry change cannot strand an upload without its
-height cache. Tracing failures during measurement or migration follow the normal
-failure-status and trace-lock cleanup path.
+Legacy JPEG/ZIP height recovery persists a missing height. Repeated identical
+measurements are accepted; a conflicting measurement is rejected. Migration
+retains its existing conditional per-frame updates and durable conversion markers,
+so interrupted migrations can resume without flipping a frame twice. There is no
+migration path between different movie geometries.
+
+Metadata-only requests use stored height or source dimensions without JPEG/ZIP
+reads or cache writes. With both source dimensions available, fallback height
+applies the tracer's scaling and rotation. A height-only legacy record retains
+its historical interpretation until analysis pixels are measured.
+
+Upload retries repair missing height on legacy completed uploads. Tracing failures
+during measurement or migration follow normal failure-status and lock cleanup.
 
 Browser metadata and JSON trackpoint downloads include ``frame_height_px`` and
 ``trackpoint_origin`` in ``metadata``. CSV repeats them as columns; XLSX includes

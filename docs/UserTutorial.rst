@@ -40,6 +40,7 @@ Uploading Movies (optional)
 - The upload form asks whether your movie may be used in academic research. Before answering, review the `Contributor Agreement <tos#contributor-agreement>`_ linked on the form. Select **Yes** or **No**. If you select **Yes**, you will also be asked whether you want to be credited by name; your display name is pre-filled as the attribution name, which you can edit.
 - If you know the capture interval of your recording (how many frames were captured per minute of real time), enter it in the **Capture interval (frames/minute)** field. You can also set or change this later on the Analyze page.
 - Choose a file to upload.
+- Before clicking Upload, use the local movie preview and Rotate 90° clockwise button to choose the orientation. Processing fixes this orientation; upload a new movie if it needs to change afterward.
 - After S3 accepts the file, the page reports a separate processing phase,
   normally lasting 1–3 minutes. Play and Analyze remain disabled on the Movies
   page until the file has reached durable movie storage. If processing does not
@@ -52,7 +53,6 @@ Uploading Movies (optional)
 Tracking the Uploaded Movie
 ---------------------------
 - Once the file is uploaded, the page shows a first frame of your movie and a "Next steps" section. Click **Analyze** to go to the Analyze page. (The **Track the uploaded movie** link goes to the same place.)
-- There's an opportunity to rotate the movie 90° clockwise as many times as necessary to orient the movie properly if it's not. The rotation control is disabled while each rotation is saved. Note that once you proceed to the Analyze page, you won't be able to rotate the movie anymore.
 
 .. image:: tutorial_images/track_uploaded_movie.png
    :alt: Post-upload confirmation page showing the movie's first frame and a Next Steps section with Analyze and Track the uploaded movie links

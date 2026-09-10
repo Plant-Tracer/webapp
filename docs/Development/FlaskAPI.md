@@ -562,6 +562,10 @@ the browser invokes the authenticated `/resize-api/v1/process-upload`
 compatibility adapter. The browser polls metadata until processing is complete,
 then requests the first frame and links the user to Analyze.
 
+The optional `rotation` parameter selects `0` (default), `90`, `180`, or `270` degrees
+clockwise before upload processing. Invalid values return HTTP 400. Processing
+saves source dimensions, measured `frame_height_px`, and completion state together.
+
 **Parameters**
 
 | Name | Required | Description |
@@ -630,17 +634,15 @@ analysis coordinate space used by the trackpoints, or `null` when unknown.
 present even when no frame range is requested. Metadata-only requests use the
 stored height or source dimensions, without reading JPEG/ZIP objects or caching
 height. When requesting frames, a legacy record's height may be recovered from
-stored JPEG frames or its ZIP and cached in DynamoDB. Source, rotation, version,
-or dimension updates disable recovery from these unversioned legacy artifacts;
-height then comes from a new measurement or current dimensions, or remains null.
-Invalid frame ranges, including negative `frame_start`, are rejected before height recovery or caching. Heights are
-JSON integers. Requesting legacy trackpoints also performs the existing conversion
-to bottom-left coordinates.
+stored JPEG frames or its ZIP and cached in DynamoDB. The measured height is fixed:
+repeated identical measurements are accepted, and a conflicting measurement is
+rejected with HTTP 409. Invalid frame ranges, including negative `frame_start`,
+are rejected before recovery or caching. Heights are JSON integers.
 
-The recovered height remains tied to its movie geometry snapshot through
-migration. Each frame conversion transaction checks that geometry and the
-unconverted points; the final origin update also checks geometry. Conflicts
-return HTTP 409 with a retry message. Trackpoint downloads use the same behavior.
+Processing fixes rotation, source dimensions, and analysis-frame height. Legacy
+trackpoints retain the existing per-frame conditional conversion to bottom-left
+coordinates, so retries do not flip an already converted frame again. Trackpoint
+downloads use the same height recovery and coordinate conversion.
 
 **Parameters**
 
@@ -791,7 +793,10 @@ Rename one marker label across all stored trackpoints for a movie. Other marker 
 
 #### `POST /api/rotate-movie`
 
-Set the movie's rotation. Tracking is cleared; Lambda applies the rotation when re-processing.
+Set rotation while the movie is still uploading and processing has not begun.
+The change is conditional in DynamoDB. Once processing begins, including completed
+and legacy movies, return HTTP 409 without changing rotation or clearing tracking.
+The upload form chooses rotation before uploading and supplies it to `/api/new-movie`.
 
 **Parameters**
 

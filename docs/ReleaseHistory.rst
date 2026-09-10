@@ -81,11 +81,10 @@ Unreleased Summary
     * Include analysis-frame pixel height and coordinate origin consistently in
       trackpoint JSON, CSV, and XLSX downloads. Persist measured height and use
       it in browser marker conversions for landscape and portrait movies.
-      Prevent retained JPEG/ZIP artifacts from restoring stale height after
-      rotation, reject conflicting height recovery before converting coordinates,
-      guard each legacy frame conversion against geometry changes, repair missing
-      height on upload retries, and avoid artifact reads on metadata-only
-      requests (refs #1233).
+      Choose rotation before upload and reject rotation changes once processing
+      starts, preserving finalized geometry and tracking. Save processed height
+      with upload completion, recover missing legacy heights, and avoid artifact
+      reads on metadata-only requests (refs #1233).
 
     * Standardize the agent PR workflow as ``pr-to-ready``, retaining
       ``codex-to-complete`` and ``codex-to-ready`` aliases, with shared

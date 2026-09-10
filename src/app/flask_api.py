@@ -55,7 +55,6 @@ from .odb import (
     DDBO,
     UnauthorizedUser,
     AtomicRenameConflict,
-    clear_movie_tracking,
 )
 from .s3_presigned import (
     movie_object_key,
@@ -161,8 +160,7 @@ def _height_from_movie_frame(movie_id, frame_number):
 
 def infer_trackpoint_frame_height(movie_id, movie, frame_start, *, recover_legacy_frames=True):
     """Resolve height from the caller's raw movie snapshot (before API rotation)."""
-    if (movie.get(odb.FRAME_HEIGHT_PX) is None and recover_legacy_frames
-            and not movie.get(odb.LEGACY_FRAME_HEIGHT_INVALIDATED, False)):
+    if (movie.get(odb.FRAME_HEIGHT_PX) is None and recover_legacy_frames):
         candidate_frames = [frame_start, 0] if frame_start not in (None, 0) else [0]
         height = next((height for frame_number in candidate_frames
                        if (height := _height_from_movie_frame(movie_id, frame_number))), None)
@@ -317,7 +315,7 @@ def _trackpoint_export_data(movie):
     trim_start_frame, trim_end_frame = odb.movie_trim_bounds(movie_metadata)
     frame_height = infer_trackpoint_frame_height(movie[MOVIE_ID], movie, trim_start_frame)
     movie_metadata = odb.ensure_bottom_left_trackpoints(
-        movie_id=movie[MOVIE_ID], frame_height=frame_height, movie_snapshot=movie)
+        movie_id=movie[MOVIE_ID], frame_height=frame_height)
     coordinate_metadata = TrackpointCoordinateMetadata(
         frame_height_px=frame_height, trackpoint_origin=movie_metadata.get(odb.TRACKPOINT_ORIGIN))
     trackpoint_dicts = odb.get_movie_trackpoints(
@@ -591,10 +589,10 @@ def course_setup_required(_ex):
     return jsonify({'error': True, 'message': 'No valid course membership is available'}), 409
 
 
-@api_bp.errorhandler(odb.TrackpointFrameHeightChanged)
-def trackpoint_frame_height_changed(_ex):
+@api_bp.errorhandler(odb.MovieGeometryFinalized)
+def movie_geometry_finalized(_ex):
     return jsonify({C.API_KEY_ERROR: True,
-                    C.API_KEY_MESSAGE: 'Movie changed while resolving frame height. Please retry.'}), 409
+                    C.API_KEY_MESSAGE: 'Movie geometry is fixed once processing begins. Upload a new movie to change rotation.'}), 409
 
 
 ################################################################
@@ -875,6 +873,10 @@ def api_new_movie():
             'message': f'Movie byte length must be between 1 and {C.MAX_FILE_UPLOAD}.',
         }
 
+    rotation = 0 if get(MOVIE_ROTATION) is None else get_int(MOVIE_ROTATION)
+    if rotation not in (0, 90, 180, 270):
+        return jsonify({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: 'Invalid rotation'}), 400
+
     ret = {'error': False}
 
     def _parse_tristate(raw):
@@ -926,6 +928,7 @@ def api_new_movie():
         {
             MOVIE_DATA_URN: movie_data_urn,
             UPLOAD_STAGING_URN: upload_urn,
+            MOVIE_ROTATION: rotation,
         },
         touch_activity=False,
     )
@@ -963,12 +966,12 @@ def set_movie_metadata(*, user_id=odb.ROOT_USER_ID, set_movie_id, movie_metadata
 
 @api_bp.route('/rotate-movie', methods=POST)
 def api_edit_movie():
-    """Set movie rotation.
+    """Set rotation before upload processing; finalized movies return HTTP 409.
 
     :param api_key: user authentication
     :param movie_id: the movie to edit
     :param rotation in degrees.
-    Lambda performs rotate and scaling when the analysis is generated.
+    Lambda applies rotation and scaling in the fixed analysis coordinate space.
     """
     movie_id = get_movie_id()
     user_id = get_user_id(allow_demo=False)
@@ -978,9 +981,7 @@ def api_edit_movie():
     if rotation not in [0,90,180,270]:
         return {"error": True, "message":"Invalid rotation"}
 
-    clear_movie_tracking(movie_id)
-    ddbo = DDBO()
-    ddbo.update_movie(movie_id, {MOVIE_ROTATION: rotation})
+    odb.set_movie_rotation(movie_id=movie_id, rotation=rotation)
     logger.debug("edit-movie: movie_id=%s rotation=%s",movie_id,rotation)
     return {"error": False}
 
@@ -1071,8 +1072,8 @@ def api_get_movie_metadata():
         movie_id, movie, frame_start, recover_legacy_frames=frame_start is not None)
     if frame_start is not None:
         try:
-            odb.ensure_bottom_left_trackpoints(movie_id=movie_id, frame_height=frame_height, movie_snapshot=movie)
-        except odb.TrackpointFrameHeightChanged:
+            odb.ensure_bottom_left_trackpoints(movie_id=movie_id, frame_height=frame_height)
+        except odb.MovieGeometryFinalized:
             raise
         except RuntimeError as exc:
             logger.exception("trackpoint migration failed movie_id=%s", movie_id)

@@ -92,6 +92,9 @@ def test_upload_movie_end_to_end(chrome_driver, live_server, new_course):
         "if (typeof window.check_upload_metadata === 'function') window.check_upload_metadata();"
     )
     wait.until(EC.element_to_be_clickable((By.ID, "upload-button")))
+    rotate = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#upload-orientation button")))
+    rotate.click()
+    assert chrome_driver.find_element(By.ID, "movie-rotation").get_attribute("value") == "90"
     chrome_driver.find_element(By.ID, "upload-button").click()
 
     try:
@@ -107,6 +110,10 @@ def test_upload_movie_end_to_end(chrome_driver, live_server, new_course):
     assert movie["title"] == title
     assert movie["description"] == description
     assert movie["deleted"] == 0
+    assert movie[odb.MOVIE_ROTATION] == 90
+    assert movie[odb.FRAME_HEIGHT_PX] == odb.trackpoint_frame_height({
+        odb.WIDTH: movie[odb.WIDTH], odb.HEIGHT: movie[odb.HEIGHT], odb.MOVIE_ROTATION: 90})
+    assert not chrome_driver.find_elements(By.ID, "rotate_movie_link")
 
     # Verify MinIO object exists and matches file length
     movie_bytes = get_movie_bytes(movie_id)

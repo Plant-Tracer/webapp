@@ -238,7 +238,7 @@ async function waitForUploadProcessing(movie_id) {
  *
  * Presigned post is provided by the /api/new-movie call (see below)
  */
-async function upload_movie_post(movie_title, description, movieFile, research_use, credit_by_name, attribution_name, fpm)
+async function upload_movie_post(movie_title, description, movieFile, research_use, credit_by_name, attribution_name, fpm, rotation = 0)
 {
   // If Lambda is configured, ensure it is healthy before starting upload
   if (typeof LAMBDA_API_BASE !== 'undefined' && LAMBDA_API_BASE) {
@@ -257,6 +257,7 @@ async function upload_movie_post(movie_title, description, movieFile, research_u
   formData.append("description", description);
   formData.append("movie_data_sha256",  movie_data_sha256);
   formData.append("movie_data_length",  movieFile.size);
+  formData.append("rotation", String(rotation));
   if (research_use !== null) { formData.append("research_use", research_use); }
   if (credit_by_name !== null) { formData.append("credit_by_name", credit_by_name); }
   formData.append("attribution_name", attribution_name || "");
@@ -346,13 +347,13 @@ async function upload_movie_post(movie_title, description, movieFile, research_u
     console.log("error: ", e);
     return;
   }
-  // Movie was uploaded. Show first frame and rotation on this page; user clicks "Process movie" to go to processing.
+  // Processing fixed the orientation; show the resulting first frame before analysis.
   showUploadPreviewAfterUpload(movie_id, movie_title, description);
 }
 
 /**
- * Show the upload preview (first frame, rotate, process button) after a successful upload.
- * Does not redirect; user clicks "Process movie" to go to /processing.
+ * Show the processed first frame and analysis link after a successful upload.
+ * Does not redirect; the user follows Analyze when ready.
  */
 function showUploadPreviewAfterUpload(movie_id, movie_title, description) {
   $('#upload_message').html('');
@@ -428,7 +429,8 @@ function upload_movie()
   $('#upload-button').prop('disabled', true);
   $('#upload_message').html(`Uploading movie ...`);
 
-  upload_movie_post(movie_title, description, movieFile, research_use, credit_by_name, attribution_name, fpm);
+  return upload_movie_post(movie_title, description, movieFile, research_use, credit_by_name, attribution_name, fpm,
+                           Number($('#movie-rotation').val() || 0));
 }
 
 async function _get_movie_metadata(movie_id){
@@ -445,66 +447,25 @@ async function _get_movie_metadata(movie_id){
 }
 
 
-//
-function rotate_movie() {
-  const linkEl = $('#rotate_movie_link').get(0);
-  if (!linkEl || linkEl.classList.contains('rotate-pending')) {
-    return;
-  }
-  linkEl.classList.add('rotate-pending');
-  linkEl.setAttribute('aria-disabled', 'true');
-  return apply_rotation_and_zip().finally(() => {
-    linkEl.classList.remove('rotate-pending');
-    linkEl.removeAttribute('aria-disabled');
-  });
+let uploadPreviewUrl = null;
+
+function preview_upload_movie() {
+  const preview = $('#upload-source-preview').get(0);
+  const file = $('#movie-file').prop('files')[0];
+  if (uploadPreviewUrl) URL.revokeObjectURL(uploadPreviewUrl);
+  uploadPreviewUrl = file ? URL.createObjectURL(file) : null;
+  $('#movie-rotation').val('0');
+  preview.style.transform = '';
+  if (uploadPreviewUrl) preview.src = uploadPreviewUrl;
+  else preview.removeAttribute('src');
+  $('#upload-orientation').toggle(!!file);
+  check_upload_metadata();
 }
 
-let current_rotation = 0;
-
-async function apply_rotation_and_zip() {
-  const movie_id = window.movie_id;
-  const previewImg = $('#image-preview').get(0);
-  const rotateStatus = $('#rotate_status');
-  const previousRotation = current_rotation;
-
-  const restorePersistedRotation = () => {
-    current_rotation = previousRotation;
-    previewImg.style.transform = `rotate(${current_rotation}deg)`;
-  };
-
-  // 1. Update Visuals
-  current_rotation = (current_rotation + 90) % 360;
-  previewImg.style.transform = `rotate(${current_rotation}deg)`;
-  rotateStatus.text(' … Saving rotation…');
-
-  // 2. Point 'Analyze' directly to the analysis page
-  $('#process_movie_link').attr('href', `/analyze?movie_id=${movie_id}`);
-
-  // 3. Update the backend via /rotate-movie
-  try {
-    const formData = new FormData();
-    appendCourseContext(formData);
-    formData.append('api_key', api_key);
-    formData.append('movie_id', movie_id);
-    formData.append('rotation', String(current_rotation));
-
-    const r = await fetch(`${API_BASE}api/rotate-movie`, {
-      method: 'POST',
-      body: formData
-    });
-
-    const resp = await r.json();
-    if (resp.error) {
-      restorePersistedRotation();
-      rotateStatus.text(' Error: ' + resp.message);
-    } else {
-      rotateStatus.text(' (Rotation saved)');
-    }
-  } catch (e) {
-    restorePersistedRotation();
-    rotateStatus.text(' Network error updating rotation.');
-    console.error("Rotation sync failed:", e);
-  }
+function rotate_movie() {
+  const rotation = (Number($('#movie-rotation').val() || 0) + 90) % 360;
+  $('#movie-rotation').val(String(rotation));
+  $('#upload-source-preview').get(0).style.transform = `rotate(${rotation}deg)`;
 }
 
 async function purge_movie() {
@@ -1128,6 +1089,7 @@ function list_users()
 window.helpers = {
   upload_movie,
   rotate_movie,
+  preview_upload_movie,
   play_clicked,
   hide_clicked,
   analyze_clicked,
@@ -1143,6 +1105,7 @@ window.sync_attribution_ui = sync_attribution_ui;
 window.upload_movie = upload_movie;
 window.purge_movie = purge_movie;
 window.rotate_movie = rotate_movie;
+window.preview_upload_movie = preview_upload_movie;
 window.play_clicked = play_clicked;
 window.analyze_clicked = analyze_clicked;
 window.download_traced_clicked = download_traced_clicked;
@@ -1177,11 +1140,13 @@ if (typeof module != 'undefined'){
     register_func,
     resend_func,
     rotate_movie,
+    preview_upload_movie,
     hide_clicked,
     play_clicked,
     research_metadata_changed,
     row_checkbox_clicked,
     set_property,
+    upload_movie,
     upload_movie_post,
     upload_ready_function,
     waitForUploadProcessing

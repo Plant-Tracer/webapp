@@ -426,6 +426,7 @@ def process_uploaded_movie(*, movie_id: str):
         {RESIZE_STARTED_AT: started_at, MOVIE_STATUS: MOVIE_STATE_PROCESSING},
         touch_activity=False,
     )
+    movie = ddbo.get_movie(movie_id)  # Read rotation only after processing has closed editing.
     ddbo.put_movie_log(
         log_id=_lifecycle_log_id(movie_id, C.LOG_EVENT_MOVIE_RESIZE_STARTED),
         event_type=C.LOG_EVENT_MOVIE_RESIZE_STARTED,
@@ -450,14 +451,11 @@ def process_uploaded_movie(*, movie_id: str):
         FPS: str(metadata["fps"]),
         TOTAL_FRAMES: metadata["total_frames"],
         TOTAL_BYTES: metadata["total_bytes"],
+        odb.FRAME_HEIGHT_PX: frame_height,
         RESIZED_AT: resized_at,
         MOVIE_STATUS: MOVIE_STATE_READY,
     }
     ddbo.update_movie(movie_id, updates)
-    height_snapshot = {**movie, WIDTH: updates[WIDTH], HEIGHT: updates[HEIGHT],
-                       odb.LEGACY_FRAME_HEIGHT_INVALIDATED: True}
-    height_snapshot.pop(odb.FRAME_HEIGHT_PX, None)
-    remember_trackpoint_frame_height(movie=height_snapshot, frame_height=frame_height)
     completed_movie = ddbo.get_movie(movie_id)
     ddbo.put_movie_log(
         log_id=_lifecycle_log_id(movie_id, C.LOG_EVENT_MOVIE_RESIZE_COMPLETED),
@@ -518,7 +516,7 @@ def run_tracing(*, movie_id, frame_start, frame_end=None, job_id=None):
         movie_url = s3_presigned.make_signed_url(urn=movie_urn)
         frame_height = analysis_frame_height_from_movie(movie_url=movie_url, rotation=rotation)
         remember_trackpoint_frame_height(movie=movie_record, frame_height=frame_height)
-        odb.ensure_bottom_left_trackpoints(movie_id=movie_id, frame_height=frame_height, movie_snapshot=movie_record)
+        odb.ensure_bottom_left_trackpoints(movie_id=movie_id, frame_height=frame_height)
         input_trackpoints = [Trackpoint(**tpdict) for tpdict in get_movie_trackpoints(movie_id=movie_id)]
         tracer_input_trackpoints = odb.flip_trackpoints_y(input_trackpoints, frame_height)
         research_comment = mp4_metadata_lib.build_comment(
