@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="../">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Tracing locks &#8212; Plant Tracer Web Application 1.0 documentation</title>
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=5ecbeea2" />
+    <link rel="stylesheet" type="text/css" href="../_static/basic.css?v=b08954a9" />
+    <link rel="stylesheet" type="text/css" href="../_static/alabaster.css?v=27fed22d" />
+    <link rel="stylesheet" type="text/css" href="../_static/copybutton.css?v=76b2166b" />
+    <link rel="stylesheet" type="text/css" href="../_static/custom.css?v=b93c872d" />
+    <script src="../_static/documentation_options.js?v=f2a433a1"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/clipboard.min.js?v=a7894cd8"></script>
+    <script src="../_static/copybutton.js?v=f281be69"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Web App Theory Of Design" href="THEORY_OF_DESIGN.html" />
+    <link rel="prev" title="Plant Tracer Movie Processing" href="ProcessingPhases.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+
+  
+  
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <section id="tracing-locks">
+<h1>Tracing locks<a class="headerlink" href="#tracing-locks" title="Link to this heading">¶</a></h1>
+<p>Only one tracing job may modify a movie at a time. The DynamoDB <code class="docutils literal notranslate"><span class="pre">movies</span></code> row
+is the durable source of truth. It stores a random job ID, the initiating
+user, acquisition time, heartbeat, and a renewable 15-minute expiry. A stale
+lease is deliberately handled by application reads and conditional writes:
+when the expiry is older than 15 minutes, it is ignored and the next trace
+request atomically replaces it. No TTL is used, because TTL can only delete a
+whole DynamoDB item and the movie must remain durable.</p>
+<section id="analyze-leases">
+<h2>Analyze leases<a class="headerlink" href="#analyze-leases" title="Link to this heading">¶</a></h2>
+<p>Opening Analyze immediately acquires a separate, renewable 15-minute analysis
+lease on that same movie row. The normal browser can edit; a later browser is
+explicitly view-only and sees the existing holder’s name and start time. The
+holder releases its lease when leaving the page, while a heartbeat and expiry
+recover from crashes or lost connectivity. Flask requires the opaque lease ID
+on marker, trim, and capture-interval writes, so client-side disabled controls
+cannot bypass ownership.</p>
+<p>Starting a trace atomically replaces the initiating browser’s analysis lease
+with the tracing lease. A trace cannot begin while another browser owns the
+analysis lease, and an old page’s release request cannot remove a tracing
+lease or a newer browser’s lease.</p>
+</section>
+<section id="trace-lifecycle">
+<h2>Trace lifecycle<a class="headerlink" href="#trace-lifecycle" title="Link to this heading">¶</a></h2>
+<p>The trace request atomically obtains the lease and changes the movie status to
+<code class="docutils literal notranslate"><span class="pre">tracing</span></code>. It then clears later frames and enqueues an SQS message containing
+the job ID. A worker may claim a queued job exactly once; SQS redelivery is a
+no-op. The worker renews its lease while writing frames. Completion or a caught
+exception conditionally publishes the terminal movie state and deletes only
+the lease with its own job ID. Failures use <code class="docutils literal notranslate"><span class="pre">tracing</span> <span class="pre">failed</span></code> and retain a
+safe failure summary.</p>
+</section>
+<section id="metadata-and-user-interface">
+<h2>Metadata and user interface<a class="headerlink" href="#metadata-and-user-interface" title="Link to this heading">¶</a></h2>
+<p>Movie-list and movie-metadata responses include an active lock’s start time
+and initiating user’s display name. Analyze is read-only while the lock is
+active: viewing, playback, and downloads remain available, while marker,
+trim, retrace, and capture-interval writes are disabled in the browser and
+rejected by the Flask API. The active Analyze page polls movie metadata,
+displays frame progress, and loads the results when tracing completes. The
+progress message also tells the user that it is safe to leave the page and
+reopen Analyze later.</p>
+</section>
+<section id="audit-and-diagnostics">
+<h2>Audit and diagnostics<a class="headerlink" href="#audit-and-diagnostics" title="Link to this heading">¶</a></h2>
+<p>The DynamoDB audit table records structured <code class="docutils literal notranslate"><span class="pre">movie.tracing.started</span></code>,
+<code class="docutils literal notranslate"><span class="pre">movie.tracing.completed</span></code>, and <code class="docutils literal notranslate"><span class="pre">movie.tracing.failed</span></code> events with the job
+ID and a sanitized error summary. CloudWatch retains the full Lambda traceback
+and operational telemetry. The audit table is not a replacement for CloudWatch
+because its entries are user-facing and must not contain secrets or raw stack
+traces.</p>
+</section>
+<section id="alternatives-considered">
+<h2>Alternatives considered<a class="headerlink" href="#alternatives-considered" title="Link to this heading">¶</a></h2>
+<ol class="arabic simple">
+<li><p>A conditional movie <code class="docutils literal notranslate"><span class="pre">status</span></code> transition was smaller, but did not carry
+ownership or make an SQS redelivery safe.</p></li>
+<li><p>A movie-row lease with a job token, owner, heartbeat, and expiry is
+selected. It makes SQS redelivery and stale-lock recovery safe without
+another table, and keeps the movie as the single source of truth.</p></li>
+<li><p>A dedicated DynamoDB lease table would make ownership distinct, but adds an
+unnecessary table and lookup for data that belongs to the movie.</p></li>
+<li><p>FIFO SQS could serialize queue delivery, but cannot protect the pre-queue
+mutation or replace a database concurrency boundary.</p></li>
+</ol>
+</section>
+</section>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">Plant Tracer Web Application</a></h1>
+
+
+
+
+
+
+
+
+
+<search id="searchbox" style="display: none" role="search">
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Search"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script><h3>Navigation</h3>
+<p class="caption" role="heading"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../UserTutorial.html">Plant Tracer Web App Tutorial</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../CalculationReference.html">Calculation Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../VideoResizing.html">Resizing Video Files</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../ReleaseHistory.html">Plant-Tracer/webapp Releases</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">Developer Documentation</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="DeveloperSetup.html">Developer Setup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="DevSetupAmazonLinuxEC2.html">Developer Setup On Amazon Linux 2023 EC2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="DevSetupUbuntu.html">Setting Up Plant Tracer On Ubuntu 24.04</a></li>
+<li class="toctree-l2"><a class="reference internal" href="DeveloperSetup_Mac.html">Developer Setup Mac</a></li>
+<li class="toctree-l2"><a class="reference internal" href="WindowsDevSetup.html">Windows Developer Setup Notes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Local%20Development%20and%20Github%20Actions.html">Local Development and GitHub Actions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="Installation.html">Installation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="EnvironmentVariables.html">Environment Variables</a></li>
+<li class="toctree-l2"><a class="reference internal" href="IdentityManagement.html">Identity Management</a></li>
+<li class="toctree-l2"><a class="reference internal" href="demo_mode.html">Demo Mode</a></li>
+<li class="toctree-l2"><a class="reference internal" href="configuring_aws.html">Configuring AWS</a></li>
+<li class="toctree-l2"><a class="reference internal" href="deploy_ec2.html">Deploying To EC2</a></li>
+<li class="toctree-l2"><a class="reference internal" href="DataOwnership.html">Data Ownership</a></li>
+<li class="toctree-l2"><a class="reference internal" href="BackupRestore.html">Backup and Restore</a></li>
+<li class="toctree-l2"><a class="reference internal" href="DynamoDB.html">DynamoDB and Plant Tracer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="S3.html">S3 and Plant Tracer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="MOVIE_METADATA.html">Movie attribution and research metadata</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ArchitectureDesign.html">Architecture Design Principles</a></li>
+<li class="toctree-l2"><a class="reference internal" href="LambdaWebMigration.html">Lambda Web Migration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ClientLambdaAPI.html">Client Lambda API</a></li>
+<li class="toctree-l2"><a class="reference internal" href="FlaskAPI.html">Flask API Reference</a></li>
+<li class="toctree-l2"><a class="reference internal" href="TrackpointCoordinateSystem.html">Trackpoint Coordinate System</a></li>
+<li class="toctree-l2"><a class="reference internal" href="trim-design.html">Video Trim Design</a></li>
+<li class="toctree-l2"><a class="reference internal" href="AnalysisResults.html">Analyze: Aggregate Result Statistics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ProcessingPhases.html">Plant Tracer Movie Processing</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Tracing locks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="THEORY_OF_DESIGN.html">Web App Theory Of Design</a></li>
+<li class="toctree-l2"><a class="reference internal" href="NOTES_ON_SIMPLIFYING.html">Notes on simplfying the implementation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="notes_on_resizing.html">Notes on Resizing</a></li>
+<li class="toctree-l2"><a class="reference internal" href="optional-dict-keys-scan.html">Optional / Possibly Missing Dict Keys</a></li>
+<li class="toctree-l2"><a class="reference internal" href="CODING_STANDARDS.html">Coding Standards</a></li>
+<li class="toctree-l2"><a class="reference internal" href="TechDebt.html">Technical Debt Review</a></li>
+<li class="toctree-l2"><a class="reference internal" href="ReleaseProcess.html">Release Process</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gallery.html">Gallery Of Plant Videos</a></li>
+<li class="toctree-l2"><a class="reference internal" href="gallery_learning_plan.html">Gallery Learning Plan</a></li>
+<li class="toctree-l2"><a class="reference internal" href="movie_player.html">Movie Player Design</a></li>
+<li class="toctree-l2"><a class="reference internal" href="resources.html">Bibliography</a></li>
+<li class="toctree-l2"><a class="reference internal" href="user%20story%20-%20tracking.html">Upload And Track User Story</a></li>
+<li class="toctree-l2"><a class="reference internal" href="sam_notes.html">Notes on Deploying to SAM</a></li>
+<li class="toctree-l2"><a class="reference internal" href="mv1.html">Configuration on mv1</a></li>
+</ul>
+</li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="index.html">Developer Documentation</a><ul>
+      <li>Previous: <a href="ProcessingPhases.html" title="previous chapter">Plant Tracer Movie Processing</a></li>
+      <li>Next: <a href="THEORY_OF_DESIGN.html" title="next chapter">Web App Theory Of Design</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &#169;2023-2026 Simson Garfinkel, Steven E. Barber, JoAnn Juzefyk, Eric D. Brenner.
+      
+      |
+      Powered by <a href="https://www.sphinx-doc.org/">Sphinx 9.1.0</a>
+      &amp; <a href="https://alabaster.readthedocs.io">Alabaster 1.0.0</a>
+      
+      |
+      <a href="../_sources/Development/TracingLocks.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
