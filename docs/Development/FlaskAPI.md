@@ -627,11 +627,15 @@ Get metadata and optionally per-frame trackpoints for a specific movie.
 `metadata.frame_height_px` is the positive pixel height of the resized, rotated
 analysis coordinate space used by the trackpoints, or `null` when unknown.
 `metadata.trackpoint_origin` identifies the coordinate origin. These fields are
-present even when no frame range is requested. A legacy record's height may be
-recovered from stored JPEG frames or its ZIP and cached in DynamoDB; this read
-can therefore persist missing coordinate metadata. Invalid frame ranges are
-rejected before height recovery or caching. Heights are JSON integers. Requesting legacy trackpoints
-also performs the existing conversion to bottom-left coordinates.
+present even when no frame range is requested. Metadata-only requests use the
+stored height or source dimensions, without reading JPEG/ZIP objects or caching
+height. When requesting frames, a legacy record's height may be recovered from
+stored JPEG frames or its ZIP and cached in DynamoDB. Source, rotation, version,
+or dimension updates disable recovery from these unversioned legacy artifacts;
+height then comes from a new measurement or current dimensions, or remains null.
+Invalid frame ranges are rejected before height recovery or caching. Heights are
+JSON integers. Requesting legacy trackpoints also performs the existing conversion
+to bottom-left coordinates.
 
 **Parameters**
 

@@ -277,7 +277,14 @@ Upload processing and tracing measure the actual analysis-frame height and store
 ``frame_height_px`` on the movie. Legacy JPEG/ZIP height recovery also caches its
 result, conditional on the source, rotation, and version remaining unchanged.
 Source, version, rotation, or dimension updates invalidate a cached height unless
-they explicitly supply its replacement. The original source dimensions remain
+they explicitly supply its replacement. These updates also persist
+``legacy_frame_height_invalidated=true``: retained JPEG/ZIP artifacts have no
+geometry provenance and must never refill the cache after such an update.
+This flag remains set even after a fresh measurement; a later cache invalidation
+must not revive old artifacts. Legacy records without the flag retain height
+recovery until their geometry changes. Metadata-only requests use stored height
+or source dimensions without JPEG/ZIP recovery or cache writes.
+The original source dimensions remain
 separate. When both legacy source dimensions are available, the fallback applies the
 current tracer maximum-dimension scaling and rotation. A height-only legacy
 record retains its historical interpretation until analysis pixels are measured.

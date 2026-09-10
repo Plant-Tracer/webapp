@@ -159,17 +159,17 @@ def _height_from_movie_frame(movie_id, frame_number):
     return _jpeg_height(frame_bytes)
 
 
-def infer_trackpoint_frame_height(movie_id, movie, frame_start):
+def infer_trackpoint_frame_height(movie_id, movie, frame_start, *, recover_legacy_frames=True):
     """Resolve height from the caller's raw movie snapshot (before API rotation)."""
-    if movie.get(odb.FRAME_HEIGHT_PX) is not None:
-        return odb.trackpoint_frame_height(movie)
-    candidate_frames = [frame_start, 0] if frame_start not in (None, 0) else [0]
-    height = next((height for frame_number in candidate_frames
-                   if (height := _height_from_movie_frame(movie_id, frame_number))), None)
-    height = height or _height_from_movie_zipfile(movie)
-    if height:
-        odb.remember_trackpoint_frame_height(movie=movie, frame_height=height)
-        return height
+    if (movie.get(odb.FRAME_HEIGHT_PX) is None and recover_legacy_frames
+            and not movie.get(odb.LEGACY_FRAME_HEIGHT_INVALIDATED, False)):
+        candidate_frames = [frame_start, 0] if frame_start not in (None, 0) else [0]
+        height = next((height for frame_number in candidate_frames
+                       if (height := _height_from_movie_frame(movie_id, frame_number))), None)
+        height = height or _height_from_movie_zipfile(movie)
+        if height:
+            odb.remember_trackpoint_frame_height(movie=movie, frame_height=height)
+            return height
     try:
         return odb.trackpoint_frame_height(movie)
     except RuntimeError:
@@ -1058,7 +1058,8 @@ def api_get_movie_metadata():
             return make_response(E.FRAME_START_NO_FRAME_COUNT, 400)
         if frame_count<1:
             return make_response(E.FRAME_COUNT_GT_0, 400)
-    frame_height = infer_trackpoint_frame_height(movie_id, movie, frame_start)
+    frame_height = infer_trackpoint_frame_height(
+        movie_id, movie, frame_start, recover_legacy_frames=frame_start is not None)
     if frame_start is not None:
         try:
             odb.ensure_bottom_left_trackpoints(movie_id=movie_id, frame_height=frame_height)

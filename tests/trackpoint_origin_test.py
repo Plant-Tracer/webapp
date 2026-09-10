@@ -302,7 +302,8 @@ def test_get_movie_metadata_lazily_migrates_using_zipfile_height_when_movie_heig
     ddbo = odb.DDBO()
     ddbo.movies.update_item(
         Key={MOVIE_ID: movie_id},
-        UpdateExpression=f"SET movie_zipfile_urn=:zip_urn REMOVE {TRACKPOINT_ORIGIN}, #height",
+        UpdateExpression=(f"SET movie_zipfile_urn=:zip_urn REMOVE {TRACKPOINT_ORIGIN}, #height, "
+                          f"{odb.LEGACY_FRAME_HEIGHT_INVALIDATED}"),
         ExpressionAttributeNames={"#height": HEIGHT},
         ExpressionAttributeValues={":zip_urn": zip_urn},
     )
@@ -716,7 +717,7 @@ def test_legacy_zip_height_persists_for_downloads(client, new_movie, height):
     zip_urn = make_urn(object_name=f'tests/{movie_id}_zipfile.mov')
     odb_movie_data.write_object(zip_urn, _zip_with_frame(width=640 if height == 480 else 480, height=height))
     ddbo = odb.DDBO()
-    ddbo.update_movie(movie_id, {odb.MOVIE_ZIPFILE_URN: zip_urn})
+    ddbo.update_movie(movie_id, {odb.MOVIE_ZIPFILE_URN: zip_urn, odb.LEGACY_FRAME_HEIGHT_INVALIDATED: None})
     ddbo.movies.update_item(Key={MOVIE_ID: movie_id}, UpdateExpression=f'REMOVE {TRACKPOINT_ORIGIN}')
     ddbo.put_movie_frame({MOVIE_ID: movie_id, FRAME_NUMBER: 0,
                          'trackpoints': [Trackpoint(x=10, y=20, label='plant').model_dump()]})
@@ -738,6 +739,7 @@ def test_frame_height_invalidated_and_stale_inference_rejected(new_movie, prop, 
     odb.remember_trackpoint_frame_height(movie=snapshot, frame_height=480)
     ddbo.update_movie(movie_id, {prop: value})
     assert ddbo.get_movie(movie_id).get(odb.FRAME_HEIGHT_PX) is None
+    assert ddbo.get_movie(movie_id)[odb.LEGACY_FRAME_HEIGHT_INVALIDATED] is True
     odb.remember_trackpoint_frame_height(movie=snapshot, frame_height=480)
     assert ddbo.get_movie(movie_id).get(odb.FRAME_HEIGHT_PX) is None
     ddbo.update_movie(movie_id, {prop: snapshot.get(prop)})
@@ -777,7 +779,7 @@ def test_invalid_frame_range_does_not_cache_legacy_height(client, new_movie, fra
     zip_urn = make_urn(object_name=f'tests/{movie_id}_zipfile.mov')
     odb_movie_data.write_object(zip_urn, _zip_with_frame(width=480, height=640))
     ddbo = odb.DDBO()
-    ddbo.update_movie(movie_id, {odb.MOVIE_ZIPFILE_URN: zip_urn})
+    ddbo.update_movie(movie_id, {odb.MOVIE_ZIPFILE_URN: zip_urn, odb.LEGACY_FRAME_HEIGHT_INVALIDATED: None})
     params = {API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id, 'frame_start': 0}
     if frame_count is not None:
         params['frame_count'] = frame_count
@@ -786,3 +788,56 @@ def test_invalid_frame_range_does_not_cache_legacy_height(client, new_movie, fra
     params['frame_count'] = 1
     assert client.post('/api/get-movie-metadata', data=params).status_code == 200
     assert ddbo.get_movie(movie_id)[odb.FRAME_HEIGHT_PX] == 640
+
+
+@pytest.mark.parametrize('width,height', [(640, 480), (480, 640)])
+@pytest.mark.parametrize('artifact', ['jpeg', 'zip'])
+def test_rotation_does_not_recache_legacy_height(client, new_movie, width, height, artifact):
+    """Old artifacts survive rotation but cannot override the new coordinate height."""
+    movie_id = new_movie[MOVIE_ID]
+    ddbo = odb.DDBO()
+    ddbo.update_movie(movie_id, {odb.WIDTH: width, odb.HEIGHT: height,
+                                odb.MOVIE_ROTATION: 0, odb.FRAME_HEIGHT_PX: height})
+    if artifact == 'jpeg':
+        odb_movie_data.create_new_movie_frame(movie_id=movie_id, frame_number=0,
+                                             frame_data=_jpeg_bytes(width=width, height=height))
+    else:
+        urn = make_urn(object_name=f'tests/{movie_id}-legacy.zip')
+        odb_movie_data.write_object(urn, _zip_with_frame(width=width, height=height))
+        ddbo.update_movie(movie_id, {odb.MOVIE_ZIPFILE_URN: urn})
+    # Model a legacy record with unversioned artifacts, before the invalidation field existed.
+    ddbo.update_movie(movie_id, {odb.LEGACY_FRAME_HEIGHT_INVALIDATED: None})
+    params = {API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id}
+    rotated = client.post('/api/rotate-movie', data={**params, 'rotation': 90})
+    assert rotated.status_code == 200
+    assert rotated.get_json()['error'] is False
+    assert ddbo.get_movie(movie_id).get(odb.FRAME_HEIGHT_PX) is None
+    for frame_range in ({}, {'frame_start': 0, 'frame_count': 1}):
+        response = client.post('/api/get-movie-metadata', data={**params, **frame_range})
+        assert response.status_code == 200
+        assert response.get_json()['metadata'][odb.FRAME_HEIGHT_PX] == width
+    downloaded = client.post('/api/get-movie-trackpoints', data={**params, 'format': 'json'}).get_json()
+    assert downloaded['metadata'][odb.FRAME_HEIGHT_PX] == width
+    # Dimension-only inference is not a measurement and must not populate the cache.
+    assert ddbo.get_movie(movie_id).get(odb.FRAME_HEIGHT_PX) is None
+    ddbo.update_movie(movie_id, {odb.WIDTH: None, odb.HEIGHT: None})
+    response = client.post('/api/get-movie-metadata', data={**params, 'frame_start': 0, 'frame_count': 1})
+    assert response.get_json()['metadata'][odb.FRAME_HEIGHT_PX] is None
+
+
+def test_metadata_only_leaves_legacy_height_recovery_to_trackpoint_requests(client, new_movie):
+    """A metadata-only read does not inspect or cache a legacy ZIP's available height."""
+    movie_id = new_movie[MOVIE_ID]
+    urn = make_urn(object_name=f'tests/{movie_id}-legacy.zip')
+    odb_movie_data.write_object(urn, _zip_with_frame(width=480, height=640))
+    ddbo = odb.DDBO()
+    ddbo.update_movie(movie_id, {odb.MOVIE_ZIPFILE_URN: urn, odb.LEGACY_FRAME_HEIGHT_INVALIDATED: None})
+    params = {API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id}
+    response = client.post('/api/get-movie-metadata', data=params)
+    assert response.get_json()['metadata'][odb.FRAME_HEIGHT_PX] is None
+    assert ddbo.get_movie(movie_id).get(odb.FRAME_HEIGHT_PX) is None
+    response = client.post('/api/get-movie-metadata', data={**params, 'frame_start': 0, 'frame_count': 1})
+    assert response.get_json()['metadata'][odb.FRAME_HEIGHT_PX] == 640
+    assert ddbo.get_movie(movie_id)[odb.FRAME_HEIGHT_PX] == 640
+    response = client.post('/api/get-movie-metadata', data=params)
+    assert response.get_json()['metadata'][odb.FRAME_HEIGHT_PX] == 640

@@ -178,6 +178,7 @@ FPM = 'fpm'
 WIDTH = 'width'
 HEIGHT = 'height'
 FRAME_HEIGHT_PX = 'frame_height_px'
+LEGACY_FRAME_HEIGHT_INVALIDATED = 'legacy_frame_height_invalidated'
 TRACKPOINT_ORIGIN = 'trackpoint_origin'
 TRACKPOINT_ORIGIN_BOTTOM_LEFT = 'bottom-left'
 TRACKPOINT_MIGRATION_ORIGIN = 'trackpoint_migration_origin'
@@ -543,9 +544,10 @@ class DDBO:
             prop: fix_movie_prop_value(prop, value)
             for prop, value in updates.items()
         }
-        if FRAME_HEIGHT_PX not in movie_updates and any(
-                prop in movie_updates for prop in (MOVIE_ROTATION, MOVIE_DATA_URN, VERSION, WIDTH, HEIGHT)):
-            movie_updates[FRAME_HEIGHT_PX] = None
+        if any(prop in movie_updates for prop in (MOVIE_ROTATION, MOVIE_DATA_URN, VERSION, WIDTH, HEIGHT)):
+            movie_updates.setdefault(FRAME_HEIGHT_PX, None)
+            # Retained JPEGs/ZIPs have no geometry provenance and cannot refill this cache.
+            movie_updates[LEGACY_FRAME_HEIGHT_INVALIDATED] = True
         if touch_activity:
             movie_updates[LAST_ACTIVITY_AT] = int(time.time())
         condition = None if expected_status is None else Attr(MOVIE_STATUS).eq(expected_status)
