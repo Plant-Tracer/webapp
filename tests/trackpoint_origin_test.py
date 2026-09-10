@@ -13,7 +13,7 @@ from pydantic import ValidationError
 from resize_app import movie_glue, mpeg_jpeg_zip
 from tests.fixtures.analysis_mp4_fixture import write_four_color_movie
 
-from app import odb, schema
+from app import flask_api, odb, schema
 from app import odb_movie_data
 from app.odb import (
     API_KEY,
@@ -740,7 +740,8 @@ def test_frame_height_invalidated_and_stale_inference_rejected(new_movie, prop, 
     ddbo.update_movie(movie_id, {prop: value})
     assert ddbo.get_movie(movie_id).get(odb.FRAME_HEIGHT_PX) is None
     assert ddbo.get_movie(movie_id)[odb.LEGACY_FRAME_HEIGHT_INVALIDATED] is True
-    odb.remember_trackpoint_frame_height(movie=snapshot, frame_height=480)
+    with pytest.raises(odb.TrackpointFrameHeightChanged):
+        odb.remember_trackpoint_frame_height(movie=snapshot, frame_height=480)
     assert ddbo.get_movie(movie_id).get(odb.FRAME_HEIGHT_PX) is None
     ddbo.update_movie(movie_id, {prop: snapshot.get(prop)})
 
@@ -841,3 +842,75 @@ def test_metadata_only_leaves_legacy_height_recovery_to_trackpoint_requests(clie
     assert ddbo.get_movie(movie_id)[odb.FRAME_HEIGHT_PX] == 640
     response = client.post('/api/get-movie-metadata', data=params)
     assert response.get_json()['metadata'][odb.FRAME_HEIGHT_PX] == 640
+
+
+@pytest.mark.parametrize('width,height', [(640, 480), (480, 640)])
+@pytest.mark.parametrize('rotation', [90, 270])
+def test_tracing_caches_rotated_height_from_raw_movie(new_movie, tmp_path, width, height, rotation):
+    """Exercise the tracing entry point with real decoded MP4 pixels and raw DB dimensions."""
+    movie_id = new_movie[MOVIE_ID]
+    path = tmp_path / 'source.mp4'
+    write_four_color_movie(path, width=width, height=height)
+    odb_movie_data.set_movie_data(movie_id=movie_id, movie_data=path.read_bytes())
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={
+        odb.WIDTH: width, odb.HEIGHT: height, odb.MOVIE_ROTATION: rotation,
+        odb.TOTAL_FRAMES: 4, odb.FPS: '4'})
+    odb.put_frame_trackpoints(movie_id=movie_id, frame_number=0,
+                             trackpoints=[Trackpoint(x=10, y=width - 20, label='Apex')])
+    movie_glue.run_tracing(movie_id=movie_id, frame_start=0, frame_end=3)
+    stored = odb.get_movie(movie_id=movie_id)
+    assert stored[odb.FRAME_HEIGHT_PX] == width
+    assert (stored[odb.WIDTH], stored[odb.HEIGHT]) == (width, height)
+    assert stored[odb.MOVIE_STATUS] == odb.MOVIE_STATE_TRACING_COMPLETED
+
+
+@pytest.mark.parametrize('rotation', [0, 90, 180, 270])
+def test_untouched_height_only_legacy_movie_retains_coordinate_height(client, new_movie, rotation):
+    movie_id = new_movie[MOVIE_ID]
+    ddbo = odb.DDBO()
+    ddbo.update_movie(movie_id, {odb.HEIGHT: 150, odb.MOVIE_ROTATION: rotation})
+    ddbo.update_movie(movie_id, {odb.LEGACY_FRAME_HEIGHT_INVALIDATED: None})
+    params = {API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id}
+    for endpoint in ('get-movie-metadata', 'get-movie-trackpoints'):
+        response = client.post(f'/api/{endpoint}', data={**params, 'format': 'json'})
+        assert response.status_code == 200
+        assert response.get_json()['metadata'][odb.FRAME_HEIGHT_PX] == 150
+    if rotation in (90, 270):
+        ddbo.update_movie(movie_id, {odb.MOVIE_ROTATION: rotation})
+        response = client.post('/api/get-movie-metadata', data=params)
+        assert response.get_json()['metadata'][odb.FRAME_HEIGHT_PX] is None
+
+
+@pytest.mark.parametrize('endpoint', ['get-movie-metadata', 'get-movie-trackpoints'])
+@pytest.mark.parametrize('concurrent_change', ['rotation', 'measurement'])
+def test_height_recovery_conflict_does_not_migrate_points(client, new_movie, monkeypatch,
+                                                        endpoint, concurrent_change):
+    """A deterministic interleaving wraps real S3 reads; DB reads/writes are real too."""
+    movie_id = new_movie[MOVIE_ID]
+    ddbo = odb.DDBO()
+    urn = make_urn(object_name=f'tests/{movie_id}-legacy.zip')
+    odb_movie_data.write_object(urn, _zip_with_frame(width=200, height=150))
+    ddbo.update_movie(movie_id, {odb.WIDTH: 640, odb.HEIGHT: 480, odb.MOVIE_ZIPFILE_URN: urn})
+    ddbo.update_movie(movie_id, {odb.LEGACY_FRAME_HEIGHT_INVALIDATED: None, TRACKPOINT_ORIGIN: None})
+    ddbo.put_movie_frame({MOVIE_ID: movie_id, FRAME_NUMBER: 0,
+                         'trackpoints': [Trackpoint(x=10, y=20, label='plant').model_dump()]})
+    read_object = flask_api.read_object
+
+    def read_with_concurrent_update(object_urn):
+        data = read_object(object_urn)
+        if concurrent_change == 'rotation':
+            ddbo.update_movie(movie_id, {odb.MOVIE_ROTATION: 90})
+        else:
+            odb.remember_trackpoint_frame_height(movie=ddbo.get_movie(movie_id), frame_height=480)
+        return data
+
+    # Synchronize at the actual I/O boundary rather than relying on thread timing.
+    monkeypatch.setattr(flask_api, 'read_object', read_with_concurrent_update)
+    response = client.post(f'/api/{endpoint}', data={
+        API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id, 'format': 'json', 'frame_start': 0, 'frame_count': 1})
+    assert response.status_code == 409
+    assert response.get_json()['error'] is True
+    assert ddbo.get_movie_frame(movie_id, 0)['trackpoints'][0]['y'] == 20
+    stored = ddbo.get_movie(movie_id)
+    assert stored.get(TRACKPOINT_ORIGIN) is None
+    assert stored.get(odb.FRAME_HEIGHT_PX) == (480 if concurrent_change == 'measurement' else None)

@@ -16,7 +16,6 @@ from pydantic import BaseModel
 from .src.app.schema import Trackpoint
 from .src.app.constants import C
 from .src.app.odb import (
-    get_movie_metadata,
     get_movie_trackpoints,
     put_frame_trackpoints,
     clear_movie_tracking_after_frame,
@@ -455,8 +454,10 @@ def process_uploaded_movie(*, movie_id: str):
         MOVIE_STATUS: MOVIE_STATE_READY,
     }
     ddbo.update_movie(movie_id, updates)
-    remember_trackpoint_frame_height(movie={**movie, WIDTH: updates[WIDTH], HEIGHT: updates[HEIGHT]},
-                                    frame_height=frame_height)
+    height_snapshot = {**movie, WIDTH: updates[WIDTH], HEIGHT: updates[HEIGHT],
+                       odb.LEGACY_FRAME_HEIGHT_INVALIDATED: True}
+    height_snapshot.pop(odb.FRAME_HEIGHT_PX, None)
+    remember_trackpoint_frame_height(movie=height_snapshot, frame_height=frame_height)
     completed_movie = ddbo.get_movie(movie_id)
     ddbo.put_movie_log(
         log_id=_lifecycle_log_id(movie_id, C.LOG_EVENT_MOVIE_RESIZE_COMPLETED),
@@ -506,7 +507,7 @@ def run_tracing(*, movie_id, frame_start, frame_end=None, job_id=None):
     LOGGER.info("run_tracing movie_id=%s source_frame=%s tracing_frame_start=%s frame_end=%s cleared_frames=%s",
                 movie_id, source_frame_number, tracing_frame_start, frame_end_number, cleared_frames)
 
-    movie_record = get_movie_metadata(movie_id=movie_id)
+    movie_record = ddbo.get_movie(movie_id)
     movie_urn = movie_record.get(MOVIE_DATA_URN)
     if not movie_urn:
         raise RuntimeError(f"movie {movie_id} has no movie data URN")

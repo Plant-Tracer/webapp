@@ -637,6 +637,10 @@ Invalid frame ranges are rejected before height recovery or caching. Heights are
 JSON integers. Requesting legacy trackpoints also performs the existing conversion
 to bottom-left coordinates.
 
+If the movie geometry or cached height changes during artifact recovery, this
+endpoint returns HTTP 409 with a retry message before migrating any coordinates.
+Trackpoint downloads use the same conflict behavior.
+
 **Parameters**
 
 | Name | Required | Description |

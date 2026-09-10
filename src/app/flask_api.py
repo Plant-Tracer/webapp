@@ -590,6 +590,12 @@ def course_setup_required(_ex):
     return jsonify({'error': True, 'message': 'No valid course membership is available'}), 409
 
 
+@api_bp.errorhandler(odb.TrackpointFrameHeightChanged)
+def trackpoint_frame_height_changed(_ex):
+    return jsonify({C.API_KEY_ERROR: True,
+                    C.API_KEY_MESSAGE: 'Movie changed while resolving frame height. Please retry.'}), 409
+
+
 ################################################################
 # define get(), which gets a variable from either the forms request or the query string
 def get(key, default=None):

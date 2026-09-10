@@ -313,6 +313,9 @@ class UnauthorizedUser(ODB_Errors):
 class NoMovieData(ODB_Errors):
     """There is no data for the movie"""
 
+class TrackpointFrameHeightChanged(ODB_Errors):
+    """The movie or its measured height changed during height recovery."""
+
 class AtomicRenameConflict(ODB_Errors):
     """Marker rename lost a race with another trackpoint update"""
 
@@ -2494,6 +2497,8 @@ def trackpoint_frame_height(movie: dict) -> int:
         rotation = 0
     height_attr = WIDTH if rotation in (90, 270) else HEIGHT
     height = movie.get(height_attr)
+    if height is None and not movie.get(LEGACY_FRAME_HEIGHT_INVALIDATED, False):
+        height = movie.get(HEIGHT)
     if height is None:
         raise RuntimeError(f"movie {movie.get(MOVIE_ID)} does not have analysis frame height")
     height = int(height)
@@ -2508,18 +2513,20 @@ def trackpoint_frame_height(movie: dict) -> int:
 
 
 def remember_trackpoint_frame_height(*, movie: dict, frame_height: int) -> None:
-    """Cache measured height only while its source and rotation are unchanged."""
+    """Cache a measurement only while its movie and previous height are unchanged."""
     height = validate_movie_field(FRAME_HEIGHT_PX, frame_height)
     condition = Attr(MOVIE_ID).exists()
-    for prop in (MOVIE_DATA_URN, MOVIE_ROTATION, VERSION, WIDTH, HEIGHT):
+    for prop in (MOVIE_DATA_URN, MOVIE_ROTATION, VERSION, WIDTH, HEIGHT,
+                 FRAME_HEIGHT_PX, LEGACY_FRAME_HEIGHT_INVALIDATED):
         condition &= Attr(prop).eq(movie[prop]) if prop in movie else Attr(prop).not_exists()
     ddbo = DDBO()
     try:
         ddbo.update_table(ddbo.movies, movie[MOVIE_ID], {FRAME_HEIGHT_PX: height},
                           condition_expression=condition)
     except ClientError as exc:
-        if exc.response['Error']['Code'] != 'ConditionalCheckFailedException':
-            raise
+        if exc.response['Error']['Code'] == 'ConditionalCheckFailedException':
+            raise TrackpointFrameHeightChanged(f"movie {movie[MOVIE_ID]} changed during height recovery") from exc
+        raise
 
 
 def flip_trackpoint_y_value(y, frame_height: int) -> Decimal:
