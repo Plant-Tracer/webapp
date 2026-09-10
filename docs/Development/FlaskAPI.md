@@ -629,7 +629,8 @@ analysis coordinate space used by the trackpoints, or `null` when unknown.
 `metadata.trackpoint_origin` identifies the coordinate origin. These fields are
 present even when no frame range is requested. A legacy record's height may be
 recovered from stored JPEG frames or its ZIP and cached in DynamoDB; this read
-can therefore persist missing coordinate metadata. Requesting legacy trackpoints
+can therefore persist missing coordinate metadata. Invalid frame ranges are
+rejected before height recovery or caching. Heights are JSON integers. Requesting legacy trackpoints
 also performs the existing conversion to bottom-left coordinates.
 
 **Parameters**

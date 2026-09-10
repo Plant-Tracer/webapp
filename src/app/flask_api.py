@@ -1053,12 +1053,13 @@ def api_get_movie_metadata():
     if tracking_completed and get_all_if_tracking_completed:
         frame_start = 0
         frame_count = C.MAX_FRAMES
-    frame_height = infer_trackpoint_frame_height(movie_id, movie, frame_start)
     if frame_start is not None:
         if frame_count is None:
             return make_response(E.FRAME_START_NO_FRAME_COUNT, 400)
         if frame_count<1:
             return make_response(E.FRAME_COUNT_GT_0, 400)
+    frame_height = infer_trackpoint_frame_height(movie_id, movie, frame_start)
+    if frame_start is not None:
         try:
             odb.ensure_bottom_left_trackpoints(movie_id=movie_id, frame_height=frame_height)
         except RuntimeError as exc:

@@ -676,6 +676,9 @@ def test_movie_height_in_all_trackpoint_downloads(client, new_movie, tmp_path,
     stored = odb.get_movie(movie_id=movie_id)
     assert stored[odb.FRAME_HEIGHT_PX] == analysis_height
     assert schema.Movie(**stored).frame_height_px == analysis_height
+    shared_metadata = odb.get_movie_metadata(movie_id=movie_id)
+    assert isinstance(shared_metadata[odb.FRAME_HEIGHT_PX], int)
+    assert shared_metadata[odb.FRAME_HEIGHT_PX] == analysis_height
     actual_frame = mpeg_jpeg_zip.get_first_frame_from_url(str(path), rotation)
     assert actual_frame.shape[0] == analysis_height
     # Write through the same API used by JavaScript, then download the saved point.
@@ -765,3 +768,21 @@ def test_legacy_source_dimensions_supply_analysis_height(client, new_movie, widt
     result = client.post('/api/get-movie-metadata', data={
         API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id}).get_json()
     assert result['metadata'][odb.FRAME_HEIGHT_PX] == expected
+
+
+@pytest.mark.parametrize('frame_count', [None, 0])
+def test_invalid_frame_range_does_not_cache_legacy_height(client, new_movie, frame_count):
+    """Invalid range requests must not trigger the otherwise available ZIP backfill."""
+    movie_id = new_movie[MOVIE_ID]
+    zip_urn = make_urn(object_name=f'tests/{movie_id}_zipfile.mov')
+    odb_movie_data.write_object(zip_urn, _zip_with_frame(width=480, height=640))
+    ddbo = odb.DDBO()
+    ddbo.update_movie(movie_id, {odb.MOVIE_ZIPFILE_URN: zip_urn})
+    params = {API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id, 'frame_start': 0}
+    if frame_count is not None:
+        params['frame_count'] = frame_count
+    assert client.post('/api/get-movie-metadata', data=params).status_code == 400
+    assert ddbo.get_movie(movie_id).get(odb.FRAME_HEIGHT_PX) is None
+    params['frame_count'] = 1
+    assert client.post('/api/get-movie-metadata', data=params).status_code == 200
+    assert ddbo.get_movie(movie_id)[odb.FRAME_HEIGHT_PX] == 640
