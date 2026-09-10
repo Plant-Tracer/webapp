@@ -159,11 +159,10 @@ def _height_from_movie_frame(movie_id, frame_number):
     return _jpeg_height(frame_bytes)
 
 
-def infer_trackpoint_frame_height(movie_id, movie_metadata, frame_start):
-    """Resolve analysis height without applying rotation twice to API metadata."""
-    if movie_metadata.get(odb.FRAME_HEIGHT_PX) is not None:
-        return odb.trackpoint_frame_height(movie_metadata)
-    movie = odb.get_movie(movie_id=movie_id)
+def infer_trackpoint_frame_height(movie_id, movie, frame_start):
+    """Resolve height from the caller's raw movie snapshot (before API rotation)."""
+    if movie.get(odb.FRAME_HEIGHT_PX) is not None:
+        return odb.trackpoint_frame_height(movie)
     candidate_frames = [frame_start, 0] if frame_start not in (None, 0) else [0]
     height = next((height for frame_number in candidate_frames
                    if (height := _height_from_movie_frame(movie_id, frame_number))), None)
@@ -316,7 +315,7 @@ def _trackpoint_export_data(movie):
         odb.get_movie_metadata(movie_id=movie[MOVIE_ID])
     )
     trim_start_frame, trim_end_frame = odb.movie_trim_bounds(movie_metadata)
-    frame_height = infer_trackpoint_frame_height(movie[MOVIE_ID], movie_metadata, trim_start_frame)
+    frame_height = infer_trackpoint_frame_height(movie[MOVIE_ID], movie, trim_start_frame)
     movie_metadata = odb.ensure_bottom_left_trackpoints(movie_id=movie[MOVIE_ID], frame_height=frame_height)
     coordinate_metadata = TrackpointCoordinateMetadata(
         frame_height_px=frame_height, trackpoint_origin=movie_metadata.get(odb.TRACKPOINT_ORIGIN))
@@ -1054,7 +1053,7 @@ def api_get_movie_metadata():
     if tracking_completed and get_all_if_tracking_completed:
         frame_start = 0
         frame_count = C.MAX_FRAMES
-    frame_height = infer_trackpoint_frame_height(movie_id, movie_metadata, frame_start)
+    frame_height = infer_trackpoint_frame_height(movie_id, movie, frame_start)
     if frame_start is not None:
         if frame_count is None:
             return make_response(E.FRAME_START_NO_FRAME_COUNT, 400)
