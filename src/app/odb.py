@@ -177,6 +177,7 @@ FPS = 'fps'
 FPM = 'fpm'
 WIDTH = 'width'
 HEIGHT = 'height'
+FRAME_HEIGHT_PX = 'frame_height_px'
 TRACKPOINT_ORIGIN = 'trackpoint_origin'
 TRACKPOINT_ORIGIN_BOTTOM_LEFT = 'bottom-left'
 TRACKPOINT_MIGRATION_ORIGIN = 'trackpoint_migration_origin'
@@ -542,6 +543,9 @@ class DDBO:
             prop: fix_movie_prop_value(prop, value)
             for prop, value in updates.items()
         }
+        if FRAME_HEIGHT_PX not in movie_updates and any(
+                prop in movie_updates for prop in (MOVIE_ROTATION, MOVIE_DATA_URN, VERSION, WIDTH, HEIGHT)):
+            movie_updates[FRAME_HEIGHT_PX] = None
         if touch_activity:
             movie_updates[LAST_ACTIVITY_AT] = int(time.time())
         condition = None if expected_status is None else Attr(MOVIE_STATUS).eq(expected_status)
@@ -2478,6 +2482,9 @@ def get_frame_urn(*, movie_id, frame_number):
 
 def trackpoint_frame_height(movie: dict) -> int:
     """Return the analysis-frame height used to flip trackpoint Y coordinates."""
+    explicit_height = movie.get(FRAME_HEIGHT_PX)
+    if explicit_height is not None:
+        return int(validate_movie_field(FRAME_HEIGHT_PX, explicit_height))
     rotation_value = movie.get(MOVIE_ROTATION, 0)
     try:
         rotation = int(rotation_value)
@@ -2490,7 +2497,27 @@ def trackpoint_frame_height(movie: dict) -> int:
     height = int(height)
     if height <= 0:
         raise RuntimeError(f"movie {movie.get(MOVIE_ID)} has invalid analysis frame height {height}")
+    width = int(movie.get(WIDTH) or 0)
+    source_height = int(movie.get(HEIGHT) or 0)
+    if width > 0 and source_height > 0:
+        # Legacy source dimensions follow the same max-dimension scaling as the tracer.
+        return int(height * (C.MOVIE_MAX_WIDTH / max(width, source_height)))
     return height
+
+
+def remember_trackpoint_frame_height(*, movie: dict, frame_height: int) -> None:
+    """Cache measured height only while its source and rotation are unchanged."""
+    height = validate_movie_field(FRAME_HEIGHT_PX, frame_height)
+    condition = Attr(MOVIE_ID).exists()
+    for prop in (MOVIE_DATA_URN, MOVIE_ROTATION, VERSION, WIDTH, HEIGHT):
+        condition &= Attr(prop).eq(movie[prop]) if prop in movie else Attr(prop).not_exists()
+    ddbo = DDBO()
+    try:
+        ddbo.update_table(ddbo.movies, movie[MOVIE_ID], {FRAME_HEIGHT_PX: height},
+                          condition_expression=condition)
+    except ClientError as exc:
+        if exc.response['Error']['Code'] != 'ConditionalCheckFailedException':
+            raise
 
 
 def flip_trackpoint_y_value(y, frame_height: int) -> Decimal:

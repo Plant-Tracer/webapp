@@ -32,6 +32,7 @@ from .src.app.odb import (
     MOVIE_DATA_URN,
     MOVIE_ID,
     MOVIE_ROTATION,
+    remember_trackpoint_frame_height,
     MOVIE_TRACED_URN,
     MOVIE_ZIPFILE_URN,
     NEEDS_RETRACING,
@@ -442,6 +443,7 @@ def process_uploaded_movie(*, movie_id: str):
     with tempfile.NamedTemporaryFile(suffix=".mov") as movie_file:
         s3_presigned.s3_client().download_file(bucket, key, movie_file.name)
         metadata = mpeg_jpeg_zip.extract_movie_metadata(movie_path=movie_file.name)
+        frame_height = analysis_frame_height_from_movie(movie_url=movie_file.name, rotation=movie_rotation(movie))
     resized_at = int(time.time())
     updates = {
         WIDTH: metadata["width"],
@@ -453,6 +455,8 @@ def process_uploaded_movie(*, movie_id: str):
         MOVIE_STATUS: MOVIE_STATE_READY,
     }
     ddbo.update_movie(movie_id, updates)
+    remember_trackpoint_frame_height(movie={**movie, WIDTH: updates[WIDTH], HEIGHT: updates[HEIGHT]},
+                                    frame_height=frame_height)
     completed_movie = ddbo.get_movie(movie_id)
     ddbo.put_movie_log(
         log_id=_lifecycle_log_id(movie_id, C.LOG_EVENT_MOVIE_RESIZE_COMPLETED),
@@ -509,6 +513,7 @@ def run_tracing(*, movie_id, frame_start, frame_end=None, job_id=None):
     rotation = movie_rotation(movie_record)
     movie_url = s3_presigned.make_signed_url(urn=movie_urn)
     frame_height = analysis_frame_height_from_movie(movie_url=movie_url, rotation=rotation)
+    remember_trackpoint_frame_height(movie=movie_record, frame_height=frame_height)
     odb.ensure_bottom_left_trackpoints(movie_id=movie_id, frame_height=frame_height)
     input_trackpoints = [Trackpoint(**tpdict) for tpdict in get_movie_trackpoints(movie_id=movie_id)]
     tracer_input_trackpoints = odb.flip_trackpoints_y(input_trackpoints, frame_height)

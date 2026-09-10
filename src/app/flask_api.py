@@ -68,7 +68,7 @@ from .odb_movie_data import (
     delete_movie,
     read_object,
 )
-from .schema import DefaultCourseRequest
+from .schema import DefaultCourseRequest, TrackpointCoordinateMetadata
 
 
 api_bp = Blueprint('api', __name__)
@@ -160,16 +160,21 @@ def _height_from_movie_frame(movie_id, frame_number):
 
 
 def infer_trackpoint_frame_height(movie_id, movie_metadata, frame_start):
-    try:
+    """Resolve analysis height without applying rotation twice to API metadata."""
+    if movie_metadata.get(odb.FRAME_HEIGHT_PX) is not None:
         return odb.trackpoint_frame_height(movie_metadata)
+    movie = odb.get_movie(movie_id=movie_id)
+    candidate_frames = [frame_start, 0] if frame_start not in (None, 0) else [0]
+    height = next((height for frame_number in candidate_frames
+                   if (height := _height_from_movie_frame(movie_id, frame_number))), None)
+    height = height or _height_from_movie_zipfile(movie)
+    if height:
+        odb.remember_trackpoint_frame_height(movie=movie, frame_height=height)
+        return height
+    try:
+        return odb.trackpoint_frame_height(movie)
     except RuntimeError:
-        pass
-    candidate_frames = [frame_start, 0] if frame_start != 0 else [0]
-    for frame_number in candidate_frames:
-        height = _height_from_movie_frame(movie_id, frame_number)
-        if height:
-            return height
-    return _height_from_movie_zipfile(movie_metadata)
+        return None
 
 
 def _spreadsheet_value(value):
@@ -311,6 +316,10 @@ def _trackpoint_export_data(movie):
         odb.get_movie_metadata(movie_id=movie[MOVIE_ID])
     )
     trim_start_frame, trim_end_frame = odb.movie_trim_bounds(movie_metadata)
+    frame_height = infer_trackpoint_frame_height(movie[MOVIE_ID], movie_metadata, trim_start_frame)
+    movie_metadata = odb.ensure_bottom_left_trackpoints(movie_id=movie[MOVIE_ID], frame_height=frame_height)
+    coordinate_metadata = TrackpointCoordinateMetadata(
+        frame_height_px=frame_height, trackpoint_origin=movie_metadata.get(odb.TRACKPOINT_ORIGIN))
     trackpoint_dicts = odb.get_movie_trackpoints(
         movie_id=movie[MOVIE_ID],
         frame_start=trim_start_frame,
@@ -326,7 +335,6 @@ def _trackpoint_export_data(movie):
     # Use the robust height lookup (falls back to the movie zip) so calibration still works for
     # movies whose analysis-frame height is not stored in metadata. Conservatively stays in pixels
     # only when the height cannot be determined at all.
-    frame_height = infer_trackpoint_frame_height(movie[MOVIE_ID], movie_metadata, trim_start_frame)
     ruler_frame_points = []
     for frame_number in frame_numbers:
         points = [tp for tp in trackpoint_dicts
@@ -373,8 +381,8 @@ def _trackpoint_export_data(movie):
         ('trim_end_frame', trim_end_frame),
         ('exported_frame_count', len(frame_numbers)),
         ('marker_count', len(labels)),
-        ('trackpoint_origin', movie_metadata.get(odb.TRACKPOINT_ORIGIN, '')),
-        ('frame_height_px', frame_height if frame_height is not None else ''),
+        (odb.TRACKPOINT_ORIGIN, coordinate_metadata.trackpoint_origin or ''),
+        (odb.FRAME_HEIGHT_PX, coordinate_metadata.frame_height_px or ''),
         ('ruler_calibrated', 'yes' if calibrated else 'no'),
         ('ruler_marker_units', 'px'),
         ('non_ruler_marker_units', 'mm' if calibrated else 'px'),
@@ -407,6 +415,7 @@ def _trackpoint_export_data(movie):
         calibrated,
     )
     return {
+        C.API_KEY_METADATA: coordinate_metadata,
         'trackpoint_dicts': trackpoint_dicts,
         'fieldnames': fieldnames,
         'rows': rows,
@@ -421,13 +430,13 @@ def _csv_trackpoint_response(export_data):
     with io.StringIO() as f:
         writer = csv.DictWriter(
             f,
-            fieldnames=export_data['fieldnames'],
+            fieldnames=[*export_data['fieldnames'], odb.FRAME_HEIGHT_PX, odb.TRACKPOINT_ORIGIN],
             restval='',
             extrasaction='ignore',
         )
         writer.writeheader()
         for row in export_data['rows']:
-            writer.writerow(row)
+            writer.writerow({**row, **export_data[C.API_KEY_METADATA].model_dump()})
         response = make_response(f.getvalue())
         response.headers['Content-Type'] = 'text/csv'
         response.headers['Content-Disposition'] = 'attachment; filename="trackpoints.csv"'
@@ -1045,13 +1054,13 @@ def api_get_movie_metadata():
     if tracking_completed and get_all_if_tracking_completed:
         frame_start = 0
         frame_count = C.MAX_FRAMES
+    frame_height = infer_trackpoint_frame_height(movie_id, movie_metadata, frame_start)
     if frame_start is not None:
         if frame_count is None:
             return make_response(E.FRAME_START_NO_FRAME_COUNT, 400)
         if frame_count<1:
             return make_response(E.FRAME_COUNT_GT_0, 400)
         try:
-            frame_height = infer_trackpoint_frame_height(movie_id, movie_metadata, frame_start)
             odb.ensure_bottom_left_trackpoints(movie_id=movie_id, frame_height=frame_height)
         except RuntimeError as exc:
             logger.exception("trackpoint migration failed movie_id=%s", movie_id)
@@ -1081,6 +1090,9 @@ def api_get_movie_metadata():
             url_name = urn_name.replace("urn","url")
             movie_metadata[url_name] = make_signed_url(urn=movie_metadata[urn_name])
 
+    movie_metadata.update(TrackpointCoordinateMetadata(
+        frame_height_px=frame_height,
+        trackpoint_origin=movie_metadata.get(odb.TRACKPOINT_ORIGIN)).model_dump())
     ret = {C.API_KEY_ERROR: False,
            C.API_KEY_METADATA: movie_metadata}
 
@@ -1178,7 +1190,8 @@ def api_get_movie_trackpoints():
     export_data = _trackpoint_export_data(movie)
 
     if get('format')=='json':
-        return jsonify({'error':'False', 'trackpoint_dicts':export_data['trackpoint_dicts']})
+        return jsonify({'error':'False', 'trackpoint_dicts':export_data['trackpoint_dicts'],
+                        C.API_KEY_METADATA: export_data[C.API_KEY_METADATA].model_dump()})
     if get('format')=='xlsx':
         return _xlsx_trackpoint_response(export_data)
     return _csv_trackpoint_response(export_data)

@@ -1,5 +1,6 @@
 import csv
 import io
+import json
 import re
 import zipfile
 import xml.etree.ElementTree as ET
@@ -8,6 +9,9 @@ from decimal import Decimal
 import pytest
 from PIL import Image
 from pydantic import ValidationError
+
+from resize_app import movie_glue, mpeg_jpeg_zip
+from tests.fixtures.analysis_mp4_fixture import write_four_color_movie
 
 from app import odb, schema
 from app import odb_movie_data
@@ -438,7 +442,8 @@ def test_get_movie_trackpoints_lazily_migrates_legacy_csv_export(client, new_mov
     rows = list(csv.DictReader(io.StringIO(resp.data.decode("utf-8"))))
     # No ruler markers => uncalibrated => pixels, with units annotated in the headers.
     assert rows == [
-        {"frame_number": "0", "plant x (px)": "10", "plant y (px)": "130"},
+        {"frame_number": "0", "plant x (px)": "10", "plant y (px)": "130",
+         odb.FRAME_HEIGHT_PX: "150", TRACKPOINT_ORIGIN: BOTTOM_LEFT},
     ]
     assert odb.get_movie(movie_id=movie_id).get(TRACKPOINT_ORIGIN) == BOTTOM_LEFT
     stored_frame = odb.DDBO().movie_frames.get_item(Key={MOVIE_ID: movie_id, FRAME_NUMBER: 0})["Item"]
@@ -648,3 +653,113 @@ def test_csv_uses_inferred_height_when_metadata_height_missing(client, new_movie
     row = list(csv.DictReader(io.StringIO(resp.data.decode("utf-8"))))[0]
     assert row["Apex x (mm)"] == "10.0"
     assert row["Ruler 0mm x (px)"] == "10"
+
+
+@pytest.mark.parametrize('width,height,rotation,analysis_height', [
+    (640, 480, 0, 480), (480, 640, 0, 640),
+    (640, 480, 90, 640), (480, 640, 90, 480),
+    (1280, 960, 0, 480), (960, 1280, 90, 480),
+])
+def test_movie_height_in_all_trackpoint_downloads(client, new_movie, tmp_path,
+                                                 width, height, rotation, analysis_height):
+    """Real MP4 pixels, persisted metadata and every export agree after rotation/scaling."""
+    movie_id = new_movie[MOVIE_ID]
+    path = tmp_path / 'source.mp4'
+    write_four_color_movie(path, width=width, height=height)
+    source_metadata = mpeg_jpeg_zip.extract_movie_metadata(movie_path=str(path))
+    assert (source_metadata[odb.WIDTH], source_metadata[odb.HEIGHT]) == (width, height)
+    odb_movie_data.set_movie_data(movie_id=movie_id, movie_data=path.read_bytes())
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={odb.MOVIE_ROTATION: rotation})
+    movie_glue.process_uploaded_movie(movie_id=movie_id)
+    stored = odb.get_movie(movie_id=movie_id)
+    assert stored[odb.FRAME_HEIGHT_PX] == analysis_height
+    assert schema.Movie(**stored).frame_height_px == analysis_height
+    actual_frame = mpeg_jpeg_zip.get_first_frame_from_url(str(path), rotation)
+    assert actual_frame.shape[0] == analysis_height
+    # Write through the same API used by JavaScript, then download the saved point.
+    params = {API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id}
+    result = client.post('/api/put-frame-trackpoints', data={
+        **params, FRAME_NUMBER: 0,
+        'trackpoints': json.dumps([{'x': 10, 'y': analysis_height - 20, 'label': 'Apex'}]),
+    })
+    assert result.status_code == 200
+    expected = {odb.FRAME_HEIGHT_PX: analysis_height, TRACKPOINT_ORIGIN: BOTTOM_LEFT}
+    browser = client.post('/api/get-movie-metadata', data={**params, 'frame_start': 0, 'frame_count': 1}).get_json()
+    assert {key: browser['metadata'][key] for key in expected} == expected
+    assert browser['frames']['0']['markers'][0]['y'] == analysis_height - 20
+    for frame_range in ({}, {'frame_start': 0, 'frame_count': 1}):
+        metadata = client.post('/api/get-movie-metadata', data={**params, **frame_range}).get_json()['metadata']
+        assert metadata[odb.FRAME_HEIGHT_PX] == analysis_height
+    downloaded = client.post('/api/get-movie-trackpoints', data={**params, 'format': 'json'}).get_json()
+    assert downloaded['metadata'] == expected
+    assert downloaded['trackpoint_dicts'][0]['y'] == analysis_height - 20
+    response = client.post('/api/get-movie-trackpoints', data=params)
+    row = next(csv.DictReader(io.StringIO(response.data.decode())))
+    assert int(row[odb.FRAME_HEIGHT_PX]) == analysis_height
+    assert row[TRACKPOINT_ORIGIN] == BOTTOM_LEFT
+    assert int(row['Apex y (px)']) == analysis_height - 20
+    response = client.post('/api/get-movie-trackpoints', data={**params, 'format': 'xlsx'})
+    rows = _xlsx_rows(response.data, 'xl/worksheets/sheet2.xml')
+    metadata = {row[0]: row[1] if len(row) > 1 else '' for row in rows[1:]}
+    assert {key: metadata[key] for key in expected} == expected
+
+
+@pytest.mark.parametrize('height', [480, 640])
+def test_legacy_zip_height_persists_for_downloads(client, new_movie, height):
+    """Once established from ZIP pixels, height survives removal of that ZIP."""
+    movie_id = new_movie[MOVIE_ID]
+    zip_urn = make_urn(object_name=f'tests/{movie_id}_zipfile.mov')
+    odb_movie_data.write_object(zip_urn, _zip_with_frame(width=640 if height == 480 else 480, height=height))
+    ddbo = odb.DDBO()
+    ddbo.update_movie(movie_id, {odb.MOVIE_ZIPFILE_URN: zip_urn})
+    ddbo.movies.update_item(Key={MOVIE_ID: movie_id}, UpdateExpression=f'REMOVE {TRACKPOINT_ORIGIN}')
+    ddbo.put_movie_frame({MOVIE_ID: movie_id, FRAME_NUMBER: 0,
+                         'trackpoints': [Trackpoint(x=10, y=20, label='plant').model_dump()]})
+    params = {API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id, 'format': 'json'}
+    first = client.post('/api/get-movie-trackpoints', data=params).get_json()
+    assert first['metadata'][odb.FRAME_HEIGHT_PX] == height
+    assert first['trackpoint_dicts'][0]['y'] == height - 20
+    assert ddbo.get_movie(movie_id)[odb.FRAME_HEIGHT_PX] == height
+    odb_movie_data.purge_movie_zipfile(movie_id=movie_id)
+    assert client.post('/api/get-movie-trackpoints', data=params).get_json() == first
+
+
+@pytest.mark.parametrize('prop,value', [(odb.MOVIE_ROTATION, 90), (odb.MOVIE_DATA_URN, 's3://test/new.mov'),
+                                       (odb.VERSION, 2), (odb.WIDTH, 480), (odb.HEIGHT, 640)])
+def test_frame_height_invalidated_and_stale_inference_rejected(new_movie, prop, value):
+    ddbo = odb.DDBO()
+    movie_id = new_movie[MOVIE_ID]
+    snapshot = ddbo.get_movie(movie_id)
+    odb.remember_trackpoint_frame_height(movie=snapshot, frame_height=480)
+    ddbo.update_movie(movie_id, {prop: value})
+    assert ddbo.get_movie(movie_id).get(odb.FRAME_HEIGHT_PX) is None
+    odb.remember_trackpoint_frame_height(movie=snapshot, frame_height=480)
+    assert ddbo.get_movie(movie_id).get(odb.FRAME_HEIGHT_PX) is None
+    ddbo.update_movie(movie_id, {prop: snapshot.get(prop)})
+
+
+def test_unknown_frame_height_is_explicit(client, new_movie):
+    params = {API_KEY: new_movie[API_KEY], MOVIE_ID: new_movie[MOVIE_ID]}
+    odb.put_frame_trackpoints(movie_id=new_movie[MOVIE_ID], frame_number=0,
+                             trackpoints=[Trackpoint(x=10, y=20, label='plant')])
+    for endpoint in ('get-movie-metadata', 'get-movie-trackpoints'):
+        result = client.post(f'/api/{endpoint}', data={**params, 'format': 'json'}).get_json()
+        assert result['metadata'][odb.FRAME_HEIGHT_PX] is None
+        assert result['metadata'][TRACKPOINT_ORIGIN] == BOTTOM_LEFT
+    row = next(csv.DictReader(io.StringIO(client.post('/api/get-movie-trackpoints', data=params).data.decode())))
+    assert row[odb.FRAME_HEIGHT_PX] == ''
+    assert row[TRACKPOINT_ORIGIN] == BOTTOM_LEFT
+
+
+@pytest.mark.parametrize('width,height,rotation,expected', [
+    (640, 480, 90, 640), (480, 640, 90, 480),
+    (1280, 960, 0, 480), (480, 360, 0, 480),
+])
+def test_legacy_source_dimensions_supply_analysis_height(client, new_movie, width, height, rotation, expected):
+    """Rotated API dimensions must not cause a second rotation or omit scaling."""
+    movie_id = new_movie[MOVIE_ID]
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={
+        odb.WIDTH: width, odb.HEIGHT: height, odb.MOVIE_ROTATION: rotation})
+    result = client.post('/api/get-movie-metadata', data={
+        API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id}).get_json()
+    assert result['metadata'][odb.FRAME_HEIGHT_PX] == expected

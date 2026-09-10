@@ -167,6 +167,7 @@ class Movie(BaseModel):
     width: Annotated[int | None, Field(ge=0, le=10000)] = None
     height: Annotated[int | None, Field(ge=0, le=10000)] = None
     trackpoint_origin: Literal["bottom-left"] | None = None
+    frame_height_px: Annotated[int | None, Field(gt=0)] = None
 
     total_frames: Annotated[int | None, Field(ge=0, le=999999)] = None
     trim_start_frame: Annotated[int | None, Field(ge=0, le=999999)] = None
@@ -192,6 +193,13 @@ class Movie(BaseModel):
 
     # Preview rotation on upload page (0–3 × 90° CW). Applied when tracking.
     rotation: Annotated[int, Field(ge=0, lt=360)] = 0
+
+
+class TrackpointCoordinateMetadata(BaseModel):
+    """Pixel coordinate space shared by trackpoint APIs and downloads."""
+
+    frame_height_px: Annotated[int | None, Field(gt=0)] = None
+    trackpoint_origin: Literal["bottom-left"] | None = None
 
 
 def fix_movie_prop_value(prop, value):

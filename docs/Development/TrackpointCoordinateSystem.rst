@@ -65,6 +65,7 @@ that movie:
 .. code-block:: python
 
    trackpoint_origin: Literal["bottom-left"] | None = None
+   frame_height_px: int | None = None
 
 Rules:
 
@@ -141,9 +142,11 @@ When loading frame markers:
   ``POST /api/get-movie-metadata``.
 * For ``"bottom-left"`` movies, convert stored trackpoints to canvas coordinates
   before creating ``Marker`` and ``Line`` objects.
-* Use the loaded analysis image's natural height for the Y conversion. Movie
-  metadata records the source movie dimensions, which can differ when Lambda
-  scales the analysis frame (for example, a 480x360 source becomes 640x480).
+* Use ``metadata.frame_height_px`` for the Y conversion when supplied. This is
+  the analysis coordinate height after rotation and scaling; do not rotate it
+  again. With older responses, fall back to the loaded image's natural height.
+  Movie ``width``/``height`` can describe source dimensions rather than analysis
+  dimensions (for example, a 480x360 source becomes 640x480).
 * Rebuild the current frame after the loaded image reports its natural
   dimensions. Do not flip bottom-left trackpoints against the source-movie or
   placeholder canvas height.
@@ -266,3 +269,22 @@ When the implementation lands, update user-facing coordinate descriptions in
 ``docs/UserTutorial.rst`` and ``src/app/templates/analyze.html``. Any affected
 screenshots under ``docs/tutorial_images/`` should be flagged for user review
 rather than replaced automatically.
+
+Persisted frame height and downloads
+------------------------------------
+
+Upload processing and tracing measure the actual analysis-frame height and store
+``frame_height_px`` on the movie. Legacy JPEG/ZIP height recovery also caches its
+result, conditional on the source, rotation, and version remaining unchanged.
+Source, version, rotation, or dimension updates invalidate a cached height unless
+they explicitly supply its replacement. The original source dimensions remain
+separate. When both legacy source dimensions are available, the fallback applies the
+current tracer maximum-dimension scaling and rotation. A height-only legacy
+record retains its historical interpretation until analysis pixels are measured.
+
+Browser metadata and JSON trackpoint downloads include ``frame_height_px`` and
+``trackpoint_origin`` in ``metadata``. CSV repeats them as columns; XLSX includes
+them on the Metadata sheet. Height is always pixels, independent of calibrated
+position units. Unknown height is JSON ``null`` or an empty spreadsheet cell.
+The frame height describes the entire resized, rotated image and is independent
+of the selected analysis frame range.

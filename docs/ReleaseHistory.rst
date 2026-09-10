@@ -78,6 +78,11 @@ Release Notes
 Unreleased Summary
 ******************
 
+    * Include analysis-frame pixel height and coordinate origin consistently in
+      trackpoint JSON, CSV, and XLSX downloads. Persist measured height and use
+      it in browser marker conversions for landscape and portrait movies
+      (refs #1233).
+
     * Standardize the agent PR workflow as ``pr-to-ready``, retaining
       ``codex-to-complete`` and ``codex-to-ready`` aliases, with shared
       Codex, Claude, and Copilot implementer/reviewer instructions.
