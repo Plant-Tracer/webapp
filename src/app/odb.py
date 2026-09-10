@@ -20,7 +20,7 @@ from decimal import Decimal
 
 import boto3
 from botocore.exceptions import ClientError
-from boto3.dynamodb.conditions import Key,Attr
+from boto3.dynamodb.conditions import Key,Attr,ConditionExpressionBuilder
 from pydantic import BaseModel, ValidationError
 
 from .schema import (
@@ -2509,24 +2509,38 @@ def trackpoint_frame_height(movie: dict) -> int:
     if width > 0 and source_height > 0:
         # Legacy source dimensions follow the same max-dimension scaling as the tracer.
         return int(height * (C.MOVIE_MAX_WIDTH / max(width, source_height)))
+    if movie.get(LEGACY_FRAME_HEIGHT_INVALIDATED, False):
+        raise RuntimeError(f"movie {movie.get(MOVIE_ID)} lacks complete source dimensions")
     return height
+
+
+TRACKPOINT_GEOMETRY_PROPS = (MOVIE_DATA_URN, MOVIE_ROTATION, VERSION, WIDTH, HEIGHT,
+                            LEGACY_FRAME_HEIGHT_INVALIDATED)
+
+
+def _trackpoint_geometry_condition(movie):
+    condition = Attr(MOVIE_ID).exists()
+    for prop in TRACKPOINT_GEOMETRY_PROPS:
+        condition &= Attr(prop).eq(movie[prop]) if prop in movie else Attr(prop).not_exists()
+    return condition
+
+
+def _update_movie_coordinate_state(ddbo, movie_id, updates, condition):
+    try:
+        ddbo.update_table(ddbo.movies, movie_id, updates, condition_expression=condition)
+    except ClientError as exc:
+        if exc.response['Error']['Code'] == 'ConditionalCheckFailedException':
+            raise TrackpointFrameHeightChanged(f"movie {movie_id} changed during coordinate recovery") from exc
+        raise
 
 
 def remember_trackpoint_frame_height(*, movie: dict, frame_height: int) -> None:
     """Cache a measurement only while its movie and previous height are unchanged."""
     height = validate_movie_field(FRAME_HEIGHT_PX, frame_height)
-    condition = Attr(MOVIE_ID).exists()
-    for prop in (MOVIE_DATA_URN, MOVIE_ROTATION, VERSION, WIDTH, HEIGHT,
-                 FRAME_HEIGHT_PX, LEGACY_FRAME_HEIGHT_INVALIDATED):
-        condition &= Attr(prop).eq(movie[prop]) if prop in movie else Attr(prop).not_exists()
-    ddbo = DDBO()
-    try:
-        ddbo.update_table(ddbo.movies, movie[MOVIE_ID], {FRAME_HEIGHT_PX: height},
-                          condition_expression=condition)
-    except ClientError as exc:
-        if exc.response['Error']['Code'] == 'ConditionalCheckFailedException':
-            raise TrackpointFrameHeightChanged(f"movie {movie[MOVIE_ID]} changed during height recovery") from exc
-        raise
+    condition = _trackpoint_geometry_condition(movie)
+    condition &= (Attr(FRAME_HEIGHT_PX).eq(movie[FRAME_HEIGHT_PX]) if FRAME_HEIGHT_PX in movie
+                  else Attr(FRAME_HEIGHT_PX).not_exists())
+    _update_movie_coordinate_state(DDBO(), movie[MOVIE_ID], {FRAME_HEIGHT_PX: height}, condition)
 
 
 def flip_trackpoint_y_value(y, frame_height: int) -> Decimal:
@@ -2550,11 +2564,52 @@ def _flip_trackpoint_dict_y(trackpoint: dict, frame_height: int) -> dict:
     return flipped
 
 
-def ensure_bottom_left_trackpoints(*, movie_id: str, frame_height: int | None = None) -> dict:
+def _migrate_trackpoint_frame(ddbo, movie_id, frame, frame_height, condition):
+    """Atomically require current geometry and unchanged legacy points for each flip."""
+    expression = ConditionExpressionBuilder().build_expression(condition)
+    try:
+        ddbo.dynamodb.meta.client.transact_write_items(TransactItems=[
+            {'ConditionCheck': {
+                'TableName': ddbo.movies.name, 'Key': {MOVIE_ID: movie_id},
+                'ConditionExpression': expression.condition_expression,
+                'ExpressionAttributeNames': expression.attribute_name_placeholders,
+                'ExpressionAttributeValues': expression.attribute_value_placeholders,
+            }},
+            {'Update': {
+                'TableName': ddbo.movie_frames.name,
+                'Key': {MOVIE_ID: movie_id, FRAME_NUMBER: frame[FRAME_NUMBER]},
+                'UpdateExpression': 'SET trackpoints=:points, #origin=:origin',
+                'ConditionExpression': 'attribute_not_exists(#origin) AND trackpoints=:old_points',
+                'ExpressionAttributeNames': {'#origin': TRACKPOINT_MIGRATION_ORIGIN},
+                'ExpressionAttributeValues': {
+                    ':points': [_flip_trackpoint_dict_y(point, frame_height) for point in frame['trackpoints']],
+                    ':old_points': frame['trackpoints'], ':origin': TRACKPOINT_ORIGIN_BOTTOM_LEFT,
+                },
+            }},
+        ])
+    except ClientError as exc:
+        if exc.response['Error']['Code'] != 'TransactionCanceledException':
+            raise
+        current = ddbo.get_movie_frame(movie_id, frame[FRAME_NUMBER])
+        if current and current.get(TRACKPOINT_MIGRATION_ORIGIN) == TRACKPOINT_ORIGIN_BOTTOM_LEFT:
+            return  # Another migration already converted this frame; never flip it twice.
+        raise TrackpointFrameHeightChanged(f"movie {movie_id} changed during coordinate migration") from exc
+
+
+def ensure_bottom_left_trackpoints(*, movie_id: str, frame_height: int | None = None,
+                                   movie_snapshot: dict | None = None) -> dict:
     """Lazily migrate a movie's stored trackpoints to bottom-left coordinates."""
     assert is_movie_id(movie_id)
     ddbo = DDBO()
     movie = ddbo.get_movie(movie_id)
+    snapshot = movie if movie_snapshot is None else movie_snapshot
+    if movie_snapshot is not None and (
+            any(movie.get(prop) != snapshot.get(prop) for prop in TRACKPOINT_GEOMETRY_PROPS)
+            or (movie.get(FRAME_HEIGHT_PX) is not None and movie[FRAME_HEIGHT_PX] != frame_height)):
+        raise TrackpointFrameHeightChanged(f"movie {movie_id} changed before coordinate migration")
+    frame_height = frame_height or movie.get(FRAME_HEIGHT_PX)
+    condition = _trackpoint_geometry_condition(snapshot)
+    condition &= Attr(FRAME_HEIGHT_PX).not_exists() | Attr(FRAME_HEIGHT_PX).eq(frame_height)
     origin = movie.get(TRACKPOINT_ORIGIN)
     if origin == TRACKPOINT_ORIGIN_BOTTOM_LEFT:
         return movie
@@ -2564,52 +2619,30 @@ def ensure_bottom_left_trackpoints(*, movie_id: str, frame_height: int | None = 
     frames = ddbo.get_frames(movie_id)
     frames_with_trackpoints = [frame for frame in frames if frame.get('trackpoints')]
     if not frames_with_trackpoints:
-        ddbo.update_movie(movie_id, {
+        _update_movie_coordinate_state(ddbo, movie_id, {
             TRACKPOINT_ORIGIN: TRACKPOINT_ORIGIN_BOTTOM_LEFT,
             TRACKPOINT_MIGRATION_STATE: None,
-        }, touch_activity=False)
+        }, condition)
         return ddbo.get_movie(movie_id)
 
     frame_height = frame_height or trackpoint_frame_height(movie)
-    ddbo.update_movie(
-        movie_id,
-        {TRACKPOINT_MIGRATION_STATE: TRACKPOINT_MIGRATION_IN_PROGRESS},
-        touch_activity=False,
-    )
+    condition = _trackpoint_geometry_condition(snapshot)
+    condition &= Attr(FRAME_HEIGHT_PX).not_exists() | Attr(FRAME_HEIGHT_PX).eq(frame_height)
+    _update_movie_coordinate_state(ddbo, movie_id,
+                                  {TRACKPOINT_MIGRATION_STATE: TRACKPOINT_MIGRATION_IN_PROGRESS}, condition)
 
     for frame in frames_with_trackpoints:
         if frame.get(TRACKPOINT_MIGRATION_ORIGIN) == TRACKPOINT_ORIGIN_BOTTOM_LEFT:
             continue
-        converted_trackpoints = [_flip_trackpoint_dict_y(trackpoint, frame_height) for trackpoint in frame['trackpoints']]
-        try:
-            # Atomic per-frame flip: convert only if the frame is not already marked
-            # bottom-left. The conditional write (plus the durable marker, which we no
-            # longer remove) makes concurrent or repeated migrations of the same movie
-            # safe — a frame's Y can never be flipped twice (refs #1058). The in-memory
-            # check above is a cheap fast-path; this condition is the actual guarantee,
-            # since a concurrent runner's snapshot may not see another runner's write.
-            ddbo.movie_frames.update_item(
-                Key={MOVIE_ID: movie_id, FRAME_NUMBER: frame[FRAME_NUMBER]},
-                UpdateExpression='SET trackpoints=:trackpoints, #origin=:origin',
-                ConditionExpression='attribute_not_exists(#origin)',
-                ExpressionAttributeNames={'#origin': TRACKPOINT_MIGRATION_ORIGIN},
-                ExpressionAttributeValues={
-                    ':trackpoints': converted_trackpoints,
-                    ':origin': TRACKPOINT_ORIGIN_BOTTOM_LEFT,
-                },
-            )
-        except ClientError as exc:
-            if exc.response.get('Error', {}).get('Code', '') != 'ConditionalCheckFailedException':
-                raise
-            # A concurrent migration already flipped this frame; leave its result intact.
+        _migrate_trackpoint_frame(ddbo, movie_id, frame, frame_height, condition)
 
     # The per-frame markers are intentionally left in place. Once the movie's
     # trackpoint_origin is bottom-left, ensure_bottom_left_trackpoints() returns early and
     # never reads them again, so they cannot re-expose a flipped frame to a second flip.
-    ddbo.update_movie(movie_id, {
+    _update_movie_coordinate_state(ddbo, movie_id, {
         TRACKPOINT_ORIGIN: TRACKPOINT_ORIGIN_BOTTOM_LEFT,
         TRACKPOINT_MIGRATION_STATE: None,
-    }, touch_activity=False)
+    }, condition)
     return ddbo.get_movie(movie_id)
 
 

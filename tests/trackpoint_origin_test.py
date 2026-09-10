@@ -53,6 +53,7 @@ def _movie_payload(**overrides):
 def _make_legacy_top_left_movie(*, movie_id: str, frame_height: int, legacy_y: int) -> None:
     ddbo = odb.DDBO()
     odb.set_movie_metadata(movie_id=movie_id, movie_metadata={HEIGHT: frame_height})
+    ddbo.update_movie(movie_id, {odb.LEGACY_FRAME_HEIGHT_INVALIDATED: None})
     ddbo.movies.update_item(
         Key={MOVIE_ID: movie_id},
         UpdateExpression=f"REMOVE {TRACKPOINT_ORIGIN}",
@@ -338,6 +339,7 @@ def test_lazy_migration_retry_does_not_double_flip_converted_frames(new_movie):
     movie_id = new_movie[MOVIE_ID]
     ddbo = odb.DDBO()
     odb.set_movie_metadata(movie_id=movie_id, movie_metadata={HEIGHT: 150})
+    ddbo.update_movie(movie_id, {odb.LEGACY_FRAME_HEIGHT_INVALIDATED: None})
     ddbo.movies.update_item(
         Key={MOVIE_ID: movie_id},
         UpdateExpression=f"REMOVE {TRACKPOINT_ORIGIN}",
@@ -453,7 +455,8 @@ def test_get_movie_trackpoints_lazily_migrates_legacy_csv_export(client, new_mov
 
 def _seed_frame0(movie_id, trackpoints, *, height):
     """Set the analysis-frame height and write a single frame 0 of trackpoints."""
-    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={HEIGHT: height, "total_frames": 1})
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={
+        HEIGHT: height, odb.FRAME_HEIGHT_PX: height, odb.TOTAL_FRAMES: 1})
     odb.put_frame_trackpoints(movie_id=movie_id, frame_number=0, trackpoints=trackpoints)
 
 
@@ -773,20 +776,20 @@ def test_legacy_source_dimensions_supply_analysis_height(client, new_movie, widt
     assert result['metadata'][odb.FRAME_HEIGHT_PX] == expected
 
 
-@pytest.mark.parametrize('frame_count', [None, 0])
-def test_invalid_frame_range_does_not_cache_legacy_height(client, new_movie, frame_count):
+@pytest.mark.parametrize('frame_start,frame_count', [(0, None), (0, 0), (-1, 1)])
+def test_invalid_frame_range_does_not_cache_legacy_height(client, new_movie, frame_start, frame_count):
     """Invalid range requests must not trigger the otherwise available ZIP backfill."""
     movie_id = new_movie[MOVIE_ID]
     zip_urn = make_urn(object_name=f'tests/{movie_id}_zipfile.mov')
     odb_movie_data.write_object(zip_urn, _zip_with_frame(width=480, height=640))
     ddbo = odb.DDBO()
     ddbo.update_movie(movie_id, {odb.MOVIE_ZIPFILE_URN: zip_urn, odb.LEGACY_FRAME_HEIGHT_INVALIDATED: None})
-    params = {API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id, 'frame_start': 0}
+    params = {API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id, 'frame_start': frame_start}
     if frame_count is not None:
         params['frame_count'] = frame_count
     assert client.post('/api/get-movie-metadata', data=params).status_code == 400
     assert ddbo.get_movie(movie_id).get(odb.FRAME_HEIGHT_PX) is None
-    params['frame_count'] = 1
+    params.update(frame_start=0, frame_count=1)
     assert client.post('/api/get-movie-metadata', data=params).status_code == 200
     assert ddbo.get_movie(movie_id)[odb.FRAME_HEIGHT_PX] == 640
 
@@ -914,3 +917,86 @@ def test_height_recovery_conflict_does_not_migrate_points(client, new_movie, mon
     stored = ddbo.get_movie(movie_id)
     assert stored.get(TRACKPOINT_ORIGIN) is None
     assert stored.get(odb.FRAME_HEIGHT_PX) == (480 if concurrent_change == 'measurement' else None)
+
+
+@pytest.mark.parametrize('rotation,dimension', [(0, odb.HEIGHT), (90, odb.WIDTH),
+                                               (180, odb.HEIGHT), (270, odb.WIDTH)])
+def test_changed_geometry_requires_both_source_dimensions(client, new_movie, rotation, dimension):
+    movie_id = new_movie[MOVIE_ID]
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={dimension: 480, odb.MOVIE_ROTATION: rotation})
+    params = {API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id, 'format': 'json'}
+    for endpoint in ('get-movie-metadata', 'get-movie-trackpoints'):
+        response = client.post(f'/api/{endpoint}', data=params)
+        assert response.status_code == 200
+        assert response.get_json()['metadata'][odb.FRAME_HEIGHT_PX] is None
+
+
+@pytest.mark.parametrize('endpoint', ['get-movie-metadata', 'get-movie-trackpoints'])
+def test_geometry_change_after_inference_aborts_migration(client, new_movie, monkeypatch, endpoint):
+    movie_id = new_movie[MOVIE_ID]
+    _make_legacy_top_left_movie(movie_id=movie_id, frame_height=150, legacy_y=20)
+    infer_height = flask_api.infer_trackpoint_frame_height
+
+    def infer_then_rotate(*args, **kwargs):
+        height = infer_height(*args, **kwargs)
+        odb.DDBO().update_movie(movie_id, {odb.MOVIE_ROTATION: 90})
+        return height
+
+    monkeypatch.setattr(flask_api, 'infer_trackpoint_frame_height', infer_then_rotate)
+    response = client.post(f'/api/{endpoint}', data={
+        API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id, 'format': 'json', 'frame_start': 0, 'frame_count': 1})
+    assert response.status_code == 409
+    assert odb.DDBO().get_movie_frame(movie_id, 0)['trackpoints'][0]['y'] == 20
+    assert odb.get_movie(movie_id=movie_id).get(TRACKPOINT_ORIGIN) is None
+
+
+@pytest.mark.parametrize('change_after_frame', [False, True])
+def test_migration_transaction_and_completion_require_original_geometry(new_movie, monkeypatch, change_after_frame):
+    movie_id = new_movie[MOVIE_ID]
+    _make_legacy_top_left_movie(movie_id=movie_id, frame_height=150, legacy_y=20)
+    ddbo = odb.DDBO()
+    snapshot = ddbo.get_movie(movie_id)
+    migrate_frame = odb._migrate_trackpoint_frame  # pylint: disable=protected-access
+
+    def migrate_with_rotation(*args):
+        if change_after_frame:
+            migrate_frame(*args)
+        ddbo.update_movie(movie_id, {odb.MOVIE_ROTATION: 90})
+        if not change_after_frame:
+            migrate_frame(*args)
+
+    monkeypatch.setattr(odb, '_migrate_trackpoint_frame', migrate_with_rotation)
+    with pytest.raises(odb.TrackpointFrameHeightChanged):
+        odb.ensure_bottom_left_trackpoints(movie_id=movie_id, frame_height=150, movie_snapshot=snapshot)
+    assert ddbo.get_movie(movie_id).get(TRACKPOINT_ORIGIN) is None
+    assert ddbo.get_movie_frame(movie_id, 0)['trackpoints'][0]['y'] == (130 if change_after_frame else 20)
+
+
+@pytest.mark.parametrize('job', ['upload', 'trace'])
+def test_height_conflict_leaves_movie_work_retryable(new_movie, tmp_path, monkeypatch, job):
+    movie_id = new_movie[MOVIE_ID]
+    path = tmp_path / 'source.mp4'
+    write_four_color_movie(path, width=640, height=480)
+    odb_movie_data.set_movie_data(movie_id=movie_id, movie_data=path.read_bytes())
+    ddbo = odb.DDBO()
+    remember_height = movie_glue.remember_trackpoint_frame_height
+
+    def remember_after_rotation(**kwargs):
+        ddbo.update_movie(movie_id, {odb.MOVIE_ROTATION: 90})
+        remember_height(**kwargs)
+
+    monkeypatch.setattr(movie_glue, 'remember_trackpoint_frame_height', remember_after_rotation)
+    with pytest.raises(movie_glue.odb.TrackpointFrameHeightChanged):
+        if job == 'upload':
+            movie_glue.process_uploaded_movie(movie_id=movie_id)
+        else:
+            movie_glue.run_tracing(movie_id=movie_id, frame_start=0)
+    assert ddbo.get_movie(movie_id).get(odb.FRAME_HEIGHT_PX) is None
+    if job == 'trace':
+        assert ddbo.get_movie(movie_id)[odb.MOVIE_STATUS] == odb.MOVIE_STATE_TRACING_FAILED
+    else:
+        assert ddbo.get_movie(movie_id)[odb.RESIZED_AT]
+    monkeypatch.setattr(movie_glue, 'remember_trackpoint_frame_height', remember_height)
+    movie_glue.process_uploaded_movie(movie_id=movie_id)
+    assert ddbo.get_movie(movie_id)[odb.FRAME_HEIGHT_PX] == 640
+    assert ddbo.get_movie(movie_id)[odb.MOVIE_STATUS] == odb.MOVIE_STATE_READY

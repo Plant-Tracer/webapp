@@ -633,13 +633,14 @@ height. When requesting frames, a legacy record's height may be recovered from
 stored JPEG frames or its ZIP and cached in DynamoDB. Source, rotation, version,
 or dimension updates disable recovery from these unversioned legacy artifacts;
 height then comes from a new measurement or current dimensions, or remains null.
-Invalid frame ranges are rejected before height recovery or caching. Heights are
+Invalid frame ranges, including negative `frame_start`, are rejected before height recovery or caching. Heights are
 JSON integers. Requesting legacy trackpoints also performs the existing conversion
 to bottom-left coordinates.
 
-If the movie geometry or cached height changes during artifact recovery, this
-endpoint returns HTTP 409 with a retry message before migrating any coordinates.
-Trackpoint downloads use the same conflict behavior.
+The recovered height remains tied to its movie geometry snapshot through
+migration. Each frame conversion transaction checks that geometry and the
+unconverted points; the final origin update also checks geometry. Conflicts
+return HTTP 409 with a retry message. Trackpoint downloads use the same behavior.
 
 **Parameters**
 

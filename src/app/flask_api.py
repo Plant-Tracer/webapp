@@ -316,7 +316,8 @@ def _trackpoint_export_data(movie):
     )
     trim_start_frame, trim_end_frame = odb.movie_trim_bounds(movie_metadata)
     frame_height = infer_trackpoint_frame_height(movie[MOVIE_ID], movie, trim_start_frame)
-    movie_metadata = odb.ensure_bottom_left_trackpoints(movie_id=movie[MOVIE_ID], frame_height=frame_height)
+    movie_metadata = odb.ensure_bottom_left_trackpoints(
+        movie_id=movie[MOVIE_ID], frame_height=frame_height, movie_snapshot=movie)
     coordinate_metadata = TrackpointCoordinateMetadata(
         frame_height_px=frame_height, trackpoint_origin=movie_metadata.get(odb.TRACKPOINT_ORIGIN))
     trackpoint_dicts = odb.get_movie_trackpoints(
@@ -1060,6 +1061,8 @@ def api_get_movie_metadata():
         frame_start = 0
         frame_count = C.MAX_FRAMES
     if frame_start is not None:
+        if frame_start < 0:
+            return jsonify({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: 'frame_start must be non-negative'}), 400
         if frame_count is None:
             return make_response(E.FRAME_START_NO_FRAME_COUNT, 400)
         if frame_count<1:
@@ -1068,7 +1071,9 @@ def api_get_movie_metadata():
         movie_id, movie, frame_start, recover_legacy_frames=frame_start is not None)
     if frame_start is not None:
         try:
-            odb.ensure_bottom_left_trackpoints(movie_id=movie_id, frame_height=frame_height)
+            odb.ensure_bottom_left_trackpoints(movie_id=movie_id, frame_height=frame_height, movie_snapshot=movie)
+        except odb.TrackpointFrameHeightChanged:
+            raise
         except RuntimeError as exc:
             logger.exception("trackpoint migration failed movie_id=%s", movie_id)
             return jsonify({C.API_KEY_ERROR: True, 'message': f"Trackpoint migration failed: {exc}"}), 500

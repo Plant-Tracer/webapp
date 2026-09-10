@@ -279,6 +279,11 @@ result, conditional on the source, rotation, version, dimensions, invalidation
 state, and previously cached height remaining unchanged. A failed conditional
 write aborts recovery before coordinate migration; API callers receive HTTP 409
 and can retry. An older measurement cannot overwrite a concurrently cached height.
+Migration uses the same movie geometry snapshot as height recovery. Each frame
+conversion transaction checks that snapshot and the unchanged original points,
+and the final movie-origin update is conditional on that geometry. This preserves
+the existing protection against double conversion while rejecting geometry
+changes after height recovery or during migration.
 Source, version, rotation, or dimension updates invalidate a cached height unless
 they explicitly supply its replacement. These updates also persist
 ``legacy_frame_height_invalidated=true``: retained JPEG/ZIP artifacts have no
@@ -292,7 +297,12 @@ separate. When both legacy source dimensions are available, the fallback applies
 current tracer maximum-dimension scaling and rotation. A height-only legacy
 record retains its historical interpretation, including 90/270-degree rotation,
 until analysis pixels are measured or its geometry is updated. After a geometry
-update, a rotated source without width cannot supply a trustworthy height.
+update, both source dimensions are required to infer the scaled height.
+
+Upload retries remeasure height when ``resized_at`` exists but ``frame_height_px``
+is missing, so a concurrent geometry change cannot strand an upload without its
+height cache. Tracing failures during measurement or migration follow the normal
+failure-status and trace-lock cleanup path.
 
 Browser metadata and JSON trackpoint downloads include ``frame_height_px`` and
 ``trackpoint_origin`` in ``metadata``. CSV repeats them as columns; XLSX includes

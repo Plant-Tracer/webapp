@@ -405,7 +405,7 @@ def process_uploaded_movie(*, movie_id: str):
     """Extract post-upload metadata and finish the asynchronous resize phase."""
     ddbo = DDBO()
     movie = ddbo.get_movie(movie_id)
-    if movie.get(RESIZED_AT):
+    if movie.get(RESIZED_AT) and movie.get(odb.FRAME_HEIGHT_PX):
         ddbo.put_movie_log(
             log_id=_lifecycle_log_id(movie_id, C.LOG_EVENT_MOVIE_RESIZE_COMPLETED),
             event_type=C.LOG_EVENT_MOVIE_RESIZE_COMPLETED,
@@ -507,40 +507,40 @@ def run_tracing(*, movie_id, frame_start, frame_end=None, job_id=None):
     LOGGER.info("run_tracing movie_id=%s source_frame=%s tracing_frame_start=%s frame_end=%s cleared_frames=%s",
                 movie_id, source_frame_number, tracing_frame_start, frame_end_number, cleared_frames)
 
-    movie_record = ddbo.get_movie(movie_id)
-    movie_urn = movie_record.get(MOVIE_DATA_URN)
-    if not movie_urn:
-        raise RuntimeError(f"movie {movie_id} has no movie data URN")
-    rotation = movie_rotation(movie_record)
-    movie_url = s3_presigned.make_signed_url(urn=movie_urn)
-    frame_height = analysis_frame_height_from_movie(movie_url=movie_url, rotation=rotation)
-    remember_trackpoint_frame_height(movie=movie_record, frame_height=frame_height)
-    odb.ensure_bottom_left_trackpoints(movie_id=movie_id, frame_height=frame_height)
-    input_trackpoints = [Trackpoint(**tpdict) for tpdict in get_movie_trackpoints(movie_id=movie_id)]
-    tracer_input_trackpoints = odb.flip_trackpoints_y(input_trackpoints, frame_height)
-    research_comment = mp4_metadata_lib.build_comment(
-        movie_record.get("research_use", 0) or 0,
-        movie_record.get("credit_by_name", 0) or 0,
-        movie_record.get("attribution_name"),
-    )
-
-    if not input_trackpoints:
-        raise RuntimeError("Cannot trace movie with no trackpoints")
-
-    LOGGER.info("run_tracing movie_id=%s source_frame=%s tracing_frame_start=%s frame_end=%s input_trackpoints=%s",
-                movie_id, source_frame_number, tracing_frame_start, frame_end_number, tracer_input_trackpoints)
-    movie_traced_frame_start, movie_traced_frame_end = odb.movie_trim_bounds(movie_record)
-    if frame_end_number is not None:
-        movie_traced_frame_end = (
-            frame_end_number if movie_traced_frame_end is None
-            else min(movie_traced_frame_end, frame_end_number)
-        )
-    LOGGER.info("run_tracing movie_id=%s traced_mp4_frame_start=%s traced_mp4_frame_end=%s",
-                movie_id, movie_traced_frame_start, movie_traced_frame_end)
-
     movie_zipfile_path = None
     movie_traced_path = None
     try:
+        movie_record = ddbo.get_movie(movie_id)
+        movie_urn = movie_record.get(MOVIE_DATA_URN)
+        if not movie_urn:
+            raise RuntimeError(f"movie {movie_id} has no movie data URN")
+        rotation = movie_rotation(movie_record)
+        movie_url = s3_presigned.make_signed_url(urn=movie_urn)
+        frame_height = analysis_frame_height_from_movie(movie_url=movie_url, rotation=rotation)
+        remember_trackpoint_frame_height(movie=movie_record, frame_height=frame_height)
+        odb.ensure_bottom_left_trackpoints(movie_id=movie_id, frame_height=frame_height, movie_snapshot=movie_record)
+        input_trackpoints = [Trackpoint(**tpdict) for tpdict in get_movie_trackpoints(movie_id=movie_id)]
+        tracer_input_trackpoints = odb.flip_trackpoints_y(input_trackpoints, frame_height)
+        research_comment = mp4_metadata_lib.build_comment(
+            movie_record.get("research_use", 0) or 0,
+            movie_record.get("credit_by_name", 0) or 0,
+            movie_record.get("attribution_name"),
+        )
+
+        if not input_trackpoints:
+            raise RuntimeError("Cannot trace movie with no trackpoints")
+
+        LOGGER.info("run_tracing movie_id=%s source_frame=%s tracing_frame_start=%s frame_end=%s input_trackpoints=%s",
+                    movie_id, source_frame_number, tracing_frame_start, frame_end_number, tracer_input_trackpoints)
+        movie_traced_frame_start, movie_traced_frame_end = odb.movie_trim_bounds(movie_record)
+        if frame_end_number is not None:
+            movie_traced_frame_end = (
+                frame_end_number if movie_traced_frame_end is None
+                else min(movie_traced_frame_end, frame_end_number)
+            )
+        LOGGER.info("run_tracing movie_id=%s traced_mp4_frame_start=%s traced_mp4_frame_end=%s",
+                    movie_id, movie_traced_frame_start, movie_traced_frame_end)
+
         with tempfile.NamedTemporaryFile(suffix=".zip", mode="wb") as tf:
             movie_zipfile_path = Path(tf.name)
 

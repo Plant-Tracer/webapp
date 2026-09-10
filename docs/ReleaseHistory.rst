@@ -83,7 +83,9 @@ Unreleased Summary
       it in browser marker conversions for landscape and portrait movies.
       Prevent retained JPEG/ZIP artifacts from restoring stale height after
       rotation, reject conflicting height recovery before converting coordinates,
-      and avoid artifact reads on metadata-only requests (refs #1233).
+      guard each legacy frame conversion against geometry changes, repair missing
+      height on upload retries, and avoid artifact reads on metadata-only
+      requests (refs #1233).
 
     * Standardize the agent PR workflow as ``pr-to-ready``, retaining
       ``codex-to-complete`` and ``codex-to-ready`` aliases, with shared

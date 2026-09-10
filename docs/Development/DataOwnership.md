@@ -106,7 +106,10 @@ processing code and older migrations. Current rows store or use:
   `resize_started_at`, `resized_at`, `total_frames`, `total_bytes`.
   `date_uploaded` is a read-only compatibility field on legacy rows.
 - playback/analysis metadata: `fps`, `fpm`, `width`, `height`,
-  `trackpoint_origin`, `rotation`, `trim_start_frame`, `trim_end_frame`
+  `frame_height_px`, `legacy_frame_height_invalidated`, `trackpoint_origin`,
+  `rotation`, `trim_start_frame`, `trim_end_frame`. The height is a measured
+  analysis-coordinate value; the invalidation flag prevents retained unversioned
+  JPEG/ZIP artifacts from supplying height after geometry changes.
 - S3 references: temporary `upload_staging_urn`, durable `movie_data_urn`,
   `movie_zipfile_urn`, `first_frame_urn`, and runtime `movie_traced_urn`
 - processing helpers: `processing_state`, `zip_frame_processing`,
