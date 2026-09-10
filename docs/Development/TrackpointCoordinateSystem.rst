@@ -273,14 +273,18 @@ rather than replaced automatically.
 Persisted frame height and downloads
 ------------------------------------
 
-Rotation is chosen before upload. Once processing begins, the API rejects
+Rotation is chosen before upload. Once upload completion is recorded or processing
+begins, the API rejects
 rotation changes with HTTP 409 and leaves existing tracking intact. Processing
 stores source dimensions, measured ``frame_height_px``, and completion state in
 one update. The processed movie geometry is immutable; changing orientation
 requires a new upload. Tracing measures the same fixed coordinate space.
 
 Legacy JPEG/ZIP height recovery persists a missing height. Repeated identical
-measurements are accepted; a conflicting measurement is rejected. Migration
+measurements are accepted; a conflicting measurement is rejected as inconsistent
+stored data, not a retryable rotation request. Legacy rows with saved dimensions
+or frames cannot be rotated even if their old status still says uploading.
+Source dimensions are read-only through the metadata API, including missing fields. Migration
 retains its existing conditional per-frame updates and durable conversion markers,
 so interrupted migrations can resume without flipping a frame twice. There is no
 migration path between different movie geometries.

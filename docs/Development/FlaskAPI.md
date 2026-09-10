@@ -636,7 +636,8 @@ stored height or source dimensions, without reading JPEG/ZIP objects or caching
 height. When requesting frames, a legacy record's height may be recovered from
 stored JPEG frames or its ZIP and cached in DynamoDB. The measured height is fixed:
 repeated identical measurements are accepted, and a conflicting measurement is
-rejected with HTTP 409. Invalid frame ranges, including negative `frame_start`,
+rejected with HTTP 409 identifying inconsistent stored frame height. This is a
+data-consistency error, not a request to rotate/re-upload or a transient retry. Invalid frame ranges, including negative `frame_start`,
 are rejected before recovery or caching. Heights are JSON integers.
 
 Processing fixes rotation, source dimensions, and analysis-frame height. Legacy
@@ -793,9 +794,11 @@ Rename one marker label across all stored trackpoints for a movie. Other marker 
 
 #### `POST /api/rotate-movie`
 
-Set rotation while the movie is still uploading and processing has not begun.
-The change is conditional in DynamoDB. Once processing begins, including completed
-and legacy movies, return HTTP 409 without changing rotation or clearing tracking.
+Set rotation before upload completion, while processing has not begun.
+The change is conditional in DynamoDB. Once upload completion is recorded or
+processing begins, including completed
+and legacy movies with dimensions or any saved frames, return HTTP 409 without
+changing rotation or clearing tracking.
 The upload form chooses rotation before uploading and supplies it to `/api/new-movie`.
 
 **Parameters**
@@ -906,6 +909,9 @@ allowed maximum.
 ---
 
 #### `POST /api/set-metadata`
+
+Source `width` and `height` are read-only for clients (HTTP 403), including when
+a legacy record is missing one dimension. Processing supplies these values.
 
 Set a single metadata property on a movie or user record.
 

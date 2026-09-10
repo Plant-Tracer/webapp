@@ -833,7 +833,7 @@ def test_processed_movie_geometry_is_fixed(client, new_movie, tmp_path, width, h
     write_four_color_movie(path, width=width, height=height)
     odb_movie_data.set_movie_data(movie_id=movie_id, movie_data=path.read_bytes())
     params = {API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id}
-    assert client.post('/api/rotate-movie', data={**params, 'rotation': 90}).status_code == 200
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={odb.MOVIE_ROTATION: 90})
     movie_glue.process_uploaded_movie(movie_id=movie_id)
     odb.put_frame_trackpoints(movie_id=movie_id, frame_number=0,
                              trackpoints=[Trackpoint(x=10, y=width - 20, label='Apex')])
@@ -888,3 +888,51 @@ def test_upload_repairs_missing_height_atomically(new_movie, tmp_path):
     movie = ddbo.get_movie(movie_id)
     assert movie[odb.FRAME_HEIGHT_PX] == 640
     assert movie[odb.MOVIE_STATUS] == odb.MOVIE_STATE_READY
+
+
+@pytest.mark.parametrize('artifact', ['height', 'jpeg', 'trackpoints', 'uploaded'])
+def test_legacy_upload_with_coordinate_data_cannot_rotate(client, new_movie, artifact):
+    """Even a legacy uploading status cannot make an existing coordinate space editable."""
+    movie_id = new_movie[MOVIE_ID]
+    ddbo = odb.DDBO()
+    if artifact != 'uploaded':
+        ddbo.update_movie(movie_id, {odb.UPLOADED_AT: None})
+    if artifact == 'height':
+        ddbo.update_movie(movie_id, {odb.HEIGHT: 480})
+    elif artifact == 'jpeg':
+        odb_movie_data.create_new_movie_frame(movie_id=movie_id, frame_number=0,
+                                             frame_data=_jpeg_bytes(width=640, height=480))
+    elif artifact == 'trackpoints':
+        odb.put_frame_trackpoints(movie_id=movie_id, frame_number=0,
+                                 trackpoints=[Trackpoint(x=10, y=20, label='Apex')])
+    movie = ddbo.get_movie(movie_id)
+    frames = ddbo.get_frames(movie_id)
+    response = client.post('/api/rotate-movie', data={
+        API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id, 'rotation': 90})
+    assert response.status_code == 409
+    assert ddbo.get_movie(movie_id) == movie
+    assert ddbo.get_frames(movie_id) == frames
+
+
+@pytest.mark.parametrize('prop', [odb.WIDTH, odb.HEIGHT])
+def test_client_cannot_fill_missing_legacy_dimensions(client, new_movie, prop):
+    movie_id = new_movie[MOVIE_ID]
+    ddbo = odb.DDBO()
+    ddbo.update_movie(movie_id, {odb.FRAME_HEIGHT_PX: 480, odb.MOVIE_STATUS: odb.MOVIE_STATE_READY})
+    before = ddbo.get_movie(movie_id)
+    response = client.post('/api/set-metadata', data={
+        API_KEY: new_movie[API_KEY], 'set_movie_id': movie_id, 'property': prop, 'value': 640})
+    assert response.status_code == 403
+    assert response.get_json()['error'] is True
+    assert ddbo.get_movie(movie_id) == before
+
+
+def test_fixed_height_conflict_is_distinct_from_late_rotation(new_movie):
+    movie_id = new_movie[MOVIE_ID]
+    snapshot = odb.DDBO().get_movie(movie_id)
+    odb.remember_trackpoint_frame_height(movie=snapshot, frame_height=480)
+    # Identical measurements from concurrent readers remain idempotent.
+    odb.remember_trackpoint_frame_height(movie=snapshot, frame_height=480)
+    with pytest.raises(odb.TrackpointFrameHeightMismatch):
+        odb.remember_trackpoint_frame_height(movie=snapshot, frame_height=640)
+    assert odb.DDBO().get_movie(movie_id)[odb.FRAME_HEIGHT_PX] == 480

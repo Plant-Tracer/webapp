@@ -595,6 +595,12 @@ def movie_geometry_finalized(_ex):
                     C.API_KEY_MESSAGE: 'Movie geometry is fixed once processing begins. Upload a new movie to change rotation.'}), 409
 
 
+@api_bp.errorhandler(odb.TrackpointFrameHeightMismatch)
+def trackpoint_frame_height_mismatch(_ex):
+    return jsonify({C.API_KEY_ERROR: True,
+                    C.API_KEY_MESSAGE: 'Stored frame height disagrees with the movie frames. Contact an administrator.'}), 409
+
+
 ################################################################
 # define get(), which gets a variable from either the forms request or the query string
 def get(key, default=None):
@@ -1073,7 +1079,7 @@ def api_get_movie_metadata():
     if frame_start is not None:
         try:
             odb.ensure_bottom_left_trackpoints(movie_id=movie_id, frame_height=frame_height)
-        except odb.MovieGeometryFinalized:
+        except (odb.MovieGeometryFinalized, odb.TrackpointFrameHeightMismatch):
             raise
         except RuntimeError as exc:
             logger.exception("trackpoint migration failed movie_id=%s", movie_id)

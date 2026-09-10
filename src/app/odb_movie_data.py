@@ -120,8 +120,11 @@ def delete_object(urn):
 
 
 def set_movie_data(*,movie_id, movie_data):
-    """If we are setting the movie data, be sure that any old data (frames, zipfile, stored objects) are gone.
-    increments version.
+    """Populate source bytes for synchronous CLI setup, before publishing processing work.
+
+    Demo seeding and local tracing allocate a new movie ID immediately before this
+    call. This is not the web upload/replacement API; CLI callers own their setup
+    sequence. Existing processed movies are rejected before any object is deleted.
     """
     assert is_movie_id(movie_id)
     ddbo = DDBO()

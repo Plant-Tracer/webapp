@@ -120,6 +120,7 @@ API_KEY = 'api_key'
 EMAIL     = 'email'
 USER_NAME = 'user_name'
 ENABLED   = 'enabled'
+DDB_COUNT = 'Count'  # DynamoDB query response field
 USE_COUNT = 'use_count'
 ADMIN_FOR_COURSES = 'admin_for_courses' # user.admin_for_courses[]
 SUPER_ROLE = 'super_role'
@@ -314,6 +315,9 @@ class NoMovieData(ODB_Errors):
 
 class MovieGeometryFinalized(ODB_Errors):
     """Processing has fixed the movie geometry; upload another movie to change it."""
+
+class TrackpointFrameHeightMismatch(ODB_Errors):
+    """A measurement disagrees with the immutable coordinate height."""
 
 class AtomicRenameConflict(ODB_Errors):
     """Marker rename lost a race with another trackpoint update"""
@@ -1114,7 +1118,7 @@ class DDBO:
                 raise ValueError(self.courses) from e
             logger.error("courses=%s",self.courses)
             raise
-        if resp['Count'] > 0:
+        if resp[DDB_COUNT] > 0:
             raise ExistingCourse_Id(f"Course key {coursedict[COURSE_KEY]} already exists")
         ################
 
@@ -2533,10 +2537,20 @@ def movie_geometry_editable_condition():
 def set_movie_rotation(*, movie_id, rotation):
     """Atomically reject late rotation, including for old records without a status."""
     ddbo = DDBO()
+    # Old uploads with dimensions or saved frames already have a coordinate space.
+    # Frame producers enter processing/tracing before saving frames; the conditional
+    # status check below also excludes a producer that starts after this read.
+    frames = ddbo.movie_frames.query(KeyConditionExpression=Key(MOVIE_ID).eq(movie_id),
+                                     Select='COUNT', Limit=1, ConsistentRead=True)
+    if frames[DDB_COUNT]:
+        raise MovieGeometryFinalized(movie_id)
+    condition = movie_geometry_editable_condition()
+    for prop in (WIDTH, HEIGHT, UPLOADED_AT):
+        condition &= Attr(prop).not_exists() | Attr(prop).eq(None)
     try:
         ddbo.update_table(ddbo.movies, movie_id,
                           {MOVIE_ROTATION: rotation, LAST_ACTIVITY_AT: int(time.time())},
-                          condition_expression=movie_geometry_editable_condition())
+                          condition_expression=condition)
     except ClientError as exc:
         if exc.response['Error']['Code'] == 'ConditionalCheckFailedException':
             raise MovieGeometryFinalized(movie_id) from exc
@@ -2546,7 +2560,10 @@ def set_movie_rotation(*, movie_id, rotation):
 def remember_trackpoint_frame_height(*, movie: dict, frame_height: int) -> None:
     """Persist the fixed coordinate height; repeated identical measurements are harmless."""
     height = validate_movie_field(FRAME_HEIGHT_PX, frame_height)
-    DDBO().update_movie(movie[MOVIE_ID], {FRAME_HEIGHT_PX: height}, touch_activity=False)
+    try:
+        DDBO().update_movie(movie[MOVIE_ID], {FRAME_HEIGHT_PX: height}, touch_activity=False)
+    except MovieGeometryFinalized as exc:
+        raise TrackpointFrameHeightMismatch(movie[MOVIE_ID]) from exc
 
 
 def flip_trackpoint_y_value(y, frame_height: int) -> Decimal:
@@ -3165,6 +3182,8 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
                 # permission not granted
                 raise UnauthorizedUser("permission denied")
 
+        if user_id != ROOT_USER_ID and prop in (WIDTH, HEIGHT):
+            raise UnauthorizedUser("Movie dimensions are measured by processing and cannot be edited")
         ddbo.update_movie(set_movie_id, {prop:value})
     elif set_user_id is not None:
         value = validate_user_field(prop, value)

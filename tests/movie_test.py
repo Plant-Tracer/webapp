@@ -585,8 +585,11 @@ def test_set_research_metadata(client, new_course):
     odb_movie_data.delete_movie(movie_id=movie_id)
 
 
-def test_api_edit_movie(new_movie, client):
-    """Only valid, authenticated pre-processing rotation changes are accepted."""
+def test_api_edit_movie(new_course, client):
+    """Only valid, authenticated pre-upload rotation changes are accepted."""
+    new_movie = dict(new_course)
+    new_movie[MOVIE_ID] = odb.create_new_movie(user_id=new_course[USER_ID], title='pending upload',
+                                             description='rotation test')
     api_key = new_movie[API_KEY]
     movie_id = new_movie[MOVIE_ID]
 
@@ -628,6 +631,8 @@ def test_api_edit_movie(new_movie, client):
     movie_metadata2 = odb.get_movie_metadata(movie_id=movie_id)
     logger.debug("movie_metadata2=%s", movie_metadata2)
     assert movie_metadata2.get('rotation') == 180, f"{movie}"
+    odb_movie_data.purge_movie(movie_id=movie_id)
+    odb_movie_data.delete_movie(movie_id=movie_id)
 
 
 def test_get_movie_metadata_rotation_coercion(new_movie):

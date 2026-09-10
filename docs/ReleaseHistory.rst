@@ -82,7 +82,8 @@ Unreleased Summary
       trackpoint JSON, CSV, and XLSX downloads. Persist measured height and use
       it in browser marker conversions for landscape and portrait movies.
       Choose rotation before upload and reject rotation changes once processing
-      starts, preserving finalized geometry and tracking. Save processed height
+      starts or legacy coordinate data exists, preserving geometry and tracking.
+      Make source dimensions read-only to clients. Save processed height
       with upload completion, recover missing legacy heights, and avoid artifact
       reads on metadata-only requests (refs #1233).
 
