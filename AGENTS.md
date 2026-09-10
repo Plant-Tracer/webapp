@@ -1,3 +1,9 @@
+<!-- BEGIN GENERATED pr-to-ready -->
+## pr-to-ready
+
+For `pr-to-ready`, `codex-to-complete`, or `codex-to-ready`, read and follow [the shared workflow](.agents/skills/pr-to-ready/SKILL.md). Apply the repository-specific rules below.
+<!-- END GENERATED pr-to-ready -->
+
 # AGENTS.md
 
 This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
@@ -36,11 +42,11 @@ Use `@simsong-codex` for all GitHub activity: commits, pushes, issues, pull requ
 
 For that exception only, switch the active GitHub CLI account to `simsong`, request exactly `copilot-pull-request-reviewer[bot]` for the specified Plant-Tracer pull request, and switch immediately back to `simsong-codex`. Restore `simsong-codex` even if the request fails. Verify the resulting review-request event only after restoring `simsong-codex`; do not perform any other GitHub action while `simsong` is active.
 
-### Codex commits and Codex-to-Done lifecycle
+### Codex commits and pr-to-ready lifecycle
 
 GitHub activity authored by Codex must use `@simsong-codex`; do not use the
 personal `@simsong` account for writes, pushes, issues, pull requests, reviews,
-or comments.
+or comments, except for the specific review-request exception above.
 
 Before creating or amending a Codex-authored commit, configure and verify the
 author and committer as `Codex AI Assistant <simsong+codex@acm.org>` and verify
@@ -50,49 +56,24 @@ with `git log --format='%G? %GS %an <%ae> %cn <%ce>'`. When correcting an
 existing commit, use `git commit --amend --reset-author -S` rather than only
 amending the signature.
 
-For every Codex-authored issue implementation, follow the **Codex-to-Done
-lifecycle** in order:
+For every Codex-authored issue implementation, follow the shared
+**pr-to-ready** workflow. Additional Plant-Tracer requirements:
 
-1. Investigate the issue and current code, write an implementation-ready
-   proposal, and ask the user to review it. Do not implement while proposal
-   approval is pending.
-2. After the user approves the proposal, implement it on a feature branch,
-   including substantive tests and required documentation.
-3. Fetch `origin/main` before committing and merge it into the feature branch,
-   resolving and validating any conflicts. Create a signed Codex commit, push
-   the branch, and open the pull request as a draft.
-4. Request the Copilot bot with the exact GitHub API reviewer value
-   `copilot-pull-request-reviewer[bot]`; do not use the incomplete value
-   `copilot-pull-request-reviewer`. GitHub's UI Request control for Copilot is
-   an equivalent fallback when the API response is ambiguous. Verify a Copilot
-   pending-review entry or a `REVIEW_REQUESTED_EVENT`, not merely an HTTP
-   success response.
-5. Keep the pull request a draft while monitoring until a Copilot review or
-   review thread actually appears. Do not report a request or response based
-   only on a CLI command or an `@copilot` comment.
-6. Address every actionable Copilot finding. For each pushed fix, reply on the
-   exact Copilot thread with the commit and validation evidence, then request
-   and monitor Copilot's re-review of that new commit. Do not manually resolve
-   the thread; if GitHub resolves it automatically, report that fact.
-7. While the pull request is open, repeatedly fetch `origin/main`: after each
-   review or CI waiting interval, before pushing review fixes, and immediately
-   before marking the pull request ready. Merge new mainline commits into the
-   feature branch, resolve conflicts, rerun proportionate validation, and push
-   the merge before continuing.
-8. Keep Codecov passing when practical by testing substantive logic, but do not
-   add pro-forma tests or distort the implementation merely to raise coverage.
-   Treat Codecov as a completion blocker only when repository rules make it a
-   required check.
-9. After Copilot is feedback-free, required CI checks are green, and the branch
-   contains current `origin/main`, mark the pull request ready for review and
-   assign it to `@simsong`.
+1. Investigate and write an implementation-ready proposal; obtain the
+   user's approval before implementation unless the session already
+   supplies that approval. Then implement on a feature branch with
+   substantive tests and required documentation.
+2. Fetch and merge current `origin/main` before committing, after each
+   review or CI waiting interval, before pushing review fixes, and
+   immediately before marking ready. Resolve conflicts, validate, and
+   push updates before continuing the review cycle. The ready branch
+   must contain current `origin/main`.
+3. Follow the narrowly scoped Copilot-entitlement account exception
+   under GitHub Identities; restore `simsong-codex` immediately.
+4. Keep Codecov passing through substantive tests when practical; it
+   blocks completion only when repository rules require it.
 
-The lifecycle completes only after the current head's Copilot review and
-required CI are clear, the feature branch contains current `origin/main`, the
-pull request is ready for review, and `@simsong` is assigned. If validation or
-feedback remains, retain draft status and report the exact blocker.
-
-When the Codex-to-Done timer is active, wake every 20 minutes and reconcile
+When the pr-to-ready timer is active, wake every 20 minutes and reconcile
 live GitHub state. For the current release milestone, scan its open issues
 assigned to `@simsong-codex`, then resume the highest-priority unblocked work or
 pending pull-request review/CI follow-through. Verify milestone, assignment, PR

@@ -77,6 +77,10 @@ Release Notes
 
 Unreleased Summary
 ******************
+
+    * Standardize the agent PR workflow as ``pr-to-ready``, retaining
+      ``codex-to-complete`` and ``codex-to-ready`` aliases, with shared
+      Codex, Claude, and Copilot implementer/reviewer instructions.
     * Deployment: advance the application version to 0.9.9.10 for the next
       development deployment.
     * Admin: shrink dashboard tables with the browser down to a 1024-pixel
