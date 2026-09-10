@@ -539,6 +539,8 @@ def test_xlsx_exports_trackpoints_and_metadata(client, new_movie):
     assert metadata["trim_end_frame"] == 1
     assert metadata["exported_frame_count"] == 2
     assert metadata["marker_count"] == 4
+    assert metadata[odb.FRAME_HEIGHT_PX] == 480
+    assert metadata[TRACKPOINT_ORIGIN] == BOTTOM_LEFT
     assert metadata["ruler_calibrated"] == "yes"
     assert metadata["ruler_marker_units"] == "px"
     assert metadata["non_ruler_marker_units"] == "mm"
