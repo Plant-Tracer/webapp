@@ -5,6 +5,7 @@ from tests.fixtures.local_aws import (  # pylint: disable=unused-import
     local_s3,
     new_course,
     new_movie,
+    new_movie_record,
 )
 
 # Suppress verbose logging from urllib3 and selenium

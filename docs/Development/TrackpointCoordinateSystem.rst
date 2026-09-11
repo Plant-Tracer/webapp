@@ -284,7 +284,10 @@ Legacy JPEG/ZIP height recovery persists a missing height. Repeated identical
 measurements are accepted; a conflicting measurement is rejected as inconsistent
 stored data, not a retryable rotation request. Legacy rows with saved dimensions
 or frames cannot be rotated even if their old status still says uploading.
-Source dimensions are read-only through the metadata API, including missing fields. Migration
+Source dimensions are read-only through the metadata API, including missing fields.
+Both current and legacy upload-completion markers close geometry editing in the
+shared writer and source initializer. Trackpoint writes are rejected during
+upload setup, so they cannot create coordinates while rotation remains editable. Migration
 retains its existing conditional per-frame updates and durable conversion markers,
 so interrupted migrations can resume without flipping a frame twice. There is no
 migration path between different movie geometries.

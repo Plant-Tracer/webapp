@@ -595,6 +595,12 @@ def movie_geometry_finalized(_ex):
                     C.API_KEY_MESSAGE: 'Movie geometry is fixed once processing begins. Upload a new movie to change rotation.'}), 409
 
 
+@api_bp.errorhandler(odb.MovieUploadIncomplete)
+def movie_upload_incomplete(_ex):
+    return jsonify({C.API_KEY_ERROR: True,
+                    C.API_KEY_MESSAGE: 'Wait for the movie upload to complete before saving trackpoints.'}), 409
+
+
 @api_bp.errorhandler(odb.TrackpointFrameHeightMismatch)
 def trackpoint_frame_height_mismatch(_ex):
     return jsonify({C.API_KEY_ERROR: True,

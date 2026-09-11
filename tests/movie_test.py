@@ -635,10 +635,10 @@ def test_api_edit_movie(new_course, client):
     odb_movie_data.delete_movie(movie_id=movie_id)
 
 
-def test_get_movie_metadata_rotation_coercion(new_movie):
+def test_get_movie_metadata_rotation_coercion(new_movie_record):
     """Verify that get_movie_metadata coerces rotation to int, defaulting to 0 for invalid values,
     and swaps width/height only when rotation is 90 or 270."""
-    movie_id = new_movie[MOVIE_ID]
+    movie_id = new_movie_record[MOVIE_ID]
 
     # Seed width and height so we can detect swaps
     odb.set_movie_metadata(movie_id=movie_id, movie_metadata={'width': 100, 'height': 200})

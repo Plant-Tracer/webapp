@@ -572,6 +572,7 @@ saves source dimensions, measured `frame_height_px`, and completion state togeth
 |------|----------|-------------|
 | `api_key` | Yes | Must not be the demo key |
 | `title` | No | Movie title |
+| `rotation` | No | Form field: `0` (default), `90`, `180`, or `270` degrees clockwise; chosen before upload |
 | `description` | No | Movie description |
 | `movie_data_sha256` | Yes | SHA-256 hex digest of the video file (64 chars) |
 | `movie_data_length` | Yes | Exact movie byte length, from 1 through the configured upload limit. The returned S3 policy accepts exactly this size. |
@@ -741,6 +742,9 @@ With `format=json`: `{ "error": "False", "trackpoint_dicts": [...], "metadata": 
 
 #### `POST /api/put-frame-trackpoints`
 
+Returns HTTP 409 while the movie is still in upload setup, before a current or
+legacy upload-completion marker exists. No frame or tracking metadata is written.
+
 Write trackpoints for a single frame. Used by the client before requesting re-tracking.
 
 **Parameters**
@@ -796,7 +800,7 @@ Rename one marker label across all stored trackpoints for a movie. Other marker 
 
 Set rotation before upload completion, while processing has not begun.
 The change is conditional in DynamoDB. Once upload completion is recorded or
-processing begins, including completed
+processing begins (also recognizing legacy `date_uploaded`), including completed
 and legacy movies with dimensions or any saved frames, return HTTP 409 without
 changing rotation or clearing tracking.
 The upload form chooses rotation before uploading and supplies it to `/api/new-movie`.

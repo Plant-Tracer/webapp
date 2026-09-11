@@ -663,16 +663,16 @@ def test_csv_uses_inferred_height_when_metadata_height_missing(client, new_movie
     (640, 480, 90, 640), (480, 640, 90, 480),
     (1280, 960, 0, 480), (960, 1280, 90, 480),
 ])
-def test_movie_height_in_all_trackpoint_downloads(client, new_movie, tmp_path,
+def test_movie_height_in_all_trackpoint_downloads(client, new_movie_record, tmp_path,
                                                  width, height, rotation, analysis_height):
     """Real MP4 pixels, persisted metadata and every export agree after rotation/scaling."""
-    movie_id = new_movie[MOVIE_ID]
+    movie_id = new_movie_record[MOVIE_ID]
     path = tmp_path / 'source.mp4'
     write_four_color_movie(path, width=width, height=height)
     source_metadata = mpeg_jpeg_zip.extract_movie_metadata(movie_path=str(path))
     assert (source_metadata[odb.WIDTH], source_metadata[odb.HEIGHT]) == (width, height)
-    odb_movie_data.set_movie_data(movie_id=movie_id, movie_data=path.read_bytes())
     odb.set_movie_metadata(movie_id=movie_id, movie_metadata={odb.MOVIE_ROTATION: rotation})
+    odb_movie_data.set_movie_data(movie_id=movie_id, movie_data=path.read_bytes())
     movie_glue.process_uploaded_movie(movie_id=movie_id)
     stored = odb.get_movie(movie_id=movie_id)
     assert stored[odb.FRAME_HEIGHT_PX] == analysis_height
@@ -683,7 +683,7 @@ def test_movie_height_in_all_trackpoint_downloads(client, new_movie, tmp_path,
     actual_frame = mpeg_jpeg_zip.get_first_frame_from_url(str(path), rotation)
     assert actual_frame.shape[0] == analysis_height
     # Write through the same API used by JavaScript, then download the saved point.
-    params = {API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id}
+    params = {API_KEY: new_movie_record[API_KEY], MOVIE_ID: movie_id}
     result = client.post('/api/put-frame-trackpoints', data={
         **params, FRAME_NUMBER: 0,
         'trackpoints': json.dumps([{'x': 10, 'y': analysis_height - 20, 'label': 'Apex'}]),
@@ -747,13 +747,13 @@ def test_unknown_frame_height_is_explicit(client, new_movie):
     (640, 480, 90, 640), (480, 640, 90, 480),
     (1280, 960, 0, 480), (480, 360, 0, 480),
 ])
-def test_legacy_source_dimensions_supply_analysis_height(client, new_movie, width, height, rotation, expected):
+def test_legacy_source_dimensions_supply_analysis_height(client, new_movie_record, width, height, rotation, expected):
     """Rotated API dimensions must not cause a second rotation or omit scaling."""
-    movie_id = new_movie[MOVIE_ID]
+    movie_id = new_movie_record[MOVIE_ID]
     odb.set_movie_metadata(movie_id=movie_id, movie_metadata={
         odb.WIDTH: width, odb.HEIGHT: height, odb.MOVIE_ROTATION: rotation})
     result = client.post('/api/get-movie-metadata', data={
-        API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id}).get_json()
+        API_KEY: new_movie_record[API_KEY], MOVIE_ID: movie_id}).get_json()
     assert result['metadata'][odb.FRAME_HEIGHT_PX] == expected
 
 
@@ -795,15 +795,15 @@ def test_metadata_only_leaves_legacy_height_recovery_to_trackpoint_requests(clie
 
 @pytest.mark.parametrize('width,height', [(640, 480), (480, 640)])
 @pytest.mark.parametrize('rotation', [90, 270])
-def test_tracing_caches_rotated_height_from_raw_movie(new_movie, tmp_path, width, height, rotation):
+def test_tracing_caches_rotated_height_from_raw_movie(new_movie_record, tmp_path, width, height, rotation):
     """Exercise the tracing entry point with real decoded MP4 pixels and raw DB dimensions."""
-    movie_id = new_movie[MOVIE_ID]
+    movie_id = new_movie_record[MOVIE_ID]
     path = tmp_path / 'source.mp4'
     write_four_color_movie(path, width=width, height=height)
-    odb_movie_data.set_movie_data(movie_id=movie_id, movie_data=path.read_bytes())
     odb.set_movie_metadata(movie_id=movie_id, movie_metadata={
         odb.WIDTH: width, odb.HEIGHT: height, odb.MOVIE_ROTATION: rotation,
         odb.TOTAL_FRAMES: 4, odb.FPS: '4'})
+    odb_movie_data.set_movie_data(movie_id=movie_id, movie_data=path.read_bytes())
     odb.put_frame_trackpoints(movie_id=movie_id, frame_number=0,
                              trackpoints=[Trackpoint(x=10, y=width - 20, label='Apex')])
     movie_glue.run_tracing(movie_id=movie_id, frame_start=0, frame_end=3)
@@ -814,11 +814,11 @@ def test_tracing_caches_rotated_height_from_raw_movie(new_movie, tmp_path, width
 
 
 @pytest.mark.parametrize('rotation', [0, 90, 180, 270])
-def test_untouched_height_only_legacy_movie_retains_coordinate_height(client, new_movie, rotation):
-    movie_id = new_movie[MOVIE_ID]
+def test_untouched_height_only_legacy_movie_retains_coordinate_height(client, new_movie_record, rotation):
+    movie_id = new_movie_record[MOVIE_ID]
     ddbo = odb.DDBO()
     ddbo.update_movie(movie_id, {odb.HEIGHT: 150, odb.MOVIE_ROTATION: rotation})
-    params = {API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id}
+    params = {API_KEY: new_movie_record[API_KEY], MOVIE_ID: movie_id}
     for endpoint in ('get-movie-metadata', 'get-movie-trackpoints'):
         response = client.post(f'/api/{endpoint}', data={**params, 'format': 'json'})
         assert response.status_code == 200
@@ -826,14 +826,14 @@ def test_untouched_height_only_legacy_movie_retains_coordinate_height(client, ne
 
 
 @pytest.mark.parametrize('width,height', [(640, 480), (480, 640)])
-def test_processed_movie_geometry_is_fixed(client, new_movie, tmp_path, width, height):
+def test_processed_movie_geometry_is_fixed(client, new_movie_record, tmp_path, width, height):
     """Reject late edits without altering the processed pixels or saved trackpoints."""
-    movie_id = new_movie[MOVIE_ID]
+    movie_id = new_movie_record[MOVIE_ID]
     path = tmp_path / 'source.mp4'
     write_four_color_movie(path, width=width, height=height)
-    odb_movie_data.set_movie_data(movie_id=movie_id, movie_data=path.read_bytes())
-    params = {API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id}
     odb.set_movie_metadata(movie_id=movie_id, movie_metadata={odb.MOVIE_ROTATION: 90})
+    odb_movie_data.set_movie_data(movie_id=movie_id, movie_data=path.read_bytes())
+    params = {API_KEY: new_movie_record[API_KEY], MOVIE_ID: movie_id}
     movie_glue.process_uploaded_movie(movie_id=movie_id)
     odb.put_frame_trackpoints(movie_id=movie_id, frame_number=0,
                              trackpoints=[Trackpoint(x=10, y=width - 20, label='Apex')])
@@ -875,8 +875,8 @@ def test_rotation_rejects_processing_and_legacy_states(client, new_movie, state)
     assert ddbo.get_movie(movie_id) == before
 
 
-def test_upload_repairs_missing_height_atomically(new_movie, tmp_path):
-    movie_id = new_movie[MOVIE_ID]
+def test_upload_repairs_missing_height_atomically(new_movie_record, tmp_path):
+    movie_id = new_movie_record[MOVIE_ID]
     path = tmp_path / 'source.mp4'
     write_four_color_movie(path, width=480, height=640)
     odb_movie_data.set_movie_data(movie_id=movie_id, movie_data=path.read_bytes())
@@ -903,8 +903,8 @@ def test_legacy_upload_with_coordinate_data_cannot_rotate(client, new_movie, art
         odb_movie_data.create_new_movie_frame(movie_id=movie_id, frame_number=0,
                                              frame_data=_jpeg_bytes(width=640, height=480))
     elif artifact == 'trackpoints':
-        odb.put_frame_trackpoints(movie_id=movie_id, frame_number=0,
-                                 trackpoints=[Trackpoint(x=10, y=20, label='Apex')])
+        ddbo.put_movie_frame({MOVIE_ID: movie_id, FRAME_NUMBER: 0,
+                              'trackpoints': [Trackpoint(x=10, y=20, label='Apex').model_dump()]})
     movie = ddbo.get_movie(movie_id)
     frames = ddbo.get_frames(movie_id)
     response = client.post('/api/rotate-movie', data={
@@ -936,3 +936,33 @@ def test_fixed_height_conflict_is_distinct_from_late_rotation(new_movie):
     with pytest.raises(odb.TrackpointFrameHeightMismatch):
         odb.remember_trackpoint_frame_height(movie=snapshot, frame_height=640)
     assert odb.DDBO().get_movie(movie_id)[odb.FRAME_HEIGHT_PX] == 480
+
+
+@pytest.mark.parametrize('upload_field', [odb.UPLOADED_AT, odb.DATE_UPLOADED])
+def test_uploaded_movie_rejects_shared_rotation_and_source_replacement(new_movie, upload_field):
+    movie_id = new_movie[MOVIE_ID]
+    ddbo = odb.DDBO()
+    if upload_field == odb.DATE_UPLOADED:
+        ddbo.update_movie(movie_id, {odb.UPLOADED_AT: None, odb.DATE_UPLOADED: 1})
+    movie = ddbo.get_movie(movie_id)
+    original = odb_movie_data.read_object(movie[odb.MOVIE_DATA_URN])
+    with pytest.raises(odb.MovieGeometryFinalized):
+        ddbo.update_movie(movie_id, {odb.MOVIE_ROTATION: 90})
+    with pytest.raises(odb.MovieGeometryFinalized):
+        odb_movie_data.set_movie_data(movie_id=movie_id, movie_data=b'replacement')
+    assert ddbo.get_movie(movie_id) == movie
+    assert odb_movie_data.read_object(movie[odb.MOVIE_DATA_URN]) == original
+
+
+def test_upload_setup_cannot_accept_trackpoints(client, new_movie_record):
+    movie_id = new_movie_record[MOVIE_ID]
+    params = {API_KEY: new_movie_record[API_KEY], MOVIE_ID: movie_id}
+    response = client.post('/api/put-frame-trackpoints', data={
+        **params, FRAME_NUMBER: 0, 'trackpoints': json.dumps([{'x': 10, 'y': 20, 'label': 'Apex'}])})
+    assert response.status_code == 409
+    assert 'upload' in response.get_json()['message']
+    ddbo = odb.DDBO()
+    assert not ddbo.get_frames(movie_id)
+    assert ddbo.get_movie(movie_id).get(odb.LAST_FRAME_TRACKED) is None
+    # Rejected points cannot race rotation or leave coordinate state behind.
+    assert client.post('/api/rotate-movie', data={**params, 'rotation': 90}).status_code == 200

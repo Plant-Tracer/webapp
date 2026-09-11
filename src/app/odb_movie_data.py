@@ -15,7 +15,7 @@ from .s3_presigned import frame_object_key, make_urn, movie_object_key, s3_clien
 from .constants import C, logger, storage_deployment_id
 from .odb import (
     DDBO,
-    RESIZE_STARTED_AT, RESIZED_AT, FRAME_HEIGHT_PX, MovieGeometryFinalized,
+    RESIZE_STARTED_AT, RESIZED_AT, FRAME_HEIGHT_PX, MovieGeometryFinalized, DATE_UPLOADED,
     MOVIE_STATUS, MOVIE_STATE_UPLOADING, MOVIE_TRACED_URN, LAST_FRAME_TRACKED,
     is_movie_id,
     VERSION,
@@ -130,7 +130,7 @@ def set_movie_data(*,movie_id, movie_data):
     ddbo = DDBO()
     movie = ddbo.get_movie(movie_id)
     if movie.get(MOVIE_STATUS) != MOVIE_STATE_UPLOADING or any(movie.get(prop) is not None for prop in (
-            RESIZE_STARTED_AT, RESIZED_AT, FRAME_HEIGHT_PX, MOVIE_ZIPFILE_URN,
+            UPLOADED_AT, DATE_UPLOADED, RESIZE_STARTED_AT, RESIZED_AT, FRAME_HEIGHT_PX, MOVIE_ZIPFILE_URN,
             MOVIE_TRACED_URN, LAST_FRAME_TRACKED)):
         raise MovieGeometryFinalized(movie_id)
     version = movie.get(VERSION, 0)

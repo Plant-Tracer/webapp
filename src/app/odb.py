@@ -316,6 +316,9 @@ class NoMovieData(ODB_Errors):
 class MovieGeometryFinalized(ODB_Errors):
     """Processing has fixed the movie geometry; upload another movie to change it."""
 
+class MovieUploadIncomplete(ODB_Errors):
+    """Upload must complete before coordinate data can be saved."""
+
 class TrackpointFrameHeightMismatch(ODB_Errors):
     """A measurement disagrees with the immutable coordinate height."""
 
@@ -2528,7 +2531,7 @@ def trackpoint_frame_height(movie: dict) -> int:
 def movie_geometry_editable_condition():
     """Only an upload that has not entered processing may change geometry."""
     condition = Attr(MOVIE_STATUS).eq(MOVIE_STATE_UPLOADING)
-    for prop in (RESIZE_STARTED_AT, RESIZED_AT, FRAME_HEIGHT_PX, MOVIE_ZIPFILE_URN,
+    for prop in (UPLOADED_AT, DATE_UPLOADED, RESIZE_STARTED_AT, RESIZED_AT, FRAME_HEIGHT_PX, MOVIE_ZIPFILE_URN,
                  MOVIE_TRACED_URN, LAST_FRAME_TRACKED):
         condition &= Attr(prop).not_exists() | Attr(prop).eq(None)
     return condition
@@ -2545,7 +2548,7 @@ def set_movie_rotation(*, movie_id, rotation):
     if frames[DDB_COUNT]:
         raise MovieGeometryFinalized(movie_id)
     condition = movie_geometry_editable_condition()
-    for prop in (WIDTH, HEIGHT, UPLOADED_AT):
+    for prop in (WIDTH, HEIGHT):
         condition &= Attr(prop).not_exists() | Attr(prop).eq(None)
     try:
         ddbo.update_table(ddbo.movies, movie_id,
@@ -3019,6 +3022,9 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackp
     :param: trackpoints - array of Tractpoints.
     """
     assert int(frame_number) >= 0
+    movie = DDBO().get_movie(movie_id)
+    if movie.get(MOVIE_STATUS) == MOVIE_STATE_UPLOADING and not movie_is_available(movie):
+        raise MovieUploadIncomplete(movie_id)
     ensure_bottom_left_trackpoints(movie_id=movie_id)
     # Remove numpy from trackpoints
     trackpoints = [ tp.model_dump(exclude_none=True, exclude_defaults=True) for tp in trackpoints ]
