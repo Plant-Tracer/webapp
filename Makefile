@@ -243,9 +243,8 @@ analysis-mp4-bundle: install-lambda-deps
 		--max-width "$(ANALYSIS_MP4_MAX_WIDTH)" \
 		--max-height "$(ANALYSIS_MP4_MAX_HEIGHT)"
 
-analysis-mp4-browser-test: install-lambda-deps
-	$(MAKE) vend-lambda-resize
-	PYTHONPATH=.:lambda-resize/src:$$PYTHONPATH uv run pytest -v --log-cli-level=$(LOG_LEVEL) browser_tests/analysis_mp4_browser_test.py
+analysis-mp4-browser-test: .venv/pyvenv.cfg
+	uv run --group lambda python -m pytest -o "pythonpath=. lambda-resize/src" -v --log-cli-level=$(LOG_LEVEL) browser_tests/analysis_mp4_browser_test.py
 
 # Set these during development to speed testing of the one function you care about:
 TEST1MODULE=tests/endpoint_test.py
