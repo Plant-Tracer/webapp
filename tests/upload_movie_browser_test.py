@@ -142,6 +142,9 @@ def test_upload_movie_end_to_end(chrome_driver, live_server, new_course):
         pytest.fail("Uploaded movie title never appeared in /list")
 
     chrome_driver.get(f"{live_server}/analyze?movie_id={movie_id}")
+    # Establish the ready state before navigation so initialization cannot mask
+    # a failure to re-enable tracing after asynchronous frame decoding.
+    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .track_button')))
     next_button = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .next_frame')))
     next_button.click()
     wait.until(lambda browser: browser.find_element(By.CSS_SELECTOR, '#tracer .frame_number_field')

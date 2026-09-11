@@ -85,7 +85,8 @@ Unreleased Summary
       speed. Tracing consumes analysis pixels and generates no JPEG ZIP. Original
       uploads are preserved; traced movies show markers without frame-number labels.
       Desktop browser checks encode and play real analysis movies on Windows and
-      macOS without requiring local database services.
+      macOS in landscape and portrait formats without requiring local database
+      services. Restore tracing controls after stepping through an untracked movie.
       Version 0.9.9.11 supports testing this workflow on a dev stack
       (refs #1162, #1163, #1164, #1165, #1166, #1168, #1038).
 

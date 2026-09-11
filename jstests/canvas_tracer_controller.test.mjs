@@ -716,6 +716,24 @@ describe('TracerController constructor', () => {
         expect(tc.dl_movie_id.prop).toHaveBeenCalledWith('disabled', false);
     });
 
+    test.each([
+        [-1, false],
+        [1, false],
+        [2, true],
+    ])('decoding restores the correct trace state with last tracked frame %i', (lastTracked, disabled) => {
+        const tc = new TracerController('div#tc',
+            makeMovieMetadata({ total_frames: 3, last_frame_tracked: lastTracked }), 'k');
+        tc.frames = Array.from({ length: 3 }, (_, frame_number) => ({ frame_number, markers: [] }));
+        tc.frame_number = 0;
+        tc.frame_loading = true;
+        tc.refreshFrameEditState();
+        expect(tc.track_button.prop).toHaveBeenLastCalledWith('disabled', true);
+
+        tc.frame_loading = false;
+        tc.refreshFrameEditState();
+        expect(tc.track_button.prop).toHaveBeenLastCalledWith('disabled', disabled);
+    });
+
     test('fully traced movie keeps Retrace disabled until marker data changes', () => {
         const tc = new TracerController(
             'div#tc',

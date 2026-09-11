@@ -626,7 +626,7 @@ class TracerController extends MovieController {
         if (!editable) {
             this.add_marker_button.prop(DISABLED, true);
             this.track_button.prop(DISABLED, true);
-        } else if (this.hasTraceableFrameData()) {
+        } else {
             this.refreshTrackButtonState();
         }
     }
@@ -854,6 +854,7 @@ class TracerController extends MovieController {
             return;
         }
         this.track_button.val(TRACE_MOVIE);
+        this.track_button.prop(DISABLED, false);
         this.refreshRetraceRequiredMessage();
     }
 

@@ -17,16 +17,17 @@ from browser_tests.video_probe import FRAME_SEQUENCE, matches_color, wait_for_de
 from tests.fixtures.analysis_mp4_fixture import FRAME_COLORS, write_four_color_movie
 
 
-@pytest.fixture
-def analysis_bundle_server(tmp_path) -> str:
+@pytest.fixture(params=[(640, 480), (480, 640)], ids=['landscape', 'portrait'])
+def analysis_bundle_server(tmp_path, request) -> str:
     """Serve a real generated portable bundle over HTTP."""
     source_path = tmp_path / "source.mp4"
     bundle_path = tmp_path / "bundle"
-    write_four_color_movie(source_path)
+    width, height = request.param
+    write_four_color_movie(source_path, width=width, height=height)
     create_analysis_bundle(
         source_path=source_path,
         output_dir=bundle_path,
-        options=AnalysisMp4Options(rotation=90, max_width=64, max_height=48),
+        options=AnalysisMp4Options(rotation=90),
     )
     long_source = tmp_path / 'long.mp4'
     writer = H264Writer(long_source, fps=15)
