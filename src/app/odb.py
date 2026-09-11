@@ -1298,6 +1298,13 @@ class DDBO:
         assert int(framedict[FRAME_NUMBER]) >= 0
         self.movie_frames.put_item(Item=framedict)
 
+    def has_movie_frames(self, movie_id):
+        """Check for coordinate data without loading a movie's frames."""
+        assert is_movie_id(movie_id)
+        response = self.movie_frames.query(KeyConditionExpression=Key(MOVIE_ID).eq(movie_id),
+                                           Select='COUNT', Limit=1, ConsistentRead=True)
+        return response[DDB_COUNT] > 0
+
     def get_frames(self, movie_id):
         """Gets all the movie frames"""
         assert is_movie_id(movie_id)
@@ -2543,9 +2550,7 @@ def set_movie_rotation(*, movie_id, rotation):
     # Old uploads with dimensions or saved frames already have a coordinate space.
     # Frame producers enter processing/tracing before saving frames; the conditional
     # status check below also excludes a producer that starts after this read.
-    frames = ddbo.movie_frames.query(KeyConditionExpression=Key(MOVIE_ID).eq(movie_id),
-                                     Select='COUNT', Limit=1, ConsistentRead=True)
-    if frames[DDB_COUNT]:
+    if ddbo.has_movie_frames(movie_id):
         raise MovieGeometryFinalized(movie_id)
     condition = movie_geometry_editable_condition()
     for prop in (WIDTH, HEIGHT):

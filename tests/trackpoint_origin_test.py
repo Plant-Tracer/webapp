@@ -800,10 +800,10 @@ def test_tracing_caches_rotated_height_from_raw_movie(new_movie_record, tmp_path
     movie_id = new_movie_record[MOVIE_ID]
     path = tmp_path / 'source.mp4'
     write_four_color_movie(path, width=width, height=height)
-    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={
-        odb.WIDTH: width, odb.HEIGHT: height, odb.MOVIE_ROTATION: rotation,
-        odb.TOTAL_FRAMES: 4, odb.FPS: '4'})
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={odb.MOVIE_ROTATION: rotation})
     odb_movie_data.set_movie_data(movie_id=movie_id, movie_data=path.read_bytes())
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={
+        odb.WIDTH: width, odb.HEIGHT: height, odb.TOTAL_FRAMES: 4, odb.FPS: '4'})
     odb.put_frame_trackpoints(movie_id=movie_id, frame_number=0,
                              trackpoints=[Trackpoint(x=10, y=width - 20, label='Apex')])
     movie_glue.run_tracing(movie_id=movie_id, frame_start=0, frame_end=3)
@@ -966,3 +966,27 @@ def test_upload_setup_cannot_accept_trackpoints(client, new_movie_record):
     assert ddbo.get_movie(movie_id).get(odb.LAST_FRAME_TRACKED) is None
     # Rejected points cannot race rotation or leave coordinate state behind.
     assert client.post('/api/rotate-movie', data={**params, 'rotation': 90}).status_code == 200
+
+
+@pytest.mark.parametrize('artifact', [odb.WIDTH, odb.HEIGHT, 'jpeg', 'trackpoints'])
+def test_source_initialization_preserves_legacy_coordinate_data(new_movie_record, artifact):
+    """Legacy uploading rows without completion markers must not lose coordinate data."""
+    movie_id = new_movie_record[MOVIE_ID]
+    ddbo = odb.DDBO()
+    frame_urn = None
+    jpeg = _jpeg_bytes(width=640, height=480)
+    if artifact in (odb.WIDTH, odb.HEIGHT):
+        ddbo.update_movie(movie_id, {artifact: 480})
+    elif artifact == 'jpeg':
+        frame_urn = odb_movie_data.create_new_movie_frame(movie_id=movie_id, frame_number=0, frame_data=jpeg)
+    else:
+        ddbo.put_movie_frame({MOVIE_ID: movie_id, FRAME_NUMBER: 0,
+                              'trackpoints': [Trackpoint(x=10, y=20, label='Apex').model_dump()]})
+    movie = ddbo.get_movie(movie_id)
+    frames = ddbo.get_frames(movie_id)
+    with pytest.raises(odb.MovieGeometryFinalized):
+        odb_movie_data.set_movie_data(movie_id=movie_id, movie_data=b'replacement')
+    assert ddbo.get_movie(movie_id) == movie
+    assert ddbo.get_frames(movie_id) == frames
+    if frame_urn:
+        assert odb_movie_data.read_object(frame_urn) == jpeg

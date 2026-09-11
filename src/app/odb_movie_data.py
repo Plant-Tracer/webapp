@@ -16,7 +16,7 @@ from .constants import C, logger, storage_deployment_id
 from .odb import (
     DDBO,
     RESIZE_STARTED_AT, RESIZED_AT, FRAME_HEIGHT_PX, MovieGeometryFinalized, DATE_UPLOADED,
-    MOVIE_STATUS, MOVIE_STATE_UPLOADING, MOVIE_TRACED_URN, LAST_FRAME_TRACKED,
+    MOVIE_STATUS, MOVIE_STATE_UPLOADING, MOVIE_TRACED_URN, LAST_FRAME_TRACKED, WIDTH, HEIGHT,
     is_movie_id,
     VERSION,
     course_id_for_movie_id,
@@ -124,21 +124,21 @@ def set_movie_data(*,movie_id, movie_data):
 
     Demo seeding and local tracing allocate a new movie ID immediately before this
     call. This is not the web upload/replacement API; CLI callers own their setup
-    sequence. Existing processed movies are rejected before any object is deleted.
+    sequence. Existing sources, dimensions or frames are rejected; initialization
+    never purges a previous source or coordinate data.
     """
     assert is_movie_id(movie_id)
     ddbo = DDBO()
     movie = ddbo.get_movie(movie_id)
     if movie.get(MOVIE_STATUS) != MOVIE_STATE_UPLOADING or any(movie.get(prop) is not None for prop in (
             UPLOADED_AT, DATE_UPLOADED, RESIZE_STARTED_AT, RESIZED_AT, FRAME_HEIGHT_PX, MOVIE_ZIPFILE_URN,
-            MOVIE_TRACED_URN, LAST_FRAME_TRACKED)):
+            MOVIE_TRACED_URN, LAST_FRAME_TRACKED, MOVIE_DATA_URN, WIDTH, HEIGHT)):
         raise MovieGeometryFinalized(movie_id)
     version = movie.get(VERSION, 0)
+    if version != 0 or ddbo.has_movie_frames(movie_id):
+        raise MovieGeometryFinalized(movie_id)
 
     logger.debug("got movie=%s version=%s", movie, version)
-    purge_movie_data(movie_id=movie_id)
-    purge_movie_frames( movie_id=movie_id )
-    purge_movie_zipfile( movie_id=movie_id )
     oname = movie_object_key(
         deployment_id=storage_deployment_id(),
         course_id=course_id_for_movie_id(movie_id),

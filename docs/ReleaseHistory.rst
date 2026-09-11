@@ -83,7 +83,8 @@ Unreleased Summary
       it in browser marker conversions for landscape and portrait movies.
       Choose rotation before upload and reject rotation changes once processing
       starts or legacy coordinate data exists, preserving geometry and tracking.
-      Reject repeated source uploads and trackpoint writes during upload setup;
+      Restrict source initialization to fresh records without purging legacy data,
+      and reject trackpoint writes during upload setup;
       recognize legacy upload-completion markers in the shared geometry guard.
       Make source dimensions read-only to clients. Save processed height
       with upload completion, recover missing legacy heights, and avoid artifact
