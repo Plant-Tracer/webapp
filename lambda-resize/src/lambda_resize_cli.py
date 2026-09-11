@@ -35,7 +35,6 @@ def trace_movie(args):
         movie_url=args.infile,
         frame_start=0,
         trackpoints=trackpoints,
-        movie_zipfile_path=args.zipfile,
         movie_traced_path=args.movie_traced,
         rotation=args.rotate,
         callback=print_progress,
@@ -66,7 +65,6 @@ def build_parser():
     trace_parser = subparsers.add_parser("tracer", help="Trace a movie and create artifacts")
     trace_parser.set_defaults(func=trace_movie)
     trace_parser.add_argument("--infile", type=Path, default=TEST_FILE)
-    trace_parser.add_argument("--zipfile", type=Path, default=Path("outfile.zip"))
     trace_parser.add_argument("--movie-traced", type=Path, default=Path("tracked.mp4"))
     trace_parser.add_argument("--trackpoints", default=TEST_TRACKPOINTS)
     trace_parser.add_argument("--comment", default="test comment")

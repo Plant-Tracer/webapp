@@ -78,6 +78,15 @@ Release Notes
 Unreleased Summary
 ******************
 
+    * New uploads generate a validated H.264 analysis MP4 containing every source
+      frame, rotated once, resized to fit 640 by 640 without enlargement, and
+      labeled with one-based frame numbers. The analyzer uses WebCodecs for exact
+      forward/reverse stepping before and after tracing, with adjustable playback
+      speed. Tracing consumes analysis pixels and generates no JPEG ZIP. Original
+      uploads are preserved; traced movies show markers without frame-number labels.
+      Version 0.9.9.11 supports testing this workflow on a dev stack
+      (refs #1162, #1163, #1164, #1165, #1166, #1168, #1038).
+
     * Include analysis-frame pixel height and coordinate origin consistently in
       trackpoint JSON, CSV, and XLSX downloads. Persist measured height and use
       it in browser marker conversions for landscape and portrait movies.

@@ -230,7 +230,7 @@ ANALYSIS_MP4_INPUT ?=
 ANALYSIS_MP4_OUTPUT ?=
 ANALYSIS_MP4_ROTATION ?= 0
 ANALYSIS_MP4_MAX_WIDTH ?= 640
-ANALYSIS_MP4_MAX_HEIGHT ?= 480
+ANALYSIS_MP4_MAX_HEIGHT ?= 640
 
 .PHONY: analysis-mp4-bundle analysis-mp4-browser-test
 analysis-mp4-bundle: install-lambda-deps

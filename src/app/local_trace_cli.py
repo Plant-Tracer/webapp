@@ -29,7 +29,6 @@ from app.odb import (
     FRAME_URN,
     MOVIE_ID,
     MOVIE_TRACED_URN,
-    MOVIE_ZIPFILE_URN,
     ODB_Errors,
     USER_ID,
 )
@@ -146,7 +145,7 @@ def cleanup_cli_scaffold(ids: dict[str, str]) -> None:
             odb.delete_course(course_id=course_id)
 
 
-def write_outputs(*, movie_id: str, output_dir: Path, output_prefix: str, write_zip: bool) -> dict[str, Path]:
+def write_outputs(*, movie_id: str, output_dir: Path, output_prefix: str) -> dict[str, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     metadata = odb.get_movie_metadata(movie_id=movie_id, get_last_frame_tracked=True)
     frames = DDBO().get_frames(movie_id)
@@ -166,14 +165,6 @@ def write_outputs(*, movie_id: str, output_dir: Path, output_prefix: str, write_
         "json": json_path,
         "mp4": mp4_path,
     }
-
-    if write_zip:
-        zip_urn = metadata.get(MOVIE_ZIPFILE_URN)
-        if not zip_urn:
-            raise RuntimeError("Tracing completed without a zipfile URN")
-        zip_path = output_dir / f"{output_prefix}-frames.zip"
-        odb_movie_data.copy_object_to_path(zip_urn, str(zip_path))
-        outputs["zip"] = zip_path
 
     return outputs
 
@@ -211,15 +202,12 @@ def run_local_trace(args: argparse.Namespace) -> int:
             movie_id=movie_id,
             output_dir=output_dir,
             output_prefix=output_prefix,
-            write_zip=not args.no_output_zip,
         )
 
         print(f"movie_id={movie_id}")
         print(f"source_frame={source_frame}")
         print(f"trackpoints_json={outputs['json']}")
         print(f"traced_movie={outputs['mp4']}")
-        if "zip" in outputs:
-            print(f"zipfile={outputs['zip']}")
         if args.no_cleanup:
             print("cleanup=skipped")
             print(f"course_id={ids[COURSE_ID]}")
@@ -245,8 +233,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-prefix", type=str, default=None, help="Prefix for exported artifact filenames")
     parser.add_argument("--no-cleanup", action="store_true",
                         help="Leave the temporary DynamoDB records and MinIO objects in place for debugging")
-    parser.add_argument("--no-output-zip", action="store_true",
-                        help="Do not export the generated frame zipfile alongside the traced movie")
     return parser
 
 

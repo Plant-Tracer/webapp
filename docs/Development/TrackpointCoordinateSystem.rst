@@ -309,3 +309,40 @@ them on the Metadata sheet. Height is always pixels, independent of calibrated
 position units. Unknown height is JSON ``null`` or an empty spreadsheet cell.
 The frame height describes the entire resized, rotated image and is independent
 of the selected analysis frame range.
+
+
+MP4 player validation on a dev stack
+------------------------------------
+
+New uploads on the ``new-movieplayer`` branch use the analysis MP4 immediately
+when processing completes. The original stays intact. The browser and tracker
+share the derivative's pixel dimensions; the source rotation must not be applied
+again. The analysis derivative includes every source frame, regardless of trim.
+Legacy backfill and bulk artifact deletion are separate work.
+
+The automated gates are ``make check``, ``make frame-step-browser-test``, and
+``make analysis-mp4-browser-test``. The desktop workflow runs both browser gates
+on Windows Chrome and macOS Chrome. The production analyzer is exercised with
+both the encoder output and an independent B-frame fixture. Local storage tests
+use DynamoDB Local and MinIO, including an actual browser upload followed by
+stepping, marker save, tracing, and stepping again.
+
+After deploying this branch to a dev stack using the normal Makefile deployment
+workflow, test on Windows and macOS:
+
+1. Upload a 640 by 480 and a 480 by 640 movie, choosing rotation before upload.
+2. Open Analyze as soon as processing finishes. Step forward and backward before
+   tracing; verify adjacent burned-in frame numbers and correct orientation.
+3. Select a later frame, place markers, and trace from it. Verify saved marker
+   positions, frame indices, and height in the downloaded data.
+4. After tracing, step in both directions and inspect marker overlays. Change
+   playback speed and reverse direction. Change the trim range and verify that
+   the full movie remains navigable.
+5. Verify the source download is unchanged, an analysis MP4 exists, and no new
+   ZIP object appears. The traced download contains marker overlays without
+   burned-in frame-number labels.
+
+The player keeps one decoded keyframe group at a time (at most 128 MiB) and
+limits compressed input to 256 MiB. Decoder failures and missing derivatives
+are visible in the analyzer. This validation does not claim Safari conformance;
+Safari requires its own engine check before being declared supported.

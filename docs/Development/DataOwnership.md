@@ -110,6 +110,9 @@ processing code and older migrations. Current rows store or use:
   `rotation`, `trim_start_frame`, `trim_end_frame`. The height is a measured
   analysis-coordinate value. Processing fixes geometry; legacy JPEG/ZIP artifacts
   can supply a missing height.
+- validated derivative: `analysis_mp4` stores its URN, dimensions, frame count, FPS,
+  rotation, checksum, generation timestamp and encoder contract. It is published
+  only after successful validation; original upload bytes remain authoritative.
 - S3 references: temporary `upload_staging_urn`, durable `movie_data_urn`,
   `movie_zipfile_urn`, `first_frame_urn`, and runtime `movie_traced_urn`
 - processing helpers: `processing_state`, `zip_frame_processing`,
@@ -161,8 +164,8 @@ The current S3 artifacts are:
 | Upload staging | `upload_staging_urn`, under `s3://bucket/uploads/{deployment_id}/...` | Temporary browser presigned POST target; removed after verification and copy |
 | Original uploaded movie | `movie_data_urn`, under `s3://bucket/movies/{deployment_id}/...` | Durable archive written by lambda-resize from staging |
 | Per-frame JPEG, when persisted | `frame_urn`, under the durable movie directory | Derived artifact; may be regenerated from the movie |
-| ZIP of analysis frames | `movie_zipfile_urn`, derived from `movie_data_urn` with a `_zipfile` suffix before the extension | Derived artifact written by lambda-resize tracing |
-| Traced movie | `movie_traced_urn`, derived from `movie_data_urn` with a `_traced` suffix before the extension | Derived artifact written by lambda-resize tracing |
+| ZIP of analysis frames | `movie_zipfile_urn`, derived from `movie_data_urn` with a `_zipfile` suffix before the extension | Historical artifact; new tracing no longer writes ZIPs |
+| Traced movie | `movie_traced_urn`, derived from `movie_data_urn` with a `_traced` suffix before the extension | Historical artifact; new tracing no longer writes ZIPs |
 
 During upload, `/api/new-movie` first creates the DynamoDB movie row with
 `status="uploading"` and `created_at`, but without `uploaded_at`. It records the
@@ -231,6 +234,6 @@ Use these files as the implementation sources when updating this page:
 - `src/app/odbmaint.py` - local DynamoDB table definitions
 - `src/app/s3_presigned.py` - S3 URN parsing, key generation, and presigned POST
   metadata fields
-- `lambda-resize/src/resize_app/movie_glue.py` - derived ZIP/traced movie writes
+- `lambda-resize/src/resize_app/movie_glue.py` - validated analysis MP4 and traced movie writes
 - `template.yaml` - deployed DynamoDB tables and the stack-independent S3 bucket
   parameter

@@ -171,3 +171,20 @@ For example, if FR = 0.5, then:
 - t[1] = 1 * 1/0.5 = 2 seconds
 - t[2] = 2 * 1/0.5 = 4 seconds
 - etc.
+
+
+Frame-by-frame MP4 analysis
+---------------------------
+
+After upload processing finishes, open Analyze to browse the whole movie before
+tracing. Use +1 and -1 for exact frame steps, enter a frame number to jump, or use
+forward/reverse play and the speed selector. Choose the orientation before upload;
+the original file is preserved and the analysis MP4 is rotated and resized for you.
+Frame-number labels in the movie start at 1, while the frame field starts at 0.
+
+Place or move markers on the desired frame, then choose Trace. The current markers
+are saved before tracking starts. After tracking completes, the same player shows
+the resulting markers and lets you step backward and forward to inspect them.
+Use a current Chrome or Edge browser on Windows or macOS with WebCodecs support.
+A decoder or processing error appears above the player instead of falling back to
+imprecise video seeking.

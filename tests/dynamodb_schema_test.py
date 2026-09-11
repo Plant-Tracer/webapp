@@ -9,6 +9,7 @@ from pydantic import BaseModel, TypeAdapter, ValidationError
 from app import odb, schema
 from app.schema import (
     AdminCourse,
+    AnalysisMp4,
     ApiKey,
     Course,
     CourseAdmin,
@@ -28,6 +29,7 @@ from app.schema import (
 
 
 PERSISTED_MODELS = {
+    AnalysisMp4,
     ApiKey,
     Course,
     CourseUser,
@@ -98,7 +100,10 @@ def test_persisted_pydantic_models_round_trip_through_dynamodb_local(local_ddb):
 
     def load(table, key, model_type):
         item = table.get_item(Key=key, ConsistentRead=True)["Item"]
-        return record(model_type.model_validate(item))
+        model = record(model_type.model_validate(item))
+        if isinstance(model, Movie) and model.analysis_mp4:
+            record(model.analysis_mp4)
+        return model
 
     courses = (
         Course(
@@ -150,6 +155,8 @@ def test_persisted_pydantic_models_round_trip_through_dynamodb_local(local_ddb):
             resize_queued_at=13, resize_started_at=14, resized_at=15,
             date_uploaded=16, orig_movie=movie_ids[0], fps="30", fpm="2.5",
             width=640, height=480, frame_height_px=480,
+            analysis_mp4=AnalysisMp4(urn="s3://test/movie_scaled.mp4", width=640, height=480,
+                                     frame_count=120, rotation=90, sha256="a" * 64, generated_at=16),
             trackpoint_origin="bottom-left",
             total_frames=120, trim_start_frame=1, trim_end_frame=119,
             total_bytes=1234, movie_data_urn="s3://test/movie.mp4",

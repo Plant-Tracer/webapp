@@ -13,7 +13,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("output_dir", help="new output bundle directory")
     parser.add_argument("--rotation", type=int, default=0, choices=(0, 90, 180, 270))
     parser.add_argument("--max-width", type=int, default=640)
-    parser.add_argument("--max-height", type=int, default=480)
+    parser.add_argument("--max-height", type=int, default=640)
     return parser
 
 

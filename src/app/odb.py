@@ -26,6 +26,7 @@ from pydantic import BaseModel, ValidationError
 from .schema import (
     User,
     AdminCourse,
+    AnalysisMp4,
     Movie,
     LogEntry,
     MovieAnalysisLock,
@@ -142,6 +143,8 @@ MAX_ENROLLMENT = 'max_enrollment'       # course.max_enrollment
 # movies table
 
 MOVIE_ID = 'movie_id'
+ANALYSIS_MP4 = 'analysis_mp4'
+ANALYSIS_MP4_URL = 'analysis_mp4_url'
 MOVIE_DATA_URN = 'movie_data_urn'             # original, uploaded
 MOVIE_ROTATION = 'rotation'                   # should be None, or 0, 90, 270 or 180 (integer)
 MOVIE_TRACED_URN = 'movie_traced_urn'         # with tracing
@@ -2508,6 +2511,12 @@ def get_frame_urn(*, movie_id, frame_number):
 ################################################################
 ## Trackpoints
 
+def movie_analysis_mp4(movie: dict) -> AnalysisMp4 | None:
+    """Read the validated analysis descriptor from a movie record."""
+    value = movie.get(ANALYSIS_MP4)
+    return AnalysisMp4.model_validate(value) if value else None
+
+
 def trackpoint_frame_height(movie: dict) -> int:
     """Return the analysis-frame height used to flip trackpoint Y coordinates."""
     explicit_height = movie.get(FRAME_HEIGHT_PX)
@@ -3044,7 +3053,6 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackp
     movie = ddbo.get_movie(movie_id, fields=[LAST_FRAME_TRACKED])
     current = movie.get(LAST_FRAME_TRACKED, None)
     if current is None:
-        assert frame_number==0,f"frame_number {frame_number} should be 0 if this is the first frame to be tracked"
         lft = frame_number
     else:
         lft = max(current, frame_number)
@@ -3191,7 +3199,7 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
                 # permission not granted
                 raise UnauthorizedUser("permission denied")
 
-        if user_id != ROOT_USER_ID and prop in (WIDTH, HEIGHT):
+        if user_id != ROOT_USER_ID and prop in (WIDTH, HEIGHT, ANALYSIS_MP4):
             raise UnauthorizedUser("Movie dimensions are measured by processing and cannot be edited")
         ddbo.update_movie(set_movie_id, {prop:value})
     elif set_user_id is not None:

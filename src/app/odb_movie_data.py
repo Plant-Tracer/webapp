@@ -11,6 +11,7 @@ from urllib import parse, request
 
 from botocore.exceptions import ClientError,ParamValidationError
 
+from . import odb
 from .s3_presigned import frame_object_key, make_urn, movie_object_key, s3_client
 from .constants import C, logger, storage_deployment_id
 from .odb import (
@@ -198,6 +199,11 @@ def purge_movie_zipfile(*,movie_id):
 
 def purge_movie(*,movie_id):
     """Actually delete a movie and all its frames"""
+    ddbo = DDBO()
+    analysis = odb.movie_analysis_mp4(ddbo.get_movie(movie_id))
+    if analysis:
+        delete_object(analysis.urn)
+        ddbo.update_movie(movie_id, {odb.ANALYSIS_MP4: None})
     purge_movie_data(movie_id=movie_id)
     purge_movie_frames( movie_id=movie_id )
     purge_movie_zipfile( movie_id=movie_id )

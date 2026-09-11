@@ -989,3 +989,30 @@ Check DynamoDB connectivity, S3 CORS configuration, and S3 bucket region. No aut
   "bucket_region_ok": true, "bucket_region_message": "..."
 }
 ```
+
+
+## Analysis MP4 playback contract
+
+New uploads remain in processing until the shared analysis encoder has decoded every
+source frame and validated its output. `/api/get-movie-metadata` returns
+`metadata.analysis_mp4` (URN, width, height, frame_count, fps, applied rotation,
+SHA-256, generated_at, encoder_version, profile, pixel_format and b_frames) and
+`metadata.analysis_mp4_url`, an authenticated signed playback URL. The source
+`movie_data_urn` and source dimensions remain separate and unchanged. The analysis
+MP4 is H.264 baseline/yuv420p, 15 fps, no B-frames, GOP 30 and CRF 18. It fits within
+640 by 640 pixels without enlargement. `frame_height_px` is its decoded height.
+All source frames survive; trim controls select analysis ranges rather than
+removing frames from this derivative. Burned-in labels count from 1; API and
+trackpoint frame indices remain zero-based.
+
+The production analyzer requires the analysis MP4 and a compatible WebCodecs
+browser (tested with Chrome on macOS and Windows). It exposes a visible error if
+encoding is incomplete or decoding is unavailable. It never downloads a ZIP.
+It saves the selected frame's markers before requesting tracing; a first marker
+may be saved on any frame after upload completion. Trace completion refreshes
+marker metadata while retaining the same analysis pixels. Frame endpoints select
+the derivative with no additional scaling or rotation. Tracking decodes the same
+analysis MP4; the traced movie renders source pixels through the same transform
+with marker overlays, avoiding the analysis movie's burned-in frame numbers.
+No new trace generates a ZIP. Legacy backfill and bulk S3 cleanup are separate
+operations and are not performed by deployment of this change.

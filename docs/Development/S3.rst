@@ -156,7 +156,11 @@ The resulting objects are:
      - ``movies/{deployment_id}/{course_id}/{movie_id}_traced.mov``
      - ``movie_traced_urn``
      - Derived and regenerable
-   * - Analysis-frame ZIP
+   * - Analysis MP4
+     - ``movies/{deployment_id}/{course_id}/{movie_id}_scaled.mp4``
+     - ``analysis_mp4.urn``
+     - Validated, frame-numbered playback derivative; original preserved
+   * - Historical analysis-frame ZIP
      - ``movies/{deployment_id}/{course_id}/{movie_id}_zipfile.mov``
      - ``movie_zipfile_urn``
      - Derived and regenerable
@@ -164,6 +168,10 @@ The resulting objects are:
      - ``movies/{deployment_id}/{course_id}/{movie_id}/{frame_number:06d}.jpg``
      - ``frame_urn`` on a ``movie_frames`` row
      - Optional and regenerable
+
+New upload processing writes the validated analysis MP4, and tracing writes only
+the traced MP4. Neither creates a ZIP. Existing ZIP objects are not bulk-deleted
+by this workflow.
 
 The ZIP key retains the original movie extension for compatibility even though
 the object contains ZIP bytes. Derived-artifact helpers preserve the original

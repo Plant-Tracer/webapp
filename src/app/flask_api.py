@@ -1115,6 +1115,10 @@ def api_get_movie_metadata():
             url_name = urn_name.replace("urn","url")
             movie_metadata[url_name] = make_signed_url(urn=movie_metadata[urn_name])
 
+    analysis = odb.movie_analysis_mp4(movie)
+    if analysis:
+        movie_metadata[odb.ANALYSIS_MP4_URL] = make_signed_url(urn=analysis.urn)
+
     movie_metadata.update(TrackpointCoordinateMetadata(
         frame_height_px=frame_height,
         trackpoint_origin=movie_metadata.get(odb.TRACKPOINT_ORIGIN)).model_dump())

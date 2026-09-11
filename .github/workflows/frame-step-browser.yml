@@ -27,7 +27,9 @@ jobs:
           if [ "${{ runner.os }}" = "Windows" ]; then choco install -y make; fi
           uv sync --locked
       - name: Verify frame stepping
-        run: make frame-step-browser-test
+        run: |
+          make frame-step-browser-test
+          make analysis-mp4-browser-test
 
   android:
     runs-on: ubuntu-latest

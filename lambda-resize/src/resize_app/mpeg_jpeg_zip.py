@@ -186,7 +186,7 @@ def extract_frame(*, movie_data, frame_number, fmt):
     raise ValueError(f"invalid frame_number {frame_number}")
 
 
-def get_frames_from_url(url: str, rotation: int) -> Generator[Any, None, None]:
+def get_frames_from_url(url: str, rotation: int, *, transform: bool = True) -> Generator[Any, None, None]:
     """
     Generator
     Fetches the first frame of a video from a URL, applies rotate,
@@ -219,7 +219,7 @@ def get_frames_from_url(url: str, rotation: int) -> Generator[Any, None, None]:
             h, w = frame.shape[:2]
             max_dim = max(h, w)
 
-            if max_dim > 0:
+            if transform and max_dim > 0:
                 scale = C.MOVIE_MAX_WIDTH / max_dim
                 new_w = int(w * scale)
                 new_h = int(h * scale)
@@ -232,13 +232,13 @@ def get_frames_from_url(url: str, rotation: int) -> Generator[Any, None, None]:
 
 
 
-def get_first_frame_from_url(url: str, rotation: int) -> np.ndarray:
+def get_first_frame_from_url(url: str, rotation: int, *, transform: bool = True) -> np.ndarray:
     """
     Safely grabs the first frame using a context manager and a for loop.
     Returns it as an np.ndarray which must be converted into something.
     """
     # closing() turns the generator into a context manager
-    with closing(get_frames_from_url(url, rotation)) as frame_gen:
+    with closing(get_frames_from_url(url, rotation, transform=transform)) as frame_gen:
 
         # The for loop elegantly yields the first item
         for frame in frame_gen:
