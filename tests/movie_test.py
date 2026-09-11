@@ -640,36 +640,39 @@ def test_get_movie_metadata_rotation_coercion(new_movie_record):
     and swaps width/height only when rotation is 90 or 270."""
     movie_id = new_movie_record[MOVIE_ID]
 
+    # Seed historical rows directly: these read-coercion cases include invalid
+    # rotations that normal geometry writers no longer permit.
+    ddbo = odb.DDBO()
     # Seed width and height so we can detect swaps
     odb.set_movie_metadata(movie_id=movie_id, movie_metadata={'width': 100, 'height': 200})
 
     # String "90" should be coerced to int 90 → dimensions swapped
-    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={'rotation': '90'})
+    ddbo.update_table(ddbo.movies, movie_id, {odb.MOVIE_ROTATION: '90'})
     meta = odb.get_movie_metadata(movie_id=movie_id)
     assert meta.get('width') == 200
     assert meta.get('height') == 100
 
     # Invalid string → coerced to 0 → no swap
-    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={'rotation': 'invalid'})
+    ddbo.update_table(ddbo.movies, movie_id, {odb.MOVIE_ROTATION: 'invalid'})
     meta = odb.get_movie_metadata(movie_id=movie_id)
     assert meta.get('width') == 100
     assert meta.get('height') == 200
 
 
     # None → coerced to 0 → no swap
-    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={'rotation': None})
+    ddbo.update_table(ddbo.movies, movie_id, {odb.MOVIE_ROTATION: None})
     meta = odb.get_movie_metadata(movie_id=movie_id)
     assert meta.get('width') == 100
     assert meta.get('height') == 200
 
     # String "270" should be coerced to int 270 → dimensions swapped
-    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={'rotation': '270'})
+    ddbo.update_table(ddbo.movies, movie_id, {odb.MOVIE_ROTATION: '270'})
     meta = odb.get_movie_metadata(movie_id=movie_id)
     assert meta.get('width') == 200
     assert meta.get('height') == 100
 
     # String "180" should be coerced to int 180 → no swap
-    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={'rotation': '180'})
+    ddbo.update_table(ddbo.movies, movie_id, {odb.MOVIE_ROTATION: '180'})
     meta = odb.get_movie_metadata(movie_id=movie_id)
     assert meta.get('width') == 100
     assert meta.get('height') == 200

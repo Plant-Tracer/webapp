@@ -890,15 +890,16 @@ def test_upload_repairs_missing_height_atomically(new_movie_record, tmp_path):
     assert movie[odb.MOVIE_STATUS] == odb.MOVIE_STATE_READY
 
 
-@pytest.mark.parametrize('artifact', ['height', 'jpeg', 'trackpoints', 'uploaded'])
-def test_legacy_upload_with_coordinate_data_cannot_rotate(client, new_movie, artifact):
+@pytest.mark.parametrize('artifact', ['width', 'height', 'jpeg', 'trackpoints', 'uploaded'])
+def test_legacy_upload_with_coordinate_data_cannot_rotate(client, new_movie_record, artifact):
     """Even a legacy uploading status cannot make an existing coordinate space editable."""
-    movie_id = new_movie[MOVIE_ID]
+    movie_id = new_movie_record[MOVIE_ID]
     ddbo = odb.DDBO()
-    if artifact != 'uploaded':
-        ddbo.update_movie(movie_id, {odb.UPLOADED_AT: None})
-    if artifact == 'height':
-        ddbo.update_movie(movie_id, {odb.HEIGHT: 480})
+    ddbo.update_movie(movie_id, {odb.MOVIE_ROTATION: 0})
+    if artifact == 'uploaded':
+        ddbo.update_movie(movie_id, {odb.UPLOADED_AT: 1})
+    if artifact in ('width', 'height'):
+        ddbo.update_movie(movie_id, {odb.WIDTH if artifact == 'width' else odb.HEIGHT: 480})
     elif artifact == 'jpeg':
         odb_movie_data.create_new_movie_frame(movie_id=movie_id, frame_number=0,
                                              frame_data=_jpeg_bytes(width=640, height=480))
@@ -908,8 +909,13 @@ def test_legacy_upload_with_coordinate_data_cannot_rotate(client, new_movie, art
     movie = ddbo.get_movie(movie_id)
     frames = ddbo.get_frames(movie_id)
     response = client.post('/api/rotate-movie', data={
-        API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id, 'rotation': 90})
+        API_KEY: new_movie_record[API_KEY], MOVIE_ID: movie_id, 'rotation': 90})
     assert response.status_code == 409
+    for rotation in (90, None):
+        with pytest.raises(odb.MovieGeometryFinalized):
+            ddbo.update_movie(movie_id, {odb.MOVIE_ROTATION: rotation})
+    # Repeating the saved value is harmless, including when frames already exist.
+    ddbo.update_movie(movie_id, {odb.MOVIE_ROTATION: movie[odb.MOVIE_ROTATION]}, touch_activity=False)
     assert ddbo.get_movie(movie_id) == movie
     assert ddbo.get_frames(movie_id) == frames
 

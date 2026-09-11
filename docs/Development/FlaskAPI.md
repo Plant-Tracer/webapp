@@ -641,8 +641,8 @@ rejected with HTTP 409 identifying inconsistent stored frame height. This is a
 data-consistency error, not a request to rotate/re-upload or a transient retry. Invalid frame ranges, including negative `frame_start`,
 are rejected before recovery or caching. Heights are JSON integers.
 
-Processing fixes rotation, source dimensions, and analysis-frame height. Legacy
-trackpoints retain the existing per-frame conditional conversion to bottom-left
+Upload completion fixes rotation; processing records source dimensions and the
+analysis-frame height. Legacy trackpoints retain the existing per-frame conditional conversion to bottom-left
 coordinates, so retries do not flip an already converted frame again. Trackpoint
 downloads use the same height recovery and coordinate conversion.
 

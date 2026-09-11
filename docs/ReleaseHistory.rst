@@ -81,8 +81,8 @@ Unreleased Summary
     * Include analysis-frame pixel height and coordinate origin consistently in
       trackpoint JSON, CSV, and XLSX downloads. Persist measured height and use
       it in browser marker conversions for landscape and portrait movies.
-      Choose rotation before upload and reject rotation changes once processing
-      starts or legacy coordinate data exists, preserving geometry and tracking.
+      Choose rotation before upload and reject rotation changes once upload
+      completes or legacy coordinate data exists, including shared metadata writes.
       Restrict source initialization to fresh records without purging legacy data,
       and reject trackpoint writes during upload setup;
       recognize legacy upload-completion markers in the shared geometry guard.

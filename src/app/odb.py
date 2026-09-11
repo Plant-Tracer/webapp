@@ -564,7 +564,7 @@ class DDBO:
             allowed = Attr(prop).eq(value)
             if prop in (WIDTH, HEIGHT, FRAME_HEIGHT_PX):
                 allowed |= Attr(prop).not_exists() | Attr(prop).eq(None)
-            if prop != FRAME_HEIGHT_PX:
+            if prop != FRAME_HEIGHT_PX and (prop != MOVIE_ROTATION or not self.has_movie_frames(movie_id)):
                 allowed |= movie_geometry_editable_condition()
             geometry_condition = allowed if geometry_condition is None else geometry_condition & allowed
         if geometry_condition is not None:
@@ -2536,10 +2536,10 @@ def trackpoint_frame_height(movie: dict) -> int:
 
 
 def movie_geometry_editable_condition():
-    """Only an upload that has not entered processing may change geometry."""
+    """Only an incomplete upload without saved geometry may change orientation."""
     condition = Attr(MOVIE_STATUS).eq(MOVIE_STATE_UPLOADING)
     for prop in (UPLOADED_AT, DATE_UPLOADED, RESIZE_STARTED_AT, RESIZED_AT, FRAME_HEIGHT_PX, MOVIE_ZIPFILE_URN,
-                 MOVIE_TRACED_URN, LAST_FRAME_TRACKED):
+                 MOVIE_TRACED_URN, LAST_FRAME_TRACKED, WIDTH, HEIGHT):
         condition &= Attr(prop).not_exists() | Attr(prop).eq(None)
     return condition
 
@@ -2553,8 +2553,6 @@ def set_movie_rotation(*, movie_id, rotation):
     if ddbo.has_movie_frames(movie_id):
         raise MovieGeometryFinalized(movie_id)
     condition = movie_geometry_editable_condition()
-    for prop in (WIDTH, HEIGHT):
-        condition &= Attr(prop).not_exists() | Attr(prop).eq(None)
     try:
         ddbo.update_table(ddbo.movies, movie_id,
                           {MOVIE_ROTATION: rotation, LAST_ACTIVITY_AT: int(time.time())},

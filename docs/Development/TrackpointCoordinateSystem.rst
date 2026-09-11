@@ -283,7 +283,8 @@ requires a new upload. Tracing measures the same fixed coordinate space.
 Legacy JPEG/ZIP height recovery persists a missing height. Repeated identical
 measurements are accepted; a conflicting measurement is rejected as inconsistent
 stored data, not a retryable rotation request. Legacy rows with saved dimensions
-or frames cannot be rotated even if their old status still says uploading.
+or frames cannot be rotated through either the rotation API or the shared metadata
+writer, even if their old status still says uploading.
 Source dimensions are read-only through the metadata API, including missing fields.
 Both current and legacy upload-completion markers close geometry editing in the
 shared writer and source initializer. The synchronous CLI initializer accepts only
