@@ -65,6 +65,7 @@ that movie:
 .. code-block:: python
 
    trackpoint_origin: Literal["bottom-left"] | None = None
+   frame_height_px: int | None = None
 
 Rules:
 
@@ -141,9 +142,11 @@ When loading frame markers:
   ``POST /api/get-movie-metadata``.
 * For ``"bottom-left"`` movies, convert stored trackpoints to canvas coordinates
   before creating ``Marker`` and ``Line`` objects.
-* Use the loaded analysis image's natural height for the Y conversion. Movie
-  metadata records the source movie dimensions, which can differ when Lambda
-  scales the analysis frame (for example, a 480x360 source becomes 640x480).
+* Use ``metadata.frame_height_px`` for the Y conversion when supplied. This is
+  the analysis coordinate height after rotation and scaling; do not rotate it
+  again. With older responses, fall back to the loaded image's natural height.
+  Movie ``width``/``height`` can describe source dimensions rather than analysis
+  dimensions (for example, a 480x360 source becomes 640x480).
 * Rebuild the current frame after the loaded image reports its natural
   dimensions. Do not flip bottom-left trackpoints against the source-movie or
   placeholder canvas height.
@@ -266,3 +269,43 @@ When the implementation lands, update user-facing coordinate descriptions in
 ``docs/UserTutorial.rst`` and ``src/app/templates/analyze.html``. Any affected
 screenshots under ``docs/tutorial_images/`` should be flagged for user review
 rather than replaced automatically.
+
+Persisted frame height and downloads
+------------------------------------
+
+Rotation is chosen before upload. Once upload completion is recorded or processing
+begins, the API rejects
+rotation changes with HTTP 409 and leaves existing tracking intact. Processing
+stores source dimensions, measured ``frame_height_px``, and completion state in
+one update. The processed movie geometry is immutable; changing orientation
+requires a new upload. Tracing measures the same fixed coordinate space.
+
+Legacy JPEG/ZIP height recovery persists a missing height. Repeated identical
+measurements are accepted; a conflicting measurement is rejected as inconsistent
+stored data, not a retryable rotation request. Legacy rows with saved dimensions
+or frames cannot be rotated through either the rotation API or the shared metadata
+writer, even if their old status still says uploading.
+Source dimensions are read-only through the metadata API, including missing fields.
+Both current and legacy upload-completion markers close geometry editing in the
+shared writer and source initializer. The synchronous CLI initializer accepts only
+a fresh record without a source, source dimensions, or saved frames; it never
+purges prior source or coordinate data. Trackpoint writes are rejected during
+upload setup, so they cannot create coordinates while rotation remains editable. Migration
+retains its existing conditional per-frame updates and durable conversion markers,
+so interrupted migrations can resume without flipping a frame twice. There is no
+migration path between different movie geometries.
+
+Metadata-only requests use stored height or source dimensions without JPEG/ZIP
+reads or cache writes. With both source dimensions available, fallback height
+applies the tracer's scaling and rotation. A height-only legacy record retains
+its historical interpretation until analysis pixels are measured.
+
+Upload retries repair missing height on legacy completed uploads. Tracing failures
+during measurement or migration follow normal failure-status and lock cleanup.
+
+Browser metadata and JSON trackpoint downloads include ``frame_height_px`` and
+``trackpoint_origin`` in ``metadata``. CSV repeats them as columns; XLSX includes
+them on the Metadata sheet. Height is always pixels, independent of calibrated
+position units. Unknown height is JSON ``null`` or an empty spreadsheet cell.
+The frame height describes the entire resized, rotated image and is independent
+of the selected analysis frame range.

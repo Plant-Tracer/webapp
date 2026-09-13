@@ -1285,6 +1285,34 @@ describe('TracerController.get_markers', () => {
         expect(tc.get_markers()).toEqual([{ x: 10, y: 120, label: 'Apex', color: 'orange', frame_number: 0 }]);
     });
 
+    test.each([[640, 480], [480, 640]])(
+        'explicit height controls marker round trips for %ix%i analysis frames', (width, height) => {
+            const tc = new TracerController('div#tc', makeMovieMetadata({
+                width: width * 2, height: height * 2, rotation: 90,
+                frame_height_px: height, trackpoint_origin: 'bottom-left',
+            }), 'k');
+            tc.loaded_analysis_frame_height = 200;
+            tc.naturalHeight = 100;
+            const point = {x: 10, y: height - 20, label: 'Apex', frame_number: 0};
+            const marker = tc.marker_from_trackpoint(point);
+            expect(marker.y).toBe(20);
+            tc.objects.push(marker);
+            expect(tc.get_markers()[0]).toMatchObject(point);
+            marker.y = 30;
+            expect(tc.get_markers()[0].y).toBe(height - 30);
+        }
+    );
+
+    test.each([null, 0, -1, 'invalid'])(
+        'invalid explicit height %s preserves legacy image fallback', (height) => {
+            const tc = new TracerController('div#tc', makeMovieMetadata({
+                height: 960, frame_height_px: height, trackpoint_origin: 'bottom-left',
+            }), 'k');
+            tc.loaded_analysis_frame_height = 480;
+            expect(tc.trackpoint_to_canvas({x: 10, y: 460}).y).toBe(20);
+        }
+    );
+
     test('bottom-left movie rounds fractional canvas positions before saving trackpoints', () => {
         const tc = new TracerController(
             'div#tc',
