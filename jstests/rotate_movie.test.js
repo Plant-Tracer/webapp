@@ -1,87 +1,62 @@
 /**
  * @jest-environment jsdom
  */
+const { webcrypto } = require('crypto');
+const { rotate_movie, preview_upload_movie, upload_movie } = require('planttracer');
 
-const { rotate_movie } = require('planttracer');
-
-describe('rotate_movie', () => {
+describe('rotation before upload', () => {
   beforeEach(() => {
     document.body.innerHTML = `
-      <a id="rotate_movie_link" href="javascript:;">Rotate</a>
-      <span id="rotate_status"></span>
-      <img id="image-preview">
-      <a id="process_movie_link"></a>`;
+      <form id="upload-movie-form">
+        <input id="movie-title" value="Plant movie">
+        <input id="movie-description" value="Landscape plant">
+        <input id="movie-file" type="file">
+        <input id="movie-rotation" value="0">
+        <button id="upload-button"></button>
+        <div id="upload-orientation"><video id="upload-source-preview"></video></div>
+      </form>
+      <div id="upload_message"></div><div id="message"></div>`;
+    Object.defineProperty(document.querySelector('#movie-file'), 'files', {
+      value: [{ size: 4, arrayBuffer: async () => new Uint8Array([1, 2, 3, 4]).buffer }],
+      configurable: true,
+    });
+    Object.defineProperty(global.crypto, 'subtle', { value: webcrypto.subtle, configurable: true });
     global.api_key = 'test-api-key';
     global.API_BASE = '/';
-    window.movie_id = 'movie-123';
+    global.LAMBDA_API_BASE = '';
+    global.MAX_FILE_UPLOAD = 100;
+    fetch.resetMocks();
   });
 
-  afterEach(() => {
-    jest.restoreAllMocks();
+  test('cycles locally through all orientations without changing a stored movie', () => {
+    for (const rotation of [90, 180, 270, 0]) {
+      rotate_movie();
+      expect(document.querySelector('#movie-rotation').value).toBe(String(rotation));
+      expect(document.querySelector('#upload-source-preview').style.transform).toBe(`rotate(${rotation}deg)`);
+    }
+    expect(fetch).not.toHaveBeenCalled();
   });
 
-  test('disables rotation until the save completes and ignores duplicate clicks', async () => {
-    let completeRequest;
-    global.fetch = jest.fn(() => new Promise((resolve) => {
-      completeRequest = resolve;
-    }));
-
-    const rotation = rotate_movie();
+  test('includes the chosen orientation when requesting an upload', async () => {
     rotate_movie();
-
-    const link = document.querySelector('#rotate_movie_link');
-    expect(link.classList.contains('rotate-pending')).toBe(true);
-    expect(link.getAttribute('aria-disabled')).toBe('true');
-    expect(global.fetch).toHaveBeenCalledTimes(1);
-    expect(document.querySelector('#image-preview').style.transform).toBe('rotate(90deg)');
-
-    completeRequest({ json: async () => ({ error: false }) });
-    await rotation;
-
-    expect(link.classList.contains('rotate-pending')).toBe(false);
-    expect(link.hasAttribute('aria-disabled')).toBe(false);
-    expect(document.querySelector('#rotate_status').textContent).toContain('(Rotation saved)');
-
-    global.fetch.mockResolvedValueOnce({ json: async () => ({ error: false }) });
-    await rotate_movie();
-
-    expect(global.fetch).toHaveBeenCalledTimes(2);
-    expect(document.querySelector('#image-preview').style.transform).toBe('rotate(180deg)');
+    rotate_movie();
+    fetch.mockResponseOnce(JSON.stringify({ error: true, message: 'Upload unavailable' }));
+    await upload_movie();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch.mock.calls[0][0]).toBe('/api/new-movie');
+    expect(fetch.mock.calls[0][1].body.get('rotation')).toBe('180');
+    expect(document.querySelector('#message').textContent).toContain('Upload unavailable');
   });
 
-  test('re-enables rotation after a failed save so the user can retry', async () => {
-    jest.spyOn(global.console, 'error').mockImplementation(() => {});
-    global.fetch = jest.fn().mockResolvedValueOnce({ json: async () => ({ error: false }) });
-    await rotate_movie();
-    const preview = document.querySelector('#image-preview');
-    const persistedTransform = preview.style.transform;
-
-    global.fetch.mockRejectedValueOnce(new Error('offline'));
-    await rotate_movie();
-
-    const link = document.querySelector('#rotate_movie_link');
-    expect(link.classList.contains('rotate-pending')).toBe(false);
-    expect(link.hasAttribute('aria-disabled')).toBe(false);
-    expect(preview.style.transform).toBe(persistedTransform);
-    expect(document.querySelector('#rotate_status').textContent).toContain('Network error');
-
-    global.fetch.mockResolvedValueOnce({ json: async () => ({ error: false }) });
-    await rotate_movie();
-    expect(preview.style.transform).not.toBe(persistedTransform);
-  });
-
-  test('restores the persisted preview when the backend rejects a rotation', async () => {
-    global.fetch = jest.fn().mockResolvedValueOnce({ json: async () => ({ error: false }) });
-    await rotate_movie();
-    const preview = document.querySelector('#image-preview');
-    const persistedTransform = preview.style.transform;
-
-    global.fetch.mockResolvedValueOnce({
-      json: async () => ({ error: true, message: 'save rejected' }),
-    });
-    await rotate_movie();
-
-    expect(preview.style.transform).toBe(persistedTransform);
-    expect(document.querySelector('#rotate_status').textContent).toContain('save rejected');
+  test('changing files resets orientation and releases the previous local preview', () => {
+    URL.createObjectURL = jest.fn().mockReturnValueOnce('blob:first').mockReturnValueOnce('blob:second');
+    URL.revokeObjectURL = jest.fn();
+    preview_upload_movie();
+    rotate_movie();
+    preview_upload_movie();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:first');
+    expect(document.querySelector('#movie-rotation').value).toBe('0');
+    expect(document.querySelector('#upload-source-preview').style.transform).toBe('');
+    expect(document.querySelector('#upload-source-preview').src).toBe('blob:second');
   });
 });

@@ -78,6 +78,37 @@ Release Notes
 Unreleased Summary
 ******************
 
+    * New uploads generate a validated H.264 analysis MP4 containing every source
+      frame, rotated once, resized to fit 640 by 640 without enlargement, and
+      labeled with one-based frame numbers. The analyzer uses WebCodecs for exact
+      forward/reverse stepping before and after tracing, with adjustable playback
+      speed. Tracing consumes analysis pixels and generates no JPEG ZIP. Original
+      uploads are preserved; traced movies show markers without frame-number labels.
+      Desktop browser checks encode and play real analysis movies on Windows and
+      macOS in landscape and portrait formats without requiring local database
+      services. Restore tracing controls after stepping through an untracked movie.
+      Version 0.9.9.11 supports testing this workflow on a dev stack
+      (refs #1162, #1163, #1164, #1165, #1166, #1168, #1038).
+
+    * Fetch pinned MinIO test-service binaries from official GitHub releases
+      after the old download endpoint was retired (refs #1233).
+
+    * Preserve saved trackpoints when tracing fails frame-height validation,
+      including queued retracing. Reject rotation and source initialization when
+      a legacy first-frame artifact exists (refs #1233).
+
+    * Include analysis-frame pixel height and coordinate origin consistently in
+      trackpoint JSON, CSV, and XLSX downloads. Persist measured height and use
+      it in browser marker conversions for landscape and portrait movies.
+      Choose rotation before upload and reject rotation changes once upload
+      completes or legacy coordinate data exists, including shared metadata writes.
+      Restrict source initialization to fresh records without purging legacy data,
+      and reject trackpoint writes during upload setup;
+      recognize legacy upload-completion markers in the shared geometry guard.
+      Make source dimensions read-only to clients. Save processed height
+      with upload completion, recover missing legacy heights, and avoid artifact
+      reads on metadata-only requests (refs #1233).
+
     * Standardize the agent PR workflow as ``pr-to-ready``, retaining
       ``codex-to-complete`` and ``codex-to-ready`` aliases, with shared
       Codex, Claude, and Copilot implementer/reviewer instructions.

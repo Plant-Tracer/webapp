@@ -1,5 +1,4 @@
 from pathlib import Path
-import zipfile
 
 import cv2
 import numpy as np
@@ -40,7 +39,7 @@ def test_analysis_frame_height_from_movie_uses_tracer_processed_frame():
 
 def test_trace_movie_v2_respects_frame_end(monkeypatch):
     frames = [np.zeros((8, 8, 3), dtype=np.uint8) for _frame_number in range(4)]
-    monkeypatch.setattr(tracer, "get_frames_from_url", lambda _movie_url, _rotation: frames)
+    monkeypatch.setattr(tracer, "get_frames_from_url", lambda _movie_url, _rotation, **_kwargs: frames)
 
     def fake_trace_frame(*, gray_frame_prev, gray_frame, trackpoints, frame_number):
         del gray_frame_prev, gray_frame, trackpoints
@@ -69,7 +68,7 @@ def test_trace_movie_v2_clips_traced_mp4_to_output_range(monkeypatch):
         frame = np.zeros((12, 12, 3), dtype=np.uint8)
         frame[0, 0] = [frame_number, 0, 0]
         frames.append(frame)
-    monkeypatch.setattr(tracer, "get_frames_from_url", lambda _movie_url, _rotation: frames)
+    monkeypatch.setattr(tracer, "get_frames_from_url", lambda _movie_url, _rotation, **_kwargs: frames)
 
     def fake_trace_frame(*, gray_frame_prev, gray_frame, trackpoints, frame_number):
         del gray_frame_prev, gray_frame, trackpoints
@@ -103,8 +102,7 @@ def test_trace_movie_v2_clips_traced_mp4_to_output_range(monkeypatch):
 
 def test_trace_movie_v2_closes_outputs_when_callback_fails(monkeypatch, tmp_path):
     frames = [np.zeros((16, 16, 3), dtype=np.uint8)]
-    monkeypatch.setattr(tracer, "get_frames_from_url", lambda _movie_url, _rotation: frames)
-    zip_path = tmp_path / "frames.zip"
+    monkeypatch.setattr(tracer, "get_frames_from_url", lambda _movie_url, _rotation, **_kwargs: frames)
     movie_path = tmp_path / "traced.mp4"
 
     def fail_callback(_arg):
@@ -115,14 +113,10 @@ def test_trace_movie_v2_closes_outputs_when_callback_fails(monkeypatch, tmp_path
             movie_url="https://example.com/movie.mp4",
             frame_start=1,
             trackpoints=[Trackpoint(x=1, y=1, label="apex", frame_number=0)],
-            movie_zipfile_path=zip_path,
             movie_traced_path=movie_path,
             callback=fail_callback,
         )
 
-    with zipfile.ZipFile(zip_path) as archive:
-        assert archive.testzip() is None
-        assert archive.namelist() == ["frame_0000.jpeg"]
     capture = cv2.VideoCapture(str(movie_path))
     try:
         assert capture.grab()

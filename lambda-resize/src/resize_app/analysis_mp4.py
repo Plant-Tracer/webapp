@@ -4,7 +4,10 @@
 
 import json
 import shutil
+import subprocess
 from pathlib import Path
+
+import imageio_ffmpeg
 
 import cv2
 import numpy as np
@@ -13,7 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from .video_writer import H264Writer
 
 DEFAULT_ANALYSIS_WIDTH = 640
-DEFAULT_ANALYSIS_HEIGHT = 480
+DEFAULT_ANALYSIS_HEIGHT = 640
 DEFAULT_ANALYSIS_FPS = 15.0
 ANALYSIS_PLAYER_FILENAME = "index.html"
 ANALYSIS_PLAYER_LIBRARY_FILENAME = "mp4box.all.js"
@@ -115,6 +118,21 @@ def scale_frame(frame: np.ndarray, options: AnalysisMp4Options) -> np.ndarray:
     return cv2.resize(frame, (scaled_width, scaled_height), interpolation=cv2.INTER_AREA)
 
 
+def unlabelled_analysis_frames(source_url: str, options: AnalysisMp4Options):
+    """Render source frames in the same geometry, without permanent playback labels."""
+    capture = cv2.VideoCapture(source_url)
+    try:
+        if not capture.isOpened():
+            raise ValueError("Cannot open source for traced movie rendering")
+        while True:
+            success, frame = capture.read()
+            if not success:
+                return
+            yield scale_frame(rotate_frame(frame, options.rotation), options)
+    finally:
+        capture.release()
+
+
 def burn_frame_number(frame: np.ndarray, frame_number: int) -> np.ndarray:
     """Burn a one-based frame number into an analysis frame."""
     labelled = frame.copy()
@@ -130,12 +148,14 @@ def burn_frame_number(frame: np.ndarray, frame_number: int) -> np.ndarray:
     return labelled
 
 
-def encode_analysis_mp4(*, source_path: Path, output_path: Path, options: AnalysisMp4Options) -> AnalysisMp4Result:
+def encode_analysis_mp4(*, source_path: Path, output_path: Path, options: AnalysisMp4Options,
+                        comment: str = "PlantTracer analysis MP4") -> AnalysisMp4Result:
     """Encode one rotated, scaled, frame-numbered analysis MP4."""
     capture = cv2.VideoCapture(str(source_path))
     if not capture.isOpened():
         capture.release()
         raise ValueError(f"cannot open MP4: {source_path}")
+    expected_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
     fps = DEFAULT_ANALYSIS_FPS
     frame_count = 0
     width = 0
@@ -147,7 +167,7 @@ def encode_analysis_mp4(*, source_path: Path, output_path: Path, options: Analys
             fps=fps,
             output_params=[
                 *H264_OUTPUT_PARAMETERS,
-                "-metadata", "comment=PlantTracer analysis MP4",
+                "-metadata", f"comment={comment}",
             ],
             quality=None,
         )
@@ -167,6 +187,10 @@ def encode_analysis_mp4(*, source_path: Path, output_path: Path, options: Analys
     if frame_count == 0:
         output_path.unlink(missing_ok=True)
         raise ValueError(f"MP4 has no decodable frames: {source_path}")
+    if expected_count > 0 and frame_count != expected_count:
+        output_path.unlink(missing_ok=True)
+        raise ValueError(f"Decoded {frame_count} of {expected_count} source frames")
+    validate_encoded_movie(output_path, frame_count=frame_count, width=width, height=height)
     return AnalysisMp4Result(
         bundle_dir=output_path.parent,
         movie_path=output_path,
@@ -177,6 +201,30 @@ def encode_analysis_mp4(*, source_path: Path, output_path: Path, options: Analys
         fps=fps,
         rotation=options.rotation,
     )
+
+
+def validate_encoded_movie(path: Path, *, frame_count: int, width: int, height: int) -> None:
+    """Decode the completed artifact and verify its frame count and H.264 contract."""
+    description = subprocess.run(
+        [imageio_ffmpeg.get_ffmpeg_exe(), "-hide_banner", "-i", str(path)],
+        capture_output=True, text=True, check=False,
+    ).stderr
+    if not all(value in description for value in ("h264", "Baseline", "yuv420p", "15 fps")):
+        raise ValueError("Analysis MP4 does not satisfy the H.264 baseline/yuv420p/15 fps contract")
+    capture = cv2.VideoCapture(str(path))
+    count = 0
+    try:
+        while True:
+            success, frame = capture.read()
+            if not success:
+                break
+            if frame.shape[:2] != (height, width):
+                raise ValueError("Analysis MP4 dimensions changed during encoding")
+            count += 1
+    finally:
+        capture.release()
+    if count != frame_count:
+        raise ValueError(f"Analysis MP4 retained {count} of {frame_count} frames")
 
 
 def copy_player_bundle(*, bundle_dir: Path, movie_name: str) -> Path:

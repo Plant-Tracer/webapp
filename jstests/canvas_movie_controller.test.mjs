@@ -60,9 +60,10 @@ function loadMovieController() {
     const source = fs.readFileSync(sourcePath, 'utf8')
         .replace(/^import .*;\n/gm, '')
         .replace(/^export \{ MovieController \};\s*$/m, 'return MovieController;');
-    return new Function('$', 'CanvasController', 'WebImage', 'Text', source)( // eslint-disable-line no-new-func
+    return new Function('$', 'CanvasController', 'CanvasItem', 'WebImage', 'Text', source)( // eslint-disable-line no-new-func
         mock$,
         MockCanvasController,
+        class { constructor(x, y) { this.x = x; this.y = y; } },
         MockWebImage,
         MockText
     );
@@ -132,7 +133,7 @@ describe('MovieController trim play bounds', () => {
         clearTimeout(controller.timer);
     });
 
-    test('bounce reverse turns around inside the bounded range', () => {
+    test('bounce reverse turns around inside the bounded range', async () => {
         jest.useFakeTimers();
         const controller = makeController();
         controller.bounce = true;
@@ -142,7 +143,7 @@ describe('MovieController trim play bounds', () => {
 
         expect(controller.frame_number).toBe(3);
         expect(controller.playing).toBe(-1);
-        jest.advanceTimersByTime(100);
+        await jest.advanceTimersByTimeAsync(100);
         expect(controller.playing).toBe(1);
         expect(controller.frame_number).toBe(4);
         clearTimeout(controller.timer);

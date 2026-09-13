@@ -121,6 +121,23 @@ class CourseAdmin(BaseModel):
     courses: List[AdminCourse]
 
 
+class AnalysisMp4(BaseModel):
+    """Validated immutable playback derivative; original upload remains separate."""
+
+    urn: str
+    width: Annotated[int, Field(gt=0)]
+    height: Annotated[int, Field(gt=0)]
+    frame_count: Annotated[int, Field(gt=0)]
+    fps: int = 15
+    rotation: Literal[0, 90, 180, 270]
+    sha256: str
+    generated_at: int
+    encoder_version: int = 1
+    profile: str = "baseline"
+    pixel_format: str = "yuv420p"
+    b_frames: int = 0
+
+
 class Movie(BaseModel):
     """DynamoDB movies table"""
 
@@ -167,12 +184,14 @@ class Movie(BaseModel):
     width: Annotated[int | None, Field(ge=0, le=10000)] = None
     height: Annotated[int | None, Field(ge=0, le=10000)] = None
     trackpoint_origin: Literal["bottom-left"] | None = None
+    frame_height_px: Annotated[int | None, Field(gt=0)] = None
 
     total_frames: Annotated[int | None, Field(ge=0, le=999999)] = None
     trim_start_frame: Annotated[int | None, Field(ge=0, le=999999)] = None
     trim_end_frame: Annotated[int | None, Field(ge=0, le=999999)] = None
     total_bytes: Annotated[int | None, Field(ge=0)] = None
 
+    analysis_mp4: AnalysisMp4 | None = None
     movie_data_urn: str | None = None
     movie_zipfile_urn: str | None = None
     first_frame_urn: str | None = None
@@ -192,6 +211,13 @@ class Movie(BaseModel):
 
     # Preview rotation on upload page (0–3 × 90° CW). Applied when tracking.
     rotation: Annotated[int, Field(ge=0, lt=360)] = 0
+
+
+class TrackpointCoordinateMetadata(BaseModel):
+    """Pixel coordinate space shared by trackpoint APIs and downloads."""
+
+    frame_height_px: Annotated[int | None, Field(gt=0)] = None
+    trackpoint_origin: Literal["bottom-left"] | None = None
 
 
 def fix_movie_prop_value(prop, value):

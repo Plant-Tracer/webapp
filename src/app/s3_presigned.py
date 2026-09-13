@@ -190,6 +190,11 @@ def traced_movie_urn(*, movie_data_urn):
     )
 
 
+def analysis_mp4_urn(*, movie_data_urn):
+    """Keep the source and its playback derivative in distinct objects."""
+    return movie_data_urn.rsplit('.', 1)[0] + '_scaled.mp4'
+
+
 def analysis_zip_urn(*, movie_data_urn):
     """Return an analysis-frame ZIP URN while preserving the source bucket and extension."""
     bucket, source_key = parse_s3_urn(urn=movie_data_urn)

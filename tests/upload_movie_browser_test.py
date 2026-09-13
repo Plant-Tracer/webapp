@@ -6,13 +6,14 @@ verifies the movie is stored in both S3 (MinIO) and DynamoDB.
 from pathlib import Path
 import uuid
 import hashlib
-import time
 
 import pytest
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
+
+from resize_app import local_queue, lambda_tracing_handler
 
 from app import odb
 from app import odb_movie_data
@@ -60,7 +61,17 @@ def _section_contains_title(driver, title):
         return False
 
 
+@pytest.fixture
+def local_trace_worker(monkeypatch):
+    """Use the real local asynchronous worker for browser tracing."""
+    monkeypatch.setenv('TRACING_QUEUE_MODE', 'local')
+    local_queue.start_worker(processor=lambda_tracing_handler.process_local_queue_message)
+    yield
+    local_queue.stop_worker()
+
+
 @pytest.mark.selenium
+@pytest.mark.usefixtures("local_trace_worker")
 def test_upload_movie_end_to_end(chrome_driver, live_server, new_course):
     """
     Upload a movie via the UI and verify:
@@ -92,6 +103,9 @@ def test_upload_movie_end_to_end(chrome_driver, live_server, new_course):
         "if (typeof window.check_upload_metadata === 'function') window.check_upload_metadata();"
     )
     wait.until(EC.element_to_be_clickable((By.ID, "upload-button")))
+    rotate = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "#upload-orientation button")))
+    rotate.click()
+    assert chrome_driver.find_element(By.ID, "movie-rotation").get_attribute("value") == "90"
     chrome_driver.find_element(By.ID, "upload-button").click()
 
     try:
@@ -99,14 +113,17 @@ def test_upload_movie_end_to_end(chrome_driver, live_server, new_course):
     except TimeoutException:
         pytest.fail("Movie ID was not displayed after upload completed")
 
-    # Wait a bit for async operations to complete and coverage to be updated
-    time.sleep(1)
+    wait.until(lambda _browser: odb.get_movie(movie_id=movie_id).get(odb.ANALYSIS_MP4))
 
     # Verify database entry
     movie = odb.get_movie(movie_id=movie_id)
     assert movie["title"] == title
     assert movie["description"] == description
     assert movie["deleted"] == 0
+    assert movie[odb.MOVIE_ROTATION] == 90
+    assert movie[odb.FRAME_HEIGHT_PX] == 320  # 320x240 source rotated once, without enlargement
+    assert movie[odb.ANALYSIS_MP4]["height"] == 320
+    assert not chrome_driver.find_elements(By.ID, "rotate_movie_link")
 
     # Verify MinIO object exists and matches file length
     movie_bytes = get_movie_bytes(movie_id)
@@ -123,6 +140,27 @@ def test_upload_movie_end_to_end(chrome_driver, live_server, new_course):
         assert wait.until(lambda d: _section_contains_title(d, title))
     except TimeoutException:
         pytest.fail("Uploaded movie title never appeared in /list")
+
+    chrome_driver.get(f"{live_server}/analyze?movie_id={movie_id}")
+    # Establish the ready state before navigation so initialization cannot mask
+    # a failure to re-enable tracing after asynchronous frame decoding.
+    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .track_button')))
+    next_button = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .next_frame')))
+    next_button.click()
+    wait.until(lambda browser: browser.find_element(By.CSS_SELECTOR, '#tracer .frame_number_field')
+               .get_attribute('value') == '1')
+    chrome_driver.find_element(By.CSS_SELECTOR, '#tracer .prev_frame').click()
+    wait.until(lambda browser: browser.find_element(By.CSS_SELECTOR, '#tracer .frame_number_field')
+               .get_attribute('value') == '0')
+    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .track_button'))).click()
+    wait.until(lambda _browser: odb.get_movie(movie_id=movie_id).get(odb.MOVIE_STATUS)
+               == odb.MOVIE_STATE_TRACING_COMPLETED)
+    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .next_frame'))).click()
+    wait.until(lambda browser: browser.find_element(By.CSS_SELECTOR, '#tracer .frame_number_field')
+               .get_attribute('value') == '1')
+    assert not odb.get_movie(movie_id=movie_id).get(odb.MOVIE_ZIPFILE_URN)
+    assert not chrome_driver.execute_script(
+        "return performance.getEntriesByType('resource').some(r => /zip|unzip/.test(r.name));")
 
     logger.info("Successfully uploaded movie %s via browser end-to-end test", movie_id)
 

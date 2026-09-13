@@ -26,6 +26,7 @@ from pydantic import BaseModel, ValidationError
 from .schema import (
     User,
     AdminCourse,
+    AnalysisMp4,
     Movie,
     LogEntry,
     MovieAnalysisLock,
@@ -120,6 +121,7 @@ API_KEY = 'api_key'
 EMAIL     = 'email'
 USER_NAME = 'user_name'
 ENABLED   = 'enabled'
+DDB_COUNT = 'Count'  # DynamoDB query response field
 USE_COUNT = 'use_count'
 ADMIN_FOR_COURSES = 'admin_for_courses' # user.admin_for_courses[]
 SUPER_ROLE = 'super_role'
@@ -141,6 +143,8 @@ MAX_ENROLLMENT = 'max_enrollment'       # course.max_enrollment
 # movies table
 
 MOVIE_ID = 'movie_id'
+ANALYSIS_MP4 = 'analysis_mp4'
+ANALYSIS_MP4_URL = 'analysis_mp4_url'
 MOVIE_DATA_URN = 'movie_data_urn'             # original, uploaded
 MOVIE_ROTATION = 'rotation'                   # should be None, or 0, 90, 270 or 180 (integer)
 MOVIE_TRACED_URN = 'movie_traced_urn'         # with tracing
@@ -177,6 +181,7 @@ FPS = 'fps'
 FPM = 'fpm'
 WIDTH = 'width'
 HEIGHT = 'height'
+FRAME_HEIGHT_PX = 'frame_height_px'
 TRACKPOINT_ORIGIN = 'trackpoint_origin'
 TRACKPOINT_ORIGIN_BOTTOM_LEFT = 'bottom-left'
 TRACKPOINT_MIGRATION_ORIGIN = 'trackpoint_migration_origin'
@@ -199,6 +204,7 @@ MOVIE_METADATA_BULK_PROPS = (FPS, WIDTH, HEIGHT, TOTAL_FRAMES, TOTAL_BYTES)
 FRAME_NUMBER = 'frame_number'
 MOVIE_MARKER_MAP_FRAME_NUMBER = -100
 FRAME_URN = 'frame_urn'
+FIRST_FRAME_URN = 'first_frame_urn'
 LAST_FRAME_TRACKED = 'last_frame_tracked' # computed, not stored
 
 # Values for the movie status field (single source of truth)
@@ -310,6 +316,15 @@ class UnauthorizedUser(ODB_Errors):
 
 class NoMovieData(ODB_Errors):
     """There is no data for the movie"""
+
+class MovieGeometryFinalized(ODB_Errors):
+    """Processing has fixed the movie geometry; upload another movie to change it."""
+
+class MovieUploadIncomplete(ODB_Errors):
+    """Upload must complete before coordinate data can be saved."""
+
+class TrackpointFrameHeightMismatch(ODB_Errors):
+    """A measurement disagrees with the immutable coordinate height."""
 
 class AtomicRenameConflict(ODB_Errors):
     """Marker rename lost a race with another trackpoint update"""
@@ -545,12 +560,26 @@ class DDBO:
         if touch_activity:
             movie_updates[LAST_ACTIVITY_AT] = int(time.time())
         condition = None if expected_status is None else Attr(MOVIE_STATUS).eq(expected_status)
-        return self.update_table(
-            self.movies,
-            movie_id,
-            movie_updates,
-            condition_expression=condition,
-        )
+        geometry_condition = None
+        for prop in (MOVIE_ROTATION, WIDTH, HEIGHT, FRAME_HEIGHT_PX):
+            if prop not in movie_updates:
+                continue
+            value = movie_updates[prop]
+            allowed = Attr(prop).eq(value)
+            if prop in (WIDTH, HEIGHT, FRAME_HEIGHT_PX):
+                allowed |= Attr(prop).not_exists() | Attr(prop).eq(None)
+            if prop != FRAME_HEIGHT_PX and (prop != MOVIE_ROTATION or not self.has_movie_frames(movie_id)):
+                allowed |= movie_geometry_editable_condition()
+            geometry_condition = allowed if geometry_condition is None else geometry_condition & allowed
+        if geometry_condition is not None:
+            geometry_condition &= Attr(MOVIE_ID).exists()
+            condition = geometry_condition if condition is None else condition & geometry_condition
+        try:
+            return self.update_table(self.movies, movie_id, movie_updates, condition_expression=condition)
+        except ClientError as exc:
+            if geometry_condition is not None and exc.response['Error']['Code'] == 'ConditionalCheckFailedException':
+                raise MovieGeometryFinalized(movie_id) from exc
+            raise
 
     def put_movie_log(self, *, event_type, movie, ipaddr, log_id=None, event_id=None,
                       object_key=None, sequencer=None, total_bytes=None,
@@ -1096,7 +1125,7 @@ class DDBO:
                 raise ValueError(self.courses) from e
             logger.error("courses=%s",self.courses)
             raise
-        if resp['Count'] > 0:
+        if resp[DDB_COUNT] > 0:
             raise ExistingCourse_Id(f"Course key {coursedict[COURSE_KEY]} already exists")
         ################
 
@@ -1272,6 +1301,13 @@ class DDBO:
     def put_movie_frame(self,framedict):
         assert int(framedict[FRAME_NUMBER]) >= 0
         self.movie_frames.put_item(Item=framedict)
+
+    def has_movie_frames(self, movie_id):
+        """Check for coordinate data without loading a movie's frames."""
+        assert is_movie_id(movie_id)
+        response = self.movie_frames.query(KeyConditionExpression=Key(MOVIE_ID).eq(movie_id),
+                                           Select='COUNT', Limit=1, ConsistentRead=True)
+        return response[DDB_COUNT] > 0
 
     def get_frames(self, movie_id):
         """Gets all the movie frames"""
@@ -2476,8 +2512,17 @@ def get_frame_urn(*, movie_id, frame_number):
 ################################################################
 ## Trackpoints
 
+def movie_analysis_mp4(movie: dict) -> AnalysisMp4 | None:
+    """Read the validated analysis descriptor from a movie record."""
+    value = movie.get(ANALYSIS_MP4)
+    return AnalysisMp4.model_validate(value) if value else None
+
+
 def trackpoint_frame_height(movie: dict) -> int:
     """Return the analysis-frame height used to flip trackpoint Y coordinates."""
+    explicit_height = movie.get(FRAME_HEIGHT_PX)
+    if explicit_height is not None:
+        return int(validate_movie_field(FRAME_HEIGHT_PX, explicit_height))
     rotation_value = movie.get(MOVIE_ROTATION, 0)
     try:
         rotation = int(rotation_value)
@@ -2486,11 +2531,55 @@ def trackpoint_frame_height(movie: dict) -> int:
     height_attr = WIDTH if rotation in (90, 270) else HEIGHT
     height = movie.get(height_attr)
     if height is None:
+        height = movie.get(HEIGHT)
+    if height is None:
         raise RuntimeError(f"movie {movie.get(MOVIE_ID)} does not have analysis frame height")
     height = int(height)
     if height <= 0:
         raise RuntimeError(f"movie {movie.get(MOVIE_ID)} has invalid analysis frame height {height}")
+    width = int(movie.get(WIDTH) or 0)
+    source_height = int(movie.get(HEIGHT) or 0)
+    if width > 0 and source_height > 0:
+        # Legacy source dimensions follow the same max-dimension scaling as the tracer.
+        return int(height * (C.MOVIE_MAX_WIDTH / max(width, source_height)))
     return height
+
+
+def movie_geometry_editable_condition():
+    """Only an incomplete upload without saved geometry may change orientation."""
+    condition = Attr(MOVIE_STATUS).eq(MOVIE_STATE_UPLOADING)
+    for prop in (UPLOADED_AT, DATE_UPLOADED, RESIZE_STARTED_AT, RESIZED_AT, FRAME_HEIGHT_PX, MOVIE_ZIPFILE_URN,
+                 MOVIE_TRACED_URN, LAST_FRAME_TRACKED, WIDTH, HEIGHT, FIRST_FRAME_URN):
+        condition &= Attr(prop).not_exists() | Attr(prop).eq(None)
+    return condition
+
+
+def set_movie_rotation(*, movie_id, rotation):
+    """Atomically reject late rotation, including for old records without a status."""
+    ddbo = DDBO()
+    # Old uploads with dimensions or saved frames already have a coordinate space.
+    # Frame producers enter processing/tracing before saving frames; the conditional
+    # status check below also excludes a producer that starts after this read.
+    if ddbo.has_movie_frames(movie_id):
+        raise MovieGeometryFinalized(movie_id)
+    condition = movie_geometry_editable_condition()
+    try:
+        ddbo.update_table(ddbo.movies, movie_id,
+                          {MOVIE_ROTATION: rotation, LAST_ACTIVITY_AT: int(time.time())},
+                          condition_expression=condition)
+    except ClientError as exc:
+        if exc.response['Error']['Code'] == 'ConditionalCheckFailedException':
+            raise MovieGeometryFinalized(movie_id) from exc
+        raise
+
+
+def remember_trackpoint_frame_height(*, movie: dict, frame_height: int) -> None:
+    """Persist the fixed coordinate height; repeated identical measurements are harmless."""
+    height = validate_movie_field(FRAME_HEIGHT_PX, frame_height)
+    try:
+        DDBO().update_movie(movie[MOVIE_ID], {FRAME_HEIGHT_PX: height}, touch_activity=False)
+    except MovieGeometryFinalized as exc:
+        raise TrackpointFrameHeightMismatch(movie[MOVIE_ID]) from exc
 
 
 def flip_trackpoint_y_value(y, frame_height: int) -> Decimal:
@@ -2535,6 +2624,7 @@ def ensure_bottom_left_trackpoints(*, movie_id: str, frame_height: int | None = 
         return ddbo.get_movie(movie_id)
 
     frame_height = frame_height or trackpoint_frame_height(movie)
+    remember_trackpoint_frame_height(movie=movie, frame_height=frame_height)
     ddbo.update_movie(
         movie_id,
         {TRACKPOINT_MIGRATION_STATE: TRACKPOINT_MIGRATION_IN_PROGRESS},
@@ -2945,6 +3035,9 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackp
     :param: trackpoints - array of Tractpoints.
     """
     assert int(frame_number) >= 0
+    movie = DDBO().get_movie(movie_id)
+    if movie.get(MOVIE_STATUS) == MOVIE_STATE_UPLOADING and not movie_is_available(movie):
+        raise MovieUploadIncomplete(movie_id)
     ensure_bottom_left_trackpoints(movie_id=movie_id)
     # Remove numpy from trackpoints
     trackpoints = [ tp.model_dump(exclude_none=True, exclude_defaults=True) for tp in trackpoints ]
@@ -2961,7 +3054,6 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackp
     movie = ddbo.get_movie(movie_id, fields=[LAST_FRAME_TRACKED])
     current = movie.get(LAST_FRAME_TRACKED, None)
     if current is None:
-        assert frame_number==0,f"frame_number {frame_number} should be 0 if this is the first frame to be tracked"
         lft = frame_number
     else:
         lft = max(current, frame_number)
@@ -3108,6 +3200,8 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
                 # permission not granted
                 raise UnauthorizedUser("permission denied")
 
+        if user_id != ROOT_USER_ID and prop in (WIDTH, HEIGHT, ANALYSIS_MP4):
+            raise UnauthorizedUser("Movie dimensions are measured by processing and cannot be edited")
         ddbo.update_movie(set_movie_id, {prop:value})
     elif set_user_id is not None:
         value = validate_user_field(prop, value)

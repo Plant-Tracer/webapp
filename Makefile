@@ -230,7 +230,7 @@ ANALYSIS_MP4_INPUT ?=
 ANALYSIS_MP4_OUTPUT ?=
 ANALYSIS_MP4_ROTATION ?= 0
 ANALYSIS_MP4_MAX_WIDTH ?= 640
-ANALYSIS_MP4_MAX_HEIGHT ?= 480
+ANALYSIS_MP4_MAX_HEIGHT ?= 640
 
 .PHONY: analysis-mp4-bundle analysis-mp4-browser-test
 analysis-mp4-bundle: install-lambda-deps
@@ -243,9 +243,8 @@ analysis-mp4-bundle: install-lambda-deps
 		--max-width "$(ANALYSIS_MP4_MAX_WIDTH)" \
 		--max-height "$(ANALYSIS_MP4_MAX_HEIGHT)"
 
-analysis-mp4-browser-test: install-lambda-deps
-	$(MAKE) vend-lambda-resize
-	PYTHONPATH=.:lambda-resize/src:$$PYTHONPATH uv run pytest -v --log-cli-level=$(LOG_LEVEL) browser_tests/analysis_mp4_browser_test.py
+analysis-mp4-browser-test: .venv/pyvenv.cfg
+	uv run --group lambda python -m pytest -o "pythonpath=. lambda-resize/src" -v --log-cli-level=$(LOG_LEVEL) browser_tests/analysis_mp4_browser_test.py
 
 # Set these during development to speed testing of the one function you care about:
 TEST1MODULE=tests/endpoint_test.py
@@ -446,31 +445,34 @@ stop_local_mailpit: bin/mailpit
 # Installations are used by the CI pipeline and by local developers
 
 # Sources:
-LINUX_BASE=https://dl.min.io/server/minio/release/linux-amd64
-LINUX_BASE_MC=https://dl.min.io/client/mc/release/linux-amd64
-LINUX_ARM_BASE=https://dl.min.io/server/minio/release/linux-arm64
-LINUX_ARM_BASE_MC=https://dl.min.io/client/mc/release/linux-arm64
-MACOS_AMD64_BASE=https://dl.min.io/server/minio/release/darwin-amd64
-MACOS_ARM_BASE=https://dl.min.io/server/minio/release/darwin-arm64
-MACOS_AMD64_BASE_MC=https://dl.min.io/client/mc/release/darwin-amd64
-MACOS_ARM_BASE_MC=https://dl.min.io/client/mc/release/darwin-arm64
+LINUX_BASE=https://github.com/minio/minio/releases/download/$(MINIO_TEST_RELEASE)/minio.linux-amd64.$(MINIO_TEST_RELEASE)
+LINUX_BASE_MC=https://github.com/minio/mc/releases/download/$(MC_TEST_RELEASE)/mc.linux-amd64.$(MC_TEST_RELEASE)
+LINUX_ARM_BASE=https://github.com/minio/minio/releases/download/$(MINIO_TEST_RELEASE)/minio.linux-arm64.$(MINIO_TEST_RELEASE)
+LINUX_ARM_BASE_MC=https://github.com/minio/mc/releases/download/$(MC_TEST_RELEASE)/mc.linux-arm64.$(MC_TEST_RELEASE)
+MACOS_AMD64_BASE=https://github.com/minio/minio/releases/download/$(MINIO_TEST_RELEASE)/minio.darwin-amd64.$(MINIO_TEST_RELEASE)
+MACOS_ARM_BASE=https://github.com/minio/minio/releases/download/$(MINIO_TEST_RELEASE)/minio.darwin-arm64.$(MINIO_TEST_RELEASE)
+MACOS_AMD64_BASE_MC=https://github.com/minio/mc/releases/download/$(MC_TEST_RELEASE)/mc.darwin-amd64.$(MC_TEST_RELEASE)
+MACOS_ARM_BASE_MC=https://github.com/minio/mc/releases/download/$(MC_TEST_RELEASE)/mc.darwin-arm64.$(MC_TEST_RELEASE)
+MINIO_TEST_RELEASE := RELEASE.2025-09-07T16-13-09Z
+MC_TEST_RELEASE := RELEASE.2025-08-13T08-35-41Z
+
 bin/minio:
 	@echo downloading and installing minio
 	mkdir -p bin
 	uname -a
 	arch
 	if [ "$$(uname -s)" = "Linux" ] && [ "$$(uname -m)" = "amd64" ] ; then \
-		echo Linux amd64 ; curl -fL $(LINUX_BASE)/minio -o bin/minio ; curl -fL $(LINUX_BASE_MC)/mc -o bin/mc ; \
+		echo Linux amd64 ; curl -fL $(LINUX_BASE) -o bin/minio ; curl -fL $(LINUX_BASE_MC) -o bin/mc ; \
 	elif [ "$$(uname -s)" = "Linux" ] && [ "$$(uname -m)" = "x86_64" ] ; then \
-		echo Linux x86_64 ; curl -fL $(LINUX_BASE)/minio -o bin/minio ; curl -fL $(LINUX_BASE_MC)/mc -o bin/mc ; \
+		echo Linux x86_64 ; curl -fL $(LINUX_BASE) -o bin/minio ; curl -fL $(LINUX_BASE_MC) -o bin/mc ; \
 	elif [ "$$(uname -s)" = "Linux" ] && [ "$$(uname -m)" = "aarch64" ] ; then \
-		echo Linux aarch64 ; curl -fL $(LINUX_ARM_BASE)/minio -o bin/minio ; curl -fL $(LINUX_ARM_BASE_MC)/mc -o bin/mc ; \
+		echo Linux aarch64 ; curl -fL $(LINUX_ARM_BASE) -o bin/minio ; curl -fL $(LINUX_ARM_BASE_MC) -o bin/mc ; \
 	elif [ "$$(uname -s)" = "Linux" ] && [ "$$(uname -m)" = "arm64" ] ; then \
-		echo Linux arm64 ; curl -fL $(LINUX_ARM_BASE)/minio -o bin/minio ; curl -fL $(LINUX_ARM_BASE_MC)/mc -o bin/mc ; \
+		echo Linux arm64 ; curl -fL $(LINUX_ARM_BASE) -o bin/minio ; curl -fL $(LINUX_ARM_BASE_MC) -o bin/mc ; \
 	elif [ "$$(uname -s)" = "Darwin" ] && [ "$$(uname -m)" = "arm64" ] ; then \
-		echo Darwin arm64 ; curl -fL $(MACOS_ARM_BASE)/minio -o bin/minio ; curl -fL $(MACOS_ARM_BASE_MC)/mc -o bin/mc ; \
+		echo Darwin arm64 ; curl -fL $(MACOS_ARM_BASE) -o bin/minio ; curl -fL $(MACOS_ARM_BASE_MC) -o bin/mc ; \
 	elif [ "$$(uname -s)" = "Darwin" ] ; then \
-		echo Darwin amd64 ; curl -fL $(MACOS_AMD64_BASE)/minio -o bin/minio ; curl -fL $(MACOS_AMD64_BASE_MC)/mc -o bin/mc ; \
+		echo Darwin amd64 ; curl -fL $(MACOS_AMD64_BASE) -o bin/minio ; curl -fL $(MACOS_AMD64_BASE_MC) -o bin/mc ; \
 	else \
 		echo unknown os/architecture; exit 1; \
 	fi

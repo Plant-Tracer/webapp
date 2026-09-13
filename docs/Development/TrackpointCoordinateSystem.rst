@@ -65,6 +65,7 @@ that movie:
 .. code-block:: python
 
    trackpoint_origin: Literal["bottom-left"] | None = None
+   frame_height_px: int | None = None
 
 Rules:
 
@@ -141,9 +142,11 @@ When loading frame markers:
   ``POST /api/get-movie-metadata``.
 * For ``"bottom-left"`` movies, convert stored trackpoints to canvas coordinates
   before creating ``Marker`` and ``Line`` objects.
-* Use the loaded analysis image's natural height for the Y conversion. Movie
-  metadata records the source movie dimensions, which can differ when Lambda
-  scales the analysis frame (for example, a 480x360 source becomes 640x480).
+* Use ``metadata.frame_height_px`` for the Y conversion when supplied. This is
+  the analysis coordinate height after rotation and scaling; do not rotate it
+  again. With older responses, fall back to the loaded image's natural height.
+  Movie ``width``/``height`` can describe source dimensions rather than analysis
+  dimensions (for example, a 480x360 source becomes 640x480).
 * Rebuild the current frame after the loaded image reports its natural
   dimensions. Do not flip bottom-left trackpoints against the source-movie or
   placeholder canvas height.
@@ -266,3 +269,80 @@ When the implementation lands, update user-facing coordinate descriptions in
 ``docs/UserTutorial.rst`` and ``src/app/templates/analyze.html``. Any affected
 screenshots under ``docs/tutorial_images/`` should be flagged for user review
 rather than replaced automatically.
+
+Persisted frame height and downloads
+------------------------------------
+
+Rotation is chosen before upload. Once upload completion is recorded or processing
+begins, the API rejects
+rotation changes with HTTP 409 and leaves existing tracking intact. Processing
+stores source dimensions, measured ``frame_height_px``, and completion state in
+one update. The processed movie geometry is immutable; changing orientation
+requires a new upload. Tracing measures the same fixed coordinate space.
+
+Legacy JPEG/ZIP height recovery persists a missing height. Repeated identical
+measurements are accepted; a conflicting measurement is rejected as inconsistent
+stored data, not a retryable rotation request. Legacy rows with saved dimensions
+or frames cannot be rotated through either the rotation API or the shared metadata
+writer, even if their old status still says uploading.
+Source dimensions are read-only through the metadata API, including missing fields.
+Both current and legacy upload-completion markers close geometry editing in the
+shared writer and source initializer. The synchronous CLI initializer accepts only
+a fresh record without a source, source dimensions, or saved frames; it never
+purges prior source or coordinate data. Trackpoint writes are rejected during
+upload setup, so they cannot create coordinates while rotation remains editable. Migration
+retains its existing conditional per-frame updates and durable conversion markers,
+so interrupted migrations can resume without flipping a frame twice. There is no
+migration path between different movie geometries.
+
+Metadata-only requests use stored height or source dimensions without JPEG/ZIP
+reads or cache writes. With both source dimensions available, fallback height
+applies the tracer's scaling and rotation. A height-only legacy record retains
+its historical interpretation until analysis pixels are measured.
+
+Upload retries repair missing height on legacy completed uploads. Tracing failures
+during measurement or migration follow normal failure-status and lock cleanup.
+
+Browser metadata and JSON trackpoint downloads include ``frame_height_px`` and
+``trackpoint_origin`` in ``metadata``. CSV repeats them as columns; XLSX includes
+them on the Metadata sheet. Height is always pixels, independent of calibrated
+position units. Unknown height is JSON ``null`` or an empty spreadsheet cell.
+The frame height describes the entire resized, rotated image and is independent
+of the selected analysis frame range.
+
+
+MP4 player validation on a dev stack
+------------------------------------
+
+New uploads on the ``new-movieplayer`` branch use the analysis MP4 immediately
+when processing completes. The original stays intact. The browser and tracker
+share the derivative's pixel dimensions; the source rotation must not be applied
+again. The analysis derivative includes every source frame, regardless of trim.
+Legacy backfill and bulk artifact deletion are separate work.
+
+The automated gates are ``make check``, ``make frame-step-browser-test``, and
+``make analysis-mp4-browser-test``. The desktop workflow runs both browser gates
+on Windows Chrome and macOS Chrome. The production analyzer is exercised with
+both the encoder output and an independent B-frame fixture. Local storage tests
+use DynamoDB Local and MinIO, including an actual browser upload followed by
+stepping, marker save, tracing, and stepping again.
+
+After deploying this branch to a dev stack using the normal Makefile deployment
+workflow, test on Windows and macOS:
+
+1. Upload a 640 by 480 and a 480 by 640 movie, choosing rotation before upload.
+2. Open Analyze as soon as processing finishes. Step forward and backward before
+   tracing; verify adjacent burned-in frame numbers and correct orientation.
+3. Select a later frame, place markers, and trace from it. Verify saved marker
+   positions, frame indices, and height in the downloaded data.
+4. After tracing, step in both directions and inspect marker overlays. Change
+   playback speed and reverse direction. Change the trim range and verify that
+   the full movie remains navigable.
+5. Verify the source download is unchanged, an analysis MP4 exists, and no new
+   ZIP object appears. The traced download contains marker overlays without
+   burned-in frame-number labels.
+
+The player keeps one decoded keyframe group at a time (at most 128 MiB) and
+limits compressed input to 256 MiB. Decoder failures and missing derivatives
+are visible in the analyzer. This validation does not claim Safari conformance;
+Safari requires its own engine check before being declared supported.
