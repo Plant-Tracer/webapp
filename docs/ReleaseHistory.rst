@@ -93,6 +93,10 @@ Unreleased Summary
       Version 0.9.9.11 supports testing this workflow on a dev stack
       (refs #1162, #1163, #1164, #1165, #1166, #1168, #1038).
 
+    * Reject point writes before upload completion even with stale status; recover
+      height from legacy first-frame JPEGs and release upload previews on terminal
+      outcomes (refs #1233).
+
     * Clarify that upload completion and saved frames also finalize movie
       geometry in the rotation-conflict message (refs #1233).
 

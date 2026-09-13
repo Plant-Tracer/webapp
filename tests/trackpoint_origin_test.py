@@ -1035,3 +1035,33 @@ def test_height_mismatch_preserves_saved_points_before_retracing(new_movie_recor
     assert movie[odb.MOVIE_STATUS] == odb.MOVIE_STATE_TRACING_FAILED
     assert odb_movie_data.read_object(movie[odb.MOVIE_DATA_URN]) == path.read_bytes()
     assert ddbo.get_active_movie_trace_lock(movie_id) is None
+
+
+@pytest.mark.parametrize('status', [None, odb.MOVIE_STATE_UPLOADING, odb.MOVIE_STATE_READY])
+def test_missing_upload_completion_rejects_points_before_mutation(new_movie_record, status):
+    movie_id = new_movie_record[MOVIE_ID]
+    ddbo = odb.DDBO()
+    ddbo.update_movie(movie_id, {odb.MOVIE_STATUS: status})
+    before = ddbo.get_movie(movie_id)
+    with pytest.raises(odb.MovieUploadIncomplete):
+        odb.put_frame_trackpoints(movie_id=movie_id, frame_number=0,
+                                 trackpoints=[Trackpoint(x=10, y=20, label='Apex')])
+    assert ddbo.get_movie(movie_id) == before
+    assert not ddbo.get_frames(movie_id)
+
+
+def test_height_recovery_uses_legacy_movie_first_frame(client, new_movie):
+    movie_id = new_movie[MOVIE_ID]
+    ddbo = odb.DDBO()
+    urn = make_urn(object_name=f'{movie_id}/legacy-first.jpg')
+    odb_movie_data.write_object(urn, _jpeg_bytes(width=320, height=240))
+    ddbo.put_movie_frame({MOVIE_ID: movie_id, FRAME_NUMBER: 0,
+                          'trackpoints': [Trackpoint(x=10, y=20, label='Apex').model_dump()]})
+    ddbo.movies.update_item(Key={MOVIE_ID: movie_id},
+                           UpdateExpression=f'SET {odb.FIRST_FRAME_URN}=:urn REMOVE {odb.FRAME_HEIGHT_PX}, {HEIGHT}, {odb.WIDTH}, {TRACKPOINT_ORIGIN}',
+                           ExpressionAttributeValues={':urn': urn})
+    response = client.post('/api/get-movie-trackpoints', data={
+        API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id, 'format': 'json'})
+    assert response.status_code == 200
+    assert response.get_json()['metadata'][odb.FRAME_HEIGHT_PX] == 240
+    assert response.get_json()['trackpoint_dicts'][0]['y'] == 220

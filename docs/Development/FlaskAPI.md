@@ -1036,3 +1036,7 @@ Metadata-only reads use this descriptor without caching or artifact reads;
 frame-range requests and downloads may persist it during coordinate migration.
 
 Movie processing failures return `status: "processing failed"`, `processing_failed_at`, and a bounded `processing_failure_summary` in movie metadata. The upload page stops polling and displays the reason. Retrying processing clears these failure fields and preserves the original source object.
+
+Trackpoint writes require an upload-completion marker regardless of status.
+Legacy frame-height recovery also checks the movie-level `first_frame_urn` JPEG
+before the ZIP fallback; metadata-only reads still avoid artifact IO.
