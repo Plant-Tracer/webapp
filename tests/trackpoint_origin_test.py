@@ -847,7 +847,9 @@ def test_processed_movie_geometry_is_fixed(client, new_movie_record, tmp_path, w
     for prop, value in ((odb.WIDTH, height), (odb.HEIGHT, width), (odb.MOVIE_ROTATION, 180),
                         (odb.FRAME_HEIGHT_PX, height), (odb.FRAME_HEIGHT_PX, None),
                         (odb.WIDTH, None), (odb.HEIGHT, None), (odb.MOVIE_ROTATION, None)):
-        with pytest.raises(odb.MovieGeometryFinalized):
+        error = (odb.TrackpointFrameHeightMismatch if prop == odb.FRAME_HEIGHT_PX and value is not None
+                 else odb.MovieGeometryFinalized)
+        with pytest.raises(error):
             ddbo.update_movie(movie_id, {prop: value})
     with pytest.raises(odb.MovieGeometryFinalized):
         odb_movie_data.set_movie_data(movie_id=movie_id, movie_data=b'replacement')
@@ -1065,3 +1067,28 @@ def test_height_recovery_uses_legacy_movie_first_frame(client, new_movie):
     assert response.status_code == 200
     assert response.get_json()['metadata'][odb.FRAME_HEIGHT_PX] == 240
     assert response.get_json()['trackpoint_dicts'][0]['y'] == 220
+
+
+@pytest.mark.parametrize('width,height', [(640, 480), (480, 640)])
+def test_upload_height_conflict_reports_failure_without_changing_coordinates(new_movie_record, tmp_path, width, height):
+    movie_id = new_movie_record[MOVIE_ID]
+    source = tmp_path / 'source.mp4'
+    write_four_color_movie(source, width=width, height=height)
+    original = source.read_bytes()
+    odb_movie_data.set_movie_data(movie_id=movie_id, movie_data=original)
+    ddbo = odb.DDBO()
+    ddbo.update_movie(movie_id, {odb.FRAME_HEIGHT_PX: width})
+    ddbo.put_movie_frame({MOVIE_ID: movie_id, FRAME_NUMBER: 0,
+                          'trackpoints': [Trackpoint(x=10, y=20, label='Apex').model_dump()]})
+    before = ddbo.get_frames(movie_id)
+    for _ in range(2):
+        with pytest.raises(movie_glue.odb.TrackpointFrameHeightMismatch):
+            movie_glue.process_uploaded_movie(movie_id=movie_id)
+        failed = ddbo.get_movie(movie_id)
+        assert failed[odb.MOVIE_STATUS] == odb.MOVIE_STATE_PROCESSING_FAILED
+        assert failed[odb.PROCESSING_FAILED_AT]
+        assert failed[odb.PROCESSING_FAILURE_SUMMARY]
+        assert failed[odb.FRAME_HEIGHT_PX] == width
+        assert not failed.get(odb.RESIZED_AT)
+        assert ddbo.get_frames(movie_id) == before
+        assert odb_movie_data.read_object(failed[odb.MOVIE_DATA_URN]) == original

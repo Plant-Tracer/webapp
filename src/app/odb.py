@@ -604,6 +604,10 @@ class DDBO:
                         or current.get(ANALYSIS_MP4)):
                     raise MovieProcessingLeaseLost(movie_id) from exc
             if geometry_condition is not None and exc.response['Error']['Code'] == 'ConditionalCheckFailedException':
+                height = movie_updates.get(FRAME_HEIGHT_PX)
+                stored_height = self.get_movie(movie_id).get(FRAME_HEIGHT_PX) if height is not None else None
+                if stored_height is not None and stored_height != height:
+                    raise TrackpointFrameHeightMismatch(movie_id) from exc
                 raise MovieGeometryFinalized(movie_id) from exc
             raise
 

@@ -1040,3 +1040,5 @@ Movie processing failures return `status: "processing failed"`, `processing_fail
 Trackpoint writes require an upload-completion marker regardless of status.
 Legacy frame-height recovery also checks the movie-level `first_frame_urn` JPEG
 before the ZIP fallback; metadata-only reads still avoid artifact IO.
+
+A processing measurement that conflicts with saved `frame_height_px` raises the distinct height-consistency error, preserves saved coordinates, and records `status: "processing failed"` with `processing_failed_at` and `processing_failure_summary`. Upload polling stops and displays the failure reason. Retrying cannot overwrite the fixed height.

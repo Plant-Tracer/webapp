@@ -105,6 +105,9 @@ Unreleased Summary
       Version 0.9.9.11 supports testing this workflow on a dev stack
       (refs #1162, #1163, #1164, #1165, #1166, #1168, #1038).
 
+    * Report upload frame-height conflicts as consistency failures, preserve saved
+      points and pixels, and stop upload polling with the failure reason (refs #1233).
+
     * Reject point writes before upload completion even with stale status; recover
       height from legacy first-frame JPEGs and release upload previews on terminal
       outcomes (refs #1233).
