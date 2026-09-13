@@ -78,6 +78,9 @@ Release Notes
 Unreleased Summary
 ******************
 
+    * Report upload frame-height conflicts as consistency failures, preserve saved
+      points and pixels, and stop upload polling with the failure reason (refs #1233).
+
     * Reject point writes before upload completion even with stale status; recover
       height from legacy first-frame JPEGs and release upload previews on terminal
       outcomes (refs #1233).

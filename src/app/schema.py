@@ -158,6 +158,8 @@ class Movie(BaseModel):
     resize_queued_at: int | None = None
     resize_started_at: int | None = None
     resized_at: int | None = None
+    processing_failed_at: int | None = None
+    processing_failure_summary: str | None = None
     # Read compatibility for DynamoDB rows created before uploaded_at replaced
     # date_uploaded. New writes must use uploaded_at.
     date_uploaded: int | None = None

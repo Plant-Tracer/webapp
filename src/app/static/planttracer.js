@@ -217,6 +217,9 @@ async function waitForUploadProcessing(movie_id) {
       `${MOVIE_PROCESSING_MESSAGE} Elapsed: ${Math.floor(elapsedSeconds / 60)}:${String(elapsedSeconds % 60).padStart(2, '0')}`
     );
     const metadata = await _get_movie_metadata(movie_id);
+    if (metadata && metadata.status === 'processing failed') {
+      throw new Error(metadata.processing_failure_summary || 'Movie processing failed.');
+    }
     if (metadata && metadata.resized_at && metadata.status === 'ready') {
       return metadata;
     }

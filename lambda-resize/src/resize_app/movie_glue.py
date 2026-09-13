@@ -452,7 +452,19 @@ def process_uploaded_movie(*, movie_id: str):
         RESIZED_AT: resized_at,
         MOVIE_STATUS: MOVIE_STATE_READY,
     }
-    ddbo.update_movie(movie_id, updates)
+    try:
+        ddbo.update_movie(movie_id, updates)
+    except odb.TrackpointFrameHeightMismatch as exc:
+        try:
+            ddbo.update_movie(movie_id, {
+                MOVIE_STATUS: odb.MOVIE_STATE_PROCESSING_FAILED,
+                odb.PROCESSING_FAILED_AT: int(time.time()),
+                odb.PROCESSING_FAILURE_SUMMARY: f"Trackpoint frame height conflicts with saved coordinates: {movie_id}",
+            }, expected_status=MOVIE_STATE_PROCESSING)
+        except ClientError as status_error:
+            if status_error.response['Error']['Code'] != 'ConditionalCheckFailedException':
+                raise
+        raise exc
     completed_movie = ddbo.get_movie(movie_id)
     ddbo.put_movie_log(
         log_id=_lifecycle_log_id(movie_id, C.LOG_EVENT_MOVIE_RESIZE_COMPLETED),
