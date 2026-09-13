@@ -78,6 +78,9 @@ Release Notes
 Unreleased Summary
 ******************
 
+    * Fetch pinned MinIO test-service binaries from official GitHub releases
+      after the old download endpoint was retired (refs #1233).
+
     * Preserve saved trackpoints when tracing fails frame-height validation,
       including queued retracing. Reject rotation and source initialization when
       a legacy first-frame artifact exists (refs #1233).
