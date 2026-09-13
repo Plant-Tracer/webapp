@@ -26,6 +26,7 @@ describe('rotation before upload', () => {
     global.LAMBDA_API_BASE = '';
     global.MAX_FILE_UPLOAD = 100;
     fetch.resetMocks();
+    HTMLMediaElement.prototype.load = jest.fn();
   });
 
   test('cycles locally through all orientations without changing a stored movie', () => {
@@ -46,6 +47,17 @@ describe('rotation before upload', () => {
     expect(fetch.mock.calls[0][0]).toBe('/api/new-movie');
     expect(fetch.mock.calls[0][1].body.get('rotation')).toBe('180');
     expect(document.querySelector('#message').textContent).toContain('Upload unavailable');
+  });
+
+  test('an upload error releases the selected preview', async () => {
+    URL.createObjectURL = jest.fn().mockReturnValue('blob:upload');
+    URL.revokeObjectURL = jest.fn();
+    preview_upload_movie();
+    fetch.mockResponseOnce(JSON.stringify({ error: true, message: 'Upload unavailable' }));
+    await upload_movie();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:upload');
+    expect(document.querySelector('#upload-source-preview').hasAttribute('src')).toBe(false);
+    expect(HTMLMediaElement.prototype.load).toHaveBeenCalled();
   });
 
   test('changing files resets orientation and releases the previous local preview', () => {

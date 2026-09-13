@@ -164,6 +164,9 @@ def infer_trackpoint_frame_height(movie_id, movie, frame_start, *, recover_legac
         candidate_frames = [frame_start, 0] if frame_start not in (None, 0) else [0]
         height = next((height for frame_number in candidate_frames
                        if (height := _height_from_movie_frame(movie_id, frame_number))), None)
+        if not height and movie.get(odb.FIRST_FRAME_URN):
+            first_frame = read_object(movie[odb.FIRST_FRAME_URN])
+            height = _jpeg_height(first_frame) if first_frame else None
         height = height or _height_from_movie_zipfile(movie)
         if height:
             odb.remember_trackpoint_frame_height(movie=movie, frame_height=height)

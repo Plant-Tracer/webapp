@@ -240,115 +240,119 @@ async function waitForUploadProcessing(movie_id) {
  */
 async function upload_movie_post(movie_title, description, movieFile, research_use, credit_by_name, attribution_name, fpm, rotation = 0)
 {
-  // If Lambda is configured, ensure it is healthy before starting upload
-  if (typeof LAMBDA_API_BASE !== 'undefined' && LAMBDA_API_BASE) {
-    const lambdaOk = await checkLambdaStatus();
-    if (!lambdaOk) {
-      $('#upload_message').html('Processing service is not available. Please try again in a moment.');
-      return;
-    }
-  }
-  // Get a new movie_id
-  const movie_data_sha256 = await computeSHA256(movieFile);
-  const formData = new FormData();
-  appendCourseContext(formData);
-  formData.append("api_key",     api_key);
-  formData.append("title",       movie_title);
-  formData.append("description", description);
-  formData.append("movie_data_sha256",  movie_data_sha256);
-  formData.append("movie_data_length",  movieFile.size);
-  formData.append("rotation", String(rotation));
-  if (research_use !== null) { formData.append("research_use", research_use); }
-  if (credit_by_name !== null) { formData.append("credit_by_name", credit_by_name); }
-  formData.append("attribution_name", attribution_name || "");
-  if (fpm) { formData.append("fpm", fpm); }
-  const r = await fetch(`${API_BASE}api/new-movie`, { method:"POST", body:formData});
-  const obj = await r.json();
-  console.log('new-movie obj=',obj);
-  if (obj.error){
-    $('#message').html(`Error getting upload URL: ${obj.message}`);
-    return;
-  }
-  const movie_id = window.movie_id = obj.movie_id;
-
-  // The new movie_id came with the presigned post to upload the form data.
-  // pp.fields includes signed x-amz-meta-* so metadata is set on the S3 object.
   try {
-    const pp = obj.presigned_post;
-    // #region agent log
-    const fieldOrder = Object.keys(pp.fields);
-    console.log("[DEBUG]", JSON.stringify({hypothesisId:"H2_H3_H4_H5",location:"planttracer.js:presigned_post",message:"S3 POST params",data:{urlHost:pp.url ? new URL(pp.url).host : null,fieldOrder,fieldCount:fieldOrder.length,fileType:movieFile && movieFile.type,fileName:movieFile && movieFile.name,fileSize:movieFile && movieFile.size},timestamp:Date.now()}));
-    // #endregion
-    const s3FormData = new FormData();
-    for (const field in pp.fields) {
-      s3FormData.append(field, pp.fields[field]);
+    // If Lambda is configured, ensure it is healthy before starting upload
+    if (typeof LAMBDA_API_BASE !== 'undefined' && LAMBDA_API_BASE) {
+      const lambdaOk = await checkLambdaStatus();
+      if (!lambdaOk) {
+        $('#upload_message').html('Processing service is not available. Please try again in a moment.');
+        return;
+      }
     }
-    s3FormData.append("file", movieFile); // order matters!
-    // #region agent log
-    console.log("[DEBUG]", JSON.stringify({hypothesisId:"H1",location:"planttracer.js:form_built",message:"Form built file last",data:{fieldOrder,fileIsLast:true},timestamp:Date.now()}));
-    // #endregion
-
-    const ctrl = new AbortController();
-    const startTime = Date.now();
-    const timeoutId = setTimeout(() => ctrl.abort(), UPLOAD_TIMEOUT_SECONDS * 1000);
-    const formatTime = (sec) => {
-      const m = Math.floor(sec / 60);
-      const s = Math.floor(sec % 60);
-      return `${m}:${s.toString().padStart(2, "0")}`;
-    };
-    const updateTimer = () => {
-      const elapsed = (Date.now() - startTime) / 1000;
-      const remaining = Math.max(0, UPLOAD_TIMEOUT_SECONDS - elapsed);
-      $('#upload_message').html(
-        `Uploading… Elapsed: ${formatTime(elapsed)}, Time left: ${formatTime(remaining)}`
-      );
-    };
-    updateTimer();
-    const intervalId = setInterval(updateTimer, 1000);
-
-    let r;
-    try {
-      r = await fetch(pp.url, {
-        method: "POST",
-        body: s3FormData,
-        signal: ctrl.signal,
-      });
-    } finally {
-      clearInterval(intervalId);
-      clearTimeout(timeoutId);
-    }
-    // #region agent log
-    console.log("[DEBUG]", JSON.stringify({hypothesisId:"H3",location:"planttracer.js:after_fetch",message:"S3 response",data:{ok:r.ok,status:r.status,statusText:r.statusText,redirected:r.redirected,url:r.url},timestamp:Date.now()}));
-    // #endregion
-    if (!r.ok) {
-      $('#upload_message').html(`Error uploading movie status=${r.status} ${r.statusText}`);
+    // Get a new movie_id
+    const movie_data_sha256 = await computeSHA256(movieFile);
+    const formData = new FormData();
+    appendCourseContext(formData);
+    formData.append("api_key",     api_key);
+    formData.append("title",       movie_title);
+    formData.append("description", description);
+    formData.append("movie_data_sha256",  movie_data_sha256);
+    formData.append("movie_data_length",  movieFile.size);
+    formData.append("rotation", String(rotation));
+    if (research_use !== null) { formData.append("research_use", research_use); }
+    if (credit_by_name !== null) { formData.append("credit_by_name", credit_by_name); }
+    formData.append("attribution_name", attribution_name || "");
+    if (fpm) { formData.append("fpm", fpm); }
+    const r = await fetch(`${API_BASE}api/new-movie`, { method:"POST", body:formData});
+    const obj = await r.json();
+    console.log('new-movie obj=',obj);
+    if (obj.error){
+      $('#message').html(`Error getting upload URL: ${obj.message}`);
       return;
     }
-    $('#upload_message').text(MOVIE_PROCESSING_MESSAGE);
-    // Production completion is authoritative from S3/EventBridge. MinIO local
-    // development uses the authenticated HTTP adapter for the same service.
-    if (obj.upload_completion_mode === 'http') {
-      await startLambdaProcessing(movie_id);
+    const movie_id = window.movie_id = obj.movie_id;
+
+    // The new movie_id came with the presigned post to upload the form data.
+    // pp.fields includes signed x-amz-meta-* so metadata is set on the S3 object.
+    try {
+      const pp = obj.presigned_post;
+      // #region agent log
+      const fieldOrder = Object.keys(pp.fields);
+      console.log("[DEBUG]", JSON.stringify({hypothesisId:"H2_H3_H4_H5",location:"planttracer.js:presigned_post",message:"S3 POST params",data:{urlHost:pp.url ? new URL(pp.url).host : null,fieldOrder,fieldCount:fieldOrder.length,fileType:movieFile && movieFile.type,fileName:movieFile && movieFile.name,fileSize:movieFile && movieFile.size},timestamp:Date.now()}));
+      // #endregion
+      const s3FormData = new FormData();
+      for (const field in pp.fields) {
+        s3FormData.append(field, pp.fields[field]);
+      }
+      s3FormData.append("file", movieFile); // order matters!
+      // #region agent log
+      console.log("[DEBUG]", JSON.stringify({hypothesisId:"H1",location:"planttracer.js:form_built",message:"Form built file last",data:{fieldOrder,fileIsLast:true},timestamp:Date.now()}));
+      // #endregion
+
+      const ctrl = new AbortController();
+      const startTime = Date.now();
+      const timeoutId = setTimeout(() => ctrl.abort(), UPLOAD_TIMEOUT_SECONDS * 1000);
+      const formatTime = (sec) => {
+        const m = Math.floor(sec / 60);
+        const s = Math.floor(sec % 60);
+        return `${m}:${s.toString().padStart(2, "0")}`;
+      };
+      const updateTimer = () => {
+        const elapsed = (Date.now() - startTime) / 1000;
+        const remaining = Math.max(0, UPLOAD_TIMEOUT_SECONDS - elapsed);
+        $('#upload_message').html(
+          `Uploading… Elapsed: ${formatTime(elapsed)}, Time left: ${formatTime(remaining)}`
+        );
+      };
+      updateTimer();
+      const intervalId = setInterval(updateTimer, 1000);
+
+      let r;
+      try {
+        r = await fetch(pp.url, {
+          method: "POST",
+          body: s3FormData,
+          signal: ctrl.signal,
+        });
+      } finally {
+        clearInterval(intervalId);
+        clearTimeout(timeoutId);
+      }
+      // #region agent log
+      console.log("[DEBUG]", JSON.stringify({hypothesisId:"H3",location:"planttracer.js:after_fetch",message:"S3 response",data:{ok:r.ok,status:r.status,statusText:r.statusText,redirected:r.redirected,url:r.url},timestamp:Date.now()}));
+      // #endregion
+      if (!r.ok) {
+        $('#upload_message').html(`Error uploading movie status=${r.status} ${r.statusText}`);
+        return;
+      }
+      $('#upload_message').text(MOVIE_PROCESSING_MESSAGE);
+      // Production completion is authoritative from S3/EventBridge. MinIO local
+      // development uses the authenticated HTTP adapter for the same service.
+      if (obj.upload_completion_mode === 'http') {
+        await startLambdaProcessing(movie_id);
+      }
+      await waitForUploadProcessing(movie_id);
+    } catch (e) {
+      // #region agent log
+      console.log("[DEBUG]", JSON.stringify({hypothesisId:"H_all",location:"planttracer.js:catch",message:"Upload catch",data:{name:e.name,message:e.message,cause:e.cause?String(e.cause):null},timestamp:Date.now()}));
+      // #endregion
+      let msg;
+      if (e.name === 'AbortError') {
+        msg = `Timeout uploading movie (${UPLOAD_TIMEOUT_SECONDS}s). Try a smaller file or check your connection.`;
+      } else if (e.name === 'UploadProcessingTimeoutError') {
+        msg = e.message;
+      } else {
+        msg = `Upload failed: ${e.message || String(e)}. If you see "Failed to fetch" or connection reset, check that the S3 bucket CORS is set (bootstrap) and the bucket is in the same region as the server (AWS_REGION).`;
+      }
+      $('#upload_message').html(msg);
+      console.log("error: ", e);
+      return;
     }
-    await waitForUploadProcessing(movie_id);
-  } catch (e) {
-    // #region agent log
-    console.log("[DEBUG]", JSON.stringify({hypothesisId:"H_all",location:"planttracer.js:catch",message:"Upload catch",data:{name:e.name,message:e.message,cause:e.cause?String(e.cause):null},timestamp:Date.now()}));
-    // #endregion
-    let msg;
-    if (e.name === 'AbortError') {
-      msg = `Timeout uploading movie (${UPLOAD_TIMEOUT_SECONDS}s). Try a smaller file or check your connection.`;
-    } else if (e.name === 'UploadProcessingTimeoutError') {
-      msg = e.message;
-    } else {
-      msg = `Upload failed: ${e.message || String(e)}. If you see "Failed to fetch" or connection reset, check that the S3 bucket CORS is set (bootstrap) and the bucket is in the same region as the server (AWS_REGION).`;
-    }
-    $('#upload_message').html(msg);
-    console.log("error: ", e);
-    return;
+    // Processing fixed the orientation; show the resulting first frame before analysis.
+    showUploadPreviewAfterUpload(movie_id, movie_title, description);
+  } finally {
+    release_upload_preview();
   }
-  // Processing fixed the orientation; show the resulting first frame before analysis.
-  showUploadPreviewAfterUpload(movie_id, movie_title, description);
 }
 
 /**
@@ -448,6 +452,17 @@ async function _get_movie_metadata(movie_id){
 
 
 let uploadPreviewUrl = null;
+
+function release_upload_preview() {
+  if (!uploadPreviewUrl) return;
+  URL.revokeObjectURL(uploadPreviewUrl);
+  uploadPreviewUrl = null;
+  const preview = $('#upload-source-preview').get(0);
+  if (preview) {
+    preview.removeAttribute('src');
+    preview.load();
+  }
+}
 
 function preview_upload_movie() {
   const preview = $('#upload-source-preview').get(0);

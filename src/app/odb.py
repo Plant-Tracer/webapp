@@ -3027,7 +3027,7 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackp
     """
     assert int(frame_number) >= 0
     movie = DDBO().get_movie(movie_id)
-    if movie.get(MOVIE_STATUS) == MOVIE_STATE_UPLOADING and not movie_is_available(movie):
+    if not movie_is_available(movie):
         raise MovieUploadIncomplete(movie_id)
     ensure_bottom_left_trackpoints(movie_id=movie_id)
     # Remove numpy from trackpoints

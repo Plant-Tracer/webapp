@@ -1002,3 +1002,7 @@ initialization reject such records even if the frame table and dimensions are ab
 The geometry-conflict response names upload completion, processing, and saved
 frames as finalization conditions, including legacy rows whose status is still
 `uploading`. Select rotation before uploading a new movie.
+
+Trackpoint writes require an upload-completion marker regardless of status.
+Legacy frame-height recovery also checks the movie-level `first_frame_urn` JPEG
+before the ZIP fallback; metadata-only reads still avoid artifact IO.
