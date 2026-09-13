@@ -78,6 +78,9 @@ Release Notes
 Unreleased Summary
 ******************
 
+    * Recover missing coordinate height from the validated analysis MP4 descriptor
+      so small uploads retain their actual unscaled height (refs #1162).
+
     * New uploads generate a validated H.264 analysis MP4 containing every source
       frame, rotated once, resized to fit 640 by 640 without enlargement, and
       labeled with one-based frame numbers. The analyzer uses WebCodecs for exact
@@ -89,6 +92,9 @@ Unreleased Summary
       services. Restore tracing controls after stepping through an untracked movie.
       Version 0.9.9.11 supports testing this workflow on a dev stack
       (refs #1162, #1163, #1164, #1165, #1166, #1168, #1038).
+
+    * Clarify that upload completion and saved frames also finalize movie
+      geometry in the rotation-conflict message (refs #1233).
 
     * Fetch pinned MinIO test-service binaries from official GitHub releases
       after the old download endpoint was retired (refs #1233).

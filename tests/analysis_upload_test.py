@@ -12,6 +12,7 @@ from resize_app.analysis_mp4 import AnalysisMp4Options, rotate_frame, scale_fram
 from resize_app.video_writer import H264Writer
 from app import odb, odb_movie_data, s3_presigned
 from app.schema import AnalysisMp4, Trackpoint
+from tests.fixtures.analysis_mp4_fixture import write_four_color_movie
 
 
 @pytest.mark.parametrize('width,height', [(640, 480), (480, 640), (1280, 960)])
@@ -110,3 +111,43 @@ def test_failed_recode_keeps_original_and_does_not_publish_derivative(new_movie_
     assert not movie.get(odb.ANALYSIS_MP4)
     assert movie[odb.MOVIE_STATUS] != odb.MOVIE_STATE_READY
     assert odb_movie_data.read_object(movie[odb.MOVIE_DATA_URN]) == original
+
+
+@pytest.mark.parametrize('width,height,rotation', [(480, 360, 0), (360, 480, 0), (480, 360, 90)])
+def test_missing_height_uses_analysis_descriptor_before_legacy_frames(client, new_movie_record, tmp_path,
+                                                                    width, height, rotation):
+    """Metadata and migration retain no-enlargement dimensions even with stale legacy JPEGs."""
+    movie_id = new_movie_record[odb.MOVIE_ID]
+    source = tmp_path / 'small.mp4'
+    write_four_color_movie(source, width=width, height=height)
+    ddbo = odb.DDBO()
+    ddbo.update_movie(movie_id, {odb.MOVIE_ROTATION: rotation})
+    odb_movie_data.set_movie_data(movie_id=movie_id, movie_data=source.read_bytes())
+    movie_glue.process_uploaded_movie(movie_id=movie_id)
+    expected_height = width if rotation else height
+    movie = ddbo.get_movie(movie_id)
+    assert movie[odb.ANALYSIS_MP4]['height'] == expected_height
+    # A legacy frame artifact must not override the immutable analysis descriptor.
+    success, jpeg = cv2.imencode('.jpg', np.zeros((640, 640, 3), dtype=np.uint8))
+    assert success
+    odb_movie_data.create_new_movie_frame(movie_id=movie_id, frame_number=0, frame_data=jpeg.tobytes())
+    ddbo.put_movie_frame({**ddbo.get_movie_frame(movie_id, 0),
+                          'trackpoints': [Trackpoint(x=10, y=20, label='Apex').model_dump()]})
+    ddbo.movies.update_item(Key={odb.MOVIE_ID: movie_id},
+                           UpdateExpression=f'REMOVE {odb.FRAME_HEIGHT_PX}, {odb.TRACKPOINT_ORIGIN}')
+    movie = ddbo.get_movie(movie_id)
+    assert odb.trackpoint_frame_height(movie) == expected_height
+    params = {odb.MOVIE_ID: movie_id, odb.API_KEY: new_movie_record[odb.API_KEY]}
+    response = client.post('/api/get-movie-metadata', data=params)
+    assert response.status_code == 200
+    assert response.get_json()['metadata'][odb.FRAME_HEIGHT_PX] == expected_height
+    assert odb.FRAME_HEIGHT_PX not in ddbo.get_movie(movie_id)
+    response = client.post('/api/get-movie-metadata', data={**params, 'frame_start': 0, 'frame_count': 1})
+    assert response.status_code == 200
+    assert response.get_json()['metadata'][odb.FRAME_HEIGHT_PX] == expected_height
+    assert response.get_json()['frames']['0']['markers'][0]['y'] == expected_height - 20
+    assert ddbo.get_movie(movie_id)[odb.FRAME_HEIGHT_PX] == expected_height
+    response = client.post('/api/get-movie-trackpoints', data={**params, 'format': 'json'})
+    assert response.status_code == 200
+    assert response.get_json()['metadata'][odb.FRAME_HEIGHT_PX] == expected_height
+    assert response.get_json()['trackpoint_dicts'][0]['y'] == expected_height - 20

@@ -160,7 +160,8 @@ def _height_from_movie_frame(movie_id, frame_number):
 
 def infer_trackpoint_frame_height(movie_id, movie, frame_start, *, recover_legacy_frames=True):
     """Resolve height from the caller's raw movie snapshot (before API rotation)."""
-    if (movie.get(odb.FRAME_HEIGHT_PX) is None and recover_legacy_frames):
+    if (movie.get(odb.FRAME_HEIGHT_PX) is None and not movie.get(odb.ANALYSIS_MP4)
+            and recover_legacy_frames):
         candidate_frames = [frame_start, 0] if frame_start not in (None, 0) else [0]
         height = next((height for frame_number in candidate_frames
                        if (height := _height_from_movie_frame(movie_id, frame_number))), None)
@@ -592,7 +593,7 @@ def course_setup_required(_ex):
 @api_bp.errorhandler(odb.MovieGeometryFinalized)
 def movie_geometry_finalized(_ex):
     return jsonify({C.API_KEY_ERROR: True,
-                    C.API_KEY_MESSAGE: 'Movie geometry is fixed once processing begins. Upload a new movie to change rotation.'}), 409
+                    C.API_KEY_MESSAGE: 'Movie geometry is already fixed by upload completion, processing, or saved frames. Choose rotation before uploading a new movie.'}), 409
 
 
 @api_bp.errorhandler(odb.MovieUploadIncomplete)

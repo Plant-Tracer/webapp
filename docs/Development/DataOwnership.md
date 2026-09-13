@@ -165,7 +165,7 @@ The current S3 artifacts are:
 | Original uploaded movie | `movie_data_urn`, under `s3://bucket/movies/{deployment_id}/...` | Durable archive written by lambda-resize from staging |
 | Per-frame JPEG, when persisted | `frame_urn`, under the durable movie directory | Derived artifact; may be regenerated from the movie |
 | ZIP of analysis frames | `movie_zipfile_urn`, derived from `movie_data_urn` with a `_zipfile` suffix before the extension | Historical artifact; new tracing no longer writes ZIPs |
-| Traced movie | `movie_traced_urn`, derived from `movie_data_urn` with a `_traced` suffix before the extension | Historical artifact; new tracing no longer writes ZIPs |
+| Traced movie | `movie_traced_urn`, derived from `movie_data_urn` with a `_traced` suffix before the extension | Derived MP4 with marker overlays, written after each successful trace |
 
 During upload, `/api/new-movie` first creates the DynamoDB movie row with
 `status="uploading"` and `created_at`, but without `uploaded_at`. It records the

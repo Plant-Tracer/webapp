@@ -2523,6 +2523,9 @@ def trackpoint_frame_height(movie: dict) -> int:
     explicit_height = movie.get(FRAME_HEIGHT_PX)
     if explicit_height is not None:
         return int(validate_movie_field(FRAME_HEIGHT_PX, explicit_height))
+    analysis = movie_analysis_mp4(movie)
+    if analysis is not None:
+        return analysis.height
     rotation_value = movie.get(MOVIE_ROTATION, 0)
     try:
         rotation = int(rotation_value)
