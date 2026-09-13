@@ -998,3 +998,7 @@ clearing subsequent points, for queued and direct tracing alike. A height
 mismatch records tracing failure and releases the lease without deleting points.
 Legacy `first_frame_urn` also finalizes geometry: rotation and source
 initialization reject such records even if the frame table and dimensions are absent.
+
+The geometry-conflict response names upload completion, processing, and saved
+frames as finalization conditions, including legacy rows whose status is still
+`uploading`. Select rotation before uploading a new movie.

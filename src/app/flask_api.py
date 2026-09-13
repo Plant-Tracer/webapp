@@ -592,7 +592,7 @@ def course_setup_required(_ex):
 @api_bp.errorhandler(odb.MovieGeometryFinalized)
 def movie_geometry_finalized(_ex):
     return jsonify({C.API_KEY_ERROR: True,
-                    C.API_KEY_MESSAGE: 'Movie geometry is fixed once processing begins. Upload a new movie to change rotation.'}), 409
+                    C.API_KEY_MESSAGE: 'Movie geometry is already fixed by upload completion, processing, or saved frames. Choose rotation before uploading a new movie.'}), 409
 
 
 @api_bp.errorhandler(odb.MovieUploadIncomplete)

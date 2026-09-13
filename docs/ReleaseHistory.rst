@@ -78,6 +78,9 @@ Release Notes
 Unreleased Summary
 ******************
 
+    * Clarify that upload completion and saved frames also finalize movie
+      geometry in the rotation-conflict message (refs #1233).
+
     * Fetch pinned MinIO test-service binaries from official GitHub releases
       after the old download endpoint was retired (refs #1233).
 
