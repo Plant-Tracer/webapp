@@ -15,11 +15,11 @@ FRAME_COLORS = (
 )
 
 
-def write_four_color_movie(path: Path, *, fps: int = 4) -> None:
-    """Write a deterministic 96x48, four-frame MP4."""
+def write_four_color_movie(path: Path, *, fps: int = 4, width: int = 96, height: int = 48) -> None:
+    """Write a deterministic four-frame MP4 at the requested dimensions."""
     writer = H264Writer(path, fps=fps)
     try:
         for color in FRAME_COLORS:
-            writer.append_data(np.full((48, 96, 3), color, dtype=np.uint8))
+            writer.append_data(np.full((height, width, 3), color, dtype=np.uint8))
     finally:
         writer.close()

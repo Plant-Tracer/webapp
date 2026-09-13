@@ -21,6 +21,7 @@ from app.schema import (
     MovieTraceLock,
     RenameMarkerRequest,
     Trackpoint,
+    TrackpointCoordinateMetadata,
     UniqueEmail,
     User,
 )
@@ -44,6 +45,7 @@ NON_PERSISTED_SCHEMA_MODELS = {
     CourseAdmin,
     DefaultCourseRequest,
     RenameMarkerRequest,
+    TrackpointCoordinateMetadata,
 }
 
 
@@ -147,7 +149,8 @@ def test_persisted_pydantic_models_round_trip_through_dynamodb_local(local_ddb):
             upload_staging_urn="s3://test/staging", upload_event_id="event-1",
             resize_queued_at=13, resize_started_at=14, resized_at=15,
             date_uploaded=16, orig_movie=movie_ids[0], fps="30", fpm="2.5",
-            width=640, height=480, trackpoint_origin="bottom-left",
+            width=640, height=480, frame_height_px=480,
+            trackpoint_origin="bottom-left",
             total_frames=120, trim_start_frame=1, trim_end_frame=119,
             total_bytes=1234, movie_data_urn="s3://test/movie.mp4",
             movie_zipfile_urn="s3://test/movie.zip", first_frame_urn="s3://test/frame.jpg",

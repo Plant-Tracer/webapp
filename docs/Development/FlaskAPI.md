@@ -562,12 +562,17 @@ the browser invokes the authenticated `/resize-api/v1/process-upload`
 compatibility adapter. The browser polls metadata until processing is complete,
 then requests the first frame and links the user to Analyze.
 
+The optional `rotation` parameter selects `0` (default), `90`, `180`, or `270` degrees
+clockwise before upload processing. Invalid values return HTTP 400. Processing
+saves source dimensions, measured `frame_height_px`, and completion state together.
+
 **Parameters**
 
 | Name | Required | Description |
 |------|----------|-------------|
 | `api_key` | Yes | Must not be the demo key |
 | `title` | No | Movie title |
+| `rotation` | No | Form field: `0` (default), `90`, `180`, or `270` degrees clockwise; chosen before upload |
 | `description` | No | Movie description |
 | `movie_data_sha256` | Yes | SHA-256 hex digest of the video file (64 chars) |
 | `movie_data_length` | Yes | Exact movie byte length, from 1 through the configured upload limit. The returned S3 policy accepts exactly this size. |
@@ -624,6 +629,23 @@ the stored `status` remains visible.
 
 Get metadata and optionally per-frame trackpoints for a specific movie.
 
+`metadata.frame_height_px` is the positive pixel height of the resized, rotated
+analysis coordinate space used by the trackpoints, or `null` when unknown.
+`metadata.trackpoint_origin` identifies the coordinate origin. These fields are
+present even when no frame range is requested. Metadata-only requests use the
+stored height or source dimensions, without reading JPEG/ZIP objects or caching
+height. When requesting frames, a legacy record's height may be recovered from
+stored JPEG frames or its ZIP and cached in DynamoDB. The measured height is fixed:
+repeated identical measurements are accepted, and a conflicting measurement is
+rejected with HTTP 409 identifying inconsistent stored frame height. This is a
+data-consistency error, not a request to rotate/re-upload or a transient retry. Invalid frame ranges, including negative `frame_start`,
+are rejected before recovery or caching. Heights are JSON integers.
+
+Upload completion fixes rotation; processing records source dimensions and the
+analysis-frame height. Legacy trackpoints retain the existing per-frame conditional conversion to bottom-left
+coordinates, so retries do not flip an already converted frame again. Trackpoint
+downloads use the same height recovery and coordinate conversion.
+
 **Parameters**
 
 | Name | Required | Description |
@@ -679,6 +701,14 @@ movie storage. Lease acquisition returns HTTP 409 with `error: true` and
 
 Download all trackpoints for a movie as CSV (default), XLSX, or JSON.
 
+All formats include `frame_height_px` and `trackpoint_origin`. Frame height is
+always in pixels, even when calibrated position columns use millimeters. Unknown
+height is `null` in JSON and blank in CSV/XLSX. The JSON response adds a `metadata`
+object containing these two fields alongside the existing `trackpoint_dicts`.
+XLSX retains them on its Metadata sheet. Height is resolved before legacy
+coordinate migration, and height recovered from stored frames/ZIPs is persisted
+so subsequent downloads can work without those artifacts.
+
 **Parameters**
 
 | Name | Required | Description |
@@ -687,11 +717,11 @@ Download all trackpoints for a movie as CSV (default), XLSX, or JSON.
 | `movie_id` | Yes | |
 | `format` | No | `"xlsx"` for an Excel workbook, `"json"` for JSON; omit for CSV |
 
-**Response:** CSV with columns `frame_number`, `<label> x (<unit>)`, `<label> y (<unit>)` for each marker label, served with `Content-Type: text/csv` and `Content-Disposition: attachment; filename="trackpoints.csv"` so the browser downloads it rather than displaying it inline.
+**Response:** CSV with columns `frame_number`, `<label> x (<unit>)`, `<label> y (<unit>)` for each marker label, followed by `frame_height_px` and `trackpoint_origin` on every row, served with `Content-Type: text/csv` and `Content-Disposition: attachment; filename="trackpoints.csv"` so the browser downloads it rather than displaying it inline.
 
 With `format=xlsx`, returns an Excel workbook served with `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` and `Content-Disposition: attachment; filename="trackpoints.xlsx"`. The workbook contains:
 
-- `Trackpoints`: the same columns, values, trim filtering, and unit conversion as the CSV export.
+- `Trackpoints`: the frame and marker columns, values, trim filtering, and unit conversion from CSV; coordinate metadata appears only on the Metadata sheet.
 - `Metadata`: export context including movie id, title, trim bounds, exported frame count, marker count, coordinate origin, inferred frame height, calibration status, units, scale, and capture interval (`fpm`) when available.
 - `Markers`: one row per marker label with marker type (`apex`, `ruler`, `inflection point`, or `marker`), graphable status, color, marker id, ruler size, undeletable status, frame range, trackpoint count, and any status/error values found in exported trackpoints.
 - `Chart Data`: displacement from each graphable marker's first exported position, using frames as the x-axis or minutes when `fpm` is set. Ruler markers are excluded from chart data.
@@ -706,11 +736,14 @@ With `format=xlsx`, returns an Excel workbook served with `Content-Type: applica
   the lowest and highest ruler markers in the first trimmed frame (mirrors the Analyze marker
   table). mm values are rounded to 2 decimals.
 
-With `format=json`: `{ "error": "False", "trackpoint_dicts": [...] }` — JSON values are raw pixel coordinates (no unit conversion).
+With `format=json`: `{ "error": "False", "trackpoint_dicts": [...], "metadata": { "frame_height_px": 480, "trackpoint_origin": "bottom-left" } }` — JSON values are raw pixel coordinates (no unit conversion).
 
 ---
 
 #### `POST /api/put-frame-trackpoints`
+
+Returns HTTP 409 while the movie is still in upload setup, before a current or
+legacy upload-completion marker exists. No frame or tracking metadata is written.
 
 Write trackpoints for a single frame. Used by the client before requesting re-tracking.
 
@@ -765,7 +798,12 @@ Rename one marker label across all stored trackpoints for a movie. Other marker 
 
 #### `POST /api/rotate-movie`
 
-Set the movie's rotation. Tracking is cleared; Lambda applies the rotation when re-processing.
+Set rotation before upload completion, while processing has not begun.
+The change is conditional in DynamoDB. Once upload completion is recorded or
+processing begins (also recognizing legacy `date_uploaded`), including completed
+and legacy movies with dimensions or any saved frames, return HTTP 409 without
+changing rotation or clearing tracking.
+The upload form chooses rotation before uploading and supplies it to `/api/new-movie`.
 
 **Parameters**
 
@@ -876,6 +914,9 @@ allowed maximum.
 
 #### `POST /api/set-metadata`
 
+Source `width` and `height` are read-only for clients (HTTP 403), including when
+a legacy record is missing one dimension. Processing supplies these values.
+
 Set a single metadata property on a movie or user record.
 
 **Parameters**
@@ -948,3 +989,12 @@ Check DynamoDB connectivity, S3 CORS configuration, and S3 bucket region. No aut
   "bucket_region_ok": true, "bucket_region_message": "..."
 }
 ```
+
+### Tracing validation and saved coordinate data
+
+Queueing a trace acquires its lease and marks the movie as tracing, but preserves
+existing trackpoints. The worker validates the decoded frame height before
+clearing subsequent points, for queued and direct tracing alike. A height
+mismatch records tracing failure and releases the lease without deleting points.
+Legacy `first_frame_urn` also finalizes geometry: rotation and source
+initialization reject such records even if the frame table and dimensions are absent.

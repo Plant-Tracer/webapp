@@ -55,7 +55,6 @@ from .odb import (
     DDBO,
     UnauthorizedUser,
     AtomicRenameConflict,
-    clear_movie_tracking,
 )
 from .s3_presigned import (
     movie_object_key,
@@ -68,7 +67,7 @@ from .odb_movie_data import (
     delete_movie,
     read_object,
 )
-from .schema import DefaultCourseRequest
+from .schema import DefaultCourseRequest, TrackpointCoordinateMetadata
 
 
 api_bp = Blueprint('api', __name__)
@@ -159,17 +158,20 @@ def _height_from_movie_frame(movie_id, frame_number):
     return _jpeg_height(frame_bytes)
 
 
-def infer_trackpoint_frame_height(movie_id, movie_metadata, frame_start):
-    try:
-        return odb.trackpoint_frame_height(movie_metadata)
-    except RuntimeError:
-        pass
-    candidate_frames = [frame_start, 0] if frame_start != 0 else [0]
-    for frame_number in candidate_frames:
-        height = _height_from_movie_frame(movie_id, frame_number)
+def infer_trackpoint_frame_height(movie_id, movie, frame_start, *, recover_legacy_frames=True):
+    """Resolve height from the caller's raw movie snapshot (before API rotation)."""
+    if (movie.get(odb.FRAME_HEIGHT_PX) is None and recover_legacy_frames):
+        candidate_frames = [frame_start, 0] if frame_start not in (None, 0) else [0]
+        height = next((height for frame_number in candidate_frames
+                       if (height := _height_from_movie_frame(movie_id, frame_number))), None)
+        height = height or _height_from_movie_zipfile(movie)
         if height:
+            odb.remember_trackpoint_frame_height(movie=movie, frame_height=height)
             return height
-    return _height_from_movie_zipfile(movie_metadata)
+    try:
+        return odb.trackpoint_frame_height(movie)
+    except RuntimeError:
+        return None
 
 
 def _spreadsheet_value(value):
@@ -311,6 +313,11 @@ def _trackpoint_export_data(movie):
         odb.get_movie_metadata(movie_id=movie[MOVIE_ID])
     )
     trim_start_frame, trim_end_frame = odb.movie_trim_bounds(movie_metadata)
+    frame_height = infer_trackpoint_frame_height(movie[MOVIE_ID], movie, trim_start_frame)
+    movie_metadata = odb.ensure_bottom_left_trackpoints(
+        movie_id=movie[MOVIE_ID], frame_height=frame_height)
+    coordinate_metadata = TrackpointCoordinateMetadata(
+        frame_height_px=frame_height, trackpoint_origin=movie_metadata.get(odb.TRACKPOINT_ORIGIN))
     trackpoint_dicts = odb.get_movie_trackpoints(
         movie_id=movie[MOVIE_ID],
         frame_start=trim_start_frame,
@@ -326,7 +333,6 @@ def _trackpoint_export_data(movie):
     # Use the robust height lookup (falls back to the movie zip) so calibration still works for
     # movies whose analysis-frame height is not stored in metadata. Conservatively stays in pixels
     # only when the height cannot be determined at all.
-    frame_height = infer_trackpoint_frame_height(movie[MOVIE_ID], movie_metadata, trim_start_frame)
     ruler_frame_points = []
     for frame_number in frame_numbers:
         points = [tp for tp in trackpoint_dicts
@@ -373,8 +379,8 @@ def _trackpoint_export_data(movie):
         ('trim_end_frame', trim_end_frame),
         ('exported_frame_count', len(frame_numbers)),
         ('marker_count', len(labels)),
-        ('trackpoint_origin', movie_metadata.get(odb.TRACKPOINT_ORIGIN, '')),
-        ('frame_height_px', frame_height if frame_height is not None else ''),
+        (odb.TRACKPOINT_ORIGIN, coordinate_metadata.trackpoint_origin or ''),
+        (odb.FRAME_HEIGHT_PX, coordinate_metadata.frame_height_px or ''),
         ('ruler_calibrated', 'yes' if calibrated else 'no'),
         ('ruler_marker_units', 'px'),
         ('non_ruler_marker_units', 'mm' if calibrated else 'px'),
@@ -407,6 +413,7 @@ def _trackpoint_export_data(movie):
         calibrated,
     )
     return {
+        C.API_KEY_METADATA: coordinate_metadata,
         'trackpoint_dicts': trackpoint_dicts,
         'fieldnames': fieldnames,
         'rows': rows,
@@ -421,13 +428,13 @@ def _csv_trackpoint_response(export_data):
     with io.StringIO() as f:
         writer = csv.DictWriter(
             f,
-            fieldnames=export_data['fieldnames'],
+            fieldnames=[*export_data['fieldnames'], odb.FRAME_HEIGHT_PX, odb.TRACKPOINT_ORIGIN],
             restval='',
             extrasaction='ignore',
         )
         writer.writeheader()
         for row in export_data['rows']:
-            writer.writerow(row)
+            writer.writerow({**row, **export_data[C.API_KEY_METADATA].model_dump()})
         response = make_response(f.getvalue())
         response.headers['Content-Type'] = 'text/csv'
         response.headers['Content-Disposition'] = 'attachment; filename="trackpoints.csv"'
@@ -580,6 +587,24 @@ def course_context_conflict(_ex):
 @api_bp.errorhandler(course_context.CourseSetupRequired)
 def course_setup_required(_ex):
     return jsonify({'error': True, 'message': 'No valid course membership is available'}), 409
+
+
+@api_bp.errorhandler(odb.MovieGeometryFinalized)
+def movie_geometry_finalized(_ex):
+    return jsonify({C.API_KEY_ERROR: True,
+                    C.API_KEY_MESSAGE: 'Movie geometry is fixed once processing begins. Upload a new movie to change rotation.'}), 409
+
+
+@api_bp.errorhandler(odb.MovieUploadIncomplete)
+def movie_upload_incomplete(_ex):
+    return jsonify({C.API_KEY_ERROR: True,
+                    C.API_KEY_MESSAGE: 'Wait for the movie upload to complete before saving trackpoints.'}), 409
+
+
+@api_bp.errorhandler(odb.TrackpointFrameHeightMismatch)
+def trackpoint_frame_height_mismatch(_ex):
+    return jsonify({C.API_KEY_ERROR: True,
+                    C.API_KEY_MESSAGE: 'Stored frame height disagrees with the movie frames. Contact an administrator.'}), 409
 
 
 ################################################################
@@ -860,6 +885,10 @@ def api_new_movie():
             'message': f'Movie byte length must be between 1 and {C.MAX_FILE_UPLOAD}.',
         }
 
+    rotation = 0 if get(MOVIE_ROTATION) is None else get_int(MOVIE_ROTATION)
+    if rotation not in (0, 90, 180, 270):
+        return jsonify({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: 'Invalid rotation'}), 400
+
     ret = {'error': False}
 
     def _parse_tristate(raw):
@@ -911,6 +940,7 @@ def api_new_movie():
         {
             MOVIE_DATA_URN: movie_data_urn,
             UPLOAD_STAGING_URN: upload_urn,
+            MOVIE_ROTATION: rotation,
         },
         touch_activity=False,
     )
@@ -948,12 +978,12 @@ def set_movie_metadata(*, user_id=odb.ROOT_USER_ID, set_movie_id, movie_metadata
 
 @api_bp.route('/rotate-movie', methods=POST)
 def api_edit_movie():
-    """Set movie rotation.
+    """Set rotation before upload processing; finalized movies return HTTP 409.
 
     :param api_key: user authentication
     :param movie_id: the movie to edit
     :param rotation in degrees.
-    Lambda performs rotate and scaling when the analysis is generated.
+    Lambda applies rotation and scaling in the fixed analysis coordinate space.
     """
     movie_id = get_movie_id()
     user_id = get_user_id(allow_demo=False)
@@ -963,9 +993,7 @@ def api_edit_movie():
     if rotation not in [0,90,180,270]:
         return {"error": True, "message":"Invalid rotation"}
 
-    clear_movie_tracking(movie_id)
-    ddbo = DDBO()
-    ddbo.update_movie(movie_id, {MOVIE_ROTATION: rotation})
+    odb.set_movie_rotation(movie_id=movie_id, rotation=rotation)
     logger.debug("edit-movie: movie_id=%s rotation=%s",movie_id,rotation)
     return {"error": False}
 
@@ -1046,13 +1074,19 @@ def api_get_movie_metadata():
         frame_start = 0
         frame_count = C.MAX_FRAMES
     if frame_start is not None:
+        if frame_start < 0:
+            return jsonify({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: 'frame_start must be non-negative'}), 400
         if frame_count is None:
             return make_response(E.FRAME_START_NO_FRAME_COUNT, 400)
         if frame_count<1:
             return make_response(E.FRAME_COUNT_GT_0, 400)
+    frame_height = infer_trackpoint_frame_height(
+        movie_id, movie, frame_start, recover_legacy_frames=frame_start is not None)
+    if frame_start is not None:
         try:
-            frame_height = infer_trackpoint_frame_height(movie_id, movie_metadata, frame_start)
             odb.ensure_bottom_left_trackpoints(movie_id=movie_id, frame_height=frame_height)
+        except (odb.MovieGeometryFinalized, odb.TrackpointFrameHeightMismatch):
+            raise
         except RuntimeError as exc:
             logger.exception("trackpoint migration failed movie_id=%s", movie_id)
             return jsonify({C.API_KEY_ERROR: True, 'message': f"Trackpoint migration failed: {exc}"}), 500
@@ -1081,6 +1115,9 @@ def api_get_movie_metadata():
             url_name = urn_name.replace("urn","url")
             movie_metadata[url_name] = make_signed_url(urn=movie_metadata[urn_name])
 
+    movie_metadata.update(TrackpointCoordinateMetadata(
+        frame_height_px=frame_height,
+        trackpoint_origin=movie_metadata.get(odb.TRACKPOINT_ORIGIN)).model_dump())
     ret = {C.API_KEY_ERROR: False,
            C.API_KEY_METADATA: movie_metadata}
 
@@ -1178,7 +1215,8 @@ def api_get_movie_trackpoints():
     export_data = _trackpoint_export_data(movie)
 
     if get('format')=='json':
-        return jsonify({'error':'False', 'trackpoint_dicts':export_data['trackpoint_dicts']})
+        return jsonify({'error':'False', 'trackpoint_dicts':export_data['trackpoint_dicts'],
+                        C.API_KEY_METADATA: export_data[C.API_KEY_METADATA].model_dump()})
     if get('format')=='xlsx':
         return _xlsx_trackpoint_response(export_data)
     return _csv_trackpoint_response(export_data)

@@ -29,7 +29,7 @@ from app import odb_movie_data  # pylint: disable=wrong-import-position
 from app.s3_presigned import s3_client  # pylint: disable=wrong-import-position
 
 # Import fixtures so pytest can discover them (after env/path setup above)
-from .fixtures.local_aws import local_ddb, local_s3, new_course, api_key, new_movie  # pylint: disable=wrong-import-position,unused-import
+from .fixtures.local_aws import local_ddb, local_s3, new_course, api_key, new_movie, new_movie_record  # pylint: disable=wrong-import-position,unused-import
 from .fixtures.localmail_config import mailer_config  # pylint: disable=wrong-import-position,unused-import
 from .fixtures.app_client import client  # pylint: disable=wrong-import-position,unused-import
 
