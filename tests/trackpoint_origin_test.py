@@ -890,12 +890,14 @@ def test_upload_repairs_missing_height_atomically(new_movie_record, tmp_path):
     assert movie[odb.MOVIE_STATUS] == odb.MOVIE_STATE_READY
 
 
-@pytest.mark.parametrize('artifact', ['width', 'height', 'jpeg', 'trackpoints', 'uploaded'])
+@pytest.mark.parametrize('artifact', ['width', 'height', 'jpeg', 'trackpoints', 'uploaded', odb.FIRST_FRAME_URN])
 def test_legacy_upload_with_coordinate_data_cannot_rotate(client, new_movie_record, artifact):
     """Even a legacy uploading status cannot make an existing coordinate space editable."""
     movie_id = new_movie_record[MOVIE_ID]
     ddbo = odb.DDBO()
     ddbo.update_movie(movie_id, {odb.MOVIE_ROTATION: 0})
+    if artifact == odb.FIRST_FRAME_URN:
+        ddbo.update_movie(movie_id, {odb.FIRST_FRAME_URN: make_urn(object_name=f'{movie_id}/first.jpg')})
     if artifact == 'uploaded':
         ddbo.update_movie(movie_id, {odb.UPLOADED_AT: 1})
     if artifact in ('width', 'height'):
@@ -974,14 +976,18 @@ def test_upload_setup_cannot_accept_trackpoints(client, new_movie_record):
     assert client.post('/api/rotate-movie', data={**params, 'rotation': 90}).status_code == 200
 
 
-@pytest.mark.parametrize('artifact', [odb.WIDTH, odb.HEIGHT, 'jpeg', 'trackpoints'])
+@pytest.mark.parametrize('artifact', [odb.WIDTH, odb.HEIGHT, 'jpeg', 'trackpoints', odb.FIRST_FRAME_URN])
 def test_source_initialization_preserves_legacy_coordinate_data(new_movie_record, artifact):
     """Legacy uploading rows without completion markers must not lose coordinate data."""
     movie_id = new_movie_record[MOVIE_ID]
     ddbo = odb.DDBO()
     frame_urn = None
     jpeg = _jpeg_bytes(width=640, height=480)
-    if artifact in (odb.WIDTH, odb.HEIGHT):
+    if artifact == odb.FIRST_FRAME_URN:
+        frame_urn = make_urn(object_name=f'{movie_id}/first.jpg')
+        odb_movie_data.write_object(frame_urn, jpeg)
+        ddbo.update_movie(movie_id, {odb.FIRST_FRAME_URN: frame_urn})
+    elif artifact in (odb.WIDTH, odb.HEIGHT):
         ddbo.update_movie(movie_id, {artifact: 480})
     elif artifact == 'jpeg':
         frame_urn = odb_movie_data.create_new_movie_frame(movie_id=movie_id, frame_number=0, frame_data=jpeg)
@@ -996,3 +1002,36 @@ def test_source_initialization_preserves_legacy_coordinate_data(new_movie_record
     assert ddbo.get_frames(movie_id) == frames
     if frame_urn:
         assert odb_movie_data.read_object(frame_urn) == jpeg
+
+
+@pytest.mark.parametrize('queued', [False, True])
+def test_height_mismatch_preserves_saved_points_before_retracing(new_movie_record, tmp_path, queued):
+    """Neither queue preparation nor direct tracing may clear points before validation."""
+    movie_id = new_movie_record[MOVIE_ID]
+    path = tmp_path / 'source.mp4'
+    write_four_color_movie(path, width=640, height=480)
+    odb_movie_data.set_movie_data(movie_id=movie_id, movie_data=path.read_bytes())
+    ddbo = odb.DDBO()
+    ddbo.update_movie(movie_id, {odb.FRAME_HEIGHT_PX: 640, odb.MOVIE_STATUS: odb.MOVIE_STATE_READY,
+                                odb.LAST_FRAME_TRACKED: 3})
+    for frame_number in range(4):
+        ddbo.put_movie_frame({MOVIE_ID: movie_id, FRAME_NUMBER: frame_number,
+                             'trackpoints': [Trackpoint(x=10, y=20 + frame_number,
+                                                       label='Apex').model_dump()]})
+    frames = ddbo.get_frames(movie_id)
+    job_id = None
+    if queued:
+        request = movie_glue.prepare_tracing_request(
+            api_key=new_movie_record[API_KEY], movie_id=movie_id, frame_start=0)
+        job_id = request['job_id']
+        assert request['cleared_frames'] == 0
+        assert ddbo.get_frames(movie_id) == frames
+    with pytest.raises(movie_glue.odb.TrackpointFrameHeightMismatch):
+        movie_glue.run_tracing(movie_id=movie_id, frame_start=0, job_id=job_id)
+    assert ddbo.get_frames(movie_id) == frames
+    movie = ddbo.get_movie(movie_id)
+    assert movie[odb.FRAME_HEIGHT_PX] == 640
+    assert movie[odb.LAST_FRAME_TRACKED] == 3
+    assert movie[odb.MOVIE_STATUS] == odb.MOVIE_STATE_TRACING_FAILED
+    assert odb_movie_data.read_object(movie[odb.MOVIE_DATA_URN]) == path.read_bytes()
+    assert ddbo.get_active_movie_trace_lock(movie_id) is None

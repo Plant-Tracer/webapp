@@ -1016,3 +1016,12 @@ analysis MP4; the traced movie renders source pixels through the same transform
 with marker overlays, avoiding the analysis movie's burned-in frame numbers.
 No new trace generates a ZIP. Legacy backfill and bulk S3 cleanup are separate
 operations and are not performed by deployment of this change.
+
+### Tracing validation and saved coordinate data
+
+Queueing a trace acquires its lease and marks the movie as tracing, but preserves
+existing trackpoints. The worker validates the decoded frame height before
+clearing subsequent points, for queued and direct tracing alike. A height
+mismatch records tracing failure and releases the lease without deleting points.
+Legacy `first_frame_urn` also finalizes geometry: rotation and source
+initialization reject such records even if the frame table and dimensions are absent.

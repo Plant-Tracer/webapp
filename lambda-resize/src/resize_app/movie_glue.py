@@ -325,11 +325,8 @@ def prepare_tracing_request(*, api_key: str, movie_id: str, frame_start: int,
         movie=movie, started_by_user_id=user_id,
         started_by_user_name=ddbo.get_user(user_id)[USER_NAME],
         analysis_lease_id=analysis_lease_id)
-    cleared_frames = clear_movie_tracking_after_frame(
-        movie_id=movie_id,
-        frame_number=source_frame_number,
-        frame_end=frame_end_number,
-    )
+    # Preserve saved points until the worker validates the decoded coordinate height.
+    cleared_frames = 0
     LOGGER.info(
         "Prepared tracing request: movie_id=%s source_frame=%s frame_end=%s cleared_frames=%s",
         movie_id,
@@ -524,8 +521,6 @@ def run_tracing(*, movie_id, frame_start, frame_end=None, job_id=None):
     frame_end_number = None if frame_end is None else int(frame_end)
     cleared_frames = 0
     if job_id is None:
-        cleared_frames = clear_movie_tracking_after_frame(
-            movie_id=movie_id, frame_number=source_frame_number, frame_end=frame_end_number)
         ddbo.update_movie(movie_id, {MOVIE_STATUS: odb.MOVIE_STATE_TRACING})
     LOGGER.info("run_tracing movie_id=%s source_frame=%s tracing_frame_start=%s frame_end=%s cleared_frames=%s",
                 movie_id, source_frame_number, tracing_frame_start, frame_end_number, cleared_frames)
@@ -543,6 +538,9 @@ def run_tracing(*, movie_id, frame_start, frame_end=None, job_id=None):
             movie_url=movie_url, rotation=rotation)
         remember_trackpoint_frame_height(movie=movie_record, frame_height=frame_height)
         odb.ensure_bottom_left_trackpoints(movie_id=movie_id, frame_height=frame_height)
+        cleared_frames = clear_movie_tracking_after_frame(
+            movie_id=movie_id, frame_number=source_frame_number, frame_end=frame_end_number)
+        LOGGER.info("Validated tracing height; cleared_frames=%s", cleared_frames)
         input_trackpoints = [Trackpoint(**tpdict) for tpdict in get_movie_trackpoints(movie_id=movie_id)]
         tracer_input_trackpoints = odb.flip_trackpoints_y(input_trackpoints, frame_height)
         research_comment = mp4_metadata_lib.build_comment(

@@ -90,6 +90,10 @@ Unreleased Summary
       Version 0.9.9.11 supports testing this workflow on a dev stack
       (refs #1162, #1163, #1164, #1165, #1166, #1168, #1038).
 
+    * Preserve saved trackpoints when tracing fails frame-height validation,
+      including queued retracing. Reject rotation and source initialization when
+      a legacy first-frame artifact exists (refs #1233).
+
     * Include analysis-frame pixel height and coordinate origin consistently in
       trackpoint JSON, CSV, and XLSX downloads. Persist measured height and use
       it in browser marker conversions for landscape and portrait movies.
