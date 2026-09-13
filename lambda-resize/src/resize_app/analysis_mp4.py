@@ -227,15 +227,18 @@ def validate_encoded_movie(path: Path, *, frame_count: int, width: int, height: 
         [imageio_ffmpeg.get_ffmpeg_exe(), "-hide_banner", "-i", str(path)],
         capture_output=True, text=True, check=False,
     ).stderr
-    if not all(value in description for value in ("h264", "Baseline", "yuv420p", "15 fps")):
-        raise ValueError("Analysis MP4 does not satisfy the H.264 baseline/yuv420p/15 fps contract")
-    capture = cv2.VideoCapture(str(path))
+    capture = cv2.VideoCapture(str(path), cv2.CAP_FFMPEG)
     count = 0
     try:
         while True:
             success, frame = capture.read()
             if not success:
                 break
+            frame_type = int(capture.get(cv2.CAP_PROP_FRAME_TYPE))
+            if frame_type == ord('B'):
+                raise ValueError("Analysis MP4 contains B-frames")
+            if frame_type not in (ord('I'), ord('P')):
+                raise ValueError(f"Cannot validate analysis MP4 frame type: {frame_type}")
             if frame.shape[:2] != (height, width):
                 raise ValueError("Analysis MP4 dimensions changed during encoding")
             count += 1
@@ -243,6 +246,8 @@ def validate_encoded_movie(path: Path, *, frame_count: int, width: int, height: 
         capture.release()
     if count != frame_count:
         raise ValueError(f"Analysis MP4 retained {count} of {frame_count} frames")
+    if not all(value in description for value in ("h264", "Baseline", "yuv420p", "15 fps")):
+        raise ValueError("Analysis MP4 does not satisfy the H.264 baseline/yuv420p/15 fps contract")
 
 
 def copy_player_bundle(*, bundle_dir: Path, movie_name: str) -> Path:

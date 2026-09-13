@@ -157,7 +157,7 @@ The resulting objects are:
      - ``movie_traced_urn``
      - Derived and regenerable
    * - Analysis MP4
-     - ``movies/{deployment_id}/{course_id}/{movie_id}_scaled.mp4``
+     - ``movies/{deployment_id}/{course_id}/{movie_id}_{sha256}_scaled.mp4``
      - ``analysis_mp4.urn``
      - Validated, frame-numbered playback derivative; original preserved
    * - Historical analysis-frame ZIP

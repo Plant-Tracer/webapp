@@ -78,6 +78,9 @@ Release Notes
 Unreleased Summary
 ******************
 
+    * Validate decoded analysis-frame types before publication; reject B-frames
+      and unknown types, and document checksum-addressed object keys (refs #1162).
+
     * Failed upload processing reports its reason and retries without replacing
       source bytes. Worker leases prevent overlapping or stale attempts from
       replacing a successful result; analysis MP4 objects include their checksum
