@@ -201,6 +201,7 @@ MOVIE_METADATA_BULK_PROPS = (FPS, WIDTH, HEIGHT, TOTAL_FRAMES, TOTAL_BYTES)
 FRAME_NUMBER = 'frame_number'
 MOVIE_MARKER_MAP_FRAME_NUMBER = -100
 FRAME_URN = 'frame_urn'
+FIRST_FRAME_URN = 'first_frame_urn'
 LAST_FRAME_TRACKED = 'last_frame_tracked' # computed, not stored
 
 # Values for the movie status field (single source of truth)
@@ -2539,7 +2540,7 @@ def movie_geometry_editable_condition():
     """Only an incomplete upload without saved geometry may change orientation."""
     condition = Attr(MOVIE_STATUS).eq(MOVIE_STATE_UPLOADING)
     for prop in (UPLOADED_AT, DATE_UPLOADED, RESIZE_STARTED_AT, RESIZED_AT, FRAME_HEIGHT_PX, MOVIE_ZIPFILE_URN,
-                 MOVIE_TRACED_URN, LAST_FRAME_TRACKED, WIDTH, HEIGHT):
+                 MOVIE_TRACED_URN, LAST_FRAME_TRACKED, WIDTH, HEIGHT, FIRST_FRAME_URN):
         condition &= Attr(prop).not_exists() | Attr(prop).eq(None)
     return condition
 

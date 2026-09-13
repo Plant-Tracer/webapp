@@ -989,3 +989,12 @@ Check DynamoDB connectivity, S3 CORS configuration, and S3 bucket region. No aut
   "bucket_region_ok": true, "bucket_region_message": "..."
 }
 ```
+
+### Tracing validation and saved coordinate data
+
+Queueing a trace acquires its lease and marks the movie as tracing, but preserves
+existing trackpoints. The worker validates the decoded frame height before
+clearing subsequent points, for queued and direct tracing alike. A height
+mismatch records tracing failure and releases the lease without deleting points.
+Legacy `first_frame_urn` also finalizes geometry: rotation and source
+initialization reject such records even if the frame table and dimensions are absent.
