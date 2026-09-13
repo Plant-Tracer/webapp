@@ -126,3 +126,16 @@ def test_invalid_input_leaves_no_published_bundle(tmp_path):
         )
     assert not output_dir.exists()
     assert not (tmp_path / ".player.partial").exists()
+
+
+def test_edit_list_does_not_hide_source_frames(tmp_path):
+    """The shortened MOV stores seven frames even though playback exposes six."""
+    source = analysis_mp4.project_root() / "tests/data/2019-07-31 plantmovie short.mov"
+    result = analysis_mp4.encode_analysis_mp4(
+        source_path=source, output_path=tmp_path / "analysis.mp4",
+        options=analysis_mp4.AnalysisMp4Options())
+    assert result.frame_count == 7
+    rendered = list(analysis_mp4.unlabelled_analysis_frames(
+        str(source), analysis_mp4.AnalysisMp4Options()))
+    assert len(rendered) == result.frame_count
+    assert all(frame.shape[:2] == (result.height, result.width) for frame in rendered)

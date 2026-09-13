@@ -323,6 +323,9 @@ def test_demo_movie_seeding_is_idempotent(local_ddb, capsys):
     try:
         assert seeded > 0
         assert skipped == 0
+        for movie in dbutil.DDBO().get_movies_for_course_id(dbutil.DEMO_COURSE_ID):
+            assert movie[odb.ANALYSIS_MP4]
+            assert movie[odb.MOVIE_STATUS] == odb.MOVIE_STATE_READY
 
         dbutil.seed_demo_movies()
         seed_output = capsys.readouterr().out

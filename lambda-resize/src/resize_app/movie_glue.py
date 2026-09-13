@@ -427,57 +427,66 @@ def process_uploaded_movie(*, movie_id: str):
     started_at = int(time.time())
     ddbo.update_movie(
         movie_id,
-        {RESIZE_STARTED_AT: started_at, MOVIE_STATUS: MOVIE_STATE_PROCESSING},
+        {RESIZE_STARTED_AT: started_at, MOVIE_STATUS: MOVIE_STATE_PROCESSING,
+         odb.PROCESSING_FAILED_AT: None, odb.PROCESSING_FAILURE_SUMMARY: None},
         touch_activity=False,
     )
     movie = ddbo.get_movie(movie_id)  # Read rotation only after processing has closed editing.
-    ddbo.put_movie_log(
-        log_id=_lifecycle_log_id(movie_id, C.LOG_EVENT_MOVIE_RESIZE_STARTED),
-        event_type=C.LOG_EVENT_MOVIE_RESIZE_STARTED,
-        movie=movie,
-        ipaddr="lambda-resize",
-        total_bytes=movie.get(TOTAL_BYTES),
-        if_absent=True,
-    )
-    movie_urn = (movie.get(MOVIE_DATA_URN) or "").strip()
-    if not movie_urn:
-        raise ValueError("MOVIE_DATA_URN not set")
-    bucket, key = s3_presigned.parse_s3_urn(urn=movie_urn)
-    t0 = time.time()
-    with tempfile.NamedTemporaryFile(suffix=".mov") as movie_file:
-        s3_presigned.s3_client().download_file(bucket, key, movie_file.name)
-        metadata = mpeg_jpeg_zip.extract_movie_metadata(movie_path=movie_file.name)
-        with tempfile.TemporaryDirectory() as output_dir:
-            output_path = Path(output_dir) / 'analysis.mp4'
-            result = encode_analysis_mp4(
-                source_path=Path(movie_file.name), output_path=output_path,
-                options=AnalysisMp4Options(rotation=movie_rotation(movie), max_width=640, max_height=640),
-                comment=mp4_metadata_lib.build_comment(
-                    movie.get('research_use', 0) or 0, movie.get('credit_by_name', 0) or 0,
-                    movie.get('attribution_name')),
-            )
-            if movie.get('fpm'):
-                mp4_metadata_lib.set_fpm(str(output_path), movie['fpm'])
-            analysis_urn = s3_presigned.analysis_mp4_urn(movie_data_urn=movie_urn)
-            analysis = AnalysisMp4(
-                urn=analysis_urn, width=result.width, height=result.height,
-                frame_count=result.frame_count, rotation=result.rotation,
-                sha256=hashlib.sha256(output_path.read_bytes()).hexdigest(), generated_at=int(time.time()),
-            )
-            write_object_from_path(urn=analysis_urn, path=output_path)
-    resized_at = int(time.time())
-    updates = {
-        WIDTH: metadata["width"],
-        HEIGHT: metadata["height"],
-        FPS: str(metadata["fps"]),
-        TOTAL_FRAMES: analysis.frame_count,
-        TOTAL_BYTES: metadata["total_bytes"],
-        odb.FRAME_HEIGHT_PX: analysis.height,
-        odb.ANALYSIS_MP4: analysis.model_dump(),
-        RESIZED_AT: resized_at,
-        MOVIE_STATUS: MOVIE_STATE_READY,
-    }
-    ddbo.update_movie(movie_id, updates)
+    try:
+        ddbo.put_movie_log(
+            log_id=_lifecycle_log_id(movie_id, C.LOG_EVENT_MOVIE_RESIZE_STARTED),
+            event_type=C.LOG_EVENT_MOVIE_RESIZE_STARTED,
+            movie=movie,
+            ipaddr="lambda-resize",
+            total_bytes=movie.get(TOTAL_BYTES),
+            if_absent=True,
+        )
+        movie_urn = (movie.get(MOVIE_DATA_URN) or "").strip()
+        if not movie_urn:
+            raise ValueError("MOVIE_DATA_URN not set")
+        bucket, key = s3_presigned.parse_s3_urn(urn=movie_urn)
+        t0 = time.time()
+        with tempfile.NamedTemporaryFile(suffix=".mov") as movie_file:
+            s3_presigned.s3_client().download_file(bucket, key, movie_file.name)
+            metadata = mpeg_jpeg_zip.extract_movie_metadata(movie_path=movie_file.name)
+            with tempfile.TemporaryDirectory() as output_dir:
+                output_path = Path(output_dir) / 'analysis.mp4'
+                result = encode_analysis_mp4(
+                    source_path=Path(movie_file.name), output_path=output_path,
+                    options=AnalysisMp4Options(rotation=movie_rotation(movie), max_width=640, max_height=640),
+                    comment=mp4_metadata_lib.build_comment(
+                        movie.get('research_use', 0) or 0, movie.get('credit_by_name', 0) or 0,
+                        movie.get('attribution_name')),
+                )
+                if movie.get('fpm'):
+                    mp4_metadata_lib.set_fpm(str(output_path), movie['fpm'])
+                analysis_urn = s3_presigned.analysis_mp4_urn(movie_data_urn=movie_urn)
+                analysis = AnalysisMp4(
+                    urn=analysis_urn, width=result.width, height=result.height,
+                    frame_count=result.frame_count, rotation=result.rotation,
+                    sha256=hashlib.sha256(output_path.read_bytes()).hexdigest(), generated_at=int(time.time()),
+                )
+                write_object_from_path(urn=analysis_urn, path=output_path)
+        resized_at = int(time.time())
+        updates = {
+            WIDTH: metadata["width"],
+            HEIGHT: metadata["height"],
+            FPS: str(metadata["fps"]),
+            TOTAL_FRAMES: analysis.frame_count,
+            TOTAL_BYTES: metadata["total_bytes"],
+            odb.FRAME_HEIGHT_PX: analysis.height,
+            odb.ANALYSIS_MP4: analysis.model_dump(),
+            RESIZED_AT: resized_at,
+            MOVIE_STATUS: MOVIE_STATE_READY,
+        }
+        ddbo.update_movie(movie_id, updates)
+    except Exception as exc:
+        ddbo.update_movie(movie_id, {
+            MOVIE_STATUS: odb.MOVIE_STATE_PROCESSING_FAILED,
+            odb.PROCESSING_FAILED_AT: int(time.time()),
+            odb.PROCESSING_FAILURE_SUMMARY: f"{type(exc).__name__}: {exc}"[:500],
+        })
+        raise
     completed_movie = ddbo.get_movie(movie_id)
     ddbo.put_movie_log(
         log_id=_lifecycle_log_id(movie_id, C.LOG_EVENT_MOVIE_RESIZE_COMPLETED),
@@ -536,6 +545,9 @@ def run_tracing(*, movie_id, frame_start, frame_end=None, job_id=None):
         movie_url = s3_presigned.make_signed_url(urn=analysis.urn if analysis else movie_urn)
         frame_height = analysis.height if analysis else analysis_frame_height_from_movie(
             movie_url=movie_url, rotation=rotation)
+        source_frame = ddbo.get_movie_frame(movie_id, source_frame_number)
+        if not source_frame or not source_frame.get('trackpoints'):
+            raise ValueError("Cannot trace movie without points on the selected source frame")
         remember_trackpoint_frame_height(movie=movie_record, frame_height=frame_height)
         odb.ensure_bottom_left_trackpoints(movie_id=movie_id, frame_height=frame_height)
         cleared_frames = clear_movie_tracking_after_frame(

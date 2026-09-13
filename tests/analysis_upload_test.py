@@ -6,6 +6,7 @@ import hashlib
 import cv2
 import numpy as np
 import pytest
+from botocore.exceptions import ClientError
 
 from resize_app import movie_glue
 from resize_app.analysis_mp4 import AnalysisMp4Options, rotate_frame, scale_frame
@@ -109,7 +110,9 @@ def test_failed_recode_keeps_original_and_does_not_publish_derivative(new_movie_
         movie_glue.process_uploaded_movie(movie_id=movie_id)
     movie = odb.DDBO().get_movie(movie_id)
     assert not movie.get(odb.ANALYSIS_MP4)
-    assert movie[odb.MOVIE_STATUS] != odb.MOVIE_STATE_READY
+    assert movie[odb.MOVIE_STATUS] == odb.MOVIE_STATE_PROCESSING_FAILED
+    assert movie[odb.PROCESSING_FAILED_AT]
+    assert movie[odb.PROCESSING_FAILURE_SUMMARY]
     assert odb_movie_data.read_object(movie[odb.MOVIE_DATA_URN]) == original
 
 
@@ -151,3 +154,51 @@ def test_missing_height_uses_analysis_descriptor_before_legacy_frames(client, ne
     assert response.status_code == 200
     assert response.get_json()['metadata'][odb.FRAME_HEIGHT_PX] == expected_height
     assert response.get_json()['trackpoint_dicts'][0]['y'] == expected_height - 20
+
+
+@pytest.mark.parametrize('queued', [False, True])
+def test_empty_source_preserves_later_points(new_movie_record, tmp_path, queued):
+    movie_id = new_movie_record[odb.MOVIE_ID]
+    source = tmp_path / 'source.mp4'
+    write_four_color_movie(source, width=640, height=480)
+    odb_movie_data.set_movie_data(movie_id=movie_id, movie_data=source.read_bytes())
+    movie_glue.process_uploaded_movie(movie_id=movie_id)
+    ddbo = odb.DDBO()
+    odb.put_frame_trackpoints(movie_id=movie_id, frame_number=0,
+                             trackpoints=[Trackpoint(x=10, y=20, label='Apex')])
+    odb.put_frame_trackpoints(movie_id=movie_id, frame_number=2,
+                             trackpoints=[Trackpoint(x=20, y=30, label='Apex')])
+    before = ddbo.get_frames(movie_id)
+    job_id = None
+    if queued:
+        job_id = movie_glue.prepare_tracing_request(
+            api_key=new_movie_record[odb.API_KEY], movie_id=movie_id, frame_start=1)['job_id']
+    with pytest.raises(ValueError, match='selected source frame'):
+        movie_glue.run_tracing(movie_id=movie_id, frame_start=1, job_id=job_id)
+    assert ddbo.get_frames(movie_id) == before
+    assert ddbo.get_movie(movie_id)[odb.LAST_FRAME_TRACKED] == 2
+    assert ddbo.get_active_movie_trace_lock(movie_id) is None
+
+
+def test_processing_failure_can_retry_without_replacing_source(new_movie_record, tmp_path):
+    movie_id = new_movie_record[odb.MOVIE_ID]
+    source = tmp_path / 'source.mp4'
+    write_four_color_movie(source, width=480, height=640)
+    original = source.read_bytes()
+    odb_movie_data.set_movie_data(movie_id=movie_id, movie_data=original)
+    ddbo = odb.DDBO()
+    urn = ddbo.get_movie(movie_id)[odb.MOVIE_DATA_URN]
+    # A transient unavailable S3 object can become readable on a later delivery.
+    odb_movie_data.delete_object(urn)
+    with pytest.raises(ClientError):
+        movie_glue.process_uploaded_movie(movie_id=movie_id)
+    failed = ddbo.get_movie(movie_id)
+    assert failed[odb.MOVIE_STATUS] == odb.MOVIE_STATE_PROCESSING_FAILED
+    assert failed[odb.PROCESSING_FAILURE_SUMMARY]
+    odb_movie_data.write_object(urn, original)
+    movie_glue.process_uploaded_movie(movie_id=movie_id)
+    completed = ddbo.get_movie(movie_id)
+    assert completed[odb.MOVIE_STATUS] == odb.MOVIE_STATE_READY
+    assert not completed.get(odb.PROCESSING_FAILURE_SUMMARY)
+    assert completed[odb.ANALYSIS_MP4]['height'] == 640
+    assert odb_movie_data.read_object(urn) == original

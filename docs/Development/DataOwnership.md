@@ -237,3 +237,5 @@ Use these files as the implementation sources when updating this page:
 - `lambda-resize/src/resize_app/movie_glue.py` - validated analysis MP4 and traced movie writes
 - `template.yaml` - deployed DynamoDB tables and the stack-independent S3 bucket
   parameter
+
+The resize worker owns `processing_failed_at` and `processing_failure_summary`; it records a terminal `processing failed` status after decode, validation, or publication failures. A retry clears failure metadata. Demo seeding runs the same analysis MP4 processing before declaring each new movie ready. Analysis and traced rendering ignore MOV edit lists to retain every stored source frame.

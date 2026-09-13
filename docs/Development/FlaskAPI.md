@@ -1034,3 +1034,5 @@ When `frame_height_px` is missing, a validated `analysis_mp4.height` takes
 precedence over legacy JPEG/ZIP recovery and source-dimension scaling.
 Metadata-only reads use this descriptor without caching or artifact reads;
 frame-range requests and downloads may persist it during coordinate migration.
+
+Movie processing failures return `status: "processing failed"`, `processing_failed_at`, and a bounded `processing_failure_summary` in movie metadata. The upload page stops polling and displays the reason. Retrying processing clears these failure fields and preserves the original source object.

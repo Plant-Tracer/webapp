@@ -380,3 +380,10 @@ Unreleased Summary
     * Documentation: update and make more complete
     * Documentation: Installation steps updated
     * Documentation: Add ReleaseHistory page
+
+Upload processing and tracing safeguards
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* Failed movie processing reports its reason promptly and can be retried without replacing the uploaded source.
+* Tracing from a frame without points preserves later tracking results.
+* Newly seeded demo movies include analysis MP4s. MOV edit lists no longer hide stored frames from analysis or traced rendering.

@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .video_writer import H264Writer
 
+FFMPEG_FRAME_SIZE = "size"
 DEFAULT_ANALYSIS_WIDTH = 640
 DEFAULT_ANALYSIS_HEIGHT = 640
 DEFAULT_ANALYSIS_FPS = 15.0
@@ -118,19 +119,26 @@ def scale_frame(frame: np.ndarray, options: AnalysisMp4Options) -> np.ndarray:
     return cv2.resize(frame, (scaled_width, scaled_height), interpolation=cv2.INTER_AREA)
 
 
+def source_frames(source_url: str):
+    """Decode every stored frame, including frames hidden by MOV edit lists."""
+    reader = imageio_ffmpeg.read_frames(
+        source_url, input_params=["-ignore_editlist", "1"], output_params=["-vsync", "0"])
+    try:
+        metadata = next(reader, None)
+        if metadata is None:
+            raise ValueError("Source decoder returned no metadata")
+        width, height = metadata[FFMPEG_FRAME_SIZE]
+        for pixels in reader:
+            yield cv2.cvtColor(np.frombuffer(pixels, dtype=np.uint8).reshape(height, width, 3),
+                               cv2.COLOR_RGB2BGR)
+    finally:
+        reader.close()
+
+
 def unlabelled_analysis_frames(source_url: str, options: AnalysisMp4Options):
     """Render source frames in the same geometry, without permanent playback labels."""
-    capture = cv2.VideoCapture(source_url)
-    try:
-        if not capture.isOpened():
-            raise ValueError("Cannot open source for traced movie rendering")
-        while True:
-            success, frame = capture.read()
-            if not success:
-                return
-            yield scale_frame(rotate_frame(frame, options.rotation), options)
-    finally:
-        capture.release()
+    for frame in source_frames(source_url):
+        yield scale_frame(rotate_frame(frame, options.rotation), options)
 
 
 def burn_frame_number(frame: np.ndarray, frame_number: int) -> np.ndarray:
@@ -156,6 +164,7 @@ def encode_analysis_mp4(*, source_path: Path, output_path: Path, options: Analys
         capture.release()
         raise ValueError(f"cannot open MP4: {source_path}")
     expected_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+    capture.release()
     fps = DEFAULT_ANALYSIS_FPS
     frame_count = 0
     width = 0
@@ -171,17 +180,13 @@ def encode_analysis_mp4(*, source_path: Path, output_path: Path, options: Analys
             ],
             quality=None,
         )
-        while True:
-            success, frame = capture.read()
-            if not success or frame is None:
-                break
+        for frame in source_frames(str(source_path)):
             frame = scale_frame(rotate_frame(frame, options.rotation), options)
             frame_count += 1
             labelled = burn_frame_number(frame, frame_count)
             writer.append_data(cv2.cvtColor(labelled, cv2.COLOR_BGR2RGB))
             height, width = labelled.shape[:2]
     finally:
-        capture.release()
         if writer is not None:
             writer.close()
     if frame_count == 0:

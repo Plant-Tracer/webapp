@@ -4,6 +4,7 @@ dbutil.py - CLI for dbmaint module.
 
 import argparse
 import sys
+import subprocess
 import json
 import os
 import csv
@@ -23,7 +24,7 @@ from app.paths import TEST_DATA_DIR
 from app.odb import (
     ADMIN_FOR_COURSES, COURSE_ID, COURSE_KEY, COURSE_NAME, COURSES, EMAIL,
     ENABLED, DEFAULT_COURSE_ID, USER_ID, USER_NAME, DDBO, InvalidCourse_Id,
-    MOVIE_STATUS, MOVIE_STATE_READY, TITLE,
+    TITLE,
 )
 from app.odb_movie_data import set_movie_data
 from app.constants import C, configure_local_environment, env_value
@@ -132,7 +133,7 @@ def populate_demo_movies():
                                             title=title,
                                             description=DEMO_MOVIE_DESCRIPTION)
             set_movie_data(movie_id=movie_id, movie_data=f.read())
-            ddbo.update_movie(movie_id, {MOVIE_STATUS: MOVIE_STATE_READY})
+            subprocess.run([sys.executable, "-m", "lambda_resize_cli", "process-upload", movie_id], check=True)
             existing_titles.add(title)
             seeded += 1
         # If a trackpoints JSON exists next to the movie (e.g. foo.mov -> foo_trackpoints.json), apply it.

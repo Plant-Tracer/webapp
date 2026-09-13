@@ -274,7 +274,7 @@ delete-local:
 	$(MAKE) stop-local-services
 	/bin/rm -rf var
 
-make-local-demo:
+make-local-demo: vend-lambda-resize
 	@echo creating local demo tables, course, and movies with the prefix demo-
 	$(MAKE) start-local-services
 	$(MAKE) make-local-bucket
