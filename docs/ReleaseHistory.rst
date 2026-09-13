@@ -78,6 +78,15 @@ Release Notes
 Unreleased Summary
 ******************
 
+    * Failed upload processing reports its reason and retries without replacing
+      source bytes. Worker leases prevent overlapping or stale attempts from
+      replacing a successful result; analysis MP4 objects include their checksum
+      in the key. Failed demo seeds resume on the next run (refs #1162).
+    * Tracing from an empty source frame preserves later results. Demo movies
+      include analysis MP4s, and MOV edit lists do not hide stored frames from
+      analysis or traced rendering. Remote sources are downloaded before FFmpeg
+      decoding for consistent Linux/macOS behavior (refs #1162, #1166).
+
     * Recover missing coordinate height from the validated analysis MP4 descriptor
       so small uploads retain their actual unscaled height (refs #1162).
 
@@ -384,10 +393,3 @@ Unreleased Summary
     * Documentation: update and make more complete
     * Documentation: Installation steps updated
     * Documentation: Add ReleaseHistory page
-
-Upload processing and tracing safeguards
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-* Failed movie processing reports its reason promptly and can be retried without replacing the uploaded source.
-* Tracing from a frame without points preserves later tracking results.
-* Newly seeded demo movies include analysis MP4s. MOV edit lists no longer hide stored frames from analysis or traced rendering.

@@ -424,13 +424,9 @@ def process_uploaded_movie(*, movie_id: str):
             if_absent=True,
         )
         return
-    started_at = int(time.time())
-    ddbo.update_movie(
-        movie_id,
-        {RESIZE_STARTED_AT: started_at, MOVIE_STATUS: MOVIE_STATE_PROCESSING,
-         odb.PROCESSING_FAILED_AT: None, odb.PROCESSING_FAILURE_SUMMARY: None},
-        touch_activity=False,
-    )
+    attempt = ddbo.claim_movie_processing(movie_id)
+    if attempt is None:
+        return
     movie = ddbo.get_movie(movie_id)  # Read rotation only after processing has closed editing.
     try:
         ddbo.put_movie_log(
@@ -460,11 +456,12 @@ def process_uploaded_movie(*, movie_id: str):
                 )
                 if movie.get('fpm'):
                     mp4_metadata_lib.set_fpm(str(output_path), movie['fpm'])
-                analysis_urn = s3_presigned.analysis_mp4_urn(movie_data_urn=movie_urn)
+                digest = hashlib.sha256(output_path.read_bytes()).hexdigest()
+                analysis_urn = s3_presigned.analysis_mp4_urn(movie_data_urn=movie_urn, sha256=digest)
                 analysis = AnalysisMp4(
                     urn=analysis_urn, width=result.width, height=result.height,
                     frame_count=result.frame_count, rotation=result.rotation,
-                    sha256=hashlib.sha256(output_path.read_bytes()).hexdigest(), generated_at=int(time.time()),
+                    sha256=digest, generated_at=int(time.time()),
                 )
                 write_object_from_path(urn=analysis_urn, path=output_path)
         resized_at = int(time.time())
@@ -479,13 +476,18 @@ def process_uploaded_movie(*, movie_id: str):
             RESIZED_AT: resized_at,
             MOVIE_STATUS: MOVIE_STATE_READY,
         }
-        ddbo.update_movie(movie_id, updates)
+        updates.update({odb.PROCESSING_ATTEMPT: None, odb.PROCESSING_EXPIRES_AT: None})
+        ddbo.update_movie(movie_id, updates, expected_processing_attempt=attempt)
     except Exception as exc:
-        ddbo.update_movie(movie_id, {
-            MOVIE_STATUS: odb.MOVIE_STATE_PROCESSING_FAILED,
-            odb.PROCESSING_FAILED_AT: int(time.time()),
-            odb.PROCESSING_FAILURE_SUMMARY: f"{type(exc).__name__}: {exc}"[:500],
-        })
+        try:
+            ddbo.update_movie(movie_id, {
+                MOVIE_STATUS: odb.MOVIE_STATE_PROCESSING_FAILED,
+                odb.PROCESSING_FAILED_AT: int(time.time()),
+                odb.PROCESSING_FAILURE_SUMMARY: f"{type(exc).__name__}: {exc}"[:500],
+                odb.PROCESSING_ATTEMPT: None, odb.PROCESSING_EXPIRES_AT: None,
+            }, expected_processing_attempt=attempt)
+        except odb.MovieProcessingLeaseLost:
+            LOGGER.info("Discarding stale processing failure movie_id=%s attempt=%s", movie_id, attempt)
         raise
     completed_movie = ddbo.get_movie(movie_id)
     ddbo.put_movie_log(

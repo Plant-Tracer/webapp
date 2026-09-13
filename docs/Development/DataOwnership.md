@@ -163,6 +163,7 @@ The current S3 artifacts are:
 | --- | --- | --- |
 | Upload staging | `upload_staging_urn`, under `s3://bucket/uploads/{deployment_id}/...` | Temporary browser presigned POST target; removed after verification and copy |
 | Original uploaded movie | `movie_data_urn`, under `s3://bucket/movies/{deployment_id}/...` | Durable archive written by lambda-resize from staging |
+| Analysis MP4 | `analysis_mp4.urn`, ending in `_{sha256}_scaled.mp4` | Validated playback/tracing derivative owned by lambda-resize; checksum-addressed bytes remain immutable across attempts |
 | Per-frame JPEG, when persisted | `frame_urn`, under the durable movie directory | Derived artifact; may be regenerated from the movie |
 | ZIP of analysis frames | `movie_zipfile_urn`, derived from `movie_data_urn` with a `_zipfile` suffix before the extension | Historical artifact; new tracing no longer writes ZIPs |
 | Traced movie | `movie_traced_urn`, derived from `movie_data_urn` with a `_traced` suffix before the extension | Derived MP4 with marker overlays, written after each successful trace |
@@ -239,3 +240,5 @@ Use these files as the implementation sources when updating this page:
   parameter
 
 The resize worker owns `processing_failed_at` and `processing_failure_summary`; it records a terminal `processing failed` status after decode, validation, or publication failures. A retry clears failure metadata. Demo seeding runs the same analysis MP4 processing before declaring each new movie ready. Analysis and traced rendering ignore MOV edit lists to retain every stored source frame.
+
+Upload processing uses `processing_attempt` and `processing_expires_at` for a 15-minute worker lease. Busy deliveries raise a retryable lock error; an expired lease can be reclaimed. Terminal updates require the current unexpired attempt and clear its lease. A completed analysis descriptor prevents another claim. Checksum-addressed analysis objects ensure stale workers cannot overwrite the published derivative. Newly created demo rows that failed processing are retried by the next seed command.

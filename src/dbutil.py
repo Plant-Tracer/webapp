@@ -112,10 +112,7 @@ def populate_demo_movies():
     demo_user = odb.get_user_email(DEMO_USER_EMAIL)
     demo_user_id = demo_user[USER_ID]
     ddbo = DDBO()
-    existing_titles = {
-        movie.get(TITLE)
-        for movie in ddbo.get_movies_for_course_id(DEMO_COURSE_ID)
-    }
+    existing_movies = ddbo.get_movies_for_course_id(DEMO_COURSE_ID)
     seeded = 0
     skipped = 0
     demo_movie_files = sorted(
@@ -124,8 +121,14 @@ def populate_demo_movies():
     )
     for (ct, fn) in enumerate(demo_movie_files, 1):
         title = DEMO_MOVIE_TITLE.format(ct=ct)
-        if title in existing_titles:
-            skipped += 1
+        existing = next((movie for movie in existing_movies if movie.get(TITLE) == title), None)
+        if existing:
+            if existing.get(odb.MOVIE_STATUS) == odb.MOVIE_STATE_READY:
+                skipped += 1
+            else:
+                subprocess.run([sys.executable, "-m", "lambda_resize_cli", "process-upload",
+                                existing[odb.MOVIE_ID]], check=True)
+                seeded += 1
             continue
         with open(os.path.join(TEST_DATA_DIR, fn), 'rb') as f:
             movie_id = odb.create_new_movie(user_id=demo_user_id,
@@ -134,7 +137,6 @@ def populate_demo_movies():
                                             description=DEMO_MOVIE_DESCRIPTION)
             set_movie_data(movie_id=movie_id, movie_data=f.read())
             subprocess.run([sys.executable, "-m", "lambda_resize_cli", "process-upload", movie_id], check=True)
-            existing_titles.add(title)
             seeded += 1
         # If a trackpoints JSON exists next to the movie (e.g. foo.mov -> foo_trackpoints.json), apply it.
         base, _ = os.path.splitext(fn)

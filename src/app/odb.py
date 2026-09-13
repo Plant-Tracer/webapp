@@ -213,6 +213,8 @@ MOVIE_STATUS = 'status'
 MOVIE_STATE_UPLOADING  = 'uploading'
 MOVIE_STATE_PROCESSING = 'processing'
 MOVIE_STATE_PROCESSING_FAILED = 'processing failed'
+PROCESSING_ATTEMPT = 'processing_attempt'
+PROCESSING_EXPIRES_AT = 'processing_expires_at'
 PROCESSING_FAILED_AT = 'processing_failed_at'
 PROCESSING_FAILURE_SUMMARY = 'processing_failure_summary'
 MOVIE_STATE_READY      = 'ready'
@@ -322,6 +324,14 @@ class NoMovieData(ODB_Errors):
 
 class MovieGeometryFinalized(ODB_Errors):
     """Processing has fixed the movie geometry; upload another movie to change it."""
+
+class MovieProcessingLocked(ODB_Errors):
+    """An unexpired worker already owns upload processing."""
+
+
+class MovieProcessingLeaseLost(ODB_Errors):
+    """A stale worker must not publish a terminal result."""
+
 
 class MovieUploadIncomplete(ODB_Errors):
     """Upload must complete before coordinate data can be saved."""
@@ -547,7 +557,8 @@ class DDBO:
         # 5) run the update
         return table.update_item(**params)
 
-    def update_movie(self, movie_id, updates: dict, *, touch_activity=True, expected_status=None):
+    def update_movie(self, movie_id, updates: dict, *, touch_activity=True, expected_status=None,
+                     expected_processing_attempt=None):
         """Update a movie and, by default, record its latest write activity.
 
         The former MySQL movie table exposed an automatically maintained
@@ -563,6 +574,11 @@ class DDBO:
         if touch_activity:
             movie_updates[LAST_ACTIVITY_AT] = int(time.time())
         condition = None if expected_status is None else Attr(MOVIE_STATUS).eq(expected_status)
+        if expected_processing_attempt is not None:
+            ownership = (Attr(PROCESSING_ATTEMPT).eq(expected_processing_attempt)
+                         & Attr(PROCESSING_EXPIRES_AT).gt(int(time.time()))
+                         & Attr(ANALYSIS_MP4).not_exists())
+            condition = ownership if condition is None else condition & ownership
         geometry_condition = None
         for prop in (MOVIE_ROTATION, WIDTH, HEIGHT, FRAME_HEIGHT_PX):
             if prop not in movie_updates:
@@ -580,9 +596,36 @@ class DDBO:
         try:
             return self.update_table(self.movies, movie_id, movie_updates, condition_expression=condition)
         except ClientError as exc:
+            if (expected_processing_attempt is not None
+                    and exc.response['Error']['Code'] == 'ConditionalCheckFailedException'):
+                current = self.get_movie(movie_id)
+                if (current.get(PROCESSING_ATTEMPT) != expected_processing_attempt
+                        or int(current.get(PROCESSING_EXPIRES_AT) or 0) <= int(time.time())
+                        or current.get(ANALYSIS_MP4)):
+                    raise MovieProcessingLeaseLost(movie_id) from exc
             if geometry_condition is not None and exc.response['Error']['Code'] == 'ConditionalCheckFailedException':
                 raise MovieGeometryFinalized(movie_id) from exc
             raise
+
+    def claim_movie_processing(self, movie_id):
+        """Claim upload work atomically; busy deliveries retry after the owner finishes."""
+        now = int(time.time())
+        attempt = str(uuid.uuid4())
+        available = (Attr(PROCESSING_ATTEMPT).not_exists()
+                     | Attr(PROCESSING_EXPIRES_AT).lte(now))
+        try:
+            self.update_table(self.movies, movie_id, {
+                PROCESSING_ATTEMPT: attempt, PROCESSING_EXPIRES_AT: now + 15 * 60,
+                MOVIE_STATUS: MOVIE_STATE_PROCESSING, RESIZE_STARTED_AT: now,
+                PROCESSING_FAILED_AT: None, PROCESSING_FAILURE_SUMMARY: None,
+            }, condition_expression=Attr(MOVIE_ID).exists() & Attr(ANALYSIS_MP4).not_exists() & available)
+        except ClientError as exc:
+            if exc.response['Error']['Code'] != 'ConditionalCheckFailedException':
+                raise
+            if self.get_movie(movie_id).get(ANALYSIS_MP4):
+                return None
+            raise MovieProcessingLocked(movie_id) from exc
+        return attempt
 
     def put_movie_log(self, *, event_type, movie, ipaddr, log_id=None, event_id=None,
                       object_key=None, sequencer=None, total_bytes=None,

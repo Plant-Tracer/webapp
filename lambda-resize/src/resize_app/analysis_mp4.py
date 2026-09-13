@@ -5,9 +5,12 @@
 import json
 import shutil
 import subprocess
+import tempfile
+from contextlib import ExitStack
 from pathlib import Path
 
 import imageio_ffmpeg
+import requests
 
 import cv2
 import numpy as np
@@ -120,19 +123,29 @@ def scale_frame(frame: np.ndarray, options: AnalysisMp4Options) -> np.ndarray:
 
 
 def source_frames(source_url: str):
-    """Decode every stored frame, including frames hidden by MOV edit lists."""
-    reader = imageio_ffmpeg.read_frames(
-        source_url, input_params=["-ignore_editlist", "1"], output_params=["-vsync", "0"])
-    try:
-        metadata = next(reader, None)
-        if metadata is None:
-            raise ValueError("Source decoder returned no metadata")
-        width, height = metadata[FFMPEG_FRAME_SIZE]
-        for pixels in reader:
-            yield cv2.cvtColor(np.frombuffer(pixels, dtype=np.uint8).reshape(height, width, 3),
-                               cv2.COLOR_RGB2BGR)
-    finally:
-        reader.close()
+    """Decode every stored frame from a local file, including frames hidden by edit lists."""
+    with ExitStack() as resources:
+        source_path = source_url
+        if source_url.startswith(("http://", "https://")):
+            # Avoid platform-specific FFmpeg HTTP support during traced rendering.
+            source_file = resources.enter_context(tempfile.NamedTemporaryFile(suffix=".mov"))
+            with requests.get(source_url, stream=True, timeout=60) as response:
+                response.raise_for_status()
+                shutil.copyfileobj(response.raw, source_file)
+            source_file.flush()
+            source_path = source_file.name
+        reader = imageio_ffmpeg.read_frames(
+            source_path, input_params=["-ignore_editlist", "1"], output_params=["-vsync", "0"])
+        try:
+            metadata = next(reader, None)
+            if metadata is None:
+                raise ValueError("Source decoder returned no metadata")
+            width, height = metadata[FFMPEG_FRAME_SIZE]
+            for pixels in reader:
+                yield cv2.cvtColor(np.frombuffer(pixels, dtype=np.uint8).reshape(height, width, 3),
+                                   cv2.COLOR_RGB2BGR)
+        finally:
+            reader.close()
 
 
 def unlabelled_analysis_frames(source_url: str, options: AnalysisMp4Options):

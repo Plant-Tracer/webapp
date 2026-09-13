@@ -190,9 +190,9 @@ def traced_movie_urn(*, movie_data_urn):
     )
 
 
-def analysis_mp4_urn(*, movie_data_urn):
+def analysis_mp4_urn(*, movie_data_urn, sha256):
     """Keep the source and its playback derivative in distinct objects."""
-    return movie_data_urn.rsplit('.', 1)[0] + '_scaled.mp4'
+    return movie_data_urn.rsplit('.', 1)[0] + f'_{sha256}_scaled.mp4'
 
 
 def analysis_zip_urn(*, movie_data_urn):

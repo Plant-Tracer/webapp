@@ -154,6 +154,7 @@ def test_persisted_pydantic_models_round_trip_through_dynamodb_local(local_ddb):
             upload_staging_urn="s3://test/staging", upload_event_id="event-1",
             resize_queued_at=13, resize_started_at=14, resized_at=15,
             processing_failed_at=14, processing_failure_summary="previous encoding failure",
+            processing_attempt="attempt", processing_expires_at=17,
             date_uploaded=16, orig_movie=movie_ids[0], fps="30", fpm="2.5",
             width=640, height=480, frame_height_px=480,
             analysis_mp4=AnalysisMp4(urn="s3://test/movie_scaled.mp4", width=640, height=480,

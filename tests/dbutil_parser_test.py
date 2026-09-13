@@ -327,6 +327,20 @@ def test_demo_movie_seeding_is_idempotent(local_ddb, capsys):
             assert movie[odb.ANALYSIS_MP4]
             assert movie[odb.MOVIE_STATUS] == odb.MOVIE_STATE_READY
 
+        movie = dbutil.DDBO().get_movies_for_course_id(dbutil.DEMO_COURSE_ID)[0]
+        movie_id = movie[MOVIE_ID]
+        original = odb_movie_data.read_object(movie[odb.MOVIE_DATA_URN])
+        # A previous run created its row but did not finish processing.
+        dbutil.DDBO().update_movie(movie_id, {
+            odb.ANALYSIS_MP4: None, odb.RESIZED_AT: None,
+            odb.MOVIE_STATUS: odb.MOVIE_STATE_PROCESSING_FAILED,
+        })
+        assert dbutil.populate_demo_movies() == (1, seeded - 1)
+        repaired = dbutil.DDBO().get_movie(movie_id)
+        assert repaired[odb.ANALYSIS_MP4]
+        assert repaired[odb.MOVIE_STATUS] == odb.MOVIE_STATE_READY
+        assert odb_movie_data.read_object(repaired[odb.MOVIE_DATA_URN]) == original
+        assert len(dbutil.DDBO().get_movies_for_course_id(dbutil.DEMO_COURSE_ID)) == seeded
         dbutil.seed_demo_movies()
         seed_output = capsys.readouterr().out
         assert f"demo movies seeded=0 skipped={seeded}" in seed_output

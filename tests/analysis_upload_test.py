@@ -2,6 +2,7 @@
 # pylint: disable=no-member
 
 import hashlib
+from concurrent.futures import ThreadPoolExecutor
 
 import cv2
 import numpy as np
@@ -202,3 +203,46 @@ def test_processing_failure_can_retry_without_replacing_source(new_movie_record,
     assert not completed.get(odb.PROCESSING_FAILURE_SUMMARY)
     assert completed[odb.ANALYSIS_MP4]['height'] == 640
     assert odb_movie_data.read_object(urn) == original
+
+
+def test_processing_claim_rejects_overlap_and_stale_terminal_writes(new_movie_record, tmp_path):
+    """An expired worker cannot replace a newer worker's successful movie or artifact."""
+    movie_id = new_movie_record[odb.MOVIE_ID]
+    source = tmp_path / 'source.mp4'
+    write_four_color_movie(source, width=480, height=640)
+    odb_movie_data.set_movie_data(movie_id=movie_id, movie_data=source.read_bytes())
+    ddbo = odb.DDBO()
+    old_attempt = ddbo.claim_movie_processing(movie_id)
+    owned = ddbo.get_movie(movie_id)
+    with pytest.raises(movie_glue.odb.MovieProcessingLocked):
+        movie_glue.process_uploaded_movie(movie_id=movie_id)
+    assert ddbo.get_movie(movie_id) == owned
+    ddbo.update_movie(movie_id, {odb.PROCESSING_EXPIRES_AT: 0})
+    movie_glue.process_uploaded_movie(movie_id=movie_id)
+    completed = ddbo.get_movie(movie_id)
+    artifact = odb_movie_data.read_object(completed[odb.ANALYSIS_MP4]['urn'])
+    for status in (odb.MOVIE_STATE_PROCESSING_FAILED, odb.MOVIE_STATE_READY):
+        with pytest.raises(odb.MovieProcessingLeaseLost):
+            ddbo.update_movie(movie_id, {odb.MOVIE_STATUS: status,
+                                        odb.PROCESSING_FAILURE_SUMMARY: 'stale attempt'},
+                              expected_processing_attempt=old_attempt)
+    assert ddbo.claim_movie_processing(movie_id) is None
+    assert ddbo.get_movie(movie_id) == completed
+    assert odb_movie_data.read_object(completed[odb.ANALYSIS_MP4]['urn']) == artifact
+    assert completed[odb.ANALYSIS_MP4]['sha256'] in completed[odb.ANALYSIS_MP4]['urn']
+    assert not completed.get(odb.PROCESSING_ATTEMPT)
+
+
+def test_processing_claim_has_one_winner(new_movie_record):
+    """Actual concurrent DynamoDB updates cannot both acquire upload processing."""
+    movie_id = new_movie_record[odb.MOVIE_ID]
+    def claim():
+        try:
+            return odb.DDBO().claim_movie_processing(movie_id)
+        except odb.MovieProcessingLocked:
+            return None
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        attempts = list(pool.map(lambda _: claim(), range(2)))
+    winners = [attempt for attempt in attempts if attempt]
+    assert len(winners) == 1
+    assert odb.DDBO().get_movie(movie_id)[odb.PROCESSING_ATTEMPT] == winners[0]
