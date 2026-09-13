@@ -201,9 +201,9 @@ class C:
     MOVIE_PROPS_INT = (
         'published', 'deleted', 'version', 'last_frame_tracked', 'research_use', 'credit_by_name',
         'created_at', 'uploaded_at', 'last_activity_at', 'date_uploaded',
-        'upload_bytes_expected', 'total_bytes', 'total_frames', 'width', 'height', 'rotation_steps',
+        'upload_bytes_expected', 'total_bytes', 'total_frames', 'width', 'height', 'frame_height_px', 'rotation_steps',
         'trim_start_frame', 'trim_end_frame', 'needs_retracing',
-        'resize_queued_at', 'resize_started_at', 'resized_at',
+        'resize_queued_at', 'resize_started_at', 'resized_at', 'processing_failed_at', 'processing_expires_at',
     )
     MOVIE_PROPS_STR = ('fps', 'fpm', 'trackpoint_origin')
 

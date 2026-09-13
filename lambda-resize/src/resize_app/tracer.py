@@ -21,7 +21,6 @@ import argparse
 import subprocess
 import logging
 import re
-import zipfile
 from pathlib import Path
 
 import cv2
@@ -29,7 +28,8 @@ import numpy as np
 
 from .src.app.schema import Trackpoint
 from .src.app.constants import C
-from .mpeg_jpeg_zip import convert_frame_to_jpeg,add_jpeg_comment,get_frames_from_url
+from .mpeg_jpeg_zip import get_frames_from_url
+from .analysis_mp4 import AnalysisMp4Options, unlabelled_analysis_frames
 from .video_writer import H264Writer
 
 logging.basicConfig(format=C.LOGGING_CONFIG, level=C.LOGGING_LEVEL)
@@ -258,10 +258,10 @@ def trace_movie_v2(*, movie_url,
                    frame_start:int,
                    frame_end:int | None = None,
                    trackpoints:List[Trackpoint],
-                   movie_zipfile_path:Optional[Path] = None,
                    movie_traced_path:Optional[Path] = None,
                    movie_traced_frame_range:TracedMovieFrameRange | None = None,
                    rotation=0,
+                   render_source: tuple[str, AnalysisMp4Options] | None = None,
                    callback = prototype_callback,
                    comment="Processed by PlantTracer AWS Lambda"):
     """
@@ -272,8 +272,8 @@ def trace_movie_v2(*, movie_url,
     :param frame_start: first frame to track.
     :param frame_end: optional inclusive final frame to track.
     :param trackpoints: a trackpoints data structure. Trackpoints for frame_start-1 must be provided.
-    :param movie_zipfile_path: If provided, where the movie_zipfile of scaled, rotated images goes.
     :param movie_traced_frame_range: inclusive frame range to include in the traced MP4.
+    :param render_source: original URL and shared transform options when movie_url is an analysis MP4.
     :param rotation: the rotation (in degrees) to apply to the movie before scaling
     """
 
@@ -306,12 +306,6 @@ def trace_movie_v2(*, movie_url,
     if not any((tp for tp in trackpoints if tp.frame_number == frame_start-1)):
         raise ValueError(f"len(trackpoints)={len(trackpoints)} but no tracked points for frame {frame_start-1}")
 
-    # Check to see if we are making a movie_zipfile
-    zf = None
-    if movie_zipfile_path is not None:
-        # pylint: disable=consider-using-with
-        zf = zipfile.ZipFile(movie_zipfile_path, mode='w', compression=zipfile.ZIP_DEFLATED, compresslevel=9)
-
     # Check to see if we are making a movie_traced
     movie_traced_writer = None
     if movie_traced_path is not None:
@@ -320,13 +314,15 @@ def trace_movie_v2(*, movie_url,
             fps=15,
             output_params=['-metadata', f'comment={comment}'],
         )
+    render_frames = unlabelled_analysis_frames(*render_source) if render_source else None
     trackpoints_prev = None
     gray_frame_prev = None
     trackpoints_this = None
     trackpoint_segments:list[TrackpointSegment] = []
     colors_by_label = trackpoint_colors(trackpoints)
     try:
-        for (frame_number, frame) in enumerate(get_frames_from_url(movie_url, rotation)):
+        for (frame_number, frame) in enumerate(get_frames_from_url(movie_url, rotation, transform=render_source is None)):
+            clean_frame = next(render_frames) if render_frames else frame
             # Trace only in the requested range; outside it use existing trackpoints for rendering/callbacks.
             gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             if frame_number >= frame_start and (frame_end is None or frame_number <= frame_end):
@@ -350,19 +346,12 @@ def trace_movie_v2(*, movie_url,
                                            current_trackpoints=trackpoints_this,
                                            segments=trackpoint_segments)
 
-            # Create the movie_zipfile if asked
-            if zf is not None:
-                jpeg = convert_frame_to_jpeg(frame)
-                if comment is not None:
-                    jpeg = add_jpeg_comment(jpeg, comment)
-                zf.writestr(f"frame_{frame_number:04d}.jpeg", jpeg)
-
             # Label the frame and write to the mp4 output if we are doing that
             if movie_traced_writer and frame_in_traced_movie:
-                frame_to_label = frame.copy()
+                frame_to_label = clean_frame.copy()
                 cv2_label_frame(frame=frame_to_label,
                                 trackpoints=trackpoints_this,
-                                frame_label=frame_number,
+                                frame_label=None,
                                 trackpoint_segments=trackpoint_segments,
                                 colors_by_label=colors_by_label)
                 # IMPORTANT: OpenCV uses BGR colors, but the H.264 writer expects RGB.
@@ -377,12 +366,10 @@ def trace_movie_v2(*, movie_url,
             trackpoints_prev = trackpoints_this
             gray_frame_prev = gray_frame
     finally:
-        try:
-            if movie_traced_writer:
-                movie_traced_writer.close()
-        finally:
-            if zf:
-                zf.close()
+        if render_frames:
+            render_frames.close()
+        if movie_traced_writer:
+            movie_traced_writer.close()
     return trackpoints_output
 
 

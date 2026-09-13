@@ -170,7 +170,6 @@ def test_run_tracing_passes_frame_end_and_ignores_callback_frames_after_end(new_
             frame_data=None,
             frame_trackpoints=[Trackpoint(x=14, y=24, label="apex", frame_number=4)],
         ))
-        kwargs["movie_zipfile_path"].write_bytes(b"test zip")
         kwargs["movie_traced_path"].write_bytes(b"test mp4")
         return [
             Trackpoint(x=10, y=20, label="apex", frame_number=1),
@@ -190,7 +189,7 @@ def test_run_tracing_passes_frame_end_and_ignores_callback_frames_after_end(new_
         assert movie[movie_glue.MOVIE_STATUS] == movie_glue.MOVIE_STATE_TRACING_COMPLETED
         assert movie[movie_glue.NEEDS_RETRACING] == 0
         assert movie[movie_glue.MOVIE_TRACED_URN].endswith("_traced.mov")
-        assert movie[movie_glue.MOVIE_ZIPFILE_URN].endswith("_zipfile.mov")
+        assert not movie.get(movie_glue.MOVIE_ZIPFILE_URN)
         assert movie[movie_glue.odb.LAST_ACTIVITY_AT] > 1
         assert "trackpoints" not in ddbo.get_movie_frame(movie_id, 2)
         frame_three = movie_glue.get_movie_trackpoints(

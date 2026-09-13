@@ -13,7 +13,19 @@
 const PLAY_MSEC = 100;          // pause between frames; could be 1000/29.92
 
 import { $ } from "./utils.js";
-import { CanvasController, WebImage, Text } from "./canvas_controller.mjs";
+import { CanvasController, CanvasItem, WebImage, Text } from "./canvas_controller.mjs";
+
+class VideoImage extends CanvasItem {
+    constructor(frame) {
+        super(0, 0, 'MP4 frame');
+        this.frame = frame;
+        this.width = frame.displayWidth;
+        this.height = frame.displayHeight;
+        this.fills_bounds = true;
+        this.draggable = false;
+    }
+    draw(ctx) { ctx.drawImage(this.frame, 0, 0); }
+}
 
 class MovieController extends CanvasController {
     constructor( div_selector ) {
@@ -29,12 +41,18 @@ class MovieController extends CanvasController {
         this.cached_web_images = {};
         this.timer = null;          // when playing or reverse playing, this is the timer that repeatedly calls next or prev
         this.bounce = false;    // when playing, bounce off the ends
+        this.playback_fps = 10;
+        this.playback_speed = 1;
         this.loop = false;    // when playing, Loop from end to beginning
 
         this.bind_movie_controls(div_selector);
     }
 
     bind_movie_controls(div_selector) {
+        $(div_selector + ' .playback_speed').off('change').on('change', (event) => {
+            const speed = Number(event.target.value);
+            if (Number.isFinite(speed) && speed > 0) this.playback_speed = speed;
+        });
         // set up movie controls  (manipulations are all done with CSS classes)
         // pressing a button calls either play() or goto_frame()
         $(div_selector + " input.first_button").off('click').on('click', () => {this.goto_frame(this.first_frame_target());});
@@ -42,8 +60,8 @@ class MovieController extends CanvasController {
         $(div_selector + " input.play_forward").off('click').on('click', () => {this.play(+1);});
         $(div_selector + " input.pause_button").off('click').on('click', () => {this.stop_button_pressed();});
         $(div_selector + " input.last_button").off('click').on('click', () => {this.goto_frame(this.last_frame_target());});
-        $(div_selector + " input.next_frame").off('click').on('click',  () => {this.goto_frame(this.frame_number+1);});
-        $(div_selector + " input.prev_frame").off('click').on('click',  () => {this.goto_frame(this.frame_number-1);});
+        $(div_selector + " input.next_frame").off('click').on('click',  () => {this.goto_frame((this.requested_frame ?? this.frame_number)+1);});
+        $(div_selector + " input.prev_frame").off('click').on('click',  () => {this.goto_frame((this.requested_frame ?? this.frame_number)-1);});
         $(div_selector + " input.frame_number_field").off('input').on('input', () => {
             let new_frame = this.frame_number_field.val();
             if (new_frame=='') {            // turn '' into a "0"
@@ -91,6 +109,7 @@ class MovieController extends CanvasController {
          * but the images are only downloaded the first time.
          */
         for(let i = 0;i<this.frames.length;i++){
+            if (this.mp4_player) continue;
             const url = frames[i].frame_url;
             if (!this.cached_web_images[ url ]) {
                 this.cached_web_images[ url ] = new WebImage(0, 0, frames[i].frame_url);
@@ -112,7 +131,37 @@ class MovieController extends CanvasController {
      * Always redraws.
      *
      */
-    goto_frame( frame ) {
+    goto_frame(frame) {
+        if (this.mp4_player) return this.goto_mp4_frame(frame);
+        return this.show_frame(frame);
+    }
+
+    async goto_mp4_frame(frame) {
+        const index = Math.max(0, Math.min(this.frames.length - 1, parseInt(frame, 10) || 0));
+        const request = (this.frame_request || 0) + 1;
+        this.frame_request = request;
+        this.requested_frame = index;
+        this.frame_loading = true;
+        this.set_movie_control_buttons();
+        try {
+            const decoded = await this.mp4_player.getFrame(index);
+            if (request !== this.frame_request) { decoded.close(); return; }
+            this.frame_loading = false;
+            const previous = this.video_image;
+            this.video_image = new VideoImage(decoded);
+            this.show_frame(index);
+            if (previous) previous.frame.close();
+        } catch (error) {
+            if (request !== this.frame_request) return;
+            this.frame_loading = false;
+            this.requested_frame = this.frame_number;
+            this.stop_button_pressed();
+            $('#status-big').text(error.message);
+            throw error;
+        }
+    }
+
+    show_frame( frame ) {
 	// 1. Defend against empty arrays completely
 	if (!this.frames || this.frames.length === 0) {
             console.warn("goto_frame aborted: No frames loaded yet.");
@@ -137,7 +186,9 @@ class MovieController extends CanvasController {
 
 	// 2. Safely check if the frame object exists BEFORE checking .web_image
         const currentFrame = this.frames[frame];
-        if (currentFrame && currentFrame.web_image) {
+        if (this.video_image) {
+            this.add_object(this.video_image);
+        } else if (currentFrame && currentFrame.web_image) {
             this.add_object( currentFrame.web_image );
         } else {
             this.add_object( new Text(24, 24, "No web_image for frame " + frame) );
@@ -157,7 +208,9 @@ class MovieController extends CanvasController {
     /** play is using for playing (delta=+1) and reversing (delta=-1).
      * It's called by the timer or when the button is pressed
      */
-    play(delta) {
+    async play(delta) {
+        const generation = (this.play_generation || 0) + 1;
+        this.play_generation = generation;
         var next_frame = this.frame_number;
         var next_delta = delta;
         if (this.timer) {
@@ -200,13 +253,15 @@ class MovieController extends CanvasController {
             }
         }
         if (this.playing) {
-            this.goto_frame(next_frame);
-            this.timer = setTimeout( () => {this.timer=null;this.play(next_delta);}, PLAY_MSEC );
+            await this.goto_frame(next_frame);
+            if (!this.playing || generation !== this.play_generation) return;
+            this.timer = setTimeout( () => {this.timer=null;this.play(next_delta);}, PLAY_MSEC * 10 / (this.playback_fps * this.playback_speed) );
         }
         this.set_movie_control_buttons();     // enable or disable buttons as appropriate
     }
 
     stop_button_pressed() {
+        this.play_generation = (this.play_generation || 0) + 1;
         if (this.timer) {
             clearTimeout(this.timer);
             this.timer = null;

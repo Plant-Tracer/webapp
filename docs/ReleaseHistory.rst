@@ -78,6 +78,62 @@ Release Notes
 Unreleased Summary
 ******************
 
+    * Validate decoded analysis-frame types before publication; reject B-frames
+      and unknown types, and document checksum-addressed object keys (refs #1162).
+
+    * Failed upload processing reports its reason and retries without replacing
+      source bytes. Worker leases prevent overlapping or stale attempts from
+      replacing a successful result; analysis MP4 objects include their checksum
+      in the key. Failed demo seeds resume on the next run (refs #1162).
+    * Tracing from an empty source frame preserves later results. Demo movies
+      include analysis MP4s, and MOV edit lists do not hide stored frames from
+      analysis or traced rendering. Remote sources are downloaded before FFmpeg
+      decoding for consistent Linux/macOS behavior (refs #1162, #1166).
+
+    * Recover missing coordinate height from the validated analysis MP4 descriptor
+      so small uploads retain their actual unscaled height (refs #1162).
+
+    * New uploads generate a validated H.264 analysis MP4 containing every source
+      frame, rotated once, resized to fit 640 by 640 without enlargement, and
+      labeled with one-based frame numbers. The analyzer uses WebCodecs for exact
+      forward/reverse stepping before and after tracing, with adjustable playback
+      speed. Tracing consumes analysis pixels and generates no JPEG ZIP. Original
+      uploads are preserved; traced movies show markers without frame-number labels.
+      Desktop browser checks encode and play real analysis movies on Windows and
+      macOS in landscape and portrait formats without requiring local database
+      services. Restore tracing controls after stepping through an untracked movie.
+      Version 0.9.9.11 supports testing this workflow on a dev stack
+      (refs #1162, #1163, #1164, #1165, #1166, #1168, #1038).
+
+    * Report upload frame-height conflicts as consistency failures, preserve saved
+      points and pixels, and stop upload polling with the failure reason (refs #1233).
+
+    * Reject point writes before upload completion even with stale status; recover
+      height from legacy first-frame JPEGs and release upload previews on terminal
+      outcomes (refs #1233).
+
+    * Clarify that upload completion and saved frames also finalize movie
+      geometry in the rotation-conflict message (refs #1233).
+
+    * Fetch pinned MinIO test-service binaries from official GitHub releases
+      after the old download endpoint was retired (refs #1233).
+
+    * Preserve saved trackpoints when tracing fails frame-height validation,
+      including queued retracing. Reject rotation and source initialization when
+      a legacy first-frame artifact exists (refs #1233).
+
+    * Include analysis-frame pixel height and coordinate origin consistently in
+      trackpoint JSON, CSV, and XLSX downloads. Persist measured height and use
+      it in browser marker conversions for landscape and portrait movies.
+      Choose rotation before upload and reject rotation changes once upload
+      completes or legacy coordinate data exists, including shared metadata writes.
+      Restrict source initialization to fresh records without purging legacy data,
+      and reject trackpoint writes during upload setup;
+      recognize legacy upload-completion markers in the shared geometry guard.
+      Make source dimensions read-only to clients. Save processed height
+      with upload completion, recover missing legacy heights, and avoid artifact
+      reads on metadata-only requests (refs #1233).
+
     * Standardize the agent PR workflow as ``pr-to-ready``, retaining
       ``codex-to-complete`` and ``codex-to-ready`` aliases, with shared
       Codex, Claude, and Copilot implementer/reviewer instructions.

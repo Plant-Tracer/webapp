@@ -30,14 +30,11 @@ def test_extract_first_frame_reads_the_repository_test_movie(tmp_path):
 def test_parser_preserves_tracer_diagnostic_contract(tmp_path):
     """The renamed CLI retains explicit tracer artifact arguments."""
     traced = tmp_path / "traced.mp4"
-    archive = tmp_path / "frames.zip"
     args = build_parser().parse_args([
         "tracer",
         "--movie-traced", str(traced),
-        "--zipfile", str(archive),
         "--rotate", "180",
     ])
     assert args.func is trace_movie
     assert args.movie_traced == traced
-    assert args.zipfile == archive
     assert args.rotate == 180

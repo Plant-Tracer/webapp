@@ -1,0 +1,24 @@
+<!doctype html>
+<meta charset="utf-8"><title>Production analyzer frame conformance</title>
+<script src="/src/app/static/jquery-3.7.1.min.js"></script>
+<script>var API_BASE='/', LAMBDA_API_BASE='', demo_mode=false;</script>
+<div id="status-big"></div><output id="status-output">Loading</output>
+<div id="tracer">
+<canvas id="canvas-id" width="640" height="480"></canvas>
+<select class="zoom"><option value="100">100%</option></select>
+<input class="prev_frame frame_movement" id="previous-frame-button" type="button" value="Previous">
+<input class="next_frame frame_movement" id="next-frame-button" type="button" value="Next">
+<input class="frame_number_field" value="0"><input class="marker_name_input" value="">
+<input class="track_button" type="button"><table class="marker_table"></table>
+</div>
+<script type="module">
+import {trace_movie_frames} from '/src/app/static/canvas_tracer_controller.mjs';
+const output = document.querySelector('#status-output');
+try {
+    window.playerController = await trace_movie_frames('div#tracer', {
+        movie_id:'probe', total_frames:4, frame_height_px:64, width:64, height:64,
+        uploaded_at:1, trackpoint_origin:'bottom-left', analysis_read_only:true,
+    }, new URLSearchParams(location.search).get('src'), {}, '', false);
+    output.value = `Decoded ${window.playerController.frames.length} frames`;
+} catch (error) { output.value = error.message; }
+</script>

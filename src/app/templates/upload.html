@@ -17,7 +17,7 @@
 
   <form id='upload-movie-form' class='pure-form pure-form-aligned'>
     <div id='upload-instructions'>
-      <p><b>Please enter your movie title and description and then select your movie to start the upload.</b></p>
+      <p><b>Please enter your movie title and description then select and orient your movie before uploading.</b></p>
     </div>
     <fieldset>
       <div class='pure-control-group'>
@@ -38,8 +38,16 @@
       </div>
       <div class='pure-control-group'>
         <label for='movie-file'>Select movie to upload:</label>
-        <input id='movie-file' type="file" onchange='check_upload_metadata()'>
+        <input id='movie-file' type="file" onchange='preview_upload_movie()'>
         <span class="pure-form-message-inline">required</span>
+      </div>
+      <div id='upload-orientation'>
+        <p>Choose the orientation before uploading. It cannot be changed after upload completes.</p>
+        <div class='preview-container'>
+          <video id='upload-source-preview' controls muted playsinline></video>
+        </div>
+        <input id='movie-rotation' type='hidden' value='0'>
+        <button type='button' onclick='rotate_movie()'>Rotate 90º clockwise</button>
       </div>
       <div class='upload-contributor-notice'>
         <small>Please review the <a href='tos#contributor-agreement' target='_blank'>Contributor Agreement</a> before answering.</small>
@@ -78,11 +86,9 @@
   <p id='image-preview-status' class='image-preview-status'></p>
 
   <h2>Next steps</h2>
-  <p>Review the first frame of the uploaded movie. If you need to rotate it, click the rotate link below:</p>
+  <p>Review the processed first frame, then continue to analysis.</p>
   <ul>
-    <li><a href='javascript:;' id='rotate_movie_link' onclick='rotate_movie()'>
-        Rotate 90º clockwise</a> — wait for each rotation to be saved before rotating again.<span id='rotate_status'></span></li>
-    <li><a href='javascript:;' id='process_movie_link'><strong>Analyze</strong></a> — go to the analysis page (or to processing first if you rotated).</li>
+    <li><a href='javascript:;' id='process_movie_link'><strong>Analyze</strong></a> — go to the analysis page.</li>
   </ul>
   <p>Or:</p>
   <ul>
