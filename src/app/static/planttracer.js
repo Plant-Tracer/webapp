@@ -118,8 +118,15 @@ function check_upload_metadata()
 {
   const title = $('#movie-title').val();
   const description = $('#movie-description').val();
-  const movie_file = $('#movie-file').val();
-  $('#upload-button').prop('disabled', (title.length < 3 || description.length < 3 || movie_file.length<1));
+  const movieFile = $('#movie-file').prop('files')[0];
+  const sizeError = upload_size_error(movieFile);
+  $('#upload-size-error').text(sizeError);
+  $('#upload-button').prop('disabled', (title.length < 3 || description.length < 3 || !movieFile || !!sizeError));
+}
+
+function upload_size_error(file) {
+  return file && file.size > MAX_FILE_UPLOAD
+    ? `Choose a movie of ${MAX_FILE_UPLOAD / (1024 * 1024)} MiB or less.` : '';
 }
 
 function sync_attribution_ui() {
@@ -427,8 +434,10 @@ function upload_movie()
     return;
   }
 
-  if (movieFile.size > MAX_FILE_UPLOAD) {
-    $('#message').html(`That file is too big to upload. Please chose a file smaller than ${MAX_FILE_UPLOAD} bytes.`);
+  const sizeError = upload_size_error(movieFile);
+  if (sizeError) {
+    $('#message').text(sizeError);
+    check_upload_metadata();
     return;
   }
   // Hide the form immediately so the user sees that something is happening.

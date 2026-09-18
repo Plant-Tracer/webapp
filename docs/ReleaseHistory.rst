@@ -78,6 +78,9 @@ Release Notes
 Unreleased Summary
 ******************
 
+    * Disable Upload when the selected movie exceeds 256 MiB and show the size
+      limit before transfer (refs #1162).
+
     * Use standard-library HTTP downloads in the Lambda decoder and verify imports
       against only deployment dependencies. Expand analysis metadata to 50,000
       frames, reopen the player after browser Back navigation, and stop status

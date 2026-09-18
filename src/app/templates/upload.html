@@ -39,7 +39,8 @@
       <div class='pure-control-group'>
         <label for='movie-file'>Select movie to upload:</label>
         <input id='movie-file' type="file" onchange='preview_upload_movie()'>
-        <span class="pure-form-message-inline">required</span>
+        <span class="pure-form-message-inline">required; maximum {{ MAX_FILE_UPLOAD // (1024 * 1024) }} MiB</span>
+        <span id="upload-size-error" role="alert"></span>
       </div>
       <div id='upload-orientation'>
         <p>Choose the orientation before uploading. It cannot be changed after upload completes.</p>
