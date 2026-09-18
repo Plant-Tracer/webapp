@@ -627,6 +627,16 @@ the stored `status` remains visible.
 
 #### `POST /api/get-movie-metadata`
 
+The analyzer loads up to 50,000 frames of trackpoint metadata in 1,000-frame
+pages using `frame_start` and `frame_count`, avoiding a single oversized Lambda
+response. The
+`get_all_if_tracking_completed` window likewise covers 50,000 frames (previously
+10,000). Trackpoints remain in individual DynamoDB frame records. Browser polling
+stops with a warning after 30 seconds without frame progress, including stalled
+HTTP requests; this does not cancel server tracing. Terminal tracing failures
+show `tracing_failure_summary` immediately.
+
+
 Get metadata and optionally per-frame trackpoints for a specific movie.
 
 `metadata.frame_height_px` is the positive pixel height of the resized, rotated

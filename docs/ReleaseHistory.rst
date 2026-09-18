@@ -78,6 +78,12 @@ Release Notes
 Unreleased Summary
 ******************
 
+    * Use standard-library HTTP downloads in the Lambda decoder and verify imports
+      against only deployment dependencies. Expand analysis metadata to 50,000
+      frames, reopen the player after browser Back navigation, and stop status
+      polling with a warning after 30 seconds without tracing progress. Report
+      terminal tracing failures immediately (refs #1162, #1165).
+
     * Validate decoded analysis-frame types before publication; reject B-frames
       and unknown types, and document checksum-addressed object keys (refs #1162).
 

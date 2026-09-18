@@ -27,13 +27,13 @@ const INFLECTION_MARKER_COLOR = '#2aa198';
 const MIN_MARKER_NAME_LEN = 4;  // markers must be this long (allows 'apex')
 const TRACING_COMPLETED_FLAG='tracing completed';
 const TRACING_FLAG='tracing';
-const MAX_FRAMES = 10000;
+const MAX_FRAMES = 50000;
+const FRAME_METADATA_PAGE_SIZE = 1000;
 const STATUS_POLL_MSEC = 500;
-const STATUS_POLL_MAX_ERRORS = 5;
 const TRACING_MAY_LEAVE_MESSAGE = 'You may leave this page and click Analyze again later.';
 const TRACE_MOVIE_RETRY_DELAY_MS = 5000; // if trace movie fails
 const TRACKPOINT_ORIGIN_BOTTOM_LEFT = 'bottom-left';
-const TRACKING_START_TIMEOUT_MS = 15000;
+const TRACKING_PROGRESS_TIMEOUT_MS = 30000;
 const TRIM_START_FRAME = 'trim_start_frame';
 const TRIM_END_FRAME = 'trim_end_frame';
 const MOVIE_TRACED_URL = 'movie_traced_url';
@@ -93,7 +93,7 @@ var cell_id_counter = 0;
 
 import { $, begin_inline_text_edit } from "./utils.js";
 import {
-    BACKEND_LAMBDA_UNRESPONSIVE_MESSAGE,
+    TRACING_PROGRESS_TIMEOUT_MESSAGE,
     MARKER_NAME_IN_USE_MESSAGE,
     MOVIE_CANNOT_BE_TRACED_DEMO_MESSAGE,
     MOVIE_IS_TRACED_MESSAGE,
@@ -273,7 +273,7 @@ class TracerController extends MovieController {
         this.pending_retrace_to_end = false;
         this.tracing_was_reset = false;
         this.pending_trace_start_frame = null;
-        this.tracking_start_deadline_ms = null;
+        this.tracking_progress_deadline_ms = null;
         this.trace_inputs_changed = Number(movie_metadata[NEEDS_RETRACING] || 0) === 1;
         this.marker_colors_by_label = new Map();
         this.loaded_analysis_frame_height = null;
@@ -1485,7 +1485,8 @@ class TracerController extends MovieController {
         this.tracking = true;
         this.pending_retrace_to_end = false;
         this.pending_trace_start_frame = retraceStartFrame;
-        this.tracking_start_deadline_ms = Date.now() + TRACKING_START_TIMEOUT_MS;
+        this.last_progress_frame = retraceStartFrame;
+        this.reset_tracking_progress_timeout();
         this.poll_error_count = 0;
         this.set_movie_control_buttons();
 
@@ -1505,6 +1506,7 @@ class TracerController extends MovieController {
         const TRACE_MOVIE_MAX_ATTEMPTS = 3;
 
         function tryTrackMovie(attempt) {
+            if (!self.tracking) return;
             attempt = attempt || 1;
             return fetch(url, {
                 method: 'POST',
@@ -1516,6 +1518,7 @@ class TracerController extends MovieController {
             })
                 .then((res) => res.json().then((data) => ({ status: res.status, data })).catch(() => ({ status: res.status, data: null })))
                 .then(({ status, data }) => {
+                    if (!self.tracking) return;
                     if (status >= 200 && status < 300 && !(data && data.error)) {
                         stop_analysis_lease();
                         self.movie_metadata.status = TRACING_FLAG;
@@ -1538,7 +1541,7 @@ class TracerController extends MovieController {
                     self.set_movie_control_buttons();
                     self.enableTrackButtonIfAllowed();
                     self.pending_trace_start_frame = null;
-                    self.tracking_start_deadline_ms = null;
+                    self.clear_tracking_progress_timeout();
                     self.tracking_status.text(msg);
                     console.error('[trace-movie] final failure (HTTP):', {
                         status,
@@ -1551,6 +1554,7 @@ class TracerController extends MovieController {
                     alert(msg);
                 })
                 .catch((err) => {
+                    if (!self.tracking) return;
                     if (attempt < TRACE_MOVIE_MAX_ATTEMPTS) {
                         console.warn('[trace-movie] attempt', attempt, 'failed (network error):', err && err.message, '- retrying in', TRACE_MOVIE_RETRY_DELAY_MS, 'ms');
                         return new Promise((resolve) => setTimeout(resolve, TRACE_MOVIE_RETRY_DELAY_MS)).then(() => tryTrackMovie(attempt + 1));
@@ -1561,7 +1565,7 @@ class TracerController extends MovieController {
                     self.set_movie_control_buttons();
                     self.enableTrackButtonIfAllowed();
                     self.pending_trace_start_frame = null;
-                    self.tracking_start_deadline_ms = null;
+                    self.clear_tracking_progress_timeout();
                     const msg = err && err.message ? err.message : "Tracing request failed.";
                     self.tracking_status.text(msg);
                     console.error('[trace-movie] final failure (network):', {
@@ -1577,35 +1581,47 @@ class TracerController extends MovieController {
         tryTrackMovie(1);
     }
 
-    tracking_has_started(metadata) {
-        if (!metadata || metadata.last_frame_tracked == null) {
-            return false;
-        }
-        const startFrame = (this.pending_trace_start_frame != null) ? this.pending_trace_start_frame : this.frame_number;
-        return Number(metadata.last_frame_tracked) > Number(startFrame);
+    clear_tracking_progress_timeout() {
+        clearTimeout(this.tracking_progress_timer);
+        this.tracking_progress_timer = null;
+        this.tracking_progress_deadline_ms = null;
     }
 
-    tracking_start_timed_out(metadata) {
-        if (!this.tracking || this.tracking_start_deadline_ms == null) {
-            return false;
-        }
-        if (this.tracking_has_started(metadata)) {
-            this.tracking_start_deadline_ms = null;
-            return false;
-        }
-        return Date.now() >= this.tracking_start_deadline_ms;
+    reset_tracking_progress_timeout() {
+        this.clear_tracking_progress_timeout();
+        this.tracking_progress_deadline_ms = Date.now() + TRACKING_PROGRESS_TIMEOUT_MS;
+        this.tracking_progress_timer = setTimeout(() => this.report_tracking_stalled(), TRACKING_PROGRESS_TIMEOUT_MS);
     }
 
-    report_backend_lambda_unresponsive() {
+    tracking_progress_timed_out(metadata) {
+        if (!this.tracking) return false;
+        const frame = metadata?.last_frame_tracked;
+        const previous = this.last_progress_frame ?? this.pending_trace_start_frame ?? this.frame_number;
+        if (frame != null && Number(frame) > Number(previous)) {
+            this.last_progress_frame = Number(frame);
+            this.reset_tracking_progress_timeout();
+        }
+        return this.tracking_progress_deadline_ms != null && Date.now() >= this.tracking_progress_deadline_ms;
+    }
+
+    stop_tracking_polling(message) {
         this.tracking = false;
+        this.analysis_read_only = true; // Reopen Analyze to reacquire the editing lease.
+        this.clear_tracking_progress_timeout();
+        clearTimeout(this.timeout);
+        this.timeout = null;
+        this.tracking_status_request?.abort?.();
+        this.pending_trace_start_frame = null;
         $(this.div_selector).removeClass('tracing-dimmed');
         this.set_movie_control_buttons();
         this.enableTrackButtonIfAllowed();
-        this.pending_trace_start_frame = null;
-        this.tracking_start_deadline_ms = null;
-        this.tracking_status.text(BACKEND_LAMBDA_UNRESPONSIVE_MESSAGE);
-        $('#status-big').text(BACKEND_LAMBDA_UNRESPONSIVE_MESSAGE);
-        alert(BACKEND_LAMBDA_UNRESPONSIVE_MESSAGE);
+        this.tracking_status.text(message);
+        $('#status-big').text(message);
+        alert(message);
+    }
+
+    report_tracking_stalled() {
+        if (this.tracking) this.stop_tracking_polling(TRACING_PROGRESS_TIMEOUT_MESSAGE);
     }
 
     load_movie(frames) {
@@ -1689,28 +1705,41 @@ class TracerController extends MovieController {
 
         /*
          * Poll the server to see if tracking has ended.
-         * On poll error we log to console and only alert after 3 consecutive errors.
+         * A separate progress watchdog also covers requests that never return.
          */
   poll_for_track_end() {
+        if (!this.tracking) return;
+        if (this.tracking_progress_deadline_ms == null) this.reset_tracking_progress_timeout();
         const params = {
             api_key:this.api_key,
             course_id:activeCourseId(),
             movie_id:this.movie_id,
-            get_all_if_tracking_completed: true
+            get_all_if_tracking_completed: this.total_frames <= FRAME_METADATA_PAGE_SIZE
         };
         const self = this;
-        $.post(`${API_BASE}api/get-movie-metadata`, params)
+        this.tracking_status_request = $.post(`${API_BASE}api/get-movie-metadata`, params)
             .done((data) => {
+                if (!self.tracking) return;
                 if (data.error === false) {
                     self.poll_error_count = 0;
+                    if (data.metadata.status === 'tracing failed') {
+                        self.movie_metadata = {...self.movie_metadata, ...data.metadata};
+                        self.stop_tracking_polling(data.metadata.tracing_failure_summary || 'Tracing failed. Reopen Analyze to try again.');
+                        return;
+                    }
                     if (data.metadata.status === TRACING_COMPLETED_FLAG) {
-                        if (self.tracking) {
+                        self.clear_tracking_progress_timeout();
+                        if (self.total_frames > FRAME_METADATA_PAGE_SIZE) {
+                            load_remaining_frame_metadata(data, self.api_key, 0)
+                                .then(complete => { if (self.tracking) self.movie_tracked(complete); })
+                                .catch(error => self.stop_tracking_polling(error.message));
+                        } else {
                             self.movie_tracked(data);
                         }
                         return;
                     }
-                    if (self.tracking_start_timed_out(data.metadata)) {
-                        self.report_backend_lambda_unresponsive();
+                    if (self.tracking_progress_timed_out(data.metadata)) {
+                        self.report_tracking_stalled();
                         return;
                     }
                     const last = data.metadata.last_frame_tracked;
@@ -1728,26 +1757,21 @@ class TracerController extends MovieController {
                 }
                 self.poll_error_count = (self.poll_error_count || 0) + 1;
                 console.warn('[poll_for_track_end] get-movie-metadata error (consecutive:', self.poll_error_count + '):', data);
-                if (self.tracking_start_timed_out(null)) {
-                    self.report_backend_lambda_unresponsive();
+                if (self.tracking_progress_timed_out(null)) {
+                    self.report_tracking_stalled();
                     return;
-                }
-                if (self.poll_error_count >= STATUS_POLL_MAX_ERRORS) {
-                  alert(`Status check failed ${STATUS_POLL_MAX_ERRORS} times in a row. You can refresh the page to try again.`);
                 }
                 if (self.tracking) {
                     self.timeout = setTimeout(() => { self.poll_for_track_end(); }, STATUS_POLL_MSEC);
                 }
             })
             .fail((_xhr, status, err) => {
+                if (!self.tracking) return;
                 self.poll_error_count = (self.poll_error_count || 0) + 1;
                 console.warn('[poll_for_track_end] request failed (consecutive:', self.poll_error_count + '):', status, err);
-                if (self.tracking_start_timed_out(null)) {
-                    self.report_backend_lambda_unresponsive();
+                if (self.tracking_progress_timed_out(null)) {
+                    self.report_tracking_stalled();
                     return;
-                }
-                if (self.poll_error_count >= STATUS_POLL_MAX_ERRORS) {
-                  alert(`Status check failed ${STATUS_POLL_MAX_ERRORS} times in a row. You can refresh the page to try again.`);
                 }
                 if (self.tracking) {
                     self.timeout = setTimeout(() => { self.poll_for_track_end(); }, STATUS_POLL_MSEC);
@@ -1758,7 +1782,7 @@ class TracerController extends MovieController {
     /** Refresh marker metadata after tracing; the analysis pixels are immutable. */
     movie_tracked(data) {
         this.tracking = false;
-        this.tracking_start_deadline_ms = null;
+        this.clear_tracking_progress_timeout();
         $(this.div_selector).removeClass('tracing-dimmed');
         this.movie_metadata = {...this.movie_metadata, ...data.metadata};
         for (let i = 0; i < this.frames.length; i++) {
@@ -1834,6 +1858,26 @@ function frame_index_from_zip_name(name) {
     return m ? parseInt(m[1], 10) : 0;
 }
 
+/** Bound each HTTP response while retaining marker metadata throughout the supported movie. */
+async function load_remaining_frame_metadata(response, apiKey, start = FRAME_METADATA_PAGE_SIZE) {
+    const frames = {...response.frames};
+    const count = Number(response.metadata.total_frames) || 0;
+    if (count > MAX_FRAMES) throw new Error('Analyze supports up to 50,000 frames. This movie exceeds that limit.');
+    for (let first = start; first < count; first += FRAME_METADATA_PAGE_SIZE) {
+        const page = await new Promise((resolve, reject) => {
+            $.post({
+                url: `${API_BASE}api/get-movie-metadata`, timeout: TRACKING_PROGRESS_TIMEOUT_MS,
+                data: {api_key: apiKey, course_id: activeCourseId(), movie_id: response.metadata.movie_id,
+                    frame_start: first, frame_count: Math.min(FRAME_METADATA_PAGE_SIZE, count - first)},
+            }).done(resolve).fail(result => reject(new Error(
+                result.responseJSON?.message || 'Unable to load frame annotations. Reopen Analyze to retry.')));
+        });
+        if (page.error) throw new Error(page.message || 'Unable to load frame annotations.');
+        Object.assign(frames, page.frames);
+    }
+    return {...response, frames};
+}
+
 async function trace_movie_frames(div_controller, movie_metadata, movie_url,
                                   metadata_frames, api_key, show_results, options = {}) {
     const player = await new Mp4FramePlayer().load(movie_url);
@@ -1860,6 +1904,9 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_url,
     cc.load_movie(frames);
     await cc.goto_frame(cc.frame_number);
     cc.enableTrackButtonIfAllowed();
+    $(window).off('pageshow.mp4-player').on('pageshow.mp4-player', event => {
+        if (event.originalEvent?.persisted) window.location.reload();
+    });
     $(window).off('pagehide.mp4-player').on('pagehide.mp4-player', () => {
         cc.stop_button_pressed();
         cc.mp4_player.close();
@@ -2244,7 +2291,7 @@ function trace_movie(div_controller, movie_id, api_key) {
         course_id: activeCourseId(),
         movie_id: movie_id,
         frame_start: 0,
-        frame_count: MAX_FRAMES
+        frame_count: FRAME_METADATA_PAGE_SIZE
     };
     function load_analyze(leaseResponse) {
         const leaseId = leaseResponse.lease_id;
@@ -2290,7 +2337,9 @@ function trace_movie(div_controller, movie_id, api_key) {
           $('#status-big').html(showResults ? MOVIE_IS_TRACED_RETRACE_AS_NEEDED_MESSAGE
                                 : MOVIE_READY_PLACE_MARKERS_TRACE_MESSAGE);
         }
-        trace_movie_frames(div_controller, resp.metadata, resp.metadata.analysis_mp4_url, resp.frames, api_key, showResults)
+        load_remaining_frame_metadata(resp, api_key)
+            .then(data => trace_movie_frames(div_controller, data.metadata, data.metadata.analysis_mp4_url,
+                                             data.frames, api_key, showResults))
             .catch(error => { $('#status-big').text(error.message); });
         }).fail((response) => {
             $('#status-big').text(
@@ -2328,7 +2377,7 @@ function is_movie_tracked(metadata) {
 }
 
 export { TracerController, trace_movie, trace_movie_one_frame, trace_movie_frames,
-         get_ruler_size, frame_index_from_zip_name, is_movie_tracked,
+         load_remaining_frame_metadata, get_ruler_size, frame_index_from_zip_name, is_movie_tracked,
          movie_is_available_for_analysis,
          create_default_markers, calc_scale,
          is_inflection_marker_label, is_graphable_marker, INFLECTION_POINT_LABEL,

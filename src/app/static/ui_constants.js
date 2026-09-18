@@ -1,5 +1,6 @@
 "use strict";
 
+const TRACING_PROGRESS_TIMEOUT_MESSAGE = 'No tracing progress for 30 seconds. Status checks stopped. The server may still be working; reopen Analyze to check.';
 const BACKEND_LAMBDA_UNRESPONSIVE_MESSAGE = 'backend lambda is unresponsive. Please report.';
 const MARKER_NAME_IN_USE_MESSAGE = 'That name is in use, choose another.';
 const MOVIE_CANNOT_BE_TRACED_DEMO_MESSAGE = 'Movie cannot be traced in demo mode.';
@@ -22,6 +23,7 @@ const TRACING_STARTING_MESSAGE = 'Tracing starting...';
 
 export {
     BACKEND_LAMBDA_UNRESPONSIVE_MESSAGE,
+    TRACING_PROGRESS_TIMEOUT_MESSAGE,
     MARKER_NAME_IN_USE_MESSAGE,
     MOVIE_CANNOT_BE_TRACED_DEMO_MESSAGE,
     MOVIE_IS_TRACED_MESSAGE,

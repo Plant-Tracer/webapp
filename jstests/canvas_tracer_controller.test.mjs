@@ -230,7 +230,7 @@ const defaultRequestAnimationFrame = global.requestAnimationFrame || ((callback)
 
 // ── Import module under test (after all mocks are registered) ────────────────
 const {
-    BACKEND_LAMBDA_UNRESPONSIVE_MESSAGE,
+    TRACING_PROGRESS_TIMEOUT_MESSAGE,
     MARKER_NAME_IN_USE_MESSAGE,
     MOVIE_CANNOT_BE_TRACED_DEMO_MESSAGE,
     MOVIE_IS_TRACED_MESSAGE,
@@ -244,7 +244,7 @@ const {
     TRACING_STARTING_MESSAGE,
 } = await import('ui_constants.js');
 
-const {
+const { load_remaining_frame_metadata,
     get_ruler_size,
     frame_index_from_zip_name,
     is_movie_tracked,
@@ -2080,7 +2080,7 @@ describe('TracerController.track_to_end', () => {
     test('on 200 success: tracking remains true and completion polling starts', async () => {
         mockFetchResponse(200, { error: false });
         tc.track_to_end();
-        await jest.runAllTimersAsync();
+        await jest.advanceTimersByTimeAsync(10000);
         expect(tc.tracking).toBe(true);
         expect(tc.movie_metadata.status).toBe('tracing');
         expect(tc.poll_for_track_end).toHaveBeenCalledTimes(1);
@@ -2092,14 +2092,14 @@ describe('TracerController.track_to_end', () => {
     test('on 200 success: no alert is fired', async () => {
         mockFetchResponse(200, { error: false });
         tc.track_to_end();
-        await jest.runAllTimersAsync();
+        await jest.advanceTimersByTimeAsync(10000);
         expect(global.alert).not.toHaveBeenCalled();
     });
 
     test('on 200 success: tracing remains dimmed and read-only while polling', async () => {
         mockFetchResponse(200, { error: false });
         tc.track_to_end();
-        await jest.runAllTimersAsync();
+        await jest.advanceTimersByTimeAsync(10000);
         const dimmedRemoved = mock$.mock.calls.some(
             (_, i) => mock$.mock.results[i].value.removeClass.mock.calls
                 .some(c => c[0] === 'tracing-dimmed')
@@ -2110,7 +2110,7 @@ describe('TracerController.track_to_end', () => {
     test('on 200 success: fetch is called exactly once (no retry)', async () => {
         mockFetchResponse(200, { error: false });
         tc.track_to_end();
-        await jest.runAllTimersAsync();
+        await jest.advanceTimersByTimeAsync(10000);
         expect(global.fetch).toHaveBeenCalledTimes(1);
     });
 
@@ -2118,21 +2118,21 @@ describe('TracerController.track_to_end', () => {
     test('on 400: sets tracking = false', async () => {
         mockFetchResponse(400, { error: true, message: 'Bad request' });
         tc.track_to_end();
-        await jest.runAllTimersAsync();
+        await jest.advanceTimersByTimeAsync(10000);
         expect(tc.tracking).toBe(false);
     });
 
     test('on 400: alerts with the server error message', async () => {
         mockFetchResponse(400, { error: true, message: 'Bad request' });
         tc.track_to_end();
-        await jest.runAllTimersAsync();
+        await jest.advanceTimersByTimeAsync(10000);
         expect(global.alert).toHaveBeenCalledWith('Bad request');
     });
 
     test('on 400: removes tracing-dimmed', async () => {
         mockFetchResponse(400, { error: true, message: 'Bad request' });
         tc.track_to_end();
-        await jest.runAllTimersAsync();
+        await jest.advanceTimersByTimeAsync(10000);
         const dimmedRemoved = mock$.mock.calls.some(
             (_, i) => mock$.mock.results[i].value.removeClass.mock.calls
                 .some(c => c[0] === 'tracing-dimmed')
@@ -2143,21 +2143,21 @@ describe('TracerController.track_to_end', () => {
     test('on 400: re-enables the track button via enableTrackButtonIfAllowed', async () => {
         mockFetchResponse(400, { error: true, message: 'Bad request' });
         tc.track_to_end();
-        await jest.runAllTimersAsync();
+        await jest.advanceTimersByTimeAsync(10000);
         expect(tc.track_button.prop).toHaveBeenCalledWith('disabled', false);
     });
 
     test('on 400: only one fetch attempt (no retry for client errors)', async () => {
         mockFetchResponse(400, { error: true, message: 'Bad request' });
         tc.track_to_end();
-        await jest.runAllTimersAsync();
+        await jest.advanceTimersByTimeAsync(10000);
         expect(global.fetch).toHaveBeenCalledTimes(1);
     });
 
     test('on 400: sets tracking_status to the error message', async () => {
         mockFetchResponse(400, { error: true, message: 'Bad request' });
         tc.track_to_end();
-        await jest.runAllTimersAsync();
+        await jest.advanceTimersByTimeAsync(10000);
         expect(tc.tracking_status.text).toHaveBeenCalledWith('Bad request');
     });
 
@@ -2168,7 +2168,7 @@ describe('TracerController.track_to_end', () => {
             json: () => Promise.resolve({ error: true, message: 'Server error' }),
         });
         tc.track_to_end();
-        await jest.runAllTimersAsync();
+        await jest.advanceTimersByTimeAsync(10000);
         expect(global.fetch).toHaveBeenCalledTimes(3);
     });
 
@@ -2178,7 +2178,7 @@ describe('TracerController.track_to_end', () => {
             json: () => Promise.resolve({ error: true, message: 'Server error' }),
         });
         tc.track_to_end();
-        await jest.runAllTimersAsync();
+        await jest.advanceTimersByTimeAsync(10000);
         expect(global.alert).toHaveBeenCalledWith('Server error');
     });
 
@@ -2188,7 +2188,7 @@ describe('TracerController.track_to_end', () => {
             json: () => Promise.resolve({ error: true, message: 'Server error' }),
         });
         tc.track_to_end();
-        await jest.runAllTimersAsync();
+        await jest.advanceTimersByTimeAsync(10000);
         expect(tc.tracking).toBe(false);
     });
 
@@ -2197,7 +2197,7 @@ describe('TracerController.track_to_end', () => {
             .mockResolvedValueOnce({ status: 500, json: () => Promise.resolve({ error: true, message: 'Transient' }) })
             .mockResolvedValueOnce({ status: 200, json: () => Promise.resolve({ error: false }) });
         tc.track_to_end();
-        await jest.runAllTimersAsync();
+        await jest.advanceTimersByTimeAsync(10000);
         expect(global.fetch).toHaveBeenCalledTimes(2);
         expect(global.alert).not.toHaveBeenCalled();
     });
@@ -2206,14 +2206,14 @@ describe('TracerController.track_to_end', () => {
     test('on network error: retries exactly 3 times total', async () => {
         global.fetch.mockRejectedValue(new Error('Network failure'));
         tc.track_to_end();
-        await jest.runAllTimersAsync();
+        await jest.advanceTimersByTimeAsync(10000);
         expect(global.fetch).toHaveBeenCalledTimes(3);
     });
 
     test('on network error: alerts with the error message after all retries', async () => {
         global.fetch.mockRejectedValue(new Error('Network failure'));
         tc.track_to_end();
-        await jest.runAllTimersAsync();
+        await jest.advanceTimersByTimeAsync(10000);
         expect(global.alert).toHaveBeenCalledWith('Network failure');
         expect(tc.tracking).toBe(false);
     });
@@ -2221,7 +2221,7 @@ describe('TracerController.track_to_end', () => {
     test('on network error with no message: alerts with fallback text', async () => {
         global.fetch.mockRejectedValue(null);
         tc.track_to_end();
-        await jest.runAllTimersAsync();
+        await jest.advanceTimersByTimeAsync(10000);
         expect(global.alert).toHaveBeenCalledWith('Tracing request failed.');
     });
 
@@ -2230,7 +2230,7 @@ describe('TracerController.track_to_end', () => {
             .mockRejectedValueOnce(new Error('Transient'))
             .mockResolvedValueOnce({ status: 200, json: () => Promise.resolve({ error: false }) });
         tc.track_to_end();
-        await jest.runAllTimersAsync();
+        await jest.advanceTimersByTimeAsync(10000);
         expect(global.fetch).toHaveBeenCalledTimes(2);
         expect(global.alert).not.toHaveBeenCalled();
     });
@@ -2960,6 +2960,7 @@ describe('TracerController.poll_for_track_end', () => {
     let tc;
     beforeEach(() => {
         jest.useFakeTimers();
+        resetPostMock();
         global.alert = jest.fn();
         tc = new TracerController('div#tracer', makeMovieMetadata(), 'api-key');
         tc.tracking = true;
@@ -3031,24 +3032,72 @@ describe('TracerController.poll_for_track_end', () => {
         );
     });
 
-    test('done: no progress beyond source frame after deadline → alerts backend lambda unresponsive', () => {
+    test('done: no progress beyond source frame after deadline → warns that progress stalled', () => {
         tc.pending_trace_start_frame = 0;
-        tc.tracking_start_deadline_ms = Date.now() - 1;
+        tc.tracking_progress_deadline_ms = Date.now() - 1;
         fireDone({ error: false, metadata: { status: 'tracing', last_frame_tracked: 0 } });
         tc.poll_for_track_end();
-        expect(global.alert).toHaveBeenCalledWith(BACKEND_LAMBDA_UNRESPONSIVE_MESSAGE);
+        expect(global.alert).toHaveBeenCalledWith(TRACING_PROGRESS_TIMEOUT_MESSAGE);
         expect(tc.tracking).toBe(false);
     });
 
-    test('done: progress beyond source frame after deadline → does not alert backend lambda unresponsive', () => {
+    test('done: progress beyond source frame after deadline → renews progress timeout', () => {
         tc.pending_trace_start_frame = 0;
-        tc.tracking_start_deadline_ms = Date.now() - 1;
+        tc.tracking_progress_deadline_ms = Date.now() - 1;
         fireDone({ error: false, metadata: { status: 'tracing', last_frame_tracked: 1 } });
         tc.poll_for_track_end();
-        expect(global.alert).not.toHaveBeenCalledWith(BACKEND_LAMBDA_UNRESPONSIVE_MESSAGE);
+        expect(global.alert).not.toHaveBeenCalledWith(TRACING_PROGRESS_TIMEOUT_MESSAGE);
         expect(tc.tracking_status.text).toHaveBeenCalledWith(
             'Tracing frame 1 — You may leave this page and click Analyze again later.'
         );
+    });
+
+    test('new frames renew the 30-second deadline; repeated or older frames do not', () => {
+        tc.last_progress_frame = 5;
+        tc.reset_tracking_progress_timeout();
+        jest.advanceTimersByTime(29000);
+        expect(tc.tracking_progress_timed_out({last_frame_tracked: 6})).toBe(false);
+        jest.advanceTimersByTime(29000);
+        expect(tc.tracking).toBe(true);
+        tc.tracking_progress_timed_out({last_frame_tracked: 6});
+        tc.tracking_progress_timed_out({last_frame_tracked: 4});
+        jest.advanceTimersByTime(1000);
+        expect(tc.tracking).toBe(false);
+        expect(global.alert).toHaveBeenCalledTimes(1);
+        expect(global.alert).toHaveBeenCalledWith(TRACING_PROGRESS_TIMEOUT_MESSAGE);
+    });
+
+    test('a hung status request is aborted at 30 seconds and late replies are ignored', () => {
+        let reply;
+        const request = {done: jest.fn(cb => {reply = cb; return request;}),
+            fail: jest.fn().mockReturnThis(), abort: jest.fn()};
+        mockPost.mockReturnValueOnce(request);
+        const completed = jest.spyOn(tc, 'movie_tracked');
+        tc.poll_for_track_end();
+        jest.advanceTimersByTime(29999);
+        expect(tc.tracking).toBe(true);
+        jest.advanceTimersByTime(1);
+        expect(request.abort).toHaveBeenCalledTimes(1);
+        expect(tc.tracking).toBe(false);
+        reply({error: false, metadata: {status: 'tracing completed'}});
+        expect(completed).not.toHaveBeenCalled();
+        jest.advanceTimersByTime(60000);
+        expect(mockPost).toHaveBeenCalledTimes(1);
+        expect(global.alert).toHaveBeenCalledTimes(1);
+    });
+
+    test('terminal failure after progress displays its reason and stops polling immediately', () => {
+        tc.last_progress_frame = 6;
+        tc.reset_tracking_progress_timeout();
+        fireDone({error: false, metadata: {status: 'tracing failed', last_frame_tracked: 6,
+            tracing_failure_summary: 'Source download failed'}});
+        tc.poll_for_track_end();
+        expect(tc.tracking).toBe(false);
+        expect(tc.analysis_read_only).toBe(true);
+        expect(global.alert).toHaveBeenCalledWith('Source download failed');
+        jest.advanceTimersByTime(60000);
+        expect(mockPost).toHaveBeenCalledTimes(1);
+        expect(global.alert).toHaveBeenCalledTimes(1);
     });
 
     test('done: error response → increments poll_error_count', () => {
@@ -3057,11 +3106,11 @@ describe('TracerController.poll_for_track_end', () => {
         expect(tc.poll_error_count).toBe(1);
     });
 
-    test('done: poll_error_count reaches STATUS_POLL_MAX_ERRORS → alerts', () => {
+    test('done: repeated errors use the progress deadline instead of repeated popups', () => {
         tc.poll_error_count = 4; // one more will hit 5
         fireDone({ error: true });
         tc.poll_for_track_end();
-        expect(global.alert).toHaveBeenCalledWith(expect.stringContaining('5 times'));
+        expect(global.alert).not.toHaveBeenCalled();
     });
 
     test('done: error but tracking=true → schedules next poll', () => {
@@ -3077,11 +3126,11 @@ describe('TracerController.poll_for_track_end', () => {
         expect(tc.poll_error_count).toBe(1);
     });
 
-    test('fail: poll_error_count reaches STATUS_POLL_MAX_ERRORS → alerts', () => {
+    test('fail: repeated errors use the progress deadline instead of repeated popups', () => {
         tc.poll_error_count = 4;
         fireFail({}, 500, 'err');
         tc.poll_for_track_end();
-        expect(global.alert).toHaveBeenCalledWith(expect.stringContaining('5 times'));
+        expect(global.alert).not.toHaveBeenCalled();
     });
 
     test('fail: tracking=true → schedules next poll', () => {
@@ -3419,3 +3468,46 @@ describe('graph_data', () => {
 });
 
 export {};
+
+
+describe('paged movie annotations', () => {
+    beforeEach(resetPostMock);
+
+    test('loads all 50,000 frames in bounded requests without dropping initial points', async () => {
+        mockPost.mockImplementation(options => ({
+            done(callback) {
+                const last = options.data.frame_start + options.data.frame_count - 1;
+                callback({error: false, frames: {[last]: {markers: [{label: `point${last}`}]}}});
+                return this;
+            },
+            fail() { return this; },
+        }));
+        const response = await load_remaining_frame_metadata({metadata: {movie_id: 'm1', total_frames: 50000},
+            frames: {0: {markers: [{label: 'first'}]}}}, 'key');
+        expect(mockPost).toHaveBeenCalledTimes(49);
+        expect(mockPost.mock.calls.every(([options]) => options.data.frame_count <= 1000)).toBe(true);
+        expect(response.frames[0].markers[0].label).toBe('first');
+        expect(response.frames[10999].markers[0].label).toBe('point10999');
+        expect(response.frames[49999].markers[0].label).toBe('point49999');
+    });
+
+    test('rejects larger movies instead of silently displaying incomplete annotations', async () => {
+        await expect(load_remaining_frame_metadata({metadata: {total_frames: 50001}}, 'key'))
+            .rejects.toThrow('50,000 frames');
+        expect(mockPost).not.toHaveBeenCalled();
+    });
+
+    test('completion starts at zero and rejects failed pages instead of erasing markers', async () => {
+        mockPost.mockImplementation(options => ({
+            done(callback) {
+                expect(options.data.frame_start).toBe(0);
+                callback({error: true, message: 'Annotations unavailable'});
+                return this;
+            },
+            fail() { return this; },
+        }));
+        await expect(load_remaining_frame_metadata({metadata: {movie_id: 'm1', total_frames: 50000}}, 'key', 0))
+            .rejects.toThrow('Annotations unavailable');
+        expect(mockPost).toHaveBeenCalledTimes(1);
+    });
+});

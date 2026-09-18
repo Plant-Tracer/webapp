@@ -9,6 +9,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
 
 from resize_app.analysis_mp4 import AnalysisMp4Options, create_analysis_bundle, encode_analysis_mp4
 from resize_app.video_writer import H264Writer
@@ -120,3 +121,24 @@ def test_production_player_redecodes_distant_frames_with_bounded_storage(chrome_
             "const done=arguments[arguments.length-1]; window.playerController.mp4_player.getFrame(arguments[0])"
             ".then(()=>done('unexpected success')).catch(e=>done(e.name));", index)
         assert outcome == 'RangeError'
+
+
+@pytest.mark.selenium
+def test_analyzer_reopens_player_after_browser_back(chrome_driver, analysis_bundle_server):
+    """History restoration reloads disposed WebCodecs resources for either orientation."""
+    driver = chrome_driver
+    driver.get(f"{analysis_bundle_server}/analyzer.html?src=source_scaled.mp4")
+    assert wait_for_decoded_frames(driver).startswith('Decoded 4 frames')
+    driver.get(f"{analysis_bundle_server}/README.txt")
+    driver.back()
+    WebDriverWait(driver, 10).until(lambda page: page.execute_script(
+        'return Boolean(window.playerController && !window.playerController.mp4_player.closed)'))
+    assert wait_for_decoded_frames(driver).startswith('Decoded 4 frames')
+    outcome = driver.execute_async_script(
+        "const done=arguments[0]; window.playerController.goto_frame(1)"
+        ".then(()=>requestAnimationFrame(()=>done(true))).catch(e=>done(e.message));")
+    assert outcome is True
+    sample = driver.execute_script(
+        "const c=document.getElementById('canvas-id'); return Array.from(c.getContext('2d')"
+        ".getImageData(Math.floor(c.width/4),Math.floor(c.height*3/4),1,1).data);")
+    assert matches_color(sample, FRAME_COLORS[1])

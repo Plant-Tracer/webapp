@@ -246,3 +246,30 @@ def test_processing_claim_has_one_winner(new_movie_record):
     winners = [attempt for attempt in attempts if attempt]
     assert len(winners) == 1
     assert odb.DDBO().get_movie(movie_id)[odb.PROCESSING_ATTEMPT] == winners[0]
+
+
+def test_fifty_thousand_frame_upload_keeps_last_frame_metadata(client, new_movie_record, tmp_path):
+    """A real long MP4 retains points past the old cap and on its final frame."""
+    source = tmp_path / 'long.mp4'
+    writer = H264Writer(source, fps=15)
+    try:
+        for index in range(50000):
+            writer.append_data(np.full((24, 32, 3), index % 200, dtype=np.uint8))
+    finally:
+        writer.close()
+    movie_id = new_movie_record[odb.MOVIE_ID]
+    odb_movie_data.set_movie_data(movie_id=movie_id, movie_data=source.read_bytes())
+    movie_glue.process_uploaded_movie(movie_id=movie_id)
+    ddbo = odb.DDBO()
+    assert ddbo.get_movie(movie_id)[odb.TOTAL_FRAMES] == 50000
+    for frame_number in (10001, 49999):
+        odb.put_frame_trackpoints(movie_id=movie_id, frame_number=frame_number,
+                                 trackpoints=[Trackpoint(x=10, y=10, label='Apex')])
+    ddbo.update_movie(movie_id, {odb.MOVIE_STATUS: odb.MOVIE_STATE_TRACING_COMPLETED})
+    params = {odb.API_KEY: new_movie_record[odb.API_KEY], odb.MOVIE_ID: movie_id}
+    for window in ({'get_all_if_tracking_completed': True}, {'frame_start': 0, 'frame_count': 50000}):
+        response = client.post('/api/get-movie-metadata', data={**params, **window})
+        assert response.status_code == 200
+        frames = response.get_json()['frames']
+        assert frames['10001']['markers'][0]['label'] == 'Apex'
+        assert frames['49999']['markers'][0]['y'] == 10

@@ -33,7 +33,7 @@ Viewing movies
 
 Uploading Movies (optional)
 ---------------------------
-- Ensure that your video is of a size that works well with Plant Tracer. You may have to resize it before uploading, either by trimming its length or reducing its resolution. The movement tracking algorithm works better with fairly low resolution, so no need to be concerned about losing fine detail. We recommend a frame size of no more than 640 pixels in either dimension. We recommend a maximum of 1,000 frames per movie, though we permit a maximum of 10,000 frames. Your movie file must be 256MB or less or you will not be able to upload it. Plant Tracer keeps the uploaded original movie, but analysis frames are scaled to the tracker size. See :doc:`VideoResizing` for some ways to resize videos.
+- Ensure that your video is of a size that works well with Plant Tracer. You may have to resize it before uploading, either by trimming its length or reducing its resolution. The movement tracking algorithm works better with fairly low resolution, so no need to be concerned about losing fine detail. We recommend a frame size of no more than 640 pixels in either dimension. We recommend a maximum of 1,000 frames per movie, though we permit a maximum of 50,000 frames. Your movie file must be 256MB or less or you will not be able to upload it. Plant Tracer keeps the uploaded original movie, but analysis frames are scaled to the tracker size. See :doc:`VideoResizing` for some ways to resize videos.
 - Plant Tracer will accept videos in most well-known video file formats, but MP4 is probably best.
 - To upload your movie, select Upload from the menu bar at the top of the browser frame.
 - Enter the title of the file and a description of the movie.
@@ -186,5 +186,10 @@ Place or move markers on the desired frame, then choose Trace. The current marke
 are saved before tracking starts. After tracking completes, the same player shows
 the resulting markers and lets you step backward and forward to inspect them.
 Use a current Chrome or Edge browser on Windows or macOS with WebCodecs support.
+Returning to Analyze with the browser's Back button reloads the
+player and reacquires the editing lease; saved annotations are preserved.
+If tracing makes no progress for 30 seconds, status polling stops with a warning.
+The server may still be processing: reopen Analyze to check before starting again.
+Terminal tracing failures display their stored reason immediately.
 A decoder or processing error appears above the player instead of falling back to
 imprecise video seeking.

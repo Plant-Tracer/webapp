@@ -2,7 +2,24 @@ Movie Player Design
 ===================
 
 The Analyze page is a browser-side canvas application. Flask serves the page and
-metadata APIs; lambda-resize supplies video/frame data.
+metadata APIs; lambda-resize supplies video/frame data. New uploads are converted
+into an immutable H.264 baseline/yuv420p analysis MP4, with every source frame in
+order and no B-frames. The production analyzer uses ``mp4_frame_player.mjs`` for
+forward/backward frame access; it does not download a JPEG ZIP.
+
+The analyzer and completed-tracing metadata window support 50,000 frames. The
+analyzer fetches marker metadata in 1,000-frame pages to bound HTTP responses.
+Analyze reports an explicit error for larger movies instead of showing partial
+annotations; the original upload and its complete derivative are preserved.
+A ``pageshow`` event with ``persisted=true`` reloads the analyzer after browser
+history restoration, reopening the disposed decoder and reacquiring its editing
+lease. Normal navigation does not show a data-loss confirmation.
+
+Tracing has a 30-second progress watchdog, renewed only when the last tracked
+frame advances. Unchanged frames, failed requests and a hung request do not
+extend it. On expiry the client aborts its status request, stops polling and warns
+that server work may continue. Late replies cannot restart polling. A terminal
+``tracing failed`` response stops immediately and displays its reason.
 
 Runtime Inputs
 --------------

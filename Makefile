@@ -817,7 +817,10 @@ sam-build: $(REQ)
 	done
 	@echo "Size check passed! All functions are under 250MB."
 
-.PHONY: sam-resize-artifact-test
+.PHONY: sam-resize-artifact-test lambda-media-import-check
+lambda-media-import-check:
+	PYTHONPATH=lambda-resize/src uv run --isolated --only-group lambda python -c 'from resize_app import analysis_mp4'
+
 sam-resize-artifact-test:
 	find .aws-sam/build/LambdaResizeFunction -name .DS_Store -delete
 	@FFMPEG_BINARY=$$(find .aws-sam/build/LambdaResizeFunction/imageio_ffmpeg/binaries -type f -name 'ffmpeg-*' -print -quit); \

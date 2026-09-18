@@ -8,9 +8,9 @@ import subprocess
 import tempfile
 from contextlib import ExitStack
 from pathlib import Path
+from urllib.request import urlopen
 
 import imageio_ffmpeg
-import requests
 
 import cv2
 import numpy as np
@@ -129,9 +129,8 @@ def source_frames(source_url: str):
         if source_url.startswith(("http://", "https://")):
             # Avoid platform-specific FFmpeg HTTP support during traced rendering.
             source_file = resources.enter_context(tempfile.NamedTemporaryFile(suffix=".mov"))
-            with requests.get(source_url, stream=True, timeout=60) as response:
-                response.raise_for_status()
-                shutil.copyfileobj(response.raw, source_file)
+            with urlopen(source_url, timeout=60) as response:
+                shutil.copyfileobj(response, source_file)
             source_file.flush()
             source_path = source_file.name
         reader = imageio_ffmpeg.read_frames(
