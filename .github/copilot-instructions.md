@@ -16,8 +16,9 @@ requirements supplement this shared procedure and control documented exceptions.
 An explicit request to perform this workflow authorizes the task's fixes,
 validation, signed commits, branch pushes, draft PR creation or updates, review
 requests, exact-thread replies, and final ready state, human-review request,
-and assignment. Continue already-authorized work without repeated permission
-questions. Merely loading these instructions does not authorize publication.
+and assignment, plus the verified local cleanup below. The active-work approval
+gate still applies; invoking this workflow alone does not approve an identified
+conflict. Continue already-authorized work without repeated permission questions. Merely loading these instructions does not authorize publication.
 Do not approve or merge a PR, close an issue or superseded PR, deploy, or change
 remote services unless separately authorized. Do not expand a single-PR task
 into unrelated repository work.
@@ -49,11 +50,13 @@ items with their next action, and blockers with the exact missing prerequisite.
 Reconcile this ledger before every handoff; do not silently drop an item when
 the conversation continues or context is compacted.
 
-1. Verify the repository, remote, base, current PR head, open overlapping PRs,
-   and working-tree state. Preserve unrelated or dirty work; use a project-local
-   `.tmp` worktree when branch isolation is needed. Investigate producers,
-   consumers, tests, generated artifacts, and documentation before fixing the
-   underlying failure. Respect a repository's explicit proposal requirement.
+1. Verify the repository, remote, base, current PR head, all open PRs, active
+   tasks, linked checkouts, and working-tree state. Complete the active-work
+   approval gate below before creating a branch or editing. Preserve unrelated
+   or dirty work; reuse the task's existing checkout, or create one project-local
+   `.tmp` worktree only when isolation is needed and approved overlaps are
+   addressed. Investigate producers, consumers, tests, generated artifacts,
+   and documentation. Respect the repository's explicit proposal requirement.
 2. Implement and update relevant documentation. Before each commit and push,
    re-read the requested invariant and review the complete intended diff and
    status. Run proportionate validation through the repository's Makefile;
@@ -102,6 +105,36 @@ the conversation continues or context is compacted.
    exception can permit a disputed human handoff, but never call Copilot clear
    in that case. Missing reviews, failed required checks, and valid unfixed
    defects are blockers, not a successful review loop.
+8. Perform the checkout cleanup below before reporting handoff: reconcile all
+   task work, remove eligible clean and fully published checkouts, and report
+   each retained path with its reason and next action. Keep unmerged branch
+   refs and the PR; finish branch cleanup after the human merges.
+
+## Active-work approval gate
+
+Compare the proposed scope with every open PR's base, head, diff, and commits;
+inspect local staged, unstaged, untracked, and unpublished work, and available
+active-task status. Include tasks awaiting review or merge. Check overlapping
+files and behavior, shared dependencies, generated outputs, build resources,
+and instruction/configuration changes. A clean textual merge or separate
+worktree does not establish independence. If required status is unavailable,
+report the gap; do not claim the conflict check passed.
+
+If the task potentially conflicts with active work, list each affected PR/task
+by number or exact title, branch and checkout, the overlapping files or behavior,
+and the likely interference. Distinguish observed overlap from uncertainty.
+Present a concrete proposal to wait, reuse/consolidate the existing work, or
+coordinate isolated changes, then obtain explicit user approval before the
+conflicting edits, branch creation, integration, publication, or cleanup.
+A warning alone is insufficient. Continue read-only investigation and clearly
+independent work while waiting; silence is not approval. Explain that this
+section requires the approval and link to this SKILL.md.
+
+Record the approved scope and coordination plan in the task ledger. Recheck
+before integration/push and whenever the scope or active work changes. Reuse
+approval for the same disclosed overlap; seek new approval only for a materially
+new conflict or changed plan. If no potential conflict is found, record the
+evidence and proceed without an extra approval question.
 
 ## Completion and continuity
 
@@ -141,8 +174,36 @@ Completion of review means verified human-review handoff. A push, review
 request, or thread reply alone is incomplete. Merge remains a separate human
 decision; never merge merely to trigger cleanup.
 Ready-for-review completes only the review phase. Post-merge cleanup remains
-pending until the human merges and the cleanup checks below finish, or a
-specific preservation blocker is reported. Keep those outcomes distinct.
+pending for retained checkouts and branch refs until the human merges and the
+cleanup checks below finish, or a specific preservation blocker is reported. Keep those outcomes distinct.
+
+## Checkout cleanup at handoff
+
+After validation and publication, inventory every task-owned checkout. Fetch
+remote refs and record each path, branch, local HEAD, remote branch SHA, and PR.
+A checkout is eligible for removal only when its intended work is reconciled,
+all local commits are reachable from the verified remote branch, the matching
+open PR head equals that remote SHA, and no task or process still needs it.
+Check staged, unstaged, untracked, and ignored files. Preserve private evidence,
+source data, and non-rebuildable artifacts outside the checkout, with recorded
+paths and verified hashes, before removal; caches alone are rebuildable.
+Never treat a stash or backup as publication of intended source work.
+
+From another checkout, remove eligible linked worktrees with non-force
+`git worktree remove <exact-path>`. Do not remove the primary/shared checkout.
+Keep local branches and remote PRs until merge is verified. If a repository
+requires keeping an unmerged checkout, retain it and report that requirement
+unless the user explicitly authorizes earlier removal. Preserve dirty,
+unpublished, active, or uncertain checkouts and report each concrete blocker;
+integrate recoverable task work rather than ending with an unexplained dirty
+checkout. Do not reset or broadly clean files to satisfy this step.
+
+Remove retired checkout entries from the shared-skill distribution inventory.
+Recheck the worktree list, path absence, and surviving branch/PR refs; record
+removed paths, retained paths, and artifact locations in the final handoff.
+If review later requires edits, resume from the verified PR head and repeat
+validation, publication, review, and cleanup. Post-merge branch cleanup still
+applies when the checkout was already removed at handoff.
 
 ## Post-merge checkout cleanup
 
@@ -159,7 +220,9 @@ private evidence, source data, and other non-rebuildable files must be retained.
 Do not infer safety from an empty ordinary `git status` alone.
 
 From a different checkout, use `git worktree remove` on the exact verified path,
-then delete only its fully represented local branch. Do not use force removal,
+then delete only its fully represented local branch. If the checkout was already
+removed at handoff, verify the surviving branch against current main before
+deleting that ref. Do not use force removal,
 recursive deletion of `.tmp`, or reset/checkout commands to erase dirty work.
 Preserve and report dirty, unmerged, active, or uncertain checkouts with their
 specific blockers; a request to clean all checkouts does not make their work
