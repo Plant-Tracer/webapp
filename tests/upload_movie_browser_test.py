@@ -154,15 +154,37 @@ def test_upload_movie_end_to_end(chrome_driver, live_server, new_course):
     chrome_driver.find_element(By.CSS_SELECTOR, '#tracer .prev_frame').click()
     wait.until(lambda browser: browser.find_element(By.CSS_SELECTOR, '#tracer .frame_number_field')
                .get_attribute('value') == '0')
+    # Observe the application's actual API replies, not direct DynamoDB reads.
+    chrome_driver.execute_script("""
+        window.testTraceProgress = null;
+        $.ajaxPrefilter((settings, _original, xhr) => {
+            if (new URL(settings.url, location.href).pathname === '/api/get-movie-metadata') {
+                xhr.done(data => {
+                    if (data.error === false) {
+                        window.testTraceProgress = [data.metadata.status, data.metadata.last_frame_tracked];
+                    }
+                });
+            }
+        });
+    """)
     wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .track_button'))).click()
-    # The 30-second UI wait is not a deadline for tracing the entire movie.
-    # Coverage-instrumented CI can make steady progress for longer than that.
-    def tracing_completed(_browser):
-        status = odb.get_movie(movie_id=movie_id).get(odb.MOVIE_STATUS)
-        assert status != odb.MOVIE_STATE_TRACING_FAILED, "Background tracing failed"
-        return status == odb.MOVIE_STATE_TRACING_COMPLETED
+    last_frame = 0
 
-    WebDriverWait(chrome_driver, 180).until(tracing_completed)
+    def tracing_advanced(browser):
+        progress = browser.execute_script('return window.testTraceProgress;')
+        if progress is None:
+            return False
+        status, frame = progress
+        assert status != odb.MOVIE_STATE_TRACING_FAILED, "Background tracing failed"
+        if status == odb.MOVIE_STATE_TRACING_COMPLETED or (frame is not None and frame > last_frame):
+            return progress
+        return False
+
+    # Each increase earns a fresh 30 seconds; there is no total movie deadline.
+    while True:
+        status, last_frame = wait.until(tracing_advanced, 'No API tracing progress for 30 seconds')
+        if status == odb.MOVIE_STATE_TRACING_COMPLETED:
+            break
     wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .next_frame'))).click()
     wait.until(lambda browser: browser.find_element(By.CSS_SELECTOR, '#tracer .frame_number_field')
                .get_attribute('value') == '1')

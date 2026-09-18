@@ -3067,6 +3067,26 @@ describe('TracerController.poll_for_track_end', () => {
         expect(global.alert).toHaveBeenCalledWith(TRACING_PROGRESS_TIMEOUT_MESSAGE);
     });
 
+    test('increasing API frame updates keep polling beyond three minutes until progress stalls', () => {
+        const metadata = {status: 'tracing', last_frame_tracked: 0};
+        mockPost.mockImplementation(() => ({
+            done(callback) { callback({error: false, metadata}); return this; },
+            fail() { return this; },
+        }));
+        tc.poll_for_track_end();
+        for (let frame = 1; frame <= 8; frame++) {
+            jest.advanceTimersByTime(25000);
+            metadata.last_frame_tracked = frame;
+            jest.advanceTimersByTime(1000);
+            expect(tc.tracking).toBe(true);
+            expect(tc.last_progress_frame).toBe(frame);
+        }
+        expect(global.alert).not.toHaveBeenCalled();
+        jest.advanceTimersByTime(30000);
+        expect(tc.tracking).toBe(false);
+        expect(global.alert).toHaveBeenCalledWith(TRACING_PROGRESS_TIMEOUT_MESSAGE);
+    });
+
     test('retracking recognizes progress after the previous run counter resets', () => {
         tc.last_progress_frame = 49999;
         tc.reset_tracking_progress_timeout();
