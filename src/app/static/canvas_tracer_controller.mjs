@@ -1597,9 +1597,10 @@ class TracerController extends MovieController {
         if (!this.tracking) return false;
         const frame = metadata?.last_frame_tracked;
         const previous = this.last_progress_frame ?? this.pending_trace_start_frame ?? this.frame_number;
-        if (frame != null && Number(frame) > Number(previous)) {
+        if (frame != null && Number.isFinite(Number(frame))) {
+            // A new trace can reset the previous run's counter before advancing.
             this.last_progress_frame = Number(frame);
-            this.reset_tracking_progress_timeout();
+            if (Number(frame) > Number(previous)) this.reset_tracking_progress_timeout();
         }
         return this.tracking_progress_deadline_ms != null && Date.now() >= this.tracking_progress_deadline_ms;
     }

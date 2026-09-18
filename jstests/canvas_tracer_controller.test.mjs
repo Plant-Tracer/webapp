@@ -3067,6 +3067,23 @@ describe('TracerController.poll_for_track_end', () => {
         expect(global.alert).toHaveBeenCalledWith(TRACING_PROGRESS_TIMEOUT_MESSAGE);
     });
 
+    test('retracking recognizes progress after the previous run counter resets', () => {
+        tc.last_progress_frame = 49999;
+        tc.reset_tracking_progress_timeout();
+        const initialDeadline = tc.tracking_progress_deadline_ms;
+        jest.advanceTimersByTime(20000);
+        tc.tracking_progress_timed_out({last_frame_tracked: 0});
+        expect(tc.tracking_progress_deadline_ms).toBe(initialDeadline);
+        jest.advanceTimersByTime(9000);
+        tc.tracking_progress_timed_out({last_frame_tracked: 1});
+        jest.advanceTimersByTime(29000);
+        expect(tc.tracking).toBe(true);
+        tc.tracking_progress_timed_out({last_frame_tracked: 2});
+        jest.advanceTimersByTime(30000);
+        expect(tc.tracking).toBe(false);
+        expect(global.alert).toHaveBeenCalledTimes(1);
+    });
+
     test('a hung status request is aborted at 30 seconds and late replies are ignored', () => {
         let reply;
         const request = {done: jest.fn(cb => {reply = cb; return request;}),
