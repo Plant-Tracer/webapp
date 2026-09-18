@@ -62,12 +62,14 @@ def _section_contains_title(driver, title):
 
 
 @pytest.fixture
-def local_trace_worker(monkeypatch):
+def local_trace_worker(monkeypatch, request):
     """Use the real local asynchronous worker for browser tracing."""
+    # The worker must stop before the course fixture deletes its movie records.
+    request.getfixturevalue("new_course")
     monkeypatch.setenv('TRACING_QUEUE_MODE', 'local')
     local_queue.start_worker(processor=lambda_tracing_handler.process_local_queue_message)
     yield
-    local_queue.stop_worker()
+    local_queue.stop_worker(timeout=180)
 
 
 @pytest.mark.selenium
@@ -153,8 +155,14 @@ def test_upload_movie_end_to_end(chrome_driver, live_server, new_course):
     wait.until(lambda browser: browser.find_element(By.CSS_SELECTOR, '#tracer .frame_number_field')
                .get_attribute('value') == '0')
     wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .track_button'))).click()
-    wait.until(lambda _browser: odb.get_movie(movie_id=movie_id).get(odb.MOVIE_STATUS)
-               == odb.MOVIE_STATE_TRACING_COMPLETED)
+    # The 30-second UI wait is not a deadline for tracing the entire movie.
+    # Coverage-instrumented CI can make steady progress for longer than that.
+    def tracing_completed(_browser):
+        status = odb.get_movie(movie_id=movie_id).get(odb.MOVIE_STATUS)
+        assert status != odb.MOVIE_STATE_TRACING_FAILED, "Background tracing failed"
+        return status == odb.MOVIE_STATE_TRACING_COMPLETED
+
+    WebDriverWait(chrome_driver, 180).until(tracing_completed)
     wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .next_frame'))).click()
     wait.until(lambda browser: browser.find_element(By.CSS_SELECTOR, '#tracer .frame_number_field')
                .get_attribute('value') == '1')
