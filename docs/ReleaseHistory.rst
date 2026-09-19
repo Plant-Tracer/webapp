@@ -78,6 +78,10 @@ Release Notes
 Unreleased Summary
 ******************
 
+    * Reject coordinate migration and marker changes before upload completion;
+      report saved-dimension conflicts as processing failures; exclude marker-map
+      metadata from saved-frame checks (refs #1233).
+
     * Report upload frame-height conflicts as consistency failures, preserve saved
       points and pixels, and stop upload polling with the failure reason (refs #1233).
 

@@ -454,12 +454,15 @@ def process_uploaded_movie(*, movie_id: str):
     }
     try:
         ddbo.update_movie(movie_id, updates)
-    except odb.TrackpointFrameHeightMismatch as exc:
+    except (odb.TrackpointFrameHeightMismatch, odb.MovieGeometryFinalized) as exc:
+        reason = ("Trackpoint frame height conflicts with saved coordinates"
+                  if isinstance(exc, odb.TrackpointFrameHeightMismatch)
+                  else "Decoded movie dimensions conflict with saved geometry")
         try:
             ddbo.update_movie(movie_id, {
                 MOVIE_STATUS: odb.MOVIE_STATE_PROCESSING_FAILED,
                 odb.PROCESSING_FAILED_AT: int(time.time()),
-                odb.PROCESSING_FAILURE_SUMMARY: f"Trackpoint frame height conflicts with saved coordinates: {movie_id}",
+                odb.PROCESSING_FAILURE_SUMMARY: f"{reason}: {movie_id}",
             }, expected_status=MOVIE_STATE_PROCESSING)
         except ClientError as status_error:
             if status_error.response['Error']['Code'] != 'ConditionalCheckFailedException':

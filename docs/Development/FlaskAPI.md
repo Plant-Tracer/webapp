@@ -645,6 +645,9 @@ Upload completion fixes rotation; processing records source dimensions and the
 analysis-frame height. Legacy trackpoints retain the existing per-frame conditional conversion to bottom-left
 coordinates, so retries do not flip an already converted frame again. Trackpoint
 downloads use the same height recovery and coordinate conversion.
+Frame-range requests and trackpoint downloads return HTTP 409 before recovery,
+caching, or migration if neither `uploaded_at` nor legacy `date_uploaded` is set.
+Metadata-only polling remains available without mutating coordinate state.
 
 **Parameters**
 
@@ -1003,8 +1006,17 @@ The geometry-conflict response names upload completion, processing, and saved
 frames as finalization conditions, including legacy rows whose status is still
 `uploading`. Select rotation before uploading a new movie.
 
-Trackpoint writes require an upload-completion marker regardless of status.
+Trackpoint writes, coordinate migration, and marker-map creation or renaming
+require an upload-completion marker regardless of status or coordinate origin.
+Rejected API requests return HTTP 409 without changing movie or frame records.
 Legacy frame-height recovery also checks the movie-level `first_frame_urn` JPEG
 before the ZIP fallback; metadata-only reads still avoid artifact IO.
 
 A processing measurement that conflicts with saved `frame_height_px` raises the distinct height-consistency error, preserves saved coordinates, and records `status: "processing failed"` with `processing_failed_at` and `processing_failure_summary`. Upload polling stops and displays the failure reason. Retrying cannot overwrite the fixed height.
+Conflicts with saved source width or height likewise record processing failure,
+with a dimension-specific reason, even when the analysis height is missing or
+matches. Retrying preserves saved dimensions, points, and source bytes.
+
+The saved-frame check counts only non-negative frame numbers. The marker-map
+companion item at frame `-100` alone does not finalize geometry or block source
+initialization; other finalization conditions still apply.
