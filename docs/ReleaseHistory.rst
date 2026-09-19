@@ -78,6 +78,10 @@ Release Notes
 Unreleased Summary
 ******************
 
+    * Reset Tracing sends one frame-range request instead of up to 50,000
+      per-frame requests. Background batches report progress, preserve frame
+      images, and fence duplicate work from newer edits (refs PR #1235).
+
     * Disable Upload when the selected movie exceeds 256 MiB and show the size
       limit before transfer (refs #1162).
 

@@ -783,6 +783,47 @@ rename, trim, and capture-interval writes; the owning browser includes its
 
 ---
 
+#### `POST /resize-api/v1/reset-tracing`
+
+Reset annotations with one JSON request authenticated by the `x-api-key` header
+(non-demo, movie editor). Parameters: `movie_id`, inclusive zero-based
+`frame_start` and `frame_end`, `seed_frame` inside that range, replacement
+`trackpoints` for the seed (1–100), and the owning browser's `analysis_lease_id`.
+The range must fit within the movie and the 50,000-frame application limit.
+The Analyze button sends the entire movie range and seeds the first trimmed frame
+with the default markers. Other frames in the range lose only their `trackpoints`
+attribute; frame URNs, source/analysis/traced MP4s, and frames outside the range
+are preserved. The traced download is marked stale (`needs_retracing=1`).
+
+Returns HTTP 202 with `{ "error": false, "job_id": "...", "state": "running",
+"next_frame": 0, "frame_end": 49999 }`. Invalid input returns 400; an active
+trace or another browser's analysis lease returns 409. The operation takes the
+exclusive tracing lease, preventing concurrent marker/trim edits and tracing.
+
+The resize worker queries at most 80 frame records per batch and atomically
+removes annotations with a movie checkpoint. It yields after 100 batches or
+60 seconds and queues a continuation. Retries resume the durable cursor; each
+transaction checks the job, cursor, and unexpired lease, so duplicate or late
+workers cannot clear newer edits. Acquiring a new analysis lease also invalidates
+the expired worker token, including after that browser releases its lease.
+Seed markers and completion are committed
+atomically. DynamoDB has no range-delete operation: this still incurs per-item
+transactional write capacity (higher than ordinary writes), but no per-frame
+HTTP requests or S3 work. There is no storage-format migration.
+
+#### `GET /resize-api/v1/reset-tracing`
+
+Use the same authentication header with query parameters `movie_id` and `job_id`.
+Returns the small checkpoint response above, with state `running`, `completed`,
+`failed`, `expired`, or `superseded`. This reads movie metadata only; it does not
+query frame annotations. The browser polls every two seconds and reacquires its
+analysis lease on completion without reloading the MP4. On an uncertain result,
+expired lease, or failure, it becomes view-only and asks the user to reopen
+Analyze. A partial reset can be repeated safely. Leaving the page does not cancel
+the background job; leases expire after 15 minutes without worker progress.
+
+---
+
 #### `POST /api/rename-marker`
 
 Rename one marker label across all stored trackpoints for a movie. Other marker properties, such as coordinates, color, `undeletable`, status, and error metadata, are preserved.

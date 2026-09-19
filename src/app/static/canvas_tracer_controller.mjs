@@ -1307,70 +1307,85 @@ class TracerController extends MovieController {
         this.delete_all_markers_button.prop(DISABLED, true);
         this.refreshFrameEditState();
 
-        const updates = [];
         const firstTrimFrame = this.trim_start_frame;
-        for (let frameIndex = 0; frameIndex < this.frames.length; frameIndex++) {
-            const frame = this.frames[frameIndex];
-            const markers = this.reset_comparison_markers_for_frame(frame, frameIndex);
-            const frameNumber = graph_frame_number(frame, null, frameIndex);
-            const resetMarkers = this.reset_target_markers_for_frame(frameNumber);
-            if (same_reset_markers(resetMarkers, markers)) {
-                continue;
-            }
-            updates.push({
-                frame_index: frameIndex,
-                frame_number: frameNumber,
-                markers: resetMarkers,
+        const seedMarkers = this.reset_target_markers_for_frame(firstTrimFrame);
+        const url = `${LAMBDA_API_BASE}resize-api/v1/reset-tracing`;
+        const request = async (target, options = {}) => {
+            const response = await fetch(target, {
+                ...options,
+                headers: {'Content-Type': 'application/json', 'x-api-key': this.api_key},
+                signal: AbortSignal.timeout(15000),
             });
-        }
-        if (updates.length === 0) {
-            this.goto_frame(firstTrimFrame);
-            this.refreshVisibleGraphs();
-            this.resetting_tracing = false;
-            this.refreshFrameEditState();
-            return;
-        }
-
-        const requests = updates.map(update => new Promise((resolve, reject) => {
-            const params = {
-                api_key      : this.api_key,
-                course_id    : activeCourseId(),
-                movie_id     : this.movie_id,
-                frame_number : update.frame_number,
-                trackpoints  : JSON.stringify(update.markers),
-                ...this.analysisLeaseParams(),
-            };
-            $.post(`${API_BASE}api/put-frame-trackpoints`, params)
-                .done((data) => {
-                    if (data.error) {
-                        reject(new Error(data.message || 'Error resetting tracing.'));
+            if (!response.ok) throw new Error(await response.text());
+            const result = await response.json();
+            if (result.error) throw new Error(result.message || 'Reset failed.');
+            return result;
+        };
+        const performReset = async () => {
+            let result = await request(url, {
+                method: 'POST',
+                body: JSON.stringify({
+                    movie_id: this.movie_id,
+                    frame_start: 0,
+                    frame_end: this.total_frames - 1,
+                    seed_frame: firstTrimFrame,
+                    trackpoints: seedMarkers,
+                    ...this.analysisLeaseParams(),
+                }),
+            });
+            stop_analysis_lease();
+            this.analysis_lease_id = null;
+            const statusUrl = `${url}?${new URLSearchParams({movie_id: this.movie_id, job_id: result.job_id})}`;
+            const deadline = Date.now() + 15 * 60 * 1000;
+            while (result.state === 'running') {
+                $('#status-big').text(`Resetting tracing: ${result.next_frame} of ${this.total_frames} frames. ${TRACING_MAY_LEAVE_MESSAGE}`);
+                if (Date.now() >= deadline) throw new Error('Reset is taking longer than expected.');
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                result = await request(statusUrl);
+            }
+            if (result.state !== 'completed') throw new Error(`Reset ${result.state}.`);
+            // A reset replaces the editing lease. Reacquire it before allowing changes.
+            await new Promise((resolve, reject) => {
+                $.post({
+                    url: `${API_BASE}api/acquire-movie-analysis-lease`,
+                    data: {api_key: this.api_key, movie_id: this.movie_id, course_id: activeCourseId()},
+                    timeout: 15000,
+                }).done(data => {
+                    if (data.error || !data.lease_id) {
+                        reject(new Error(data.message || 'Could not reacquire the editing lease.'));
                         return;
                     }
+                    this.analysis_lease_id = data.lease_id;
+                    start_analysis_lease(this.movie_id, this.api_key, data.lease_id);
                     resolve();
-                })
-                .fail((res) => {
-                    reject(new Error(res.responseText || 'error from put-frame-trackpoints'));
-                });
-        }));
-
-        return Promise.all(requests)
-            .then(() => {
-                for (const update of updates) {
-                    this.frames[update.frame_index].markers = update.markers.map(marker => ({...marker}));
-                }
-                this.markTracedMovieNeedsRetracing();
-                this.tracing_was_reset = true;
-                this.goto_frame(firstTrimFrame);
-                this.refreshVisibleGraphs();
-                this.markFutureFramesDirty();
-            })
-            .catch((err) => {
-                alert("error from reset-tracing:\n"+err.message);
-            })
-            .finally(() => {
-                this.resetting_tracing = false;
-                this.refreshFrameEditState();
+                }).fail(() => reject(new Error('Could not reacquire the editing lease.')));
             });
+            for (let i = 0; i < this.frames.length; i++) {
+                this.frames[i].markers = graph_frame_number(this.frames[i], null, i) === firstTrimFrame
+                    ? seedMarkers.map(marker => ({...marker})) : [];
+            }
+            this.movie_metadata.status = 'ready';
+            this.last_tracked_frame = firstTrimFrame;
+            this.movie_metadata.last_frame_tracked = firstTrimFrame;
+            this.markTracedMovieNeedsRetracing();
+            this.tracing_was_reset = true;
+            this.pending_retrace_to_end = true;
+            this.goto_frame(firstTrimFrame);
+            this.refreshVisibleGraphs();
+            this.markFutureFramesDirty();
+            $('#status-big').text('Tracing reset. Place markers on the first trimmed frame to trace again.');
+        };
+        return performReset().catch(err => {
+            // A lost response can mean partial/completed server work. Do not edit stale data.
+            stop_analysis_lease();
+            this.analysis_read_only = true;
+            const message = `${err.message} Reopen Analyze to reload annotations and try again.`;
+            $('#status-big').text(message);
+            alert(`Error resetting tracing: ${message}`);
+        }).finally(() => {
+            this.resetting_tracing = false;
+            this.set_movie_control_buttons();
+        });
     }
 
     // Subclassed methods
@@ -1694,7 +1709,7 @@ class TracerController extends MovieController {
 
     set_movie_control_buttons()  {
         /* override to disable everything if we are tracking */
-        if (this.tracking || this.saving_track_request) {
+        if (this.tracking || this.saving_track_request || this.resetting_tracing) {
             $(this.div_selector + ' input, ' + this.div_selector + ' button').prop(DISABLED,true);
             return;
         }

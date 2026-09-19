@@ -6,6 +6,7 @@ from aws_lambda_powertools import Logger
 
 from . import async_work
 from . import movie_glue
+from . import reset_tracing
 from .src.app.constants import storage_deployment_id
 
 LOGGER = Logger(service="planttracer")
@@ -48,10 +49,13 @@ def process_local_queue_message(body: dict):
     process_job(job)
 
 
-def process_job(job: async_work.TraceJob | async_work.PostUploadJob) -> None:
+def process_job(job: async_work.TraceJob | async_work.PostUploadJob | async_work.ResetJob) -> None:
     """Process one validated asynchronous job."""
     if isinstance(job, async_work.PostUploadJob):
         movie_glue.process_uploaded_movie(movie_id=job.movie_id)
+        return
+    if isinstance(job, async_work.ResetJob):
+        reset_tracing.process(job)
         return
     process_tracing_job(job)
 

@@ -707,7 +707,7 @@ class DDBO:
         return movie_analysis_lock_from_record(movie)
 
     def acquire_movie_analysis_lock(self, *, movie, started_by_user_id, started_by_user_name):
-        """Atomically obtain a 15-minute browser Analyze lease."""
+        """Obtain an Analyze lease and fence any expired background worker."""
         now = int(time.time())
         lock = MovieAnalysisLock(
             movie_id=movie[MOVIE_ID], lease_id=uuid.uuid4().hex,
@@ -720,7 +720,7 @@ class DDBO:
                 Key={MOVIE_ID: movie[MOVIE_ID]},
                 UpdateExpression=("SET #lease_id=:lease_id, #acquired=:now, #heartbeat=:now, "
                                   "#expires=:expires, #started_by_id=:started_by_id, "
-                                  "#started_by_name=:started_by_name"),
+                                  "#started_by_name=:started_by_name REMOVE #trace_job"),
                 ConditionExpression=("(attribute_not_exists(#analysis_expires) OR #analysis_expires < :now) "
                                      "AND (attribute_not_exists(#trace_expires) OR #trace_expires < :now)"),
                 ExpressionAttributeNames={
@@ -730,6 +730,7 @@ class DDBO:
                     "#started_by_id": ANALYSIS_LOCK_STARTED_BY_USER_ID,
                     "#started_by_name": ANALYSIS_LOCK_STARTED_BY_USER_NAME,
                     "#trace_expires": TRACE_LOCK_EXPIRES_AT,
+                    "#trace_job": TRACE_JOB_ID,
                 },
                 ExpressionAttributeValues={
                     ":lease_id": lock.lease_id, ":now": now, ":expires": lock.expires_at,

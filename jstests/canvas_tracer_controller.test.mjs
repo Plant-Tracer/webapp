@@ -2620,8 +2620,13 @@ describe('TracerController.reset_tracing', () => {
         global.alert = jest.fn();
         global.demo_mode = false;
         jest.clearAllMocks();
+        global.fetch = jest.fn();
+        jest.useFakeTimers();
     });
     afterEach(() => {
+        jest.clearAllTimers();
+        jest.useRealTimers();
+        delete global.fetch;
         global.demo_mode = false;
         delete global.confirm;
         delete global.alert;
@@ -2630,9 +2635,10 @@ describe('TracerController.reset_tracing', () => {
     });
 
     function mockSuccessfulFramePosts() {
+        global.fetch.mockResolvedValue({ok: true, json: async () => ({job_id: "reset-job", state: "completed"})});
         mockPost.mockImplementation(() => ({
             done: jest.fn().mockImplementation(cb => {
-                cb({ error: false });
+                cb({ error: false, lease_id: "new-lease" });
                 return { fail: jest.fn() };
             }),
             fail: jest.fn(),
@@ -2706,17 +2712,14 @@ describe('TracerController.reset_tracing', () => {
             ],
             [],
         ]);
-        expect(mockPost).toHaveBeenCalledTimes(3);
-        expect(mockPost.mock.calls.map(call => call[1].frame_number)).toEqual([0, 1, 2]);
-        expect(mockPost.mock.calls.map(call => JSON.parse(call[1].trackpoints))).toEqual([
-            [],
-            [
-                { x: 50, y: 50, label: 'Apex', color: 'orange', frame_number: 1 },
-                { x: 50, y: 100, label: 'Ruler 0mm', color: 'red', frame_number: 1, undeletable: true },
-                { x: 50, y: 150, label: 'Ruler 10mm', color: 'red', frame_number: 1, undeletable: true },
-            ],
-            [],
-        ]);
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+        expect(global.fetch.mock.calls[0][0]).toContain('resize-api/v1/reset-tracing');
+        expect(JSON.parse(global.fetch.mock.calls[0][1].body)).toMatchObject({
+            frame_start: 0, frame_end: 2, seed_frame: 1,
+            trackpoints: tc.frames[1].markers,
+        });
+        expect(mockPost).toHaveBeenCalledTimes(1);
+        expect(mockPost.mock.calls[0][0].url).toContain('acquire-movie-analysis-lease');
         expect(global.confirm).toHaveBeenCalledWith(
             RESET_TRACING_CONFIRM_MESSAGE
         );
@@ -2743,35 +2746,55 @@ describe('TracerController.reset_tracing', () => {
     });
 
     test('disables reset button and ignores re-entry while save requests are pending', () => {
-        mockPost.mockReturnValue({
-            done: jest.fn().mockReturnThis(),
-            fail: jest.fn().mockReturnThis(),
-        });
+        global.fetch.mockReturnValue(new Promise(() => {}));
 
         const promise = tc.reset_tracing();
         tc.reset_tracing();
 
         expect(resetButton.prop).toHaveBeenCalledWith('disabled', true);
         expect(global.confirm).toHaveBeenCalledTimes(1);
-        expect(mockPost).toHaveBeenCalledTimes(3);
+        expect(global.fetch).toHaveBeenCalledTimes(1);
         expect(promise).toBeInstanceOf(Promise);
     });
 
     test('keeps local markers when persistence fails', async () => {
-        mockPost.mockReturnValue({
-            done: jest.fn().mockReturnValue({
-                fail: jest.fn().mockImplementation(cb => {
-                    cb({ responseText: 'Save failed' });
-                }),
-            }),
-        });
+        global.fetch.mockResolvedValue({ok: false, text: async () => 'Save failed'});
 
         await tc.reset_tracing();
 
         expect(global.alert).toHaveBeenCalledWith(expect.stringContaining('Save failed'));
-        expect(resetButton.prop).toHaveBeenCalledWith('disabled', false);
+        expect(tc.analysis_read_only).toBe(true);
+        expect(resetButton.prop).toHaveBeenCalledWith('disabled', true);
         expect(tc.frames[0].markers).toContainEqual({ x: 10, y: 20, label: 'Apex', color: 'orange' });
         expect(tc.frames[1].markers).toContainEqual({ x: 30, y: 40, label: 'Base', color: 'magenta' });
+    });
+
+    test('50,000 frames use one mutation request and bounded status polling', async () => {
+        mockSuccessfulFramePosts();
+        tc.total_frames = 50000;
+        tc.frames = Array.from({length: 50000}, (_, frame_number) => ({
+            frame_number, markers: [{x: 10, y: 20, label: 'Apex'}],
+        }));
+        global.fetch.mockResolvedValueOnce({ok: true, json: async () => ({
+            job_id: 'reset-job', state: 'running', next_frame: 0,
+        })});
+        const promise = tc.reset_tracing();
+        await jest.advanceTimersByTimeAsync(2000);
+        await promise;
+        expect(global.fetch.mock.calls.filter(([, options]) => options.method === 'POST')).toHaveLength(1);
+        expect(JSON.parse(global.fetch.mock.calls[0][1].body)).toMatchObject({frame_start: 0, frame_end: 49999});
+        expect(global.fetch).toHaveBeenCalledTimes(2);
+        expect(tc.frames[49999].markers).toEqual([]);
+        expect(tc.last_tracked_frame).toBe(1);
+        expect(tc.analysis_lease_id).toBe('new-lease');
+    });
+
+    test('expired reset leaves the page read-only and directs the user to reload', async () => {
+        global.fetch.mockResolvedValue({ok: true, json: async () => ({job_id: 'old', state: 'expired'})});
+        await tc.reset_tracing();
+        expect(tc.analysis_read_only).toBe(true);
+        expect(global.alert).toHaveBeenCalledWith(expect.stringContaining('Reopen Analyze'));
+        expect(mockPost).not.toHaveBeenCalled();
     });
 
     test('in demo_mode shows popup and does not ask for confirmation', () => {

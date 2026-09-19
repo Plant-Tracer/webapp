@@ -192,6 +192,30 @@ def test_upload_movie_end_to_end(chrome_driver, live_server, new_course):
     assert not chrome_driver.execute_script(
         "return performance.getEntriesByType('resource').some(r => /zip|unzip/.test(r.name));")
 
+    # Reset through the real browser, HTTP receiver, queue, and DynamoDB worker.
+    before_reset = odb.get_movie(movie_id=movie_id)
+    source_urn = before_reset[odb.MOVIE_DATA_URN]
+    analysis_urn = before_reset[odb.ANALYSIS_MP4]['urn']
+    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .delete_all_markers_button'))).click()
+    wait.until(EC.alert_is_present()).accept()
+    wait.until(lambda browser: 'Tracing reset.' in browser.find_element(By.ID, 'status-big').text)
+    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .track_button')))
+    after_reset = odb.get_movie(movie_id=movie_id)
+    assert after_reset[odb.MOVIE_DATA_URN] == source_urn
+    assert after_reset[odb.ANALYSIS_MP4]['urn'] == analysis_urn
+    assert after_reset[odb.NEEDS_RETRACING] == 1
+    assert after_reset[odb.LAST_FRAME_TRACKED] == 0
+    assert after_reset.get(odb.ANALYSIS_LEASE_ID)
+    points = odb.get_movie_trackpoints(movie_id=movie_id)
+    assert {point[odb.FRAME_NUMBER] for point in points} == {0}
+    assert {point['label'] for point in points} == {'Apex', 'Ruler 0mm', 'Ruler 10mm'}
+    assert chrome_driver.execute_script("""
+        return performance.getEntriesByType('resource').filter(entry => {
+            const url = new URL(entry.name);
+            return url.pathname.endsWith('/reset-tracing') && !url.search;
+        }).length;
+    """) == 1
+
     logger.info("Successfully uploaded movie %s via browser end-to-end test", movie_id)
 
     # Cleanup movie data so fixtures remain isolated
