@@ -17,6 +17,7 @@ def main() -> int:
     cv2 = importlib.import_module("cv2")
     imageio_ffmpeg = importlib.import_module("imageio_ffmpeg")
     np = importlib.import_module("numpy")
+    analysis_mp4 = importlib.import_module("resize_app.analysis_mp4")
 
     executable = Path(imageio_ffmpeg.get_ffmpeg_exe())
     if not os.access(executable, os.X_OK):
@@ -43,6 +44,11 @@ def main() -> int:
             capture.release()
         if not success or frame is None or frame.shape[:2] != (24, 32):
             raise RuntimeError("OpenCV could not decode the packaged FFmpeg output")
+        result = analysis_mp4.encode_analysis_mp4(
+            source_path=output_path, output_path=Path(temp_dir) / "analysis.mp4",
+            options=analysis_mp4.AnalysisMp4Options())
+        if result.frame_count != 1 or (result.width, result.height) != (32, 24):
+            raise RuntimeError("Packaged production analysis encoder changed frame count or geometry")
     print(f"lambda-resize artifact media smoke passed: {executable}")
     return 0
 

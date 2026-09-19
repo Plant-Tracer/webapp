@@ -4,9 +4,10 @@ import os
 from typing import Annotated, Literal
 
 import boto3
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
-from .src.app.constants import storage_deployment_id
+from .src.app.constants import C, storage_deployment_id
+from .src.app.schema import Trackpoint
 
 EVENT_SOURCE = "planttracer.async-work"
 EVENT_DETAIL_TYPE = "Plant Tracer Async Work"
@@ -30,7 +31,34 @@ class PostUploadJob(BaseModel):
     movie_id: str
 
 
-AsyncJob = Annotated[TraceJob | PostUploadJob, Field(discriminator="job_type")]
+class ResetRequest(BaseModel):
+    """Inclusive frame range and replacement markers for its seed frame."""
+
+    movie_id: str
+    frame_start: int = Field(ge=0, lt=C.MAX_FRAMES)
+    frame_end: int = Field(ge=0, lt=C.MAX_FRAMES)
+    seed_frame: int = Field(ge=0, lt=C.MAX_FRAMES)
+    trackpoints: list[Trackpoint] = Field(min_length=1, max_length=100)
+    analysis_lease_id: str | None = None
+
+    @model_validator(mode="after")
+    def validate_range(self):
+        """Reject inverted ranges and replacement markers outside the range."""
+        if not self.frame_start <= self.seed_frame <= self.frame_end:
+            raise ValueError("seed_frame must be inside the inclusive reset range")
+        for point in self.trackpoints:
+            point.frame_number = self.seed_frame
+        return self
+
+
+class ResetJob(ResetRequest):
+    """Retryable range reset; progress is checkpointed in DynamoDB."""
+
+    job_type: Literal["reset"] = "reset"
+    job_id: str
+
+
+AsyncJob = Annotated[TraceJob | PostUploadJob | ResetJob, Field(discriminator="job_type")]
 JOB_ADAPTER = TypeAdapter(AsyncJob)
 
 
@@ -61,7 +89,7 @@ def eventbridge_client():
     )
 
 
-def publish_job(job: TraceJob | PostUploadJob) -> None:
+def publish_job(job: TraceJob | PostUploadJob | ResetJob) -> None:
     """Publish one stack-scoped work item and reject partial PutEvents failure."""
     detail = AsyncWorkDetail(stack_name=storage_deployment_id(), job=job)
     response = eventbridge_client().put_events(Entries=[{

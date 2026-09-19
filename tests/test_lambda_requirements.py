@@ -56,3 +56,8 @@ def test_lambda_requirements_include_tracer_deps():
         "lambda-resize/src/requirements.txt contains forbidden packages "
         f"{FORBIDDEN_PACKAGES & packages}"
     )
+
+
+def test_lambda_media_imports_with_only_deployment_dependencies():
+    """The production decoder must not depend on packages only installed for web/tests."""
+    subprocess.run(["make", "lambda-media-import-check"], cwd=ROOT, check=True)

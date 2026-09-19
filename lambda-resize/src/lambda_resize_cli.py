@@ -4,7 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
-from resize_app import mpeg_jpeg_zip, tracer
+from resize_app import movie_glue, mpeg_jpeg_zip, tracer
 from resize_app.src.app.schema import Trackpoint
 
 TEST_FILE = Path(__file__).parents[2] / "tests" / "data" / "2019-07-12 circumnutation.mp4"
@@ -35,12 +35,16 @@ def trace_movie(args):
         movie_url=args.infile,
         frame_start=0,
         trackpoints=trackpoints,
-        movie_zipfile_path=args.zipfile,
         movie_traced_path=args.movie_traced,
         rotation=args.rotate,
         callback=print_progress,
         comment=args.comment,
     )
+
+
+def process_upload(args):
+    """Generate the same validated derivative used by uploaded movies."""
+    movie_glue.process_uploaded_movie(movie_id=args.movie_id)
 
 
 def build_parser():
@@ -66,11 +70,13 @@ def build_parser():
     trace_parser = subparsers.add_parser("tracer", help="Trace a movie and create artifacts")
     trace_parser.set_defaults(func=trace_movie)
     trace_parser.add_argument("--infile", type=Path, default=TEST_FILE)
-    trace_parser.add_argument("--zipfile", type=Path, default=Path("outfile.zip"))
     trace_parser.add_argument("--movie-traced", type=Path, default=Path("tracked.mp4"))
     trace_parser.add_argument("--trackpoints", default=TEST_TRACKPOINTS)
     trace_parser.add_argument("--comment", default="test comment")
     trace_parser.add_argument("--rotate", type=int, default=0)
+    upload_parser = subparsers.add_parser("process-upload", help="Process a stored movie upload")
+    upload_parser.add_argument("movie_id")
+    upload_parser.set_defaults(func=process_upload)
     return parser
 
 

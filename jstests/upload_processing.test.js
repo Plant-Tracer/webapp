@@ -78,6 +78,19 @@ describe('upload processing status', () => {
     now.mockRestore();
   });
 
+  test('stops polling when processing fails and reports the stored reason', async () => {
+    fetch.mockResponseOnce(JSON.stringify({
+      error: false,
+      metadata: {
+        status: 'processing failed',
+        processing_failure_summary: 'ValueError: source has no decodable frames',
+      },
+    }));
+    await expect(waitForUploadProcessing('movie-123'))
+      .rejects.toThrow('ValueError: source has no decodable frames');
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   test('surfaces a metadata status error without continuing to poll', async () => {
     fetch.mockResponseOnce(JSON.stringify({
       error: true,

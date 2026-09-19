@@ -1,96 +1,71 @@
 /**
  * @jest-environment jsdom
  */
+const { check_upload_metadata, upload_movie } = require('planttracer');
 
-global.check_metadata_mockVal = jest.fn();
-global.check_metadata_mockProp = jest.fn();
-jest.mock('utils', () => {
-    const noop = () => {};
-    const noopChain = { html: noop, val: noop, prop: noop, click: noop, show: noop, hide: noop, on: noop };
-    return {
-    $: jest.fn((selector) => {
-        if (selector && selector.nodeType === 9) {
-            return { ready: (cb) => cb() };
-        }
-        if (['#movie-title', '#movie-description', '#movie-file'].includes(selector)) {
-            return { val: global.check_metadata_mockVal };
-        }
-        if (selector === '#upload-button') {
-            return { prop: global.check_metadata_mockProp };
-        }
-        return noopChain;
-    }),
-    $$: jest.fn(),
-    DOMWrapper: jest.fn(),
-};
+function selectFile(size) {
+    // Supply file metadata without allocating a 256 MiB test payload.
+    const file = new File(['movie'], 'plant.mp4', {type: 'video/mp4'});
+    Object.defineProperty(file, 'size', {value: size});
+    Object.defineProperty(document.querySelector('#movie-file'), 'files', {
+        value: [file], configurable: true,
+    });
+}
+
+beforeEach(() => {
+    document.body.innerHTML = `
+        <form id="upload-movie-form">
+            <input id="movie-title" value="Plant movie">
+            <input id="movie-description" value="Plant growth">
+            <input id="movie-file" type="file">
+            <button id="upload-button" type="button"></button>
+            <span id="upload-size-error"></span>
+        </form>
+        <div id="message"></div>`;
+    global.MAX_FILE_UPLOAD = 256 * 1024 * 1024;
+    fetch.resetMocks();
+    selectFile(100);
 });
 
-const module = require('planttracer');
-const check_upload_metadata = module.check_upload_metadata;
+test.each(['#movie-title', '#movie-description'])('requires at least three characters in %s', selector => {
+    document.querySelector(selector).value = 'ab';
+    check_upload_metadata();
+    expect(document.querySelector('#upload-button').disabled).toBe(true);
+});
 
-global.Audio = function() {
-  this.play = jest.fn();
-};
+test('requires a selected file', () => {
+    Object.defineProperty(document.querySelector('#movie-file'), 'files', {value: [], configurable: true});
+    check_upload_metadata();
+    expect(document.querySelector('#upload-button').disabled).toBe(true);
+});
 
-describe('check_upload_metadata', () => {
-    let mockVal, mockProp;
+test.each([256 * 1024 * 1024 - 1, 256 * 1024 * 1024])('allows a file of %i bytes', size => {
+    selectFile(size);
+    check_upload_metadata();
+    expect(document.querySelector('#upload-button').disabled).toBe(false);
+    expect(document.querySelector('#upload-size-error').textContent).toBe('');
+});
 
-    beforeEach(() => {
-        mockVal = global.check_metadata_mockVal;
-        mockProp = global.check_metadata_mockProp;
-        mockVal.mockClear();
-        mockProp.mockClear();
-    });
+test('disables oversized uploads and clears the error when a smaller file is selected', () => {
+    selectFile(MAX_FILE_UPLOAD + 1);
+    check_upload_metadata();
+    expect(document.querySelector('#upload-button').disabled).toBe(true);
+    expect(document.querySelector('#upload-size-error').textContent).toBe('Choose a movie of 256 MiB or less.');
+    // Editing the title must not reenable upload for the oversized file.
+    document.querySelector('#movie-title').value = 'Another movie';
+    check_upload_metadata();
+    expect(document.querySelector('#upload-button').disabled).toBe(true);
+    selectFile(MAX_FILE_UPLOAD);
+    check_upload_metadata();
+    expect(document.querySelector('#upload-button').disabled).toBe(false);
+    expect(document.querySelector('#upload-size-error').textContent).toBe('');
+});
 
-    test('disables upload button if title is too short', () => {
-        // Arrange
-        mockVal.mockReturnValueOnce('ab')  // Title is too short
-            .mockReturnValueOnce('Valid description')  // Valid description
-            .mockReturnValueOnce('somefile.mp4');  // Movie file is selected
-
-        // Act
-        check_upload_metadata();
-
-        // Assert
-        expect(mockProp).toHaveBeenCalledWith('disabled', true); // Button should be disabled
-    });
-
-    test('disables upload button if description is too short', () => {
-        // Arrange
-        mockVal.mockReturnValueOnce('Valid title')  // Valid title
-            .mockReturnValueOnce('ab')  // Description is too short
-            .mockReturnValueOnce('somefile.mp4');  // Movie file is selected
-
-        // Act
-        check_upload_metadata();
-
-        // Assert
-        expect(mockProp).toHaveBeenCalledWith('disabled', true); // Button should be disabled
-    });
-
-    test('disables upload button if no movie file is selected', () => {
-        // Arrange
-        mockVal.mockReturnValueOnce('Valid title')  // Valid title
-            .mockReturnValueOnce('Valid description')  // Valid description
-            .mockReturnValueOnce('');  // No movie file selected
-
-        // Act
-        check_upload_metadata();
-
-        // Assert
-        expect(mockProp).toHaveBeenCalledWith('disabled', true); // Button should be disabled
-    });
-
-    test('enables upload button if all inputs are valid', () => {
-        // Arrange
-        mockVal.mockReturnValueOnce('Valid title')  // Valid title
-            .mockReturnValueOnce('Valid description')  // Valid description
-            .mockReturnValueOnce('somefile.mp4');  // Movie file is selected
-
-        // Act
-        check_upload_metadata();
-
-        // Assert
-        expect(mockProp).toHaveBeenCalledWith('disabled', false); // Button should be enabled
-    });
+test('direct upload invocation also rejects oversized files before any network request', () => {
+    selectFile(MAX_FILE_UPLOAD + 1);
+    upload_movie();
+    expect(fetch).not.toHaveBeenCalled();
+    expect(document.querySelector('#message').textContent).toBe('Choose a movie of 256 MiB or less.');
+    expect(document.querySelector('#upload-button').disabled).toBe(true);
+    expect(document.querySelector('#upload-movie-form').style.display).not.toBe('none');
 });

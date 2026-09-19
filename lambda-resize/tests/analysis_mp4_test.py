@@ -126,3 +126,33 @@ def test_invalid_input_leaves_no_published_bundle(tmp_path):
         )
     assert not output_dir.exists()
     assert not (tmp_path / ".player.partial").exists()
+
+
+def test_edit_list_does_not_hide_source_frames(tmp_path):
+    """The shortened MOV stores seven frames even though playback exposes six."""
+    source = analysis_mp4.project_root() / "tests/data/2019-07-31 plantmovie short.mov"
+    result = analysis_mp4.encode_analysis_mp4(
+        source_path=source, output_path=tmp_path / "analysis.mp4",
+        options=analysis_mp4.AnalysisMp4Options())
+    assert result.frame_count == 7
+    rendered = list(analysis_mp4.unlabelled_analysis_frames(
+        str(source), analysis_mp4.AnalysisMp4Options()))
+    assert len(rendered) == result.frame_count
+    assert all(frame.shape[:2] == (result.height, result.width) for frame in rendered)
+
+
+def test_validator_rejects_b_frames(tmp_path):
+    """Inspect decoded frame types rather than trusting the encoder's requested options."""
+    path = tmp_path / "b-frames.mp4"
+    writer = H264Writer(path, fps=15, output_params=[
+        "-profile:v", "main", "-bf", "2", "-g", "12", "-x264-params", "b-adapt=0",
+    ])
+    try:
+        for index in range(12):
+            frame = np.full((48, 64, 3), 20 + index, dtype=np.uint8)
+            frame[10:20, index:index + 10] = 220
+            writer.append_data(frame)
+    finally:
+        writer.close()
+    with pytest.raises(ValueError, match="contains B-frames"):
+        analysis_mp4.validate_encoded_movie(path, frame_count=12, width=64, height=48)
