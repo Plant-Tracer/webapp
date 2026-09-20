@@ -36,7 +36,7 @@ from s3_upload_trigger import configure_bucket_eventbridge
 from app import odb, odb_movie_data, s3_presigned
 from app.constants import C
 from app.paths import ffmpeg_path
-from app.schema import Trackpoint
+from app.schema import Trackpoint, TrackpointCoordinateMetadata
 
 
 API_KEY_FIELD = "api_key"
@@ -52,6 +52,7 @@ TRACE_MOVIE_PATH = "resize-api/v1/trace-movie"
 TRACKPOINTS_PATH = "api/get-movie-trackpoints"
 XLSX_FORMAT = "xlsx"
 TRACKING_TOLERANCE_PIXELS = 2
+EXPORT_COORDINATE_STEP_MM = 0.01
 RENDERING_MEAN_CHANNEL_TOLERANCE = 3
 HTTP_ERROR_BODY_LIMIT = 2000
 CORS_REPAIR_RECHECK_INTERVAL = 2
@@ -275,10 +276,12 @@ def assert_position(actual, expected, *, scale, frame_number):
     else:
         actual_x, actual_y = actual.x, actual.y
     actual_x, actual_y = float(actual_x), float(actual_y)
-    if abs(actual_x - expected_x) > TRACKING_TOLERANCE_PIXELS:
+    # Each calibrated export rounds to 0.01 mm, unlike raw JSON pixel coordinates.
+    rounding = EXPORT_COORDINATE_STEP_MM * (1 if isinstance(actual, ReferenceTrackpoint) else 0.5) / scale
+    if abs(actual_x - expected_x) > TRACKING_TOLERANCE_PIXELS + rounding:
         raise AssertionError(f"frame {frame_number} Apex x={actual_x}, expected {expected_x} +/- "
                              f"{TRACKING_TOLERANCE_PIXELS} pixels")
-    if abs(actual_y - expected_y) > TRACKING_TOLERANCE_PIXELS:
+    if abs(actual_y - expected_y) > TRACKING_TOLERANCE_PIXELS + rounding:
         raise AssertionError(f"frame {frame_number} Apex y={actual_y}, expected {expected_y} +/- "
                              f"{TRACKING_TOLERANCE_PIXELS} pixels")
 
@@ -326,6 +329,21 @@ def xlsx_trackpoint_rows(xlsx_data):
             values[column] = _xlsx_value(cell, shared_strings)
         rows.append(values)
     return rows
+
+
+def csv_coordinate_rows(rows, *, frame_height):
+    """Validate current CSV coordinate metadata before comparing legacy reference columns."""
+    metadata_headers = [odb.FRAME_HEIGHT_PX, odb.TRACKPOINT_ORIGIN]
+    if not rows or rows[0][-2:] != metadata_headers:
+        raise AssertionError("CSV is missing coordinate metadata columns")
+    for row_number, row in enumerate(rows[1:], start=1):
+        if len(row) != len(rows[0]):
+            raise AssertionError(f"CSV row {row_number} has an unexpected column count")
+        metadata = TrackpointCoordinateMetadata.model_validate(dict(zip(metadata_headers, row[-2:])))
+        if (metadata.frame_height_px != frame_height
+                or metadata.trackpoint_origin != odb.TRACKPOINT_ORIGIN_BOTTOM_LEFT):
+            raise AssertionError(f"CSV row {row_number} has unexpected coordinate metadata: {metadata}")
+    return [row[:-2] for row in rows]
 
 
 def assert_export_endpoints(rows, expected_start, expected_end, *, scale, export_name):
@@ -394,10 +412,13 @@ def compare_trackpoint_rows(actual_rows, reference_rows, *, export_name):
             ("Ruler 10mm y", abs(actual.ruler_10_y - reference.ruler_10_y), "ruler"),
         )
         for label, delta, marker_type in coordinate_deltas:
-            if delta > TRACKING_TOLERANCE_PIXELS:
+            # Comparing two rounded mm values adds at most 0.01 mm of uncertainty.
+            rounding = EXPORT_COORDINATE_STEP_MM / scale if marker_type == "apex" else 0
+            if delta > TRACKING_TOLERANCE_PIXELS + rounding:
                 raise AssertionError(
                     f"{export_name} frame {actual.frame_number} {label} differs by "
-                    f"{delta:.2f} pixels; tolerance={TRACKING_TOLERANCE_PIXELS}")
+                    f"{delta:.2f} pixels; tolerance={TRACKING_TOLERANCE_PIXELS} "
+                    f"plus export rounding={rounding:.3f}")
             if marker_type == "apex":
                 max_apex_delta = max(max_apex_delta, delta)
             else:
@@ -618,7 +639,9 @@ def run_workflow(*, endpoint, stack_name, movie_path, reference_csv_path, refere
                      "artifact=%s", movie_id, len(trackpoints.trackpoint_dicts), len(apexes), json_path)
         csv_response = post_api(endpoint, TRACKPOINTS_PATH, api_key=api_key, movie_id=movie_id)
         csv_path = write_artifact(artifacts_dir, "trackpoints.csv", csv_response.content)
-        csv_rows = list(csv.reader(io.StringIO(csv_response.text)))
+        csv_rows = csv_coordinate_rows(
+            list(csv.reader(io.StringIO(csv_response.text))),
+            frame_height=uploaded_movie[odb.FRAME_HEIGHT_PX])
         assert_export_endpoints(csv_rows, expected_start, expected_end, scale=scale, export_name="CSV")
         stats = csv_trace_stats(csv_rows, expected_start, expected_end)
         with reference_csv_path.open(newline="", encoding="utf-8") as reference_csv:

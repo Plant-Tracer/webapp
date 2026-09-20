@@ -78,6 +78,10 @@ Release Notes
 Unreleased Summary
 ******************
 
+    * Deployment: validate CSV coordinate metadata separately from legacy
+      reference coordinates, and account for calibrated export rounding in the
+      two-pixel tracing comparison (refs PR #1235).
+
     * Standardize all movie frame numbers on zero-based indexing: frame 0 is
       time zero. Correct the formerly one-based red analysis labels; older
       analysis derivatives are recoded on demand. Downloaded traced movies now

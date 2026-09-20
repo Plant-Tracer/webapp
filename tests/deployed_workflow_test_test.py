@@ -1,5 +1,6 @@
 """Tests for the deployed workflow command and verification logic."""
 
+import csv
 import json
 import threading
 from decimal import Decimal
@@ -10,6 +11,7 @@ import requests
 from PIL import Image
 
 import deployed_workflow_test
+from app import odb
 from app.schema import Trackpoint
 
 
@@ -208,6 +210,62 @@ def test_trackpoint_comparison_accepts_small_drift_and_rejects_large_drift():
     with pytest.raises(AssertionError, match="differs by 2.10 pixels"):
         deployed_workflow_test.compare_trackpoint_rows(
             outside_tolerance, reference, export_name="CSV")
+
+
+def test_trackpoint_comparison_accounts_for_mm_rounding_at_pixel_tolerance():
+    start, _end = deployed_workflow_test.reference_trackpoints(
+        deployed_workflow_test.DEFAULT_REFERENCE_CSV_PATH)
+    scale = deployed_workflow_test.reference_scale(start)
+    reference = start.model_copy(update={"apex_x": round(196 * scale, 2)})
+    actual = reference.model_copy(update={"apex_x": round(194 * scale, 2)})
+    headers = list(reference.model_dump(by_alias=True))
+    reference_rows = [headers, list(reference.model_dump(by_alias=True).values())]
+    actual_rows = [headers, list(actual.model_dump(by_alias=True).values())]
+    stats = deployed_workflow_test.compare_trackpoint_rows(actual_rows, reference_rows, export_name="CSV")
+    assert 2 < stats.max_apex_delta_pixels < 2.05
+    deployed_workflow_test.assert_position(actual, reference, scale=scale, frame_number=0)
+    actual_rows[1][headers.index(deployed_workflow_test.APEX_X_COLUMN)] = round(193 * scale, 2)
+    with pytest.raises(AssertionError, match="differs by"):
+        deployed_workflow_test.compare_trackpoint_rows(actual_rows, reference_rows, export_name="CSV")
+    # Integer pixel ruler columns do not receive a rounding allowance.
+    actual_rows[1] = list(reference.model_dump(by_alias=True).values())
+    actual_rows[1][headers.index(deployed_workflow_test.RULER_0_X_COLUMN)] += 3
+    with pytest.raises(AssertionError, match="Ruler 0mm x differs by 3.00"):
+        deployed_workflow_test.compare_trackpoint_rows(actual_rows, reference_rows, export_name="CSV")
+
+
+def test_csv_metadata_preserves_reference_coordinates():
+    with deployed_workflow_test.DEFAULT_REFERENCE_CSV_PATH.open(encoding="utf-8", newline="") as stream:
+        reference = list(csv.reader(stream))
+    current = [reference[0] + [odb.FRAME_HEIGHT_PX, odb.TRACKPOINT_ORIGIN]]
+    current.extend(row + ["480", odb.TRACKPOINT_ORIGIN_BOTTOM_LEFT] for row in reference[1:])
+
+    coordinates = deployed_workflow_test.csv_coordinate_rows(current, frame_height=480)
+    assert coordinates == reference
+    stats = deployed_workflow_test.compare_trackpoint_rows(coordinates, reference, export_name="CSV")
+    assert stats.rows == 296
+    assert stats.max_apex_delta_pixels == 0
+    assert stats.max_ruler_delta_pixels == 0
+    # Validation must cover intermediate rows, not just the endpoints.
+    current[20][-2] = "240"
+    with pytest.raises(AssertionError, match="row 20.*coordinate metadata"):
+        deployed_workflow_test.csv_coordinate_rows(current, frame_height=480)
+
+
+@pytest.mark.parametrize('metadata', [["480", ""], ["", "bottom-left"], ["480", "top-left"]])
+def test_csv_metadata_rejects_missing_or_invalid_coordinate_space(metadata):
+    rows = [[odb.FRAME_HEIGHT_PX, odb.TRACKPOINT_ORIGIN], metadata]
+    with pytest.raises((AssertionError, ValueError)):
+        deployed_workflow_test.csv_coordinate_rows(rows, frame_height=480)
+
+
+def test_csv_metadata_requires_columns_and_complete_rows():
+    with pytest.raises(AssertionError, match="missing coordinate metadata"):
+        deployed_workflow_test.csv_coordinate_rows([["frame_number"], ["0"]], frame_height=480)
+    with pytest.raises(AssertionError, match="column count"):
+        deployed_workflow_test.csv_coordinate_rows(
+            [["frame_number", odb.FRAME_HEIGHT_PX, odb.TRACKPOINT_ORIGIN], ["0", "480"]],
+            frame_height=480)
 
 
 def test_rendering_comparison_accepts_small_mean_channel_drift(tmp_path):
