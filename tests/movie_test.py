@@ -1011,6 +1011,7 @@ def test_movie_writes_reject_trace_and_foreign_analysis_leases(client, new_movie
         ('/api/rename-marker', {
             'old_label': 'Apex', 'new_label': 'Tip',
         }),
+        ('/api/delete-marker', {'label': 'Apex'}),
     )
     acquired = client.post(
         '/api/acquire-movie-analysis-lease', data=request_data).get_json()

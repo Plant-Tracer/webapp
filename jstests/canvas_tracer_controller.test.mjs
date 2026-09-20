@@ -2579,6 +2579,8 @@ describe('TracerController.del_row', () => {
         tc = new TracerController('div#tracer', makeMovieMetadata(), 'api-key');
         jest.clearAllMocks();
         global.demo_mode = false;
+        global.alert = jest.fn();
+        tc.clear_selection = () => { tc.selected = null; };
     });
 
     test('does not delete undeletable markers', () => {
@@ -2593,18 +2595,76 @@ describe('TracerController.del_row', () => {
         expect(mockPost).not.toHaveBeenCalled();
     });
 
-    test('deletes marker with ruler label when it is not undeletable', () => {
+    test('deletes marker with ruler label when it is not undeletable', async () => {
         const ruler = new MockMarkerClass(10, 20, 5, 'red', 'red', 'Ruler 0mm');
         const apex = new MockMarkerClass(30, 40, 5, 'orange', 'orange', 'Apex');
         tc.objects.push(ruler, apex);
+        tc.frames = [{markers: [{label: 'Ruler 0mm', x: 10, y: 20}, {label: 'Apex', x: 30, y: 40}]}];
+        mockPost.mockReturnValueOnce({done: callback => { callback({error: false}); return {fail: jest.fn()}; }});
+        await tc.del_row(0);
 
-        tc.del_row(0);
-
-        expect(tc.objects).toEqual([apex]);
+        expect(tc.objects.filter(obj => obj.constructor.name === MockMarkerClass.name).map(obj => obj.name)).toEqual(['Apex']);
         expect(mockPost).toHaveBeenCalledWith(
-            expect.stringContaining('put-frame-trackpoints'),
-            expect.objectContaining({ frame_number: 0 })
+            expect.stringContaining('delete-marker'),
+            expect.objectContaining({ label: 'Ruler 0mm' })
         );
+    });
+
+    test('removes an off-frame marker and every trajectory only after server success', async () => {
+        const tbody = makeEl();
+        useSelectorElements({'div#tracer tbody.marker_table_body': tbody});
+        tc.frames = [
+            {markers: [{label: 'Keep', x: 10, y: 20}]},
+            {markers: [{label: 'Gone', x: 30, y: 40}, {label: 'Keep', x: 11, y: 21}]},
+            {markers: [{label: 'Gone', x: 35, y: 45}, {label: 'Keep', x: 12, y: 22}]},
+        ];
+        tc.movie_metadata.total_frames = 3;
+        tc.trim_end_frame_missing = true;
+        tc.add_frame_objects(0);
+        expect(tbody.html.mock.calls.at(-1)[0]).toContain('marker_label="Gone"');
+        expect(tbody.html.mock.calls.at(-1)[0]).toContain('n/a');
+        let respond;
+        mockPost.mockReturnValueOnce({done: callback => { respond = callback; return {fail: jest.fn()}; }});
+        const pending = tc.delete_marker('Gone');
+        await Promise.resolve();
+        expect(tc.frames[1].markers.some(point => point.label === 'Gone')).toBe(true);
+        respond({error: false});
+        await expect(pending).resolves.toBe(true);
+        expect(tc.frames.flatMap(frame => frame.markers).map(point => point.label)).toEqual(['Keep', 'Keep', 'Keep']);
+        expect(tc.objects.filter(obj => obj.constructor.name === MockLineClass.name)).toHaveLength(2);
+        expect(tc.objects.filter(obj => obj.constructor.name === MockMarkerClass.name).map(obj => obj.name)).toEqual(['Keep']);
+        expect(tc.movie_metadata.needs_retracing).toBe(1);
+        expect(tc.deleting_marker).toBe(false);
+        expect(tbody.html.mock.calls.at(-1)[0]).not.toContain('Gone');
+        expect(mockPost).toHaveBeenCalledTimes(1);
+    });
+
+    test('preserves the marker and all frames when deletion fails', async () => {
+        tc.frames = [{markers: [{label: 'Apex', x: 30, y: 40}]}];
+        const before = JSON.stringify(tc.frames);
+        mockPost.mockReturnValueOnce({done: callback => { callback({error: true, message: 'Conflict'}); return {fail: jest.fn()}; }});
+        await expect(tc.delete_marker('Apex')).resolves.toBe(false);
+        expect(JSON.stringify(tc.frames)).toBe(before);
+        expect(global.alert).toHaveBeenCalledWith('Error deleting marker: Conflict');
+        expect(tc.deleting_marker).toBe(false);
+    });
+
+    test('waits for every outstanding marker save before deleting', async () => {
+        tc.frames = [{markers: [{label: 'Apex', x: 30, y: 40}]}];
+        let first;
+        let second;
+        tc.marker_save_requests = new Set([
+            new Promise(resolve => { first = resolve; }),
+            new Promise(resolve => { second = resolve; }),
+        ]);
+        mockPost.mockReturnValueOnce({done: callback => { callback({error: false}); return {fail: jest.fn()}; }});
+        const pending = tc.delete_marker('Apex');
+        second();
+        await Promise.resolve();
+        expect(mockPost).not.toHaveBeenCalled();
+        first();
+        await expect(pending).resolves.toBe(true);
+        expect(tc.frames[0].markers).toEqual([]);
     });
 });
 

@@ -285,6 +285,12 @@ The marker lookup table is stored as a metadata item in ``movie_frames`` with
 ``marker_labels`` (current label to ``marker_id``), and ``marker_aliases``
 (stored or legacy label to ``marker_id``). Frame trackpoints may store
 ``marker_id``; API responses resolve the current label through this marker map.
+Deleting a marker sets ``deleted=true`` on its marker-map entry and removes its
+active ``marker_labels`` mapping in the same transaction that marks the movie
+as needing retracing. Trackpoint readers omit that identity across all frames;
+the stored frame rows and legacy aliases remain intact. Reusing a deleted label
+allocates a new marker ID. Old aliases remain attached to the deleted ID so old
+points cannot reappear when that name is reused or renamed.
 
 
 Data Consistency Notes

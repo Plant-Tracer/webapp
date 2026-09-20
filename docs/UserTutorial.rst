@@ -207,6 +207,11 @@ Reading movie traces
 Frame counting starts at 0, which is also time zero. The marker table's Frames
 column gives each marker's first and last saved frame. A marker with no saved
 position on the displayed frame remains in the table with location ``n/a``.
+Deleting a marker removes its row and all of its saved traces throughout the
+movie, including outside the trim range. You can delete it from an ``n/a`` row;
+protected ruler markers cannot be deleted. Retrace to update a previously
+generated movie download. Reusing the name starts a new marker without restoring
+the deleted path.
 Past and current trace segments are fully opaque; future segments use 70 percent
 opacity. Tracing from the displayed frame preserves earlier points.
 

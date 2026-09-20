@@ -33,6 +33,7 @@ from .schema import (
     MovieTraceLock,
     Trackpoint,
     RenameMarkerRequest,
+    DeleteMarkerRequest,
     validate_movie_field,
     Course,
     fix_movie,
@@ -152,6 +153,7 @@ MOVIE_ZIPFILE_URN = 'movie_zipfile_urn'       # rotated and scaled
 NEEDS_RETRACING = 'needs_retracing'           # traced MP4 may be stale after marker edits
 MARKER_ID = 'marker_id'
 MARKERS = 'markers'
+MARKER_DELETED = 'deleted'
 MARKER_LABELS = 'marker_labels'
 MARKER_ALIASES = 'marker_aliases'
 TITLE = 'title'
@@ -2772,6 +2774,8 @@ def get_movie_trackpoints(*, movie_id, frame_start=None, frame_count=None, frame
     for frame in iter_movie_frames_in_range( DDBO().movie_frames, movie_id,
                                              frame_start, frame_end ):
         for tp in frame.get('trackpoints',[]):
+            if marker_is_deleted(marker_map, tp):
+                continue
             trackpoint = {key: value for key, value in tp.items()
                           if value is not None and key != MARKER_ID}
             trackpoint[FRAME_NUMBER] = int(frame[FRAME_NUMBER])
@@ -2806,7 +2810,8 @@ def _new_marker_id(label: str, markers: dict) -> str:
     digest = hashlib.sha256(label.encode("utf-8")).hexdigest()[:16]
     marker_id = f"marker-{digest}"
     counter = 1
-    while marker_id in markers and markers[marker_id].get('label') != label:
+    while marker_id in markers and (markers[marker_id].get('label') != label
+                                    or markers[marker_id].get(MARKER_DELETED)):
         counter += 1
         marker_id = f"marker-{digest}-{counter}"
     return marker_id
@@ -2897,6 +2902,12 @@ def _write_movie_marker_map(*, ddbo, old_item: dict, new_item: dict):
     )
 
 
+def marker_is_deleted(marker_map: dict, trackpoint: dict) -> bool:
+    """Resolve tombstones for stable IDs and legacy labels without rewriting frames."""
+    marker_id = trackpoint.get(MARKER_ID) or marker_map.get(MARKER_ALIASES, {}).get(trackpoint.get('label'))
+    return bool(marker_map.get(MARKERS, {}).get(marker_id, {}).get(MARKER_DELETED))
+
+
 def marker_label_for_trackpoint(marker_map: dict, trackpoint: dict) -> str:
     """Return a trackpoint's current label, resolving marker_id through the movie marker map."""
     marker_id = trackpoint.get(MARKER_ID)
@@ -2925,11 +2936,15 @@ def ensure_trackpoint_marker_ids(*, movie_id: str, trackpoints: list[dict]) -> l
         stored_trackpoint = copy.copy(trackpoint)
         label = stored_trackpoint['label']
         marker_id = stored_trackpoint.get(MARKER_ID) or marker_labels.get(label) or marker_aliases.get(label)
+        if markers.get(marker_id, {}).get(MARKER_DELETED):
+            if stored_trackpoint.get(MARKER_ID):
+                continue  # A stale writer must not revive a deleted marker ID.
+            marker_id = None
         if marker_id is None:
             marker_id = _new_marker_id(label, markers)
             markers[marker_id] = {'label': label}
             marker_labels[label] = marker_id
-            marker_aliases[label] = marker_id
+            marker_aliases.setdefault(label, marker_id)  # Legacy points keep their old identity.
             changed = True
         stored_trackpoint[MARKER_ID] = marker_id
         stored_trackpoints.append(stored_trackpoint)
@@ -3005,7 +3020,7 @@ def rename_movie_marker(*, movie_id: str, old_label: str, new_label: str,
 
     marker_labels.pop(old_label)
     marker_labels[new_label] = marker_id
-    marker_aliases[old_label] = marker_id
+    marker_aliases.setdefault(old_label, marker_id)
     marker_aliases[new_label] = marker_id
     markers[marker_id] = {**markers.get(marker_id, {}), 'label': new_label}
     trackpoints_updated = 0
@@ -3028,6 +3043,33 @@ def rename_movie_marker(*, movie_id: str, old_label: str, new_label: str,
         MARKER_LABELS: marker_labels,
         MARKER_ALIASES: marker_aliases,
     }
+    _commit_marker_map_change(ddbo, marker_map, new_marker_map, needs_retracing=needs_retracing)
+    return {'frames_updated': frames_updated, 'trackpoints_updated': trackpoints_updated}
+
+
+def delete_movie_marker(*, movie_id: str, label: str):
+    """Atomically hide a marker everywhere and invalidate its traced download."""
+    label = DeleteMarkerRequest(label=label).label
+    ddbo = DDBO()
+    frames = ddbo.get_frames(movie_id)
+    marker_map = get_movie_marker_map(movie_id=movie_id, frames=frames, create=True)
+    marker_id = marker_map[MARKER_LABELS].get(label)
+    if marker_id is None:
+        return
+    for frame in frames:
+        for point in frame.get('trackpoints', []):
+            point_id = point.get(MARKER_ID) or marker_map[MARKER_ALIASES].get(point.get('label'))
+            if point_id == marker_id and point.get('undeletable'):
+                raise ValueError("This marker cannot be deleted")
+    updated = copy.deepcopy(marker_map)
+    updated[MARKERS][marker_id][MARKER_DELETED] = True
+    updated[MARKER_LABELS].pop(label)
+    _commit_marker_map_change(ddbo, marker_map, updated, needs_retracing=True)
+
+
+def _commit_marker_map_change(ddbo, marker_map, new_marker_map, *, needs_retracing):
+    """Commit a marker-map edit and movie invalidation in one conditional transaction."""
+    movie_id = marker_map[MOVIE_ID]
     transact_items = [{
         'Update': {
             'TableName': ddbo.movie_frames.name,
@@ -3086,10 +3128,9 @@ def rename_movie_marker(*, movie_id: str, old_label: str, new_label: str,
     except ClientError as exc:
         if exc.response.get('Error', {}).get('Code') == 'TransactionCanceledException':
             raise AtomicRenameConflict(
-                f"marker rename for movie {movie_id} was canceled because the marker map changed"
+                f"marker edit for movie {movie_id} was canceled because the marker map changed"
             ) from exc
         raise
-    return {'frames_updated': frames_updated, 'trackpoints_updated': trackpoints_updated}
 
 def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackpoint],
                           needs_retracing:bool=False):

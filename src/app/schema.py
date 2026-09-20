@@ -264,6 +264,17 @@ class Trackpoint(BaseModel):
         return d.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
 
 
+class DeleteMarkerRequest(BaseModel):
+    """Delete one named marker throughout a movie."""
+
+    label: Annotated[str, Field(min_length=1, max_length=100)]
+
+    @field_validator("label", mode="before")
+    @classmethod
+    def strip_label(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+
 class RenameMarkerRequest(BaseModel):
     """Request to rename a marker label across a movie's stored trackpoints."""
 

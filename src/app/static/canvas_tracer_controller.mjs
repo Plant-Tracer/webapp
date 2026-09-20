@@ -441,7 +441,7 @@ class TracerController extends MovieController {
     }
 
     editingLocked() {
-        return this.analysis_read_only || this.frame_loading || this.tracking || this.resetting_tracing || this.movieStatusIsTracing();
+        return this.analysis_read_only || this.frame_loading || this.tracking || this.resetting_tracing || this.deleting_marker || this.movieStatusIsTracing();
     }
 
     analysisLeaseParams() {
@@ -1155,10 +1155,10 @@ class TracerController extends MovieController {
                 `<td>${range.first}-${range.last}</td>` +
                 `<td id="${obj.table_cell_id}">${visible ? this.format_trackpoint_location(trackpoint) : 'n/a'}</td>` +
                 `<td id="${obj.table_cell_id}-mm" class="obj-mm"> ${obj.loc_mm}</td>`;
-            if (!visible || marker_is_undeletable(obj)) {
+            if (marker_is_undeletable(obj)) {
                 rows += `<td class="nodemo"></td></tr>`;
             } else {
-                rows += `<td class="del-row nodemo" object_index="${index}" >🚫</td></tr>`;
+                rows += `<td class="del-row nodemo" marker_label="${encodeURIComponent(obj.name)}" >🚫</td></tr>`;
             }
         }
         // put the HTML in the window and wire up the delete object method
@@ -1166,7 +1166,7 @@ class TracerController extends MovieController {
         $(this.div_selector + " .marker-name-editor").on('click',
                      (event) => {this.begin_marker_rename(event.currentTarget);});
         $(this.div_selector + " .del-row").on('click',
-                     (event) => {this.del_row(event.target.getAttribute('object_index'));});
+                     (event) => {this.delete_marker(decodeURIComponent(event.currentTarget.getAttribute('marker_label')));});
         $(this.div_selector + " .del-row").css('cursor','default');
         this.redraw();          // redraw with the markers
         if (demo_mode) {        // be sure to hide the just-added delete option
@@ -1282,19 +1282,57 @@ class TracerController extends MovieController {
 
     // Delete a row and update the server
     del_row(i) {
+        return this.delete_marker(this.objects[i]?.name);
+    }
+
+    async delete_marker(label) {
         if (!this.isCurrentFrameEditable()) {
-            return;
+            return false;
         }
-        const obj = this.objects[i];
-        if (!obj || obj.constructor.name != Marker.name || marker_is_undeletable(obj)) {
-            return;
+        const obj = this.objects.find(item => item.constructor.name == Marker.name && item.name === label);
+        const points = (this.frames || []).flatMap(frame => frame?.markers || []).filter(point => point.label === label);
+        if ((!obj && points.length === 0) || (obj && marker_is_undeletable(obj)) || points.some(point => point.undeletable)) {
+            return false;
         }
-        this.objects.splice(i,1);
-        this.create_marker_table();
-        this.markFutureFramesDirty();
-        this.refreshResetTracingButtonState();
-        this.refreshFrameEditState(); // re-enable the inflection-point button if it was removed
-        this.put_markers();
+        if (demo_mode) {
+            $('#demo-popup').fadeIn(300);
+            return false;
+        }
+        this.deleting_marker = true;
+        this.refreshFrameEditState();
+        try {
+            await Promise.all(this.marker_save_requests || []);
+            const deleted = await new Promise(resolve => {
+                $.post(`${API_BASE}api/delete-marker`, {
+                    api_key: this.api_key, course_id: activeCourseId(), movie_id: this.movie_id,
+                    label, ...this.analysisLeaseParams(),
+                }).done(data => {
+                    if (data.error) alert('Error deleting marker: ' + data.message);
+                    resolve(!data.error);
+                }).fail(() => {
+                    alert('Failed to delete marker. Reopen Analyze to check its saved state.');
+                    resolve(false);
+                });
+            });
+            if (!deleted) return false;
+            for (const frame of this.frames || []) {
+                if (frame) frame.markers = (frame.markers || []).filter(point => point.label !== label);
+            }
+            this.clear_selection();
+            this.objects = this.objects.filter(item => item.constructor.name != Marker.name && item.constructor.name != Line.name);
+            this.add_frame_objects(this.frame_number);
+            this.markTracedMovieNeedsRetracing();
+            this.refreshVisibleGraphs();
+            return true;
+        } catch (error) {
+            console.error('marker deletion failed', error);
+            alert('Could not finish saving annotations before deleting the marker.');
+            return false;
+        } finally {
+            this.deleting_marker = false;
+            this.refreshResetTracingButtonState();
+            this.refreshFrameEditState();
+        }
     }
 
     default_trackpoints_from_template(frameNumber = this.frame_number) {
@@ -1461,7 +1499,7 @@ class TracerController extends MovieController {
             trackpoints  : JSON.stringify(markers), // markers as a JSON string because we do POST as a form, not as REST
             ...this.analysisLeaseParams(),
         };
-        return $.post(`${API_BASE}api/put-frame-trackpoints`, put_frame_markers_params )
+        const request = $.post(`${API_BASE}api/put-frame-trackpoints`, put_frame_markers_params )
             .done( (data) => {
                 if (data.error) {
                     alert("Error saving annotations: "+data.message);
@@ -1475,6 +1513,12 @@ class TracerController extends MovieController {
                 console.error("put-frame-trackpoints failed", res);
                 alert("error from put-frame-trackpoints:\n"+res.responseText);
             });
+        const pending = Promise.resolve(request);
+        this.marker_save_requests ||= new Set();
+        this.marker_save_requests.add(pending);
+        const finished = () => this.marker_save_requests.delete(pending);
+        pending.then(finished, finished);
+        return request;
     }
 
     /* track_to_end() is called when the track_button ('track to end') button is clicked.

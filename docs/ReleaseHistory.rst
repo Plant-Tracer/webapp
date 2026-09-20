@@ -78,6 +78,11 @@ Release Notes
 Unreleased Summary
 ******************
 
+    * Version 0.9.9.15: deleting a marker removes it from every frame, the marker
+      table and graphs, including when its current location is n/a. Preserve
+      other markers and frame data, reject deletion of protected rulers, and
+      mark existing traced downloads for regeneration (refs PR #1235).
+
     * Deployment: validate CSV coordinate metadata separately from legacy
       reference coordinates, and account for calibrated export rounding in the
       two-pixel tracing comparison (refs PR #1235).

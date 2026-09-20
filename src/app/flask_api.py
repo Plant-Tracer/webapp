@@ -1409,6 +1409,24 @@ def api_rename_marker():
     })
 
 
+@api_bp.route('/delete-marker', methods=POST)
+def api_delete_marker():
+    """Delete a marker throughout the movie, including outside its trim range."""
+    user_id = get_user_id(allow_demo=False)
+    movie = odb.can_edit_movie(user_id=user_id, movie_id=get_movie_id())
+    if response := tracing_lock_response(movie[MOVIE_ID]):
+        return response
+    if response := analysis_lock_response(movie):
+        return response
+    try:
+        odb.delete_movie_marker(movie_id=movie[MOVIE_ID], label=get('label'))
+    except ValueError as exc:
+        return jsonify({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: str(exc)}), 400
+    except AtomicRenameConflict as exc:
+        return jsonify({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: str(exc)}), 409
+    return jsonify({C.API_KEY_ERROR: False})
+
+
 ################################################################
 ##
 # Log API

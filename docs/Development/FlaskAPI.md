@@ -852,6 +852,23 @@ the background job; leases expire after 15 minutes without worker progress.
 
 ---
 
+#### `POST /api/delete-marker`
+
+Delete the named marker throughout a movie, including frames outside the trim
+range. Parameters: `api_key`, `movie_id`, `label`, and the current
+`analysis_lease_id` when an editing lease is active. Requires movie edit permission;
+demo writes, active tracing, foreign editing leases, and protected (`undeletable`)
+markers are rejected. Success returns `{ "error": false }`; repeat deletion is
+idempotent. Invalid/protected labels return 400; concurrent marker-map edits return 409.
+
+Deletion records a tombstone in the stable marker map and atomically sets
+`needs_retracing=1`. All trackpoint reads, exports and subsequent tracing exclude
+the deleted identity, including legacy label aliases. Frame data is retained;
+there are no per-frame writes or S3 changes. The client removes the table row,
+paths and graph series after success. A new marker with the same name receives
+a new identity and does not revive the old trace. Existing downloaded movies
+retain their rendered overlays until tracing regenerates them.
+
 #### `POST /api/rename-marker`
 
 Rename one marker label across all stored trackpoints for a movie. Other marker properties, such as coordinates, color, `undeletable`, status, and error metadata, are preserved.
