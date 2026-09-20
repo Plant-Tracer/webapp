@@ -951,6 +951,10 @@ class TracerController extends MovieController {
     }
 
     analysis_frame_height() {
+        const explicitHeight = Number(this.movie_metadata?.frame_height_px);
+        if (Number.isFinite(explicitHeight) && explicitHeight > 0) {
+            return explicitHeight;
+        }
         const height = this.loaded_analysis_frame_height
             ?? (this.movie_metadata ? this.movie_metadata.height : null);
         const fallbackHeight = this.naturalHeight || (this.c ? this.c.height : null);

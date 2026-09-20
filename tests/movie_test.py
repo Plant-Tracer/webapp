@@ -225,6 +225,26 @@ def test_new_movie_stores_fpm_and_signs_metadata(client, new_course, local_s3):
     odb_movie_data.purge_movie(movie_id=res['movie_id'])
 
 
+@pytest.mark.parametrize('rotation', [None, 0, 90, 180, 270, 45, 'invalid', ''])
+def test_new_movie_rotation_is_set_before_upload(client, new_course, rotation):
+    response = client.post('/api/new-movie', data={
+        API_KEY: new_course[API_KEY], 'title': 'orientation test', 'description': 'new upload',
+        'movie_data_sha256': 'a' * 64, 'movie_data_length': 4,
+        **({odb.MOVIE_ROTATION: rotation} if rotation is not None else {}),
+    })
+    if rotation in (45, 'invalid', ''):
+        assert response.status_code == 400
+        assert response.get_json()['error'] is True
+        return
+    assert response.status_code == 200
+    movie_id = response.get_json()[MOVIE_ID]
+    movie = odb.get_movie(movie_id=movie_id)
+    assert movie[odb.MOVIE_ROTATION] == (rotation or 0)
+    assert movie[odb.MOVIE_STATUS] == odb.MOVIE_STATE_UPLOADING
+    assert not movie.get(odb.RESIZED_AT)
+    odb_movie_data.purge_movie(movie_id=movie_id)
+
+
 def test_new_movie_rejects_invalid_fpm(client, new_course):
     """new-movie with an invalid fpm returns an error and does not create the movie."""
     api_key = copy.copy(new_course)[API_KEY]
@@ -565,9 +585,11 @@ def test_set_research_metadata(client, new_course):
     odb_movie_data.delete_movie(movie_id=movie_id)
 
 
-def test_api_edit_movie(new_movie, client):
-    """Verify edit-movie: invalid action/auth fail; valid rotate90cw updates rotation_steps and triggers Lambda.
-    VM only updates rotation_steps and clears tracking; rotation/zip run in Lambda."""
+def test_api_edit_movie(new_course, client):
+    """Only valid, authenticated pre-upload rotation changes are accepted."""
+    new_movie = dict(new_course)
+    new_movie[MOVIE_ID] = odb.create_new_movie(user_id=new_course[USER_ID], title='pending upload',
+                                             description='rotation test')
     api_key = new_movie[API_KEY]
     movie_id = new_movie[MOVIE_ID]
 
@@ -592,14 +614,14 @@ def test_api_edit_movie(new_movie, client):
     resp = client.post('/api/rotate-movie', data=data)
     assert resp.json['error'] is True, f"resp.json={resp.json} data={data}"
 
-    # Success: rotation_steps omitted => 1 step
+    # Success: rotation before processing
     data = {'api_key': api_key, 'movie_id': movie_id, 'rotation': '90'}
     resp = client.post('/api/rotate-movie', data=data)
     assert resp.json['error'] is False, f"resp.json={resp.json} data={data}"
     movie = odb.get_movie(movie_id=movie_id)
     assert movie.get('rotation') == 90, f"{movie}"
 
-    # Success: rotation_steps=2
+    # Success: revise orientation before processing
     data = {'api_key': api_key, 'movie_id': movie_id, 'rotation': '180'}
     resp = client.post('/api/rotate-movie', data=data)
     assert resp.json['error'] is False, f"resp.json={resp.json} data={data}"
@@ -609,43 +631,48 @@ def test_api_edit_movie(new_movie, client):
     movie_metadata2 = odb.get_movie_metadata(movie_id=movie_id)
     logger.debug("movie_metadata2=%s", movie_metadata2)
     assert movie_metadata2.get('rotation') == 180, f"{movie}"
+    odb_movie_data.purge_movie(movie_id=movie_id)
+    odb_movie_data.delete_movie(movie_id=movie_id)
 
 
-def test_get_movie_metadata_rotation_coercion(new_movie):
+def test_get_movie_metadata_rotation_coercion(new_movie_record):
     """Verify that get_movie_metadata coerces rotation to int, defaulting to 0 for invalid values,
     and swaps width/height only when rotation is 90 or 270."""
-    movie_id = new_movie[MOVIE_ID]
+    movie_id = new_movie_record[MOVIE_ID]
 
+    # Seed historical rows directly: these read-coercion cases include invalid
+    # rotations that normal geometry writers no longer permit.
+    ddbo = odb.DDBO()
     # Seed width and height so we can detect swaps
     odb.set_movie_metadata(movie_id=movie_id, movie_metadata={'width': 100, 'height': 200})
 
     # String "90" should be coerced to int 90 → dimensions swapped
-    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={'rotation': '90'})
+    ddbo.update_table(ddbo.movies, movie_id, {odb.MOVIE_ROTATION: '90'})
     meta = odb.get_movie_metadata(movie_id=movie_id)
     assert meta.get('width') == 200
     assert meta.get('height') == 100
 
     # Invalid string → coerced to 0 → no swap
-    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={'rotation': 'invalid'})
+    ddbo.update_table(ddbo.movies, movie_id, {odb.MOVIE_ROTATION: 'invalid'})
     meta = odb.get_movie_metadata(movie_id=movie_id)
     assert meta.get('width') == 100
     assert meta.get('height') == 200
 
 
     # None → coerced to 0 → no swap
-    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={'rotation': None})
+    ddbo.update_table(ddbo.movies, movie_id, {odb.MOVIE_ROTATION: None})
     meta = odb.get_movie_metadata(movie_id=movie_id)
     assert meta.get('width') == 100
     assert meta.get('height') == 200
 
     # String "270" should be coerced to int 270 → dimensions swapped
-    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={'rotation': '270'})
+    ddbo.update_table(ddbo.movies, movie_id, {odb.MOVIE_ROTATION: '270'})
     meta = odb.get_movie_metadata(movie_id=movie_id)
     assert meta.get('width') == 200
     assert meta.get('height') == 100
 
     # String "180" should be coerced to int 180 → no swap
-    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={'rotation': '180'})
+    ddbo.update_table(ddbo.movies, movie_id, {odb.MOVIE_ROTATION: '180'})
     meta = odb.get_movie_metadata(movie_id=movie_id)
     assert meta.get('width') == 100
     assert meta.get('height') == 200
