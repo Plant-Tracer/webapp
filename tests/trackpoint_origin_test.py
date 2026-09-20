@@ -817,7 +817,8 @@ def test_tracing_caches_rotated_height_from_raw_movie(new_movie_record, tmp_path
 def test_untouched_height_only_legacy_movie_retains_coordinate_height(client, new_movie_record, rotation):
     movie_id = new_movie_record[MOVIE_ID]
     ddbo = odb.DDBO()
-    ddbo.update_movie(movie_id, {odb.HEIGHT: 150, odb.MOVIE_ROTATION: rotation})
+    # Historical completed uploads use date_uploaded rather than uploaded_at.
+    ddbo.update_movie(movie_id, {odb.HEIGHT: 150, odb.MOVIE_ROTATION: rotation, odb.DATE_UPLOADED: 1})
     params = {API_KEY: new_movie_record[API_KEY], MOVIE_ID: movie_id}
     for endpoint in ('get-movie-metadata', 'get-movie-trackpoints'):
         response = client.post(f'/api/{endpoint}', data={**params, 'format': 'json'})
@@ -1091,4 +1092,113 @@ def test_upload_height_conflict_reports_failure_without_changing_coordinates(new
         assert failed[odb.FRAME_HEIGHT_PX] == width
         assert not failed.get(odb.RESIZED_AT)
         assert ddbo.get_frames(movie_id) == before
+        assert odb_movie_data.read_object(failed[odb.MOVIE_DATA_URN]) == original
+
+
+@pytest.mark.parametrize('origin', [None, BOTTOM_LEFT])
+@pytest.mark.parametrize('status', [None, odb.MOVIE_STATE_UPLOADING, odb.MOVIE_STATE_READY])
+def test_incomplete_upload_rejects_coordinate_mutators(new_movie_record, origin, status):
+    """Shared writers must reject incomplete uploads even with an existing origin/map."""
+    movie_id = new_movie_record[MOVIE_ID]
+    ddbo = odb.DDBO()
+    ddbo.update_movie(movie_id, {odb.MOVIE_STATUS: status, odb.TRACKPOINT_ORIGIN: origin})
+    ddbo.put_movie_frame({MOVIE_ID: movie_id, FRAME_NUMBER: 0,
+                         'trackpoints': [Trackpoint(x=10, y=20, label='Apex').model_dump()]})
+    before = ddbo.get_movie(movie_id)
+    frames = ddbo.get_frames(movie_id)
+    marker_map = odb.get_movie_marker_map(movie_id=movie_id)
+    for saved_map in (False, True):
+        if saved_map:
+            ddbo.movie_frames.put_item(Item=marker_map)
+        with pytest.raises(odb.MovieUploadIncomplete):
+            odb.ensure_bottom_left_trackpoints(movie_id=movie_id, frame_height=480)
+        with pytest.raises(odb.MovieUploadIncomplete):
+            odb.rename_movie_marker(movie_id=movie_id, old_label='Apex', new_label='Tip')
+        with pytest.raises(odb.MovieUploadIncomplete):
+            odb.ensure_trackpoint_marker_ids(movie_id=movie_id, trackpoints=[
+                Trackpoint(x=10, y=20, label='Tip').model_dump()])
+        assert ddbo.get_movie(movie_id) == before
+        assert ddbo.get_frames(movie_id) == frames
+        item = ddbo.movie_frames.get_item(Key=odb.movie_marker_map_key(movie_id)).get('Item')
+        assert item == (marker_map if saved_map else None)
+
+
+@pytest.mark.parametrize('operation', ['metadata', 'json', 'csv', 'xlsx', 'rename'])
+def test_incomplete_upload_api_preserves_legacy_coordinates(client, new_movie_record, operation):
+    """Reject before even caching legacy height; metadata-only polling stays read-only."""
+    movie_id = new_movie_record[MOVIE_ID]
+    ddbo = odb.DDBO()
+    urn = make_urn(object_name=f'{movie_id}/legacy.zip')
+    artifact = _zip_with_frame(width=640, height=480)
+    odb_movie_data.write_object(urn, artifact)
+    ddbo.update_movie(movie_id, {odb.MOVIE_ZIPFILE_URN: urn, odb.TRACKPOINT_ORIGIN: None})
+    ddbo.put_movie_frame({MOVIE_ID: movie_id, FRAME_NUMBER: 0,
+                         'trackpoints': [Trackpoint(x=10, y=20, label='Apex').model_dump()]})
+    before = ddbo.get_movie(movie_id)
+    frames = ddbo.get_frames(movie_id)
+    params = {API_KEY: new_movie_record[API_KEY], MOVIE_ID: movie_id}
+    assert client.post('/api/get-movie-metadata', data=params).status_code == 200
+    if operation == 'metadata':
+        response = client.post('/api/get-movie-metadata', data={**params, 'frame_start': 0, 'frame_count': 1})
+    elif operation == 'rename':
+        response = client.post('/api/rename-marker', data={**params, 'old_label': 'Apex', 'new_label': 'Tip'})
+    else:
+        response = client.post('/api/get-movie-trackpoints', data={**params, 'format': operation})
+    assert response.status_code == 409
+    assert 'upload' in response.get_json()['message']
+    assert ddbo.get_movie(movie_id) == before
+    assert ddbo.get_frames(movie_id) == frames
+    assert 'Item' not in ddbo.movie_frames.get_item(Key=odb.movie_marker_map_key(movie_id))
+    assert odb_movie_data.read_object(urn) == artifact
+
+
+def test_marker_map_alone_does_not_finalize_geometry(client, new_movie_record, tmp_path):
+    movie_id = new_movie_record[MOVIE_ID]
+    ddbo = odb.DDBO()
+    # Represent a legacy companion item without any actual coordinate frames.
+    marker_map = odb.get_movie_marker_map(movie_id=movie_id)
+    ddbo.movie_frames.put_item(Item=marker_map)
+    assert not ddbo.has_movie_frames(movie_id)
+    response = client.post('/api/rotate-movie', data={
+        API_KEY: new_movie_record[API_KEY], MOVIE_ID: movie_id, 'rotation': 90})
+    assert response.status_code == 200
+    source = tmp_path / 'source.mp4'
+    write_four_color_movie(source, width=640, height=480)
+    odb_movie_data.set_movie_data(movie_id=movie_id, movie_data=source.read_bytes())
+    movie = ddbo.get_movie(movie_id)
+    assert movie[odb.MOVIE_ROTATION] == 90
+    assert odb.movie_is_available(movie)
+    assert odb_movie_data.read_object(movie[odb.MOVIE_DATA_URN]) == source.read_bytes()
+    assert ddbo.movie_frames.get_item(Key=odb.movie_marker_map_key(movie_id))['Item'] == marker_map
+    # A real frame after the negative-numbered map must still be found with Limit=1.
+    ddbo.put_movie_frame({MOVIE_ID: movie_id, FRAME_NUMBER: 0,
+                         'trackpoints': [Trackpoint(x=10, y=20, label='Apex').model_dump()]})
+    assert ddbo.has_movie_frames(movie_id)
+
+
+@pytest.mark.parametrize('dimension', [odb.WIDTH, odb.HEIGHT])
+@pytest.mark.parametrize('cached_height', [None, 480])
+def test_upload_dimension_conflict_reports_failure(new_movie_record, tmp_path, dimension, cached_height):
+    """Missing/matching analysis height must not hide a saved source-dimension conflict."""
+    movie_id = new_movie_record[MOVIE_ID]
+    source = tmp_path / 'source.mp4'
+    write_four_color_movie(source, width=640, height=480)
+    original = source.read_bytes()
+    odb_movie_data.set_movie_data(movie_id=movie_id, movie_data=original)
+    ddbo = odb.DDBO()
+    ddbo.update_movie(movie_id, {dimension: 800, odb.FRAME_HEIGHT_PX: cached_height})
+    ddbo.put_movie_frame({MOVIE_ID: movie_id, FRAME_NUMBER: 0,
+                         'trackpoints': [Trackpoint(x=10, y=20, label='Apex').model_dump()]})
+    frames = ddbo.get_frames(movie_id)
+    for _ in range(2):
+        with pytest.raises(movie_glue.odb.MovieGeometryFinalized):
+            movie_glue.process_uploaded_movie(movie_id=movie_id)
+        failed = ddbo.get_movie(movie_id)
+        assert failed[odb.MOVIE_STATUS] == odb.MOVIE_STATE_PROCESSING_FAILED
+        assert failed[odb.PROCESSING_FAILED_AT]
+        assert 'dimensions' in failed[odb.PROCESSING_FAILURE_SUMMARY]
+        assert failed[dimension] == 800
+        assert failed.get(odb.FRAME_HEIGHT_PX) == cached_height
+        assert not failed.get(odb.RESIZED_AT)
+        assert ddbo.get_frames(movie_id) == frames
         assert odb_movie_data.read_object(failed[odb.MOVIE_DATA_URN]) == original

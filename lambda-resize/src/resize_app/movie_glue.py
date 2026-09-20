@@ -479,11 +479,13 @@ def process_uploaded_movie(*, movie_id: str):
         updates.update({odb.PROCESSING_ATTEMPT: None, odb.PROCESSING_EXPIRES_AT: None})
         ddbo.update_movie(movie_id, updates, expected_processing_attempt=attempt)
     except Exception as exc:
+        reason = ("Decoded movie dimensions conflict with saved geometry"
+                  if isinstance(exc, odb.MovieGeometryFinalized) else f"{type(exc).__name__}: {exc}")
         try:
             ddbo.update_movie(movie_id, {
                 MOVIE_STATUS: odb.MOVIE_STATE_PROCESSING_FAILED,
                 odb.PROCESSING_FAILED_AT: int(time.time()),
-                odb.PROCESSING_FAILURE_SUMMARY: f"{type(exc).__name__}: {exc}"[:500],
+                odb.PROCESSING_FAILURE_SUMMARY: reason[:500],
                 odb.PROCESSING_ATTEMPT: None, odb.PROCESSING_EXPIRES_AT: None,
             }, expected_processing_attempt=attempt)
         except odb.MovieProcessingLeaseLost:

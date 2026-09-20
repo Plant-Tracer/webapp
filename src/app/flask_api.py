@@ -160,6 +160,8 @@ def _height_from_movie_frame(movie_id, frame_number):
 
 def infer_trackpoint_frame_height(movie_id, movie, frame_start, *, recover_legacy_frames=True):
     """Resolve height from the caller's raw movie snapshot (before API rotation)."""
+    if recover_legacy_frames and not odb.movie_is_available(movie):
+        raise odb.MovieUploadIncomplete(movie_id)
     if (movie.get(odb.FRAME_HEIGHT_PX) is None and not movie.get(odb.ANALYSIS_MP4)
             and recover_legacy_frames):
         candidate_frames = [frame_start, 0] if frame_start not in (None, 0) else [0]
@@ -602,7 +604,7 @@ def movie_geometry_finalized(_ex):
 @api_bp.errorhandler(odb.MovieUploadIncomplete)
 def movie_upload_incomplete(_ex):
     return jsonify({C.API_KEY_ERROR: True,
-                    C.API_KEY_MESSAGE: 'Wait for the movie upload to complete before saving trackpoints.'}), 409
+                    C.API_KEY_MESSAGE: 'Wait for the movie upload to complete before accessing trackpoints or changing markers.'}), 409
 
 
 @api_bp.errorhandler(odb.TrackpointFrameHeightMismatch)
@@ -1089,7 +1091,7 @@ def api_get_movie_metadata():
     if frame_start is not None:
         try:
             odb.ensure_bottom_left_trackpoints(movie_id=movie_id, frame_height=frame_height)
-        except (odb.MovieGeometryFinalized, odb.TrackpointFrameHeightMismatch):
+        except (odb.MovieGeometryFinalized, odb.TrackpointFrameHeightMismatch, odb.MovieUploadIncomplete):
             raise
         except RuntimeError as exc:
             logger.exception("trackpoint migration failed movie_id=%s", movie_id)

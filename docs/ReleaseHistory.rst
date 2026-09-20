@@ -120,6 +120,9 @@ Unreleased Summary
       services. Restore tracing controls after stepping through an untracked movie.
       Version 0.9.9.11 supports testing this workflow on a dev stack
       (refs #1162, #1163, #1164, #1165, #1166, #1168, #1038).
+    * Reject coordinate migration and marker changes before upload completion;
+      report saved-dimension conflicts as processing failures; exclude marker-map
+      metadata from saved-frame checks (refs #1233).
 
     * Report upload frame-height conflicts as consistency failures, preserve saved
       points and pixels, and stop upload polling with the failure reason (refs #1233).

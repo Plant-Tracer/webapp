@@ -289,8 +289,11 @@ Source dimensions are read-only through the metadata API, including missing fiel
 Both current and legacy upload-completion markers close geometry editing in the
 shared writer and source initializer. The synchronous CLI initializer accepts only
 a fresh record without a source, source dimensions, or saved frames; it never
-purges prior source or coordinate data. Trackpoint writes are rejected during
-upload setup, so they cannot create coordinates while rotation remains editable. Migration
+purges prior source or coordinate data. Trackpoint writes, migration, and marker
+map creation or renaming are rejected during upload setup, before any height
+recovery or coordinate mutation, even when a legacy coordinate origin is already
+present. The marker-map companion item at frame -100 is not a saved coordinate
+frame and alone does not block rotation or source initialization. Migration
 retains its existing conditional per-frame updates and durable conversion markers,
 so interrupted migrations can resume without flipping a frame twice. There is no
 migration path between different movie geometries.
@@ -302,6 +305,9 @@ its historical interpretation until analysis pixels are measured.
 
 Upload retries repair missing height on legacy completed uploads. Tracing failures
 during measurement or migration follow normal failure-status and lock cleanup.
+Upload processing records a failure when decoded source dimensions conflict with
+saved dimensions, including when the analysis height is missing or agrees. It
+preserves saved dimensions, coordinates, and source bytes on retries.
 
 Browser metadata and JSON trackpoint downloads include ``frame_height_px`` and
 ``trackpoint_origin`` in ``metadata``. CSV repeats them as columns; XLSX includes

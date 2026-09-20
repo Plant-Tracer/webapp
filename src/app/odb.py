@@ -1356,7 +1356,8 @@ class DDBO:
     def has_movie_frames(self, movie_id):
         """Check for coordinate data without loading a movie's frames."""
         assert is_movie_id(movie_id)
-        response = self.movie_frames.query(KeyConditionExpression=Key(MOVIE_ID).eq(movie_id),
+        response = self.movie_frames.query(KeyConditionExpression=Key(MOVIE_ID).eq(movie_id)
+                                           & Key(FRAME_NUMBER).gte(0),
                                            Select='COUNT', Limit=1, ConsistentRead=True)
         return response[DDB_COUNT] > 0
 
@@ -2662,6 +2663,8 @@ def ensure_bottom_left_trackpoints(*, movie_id: str, frame_height: int | None = 
     assert is_movie_id(movie_id)
     ddbo = DDBO()
     movie = ddbo.get_movie(movie_id)
+    if not movie_is_available(movie):
+        raise MovieUploadIncomplete(movie_id)
     origin = movie.get(TRACKPOINT_ORIGIN)
     if origin == TRACKPOINT_ORIGIN_BOTTOM_LEFT:
         return movie
@@ -2833,6 +2836,8 @@ def get_movie_marker_map(*, movie_id: str, frames: list[dict] | None = None,
     """Return the marker-map companion item for a movie, creating it from frames if requested."""
     assert is_movie_id(movie_id)
     ddbo = DDBO()
+    if create and not movie_is_available(ddbo.get_movie(movie_id)):
+        raise MovieUploadIncomplete(movie_id)
     key = movie_marker_map_key(movie_id)
     item = ddbo.movie_frames.get_item(Key=key, ConsistentRead=True).get('Item')
     if item or not create:
@@ -3089,9 +3094,6 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackp
     :param: trackpoints - array of Tractpoints.
     """
     assert int(frame_number) >= 0
-    movie = DDBO().get_movie(movie_id)
-    if not movie_is_available(movie):
-        raise MovieUploadIncomplete(movie_id)
     ensure_bottom_left_trackpoints(movie_id=movie_id)
     # Remove numpy from trackpoints
     trackpoints = [ tp.model_dump(exclude_none=True, exclude_defaults=True) for tp in trackpoints ]
