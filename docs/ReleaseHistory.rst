@@ -78,6 +78,9 @@ Release Notes
 Unreleased Summary
 ******************
 
+    * Version 0.9.9.17: bump the deployment version for the trim-aware traced
+      download changes and schema validation correction (refs PR #1235).
+
     * Version 0.9.9.16: apply the selected trim to matrix frame ranges, retaining
       out-of-range markers with n/a. Keep traced downloads available in the
       analyzer and movie list; regenerate stale downloads on request using saved
