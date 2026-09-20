@@ -790,8 +790,8 @@ rename, trim, and capture-interval writes; the owning browser includes its
 
 Analyze calls this endpoint before acquiring its editing lease. The JSON body
 contains `movie_id`; the `x-api-key` header must authorize access to the movie.
-For a completed upload, a valid analysis descriptor and existing S3 object return
-HTTP 200 with `ready: true`. A missing descriptor or object starts asynchronous
+For a completed upload, a current-version analysis descriptor and existing S3 object return
+HTTP 200 with `ready: true`. A missing descriptor, object, or older encoder version starts asynchronous
 recoding and returns HTTP 202 with `ready: false` and
 "Recoding is in progress, come back in a few minutes."
 
@@ -804,7 +804,8 @@ clear the processing failure before retrying. S3 permission/service errors are
 not treated as missing objects. The browser does not poll or acquire an editing
 lease while recoding is pending. Source objects, saved frame data, annotations,
 and the prior completed tracing status are preserved; geometry conflicts fail
-without rewriting saved coordinates.
+without rewriting saved coordinates. Encoder version 2 uses zero-based burned-in
+frame numbers. Unknown saved-point geometry requires recovery before recoding.
 
 Analyze links lacking `course_id` redirect to the authorized movie's course,
 so an unrelated default course does not cause a lease-context conflict. Explicit

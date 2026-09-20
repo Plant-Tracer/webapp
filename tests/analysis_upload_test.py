@@ -90,8 +90,10 @@ def test_uploaded_mp4_is_rotated_scaled_complete_and_traceable(client, new_movie
             assert capture.grab()
         success, traced_frame = capture.read()
         assert success
-        # Traced output has marker overlays but no burned-in frame numbers.
-        assert not np.any(np.all(traced_frame[:35, -45:] > 170, axis=2))
+        # Traced output includes a blue label, distinct from the red analysis label.
+        label = traced_frame[:35, -45:].astype(int)
+        assert np.any((label[:, :, 0] > 150) & (label[:, :, 2] < 100))
+        assert np.any(np.all(label > 170, axis=2))
         assert np.max(np.abs(traced_frame[analysis.height // 2, analysis.width // 2].astype(int)
                              - expected[analysis.height // 2, analysis.width // 2].astype(int))) > 30
     finally:

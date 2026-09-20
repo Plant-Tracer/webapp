@@ -160,6 +160,14 @@ def test_run_tracing_passes_frame_end_and_ignores_callback_frames_after_end(new_
         assert kwargs["movie_traced_frame_range"] == tracer.TracedMovieFrameRange(start=0, end=3)
         assert ddbo.get_movie(movie_id)[movie_glue.MOVIE_STATUS] == movie_glue.odb.MOVIE_STATE_TRACING
         callback = kwargs["callback"]
+        previous = ddbo.get_movie_frame(movie_id, 0)
+        progress = ddbo.get_movie(movie_id).get(movie_glue.LAST_FRAME_TRACKED)
+        callback(tracer.TracerCallbackArg(
+            frame_number=0, frame_data=None,
+            frame_trackpoints=[Trackpoint(x=999, y=999, label="apex", frame_number=0)],
+        ))
+        assert ddbo.get_movie_frame(movie_id, 0) == previous
+        assert ddbo.get_movie(movie_id).get(movie_glue.LAST_FRAME_TRACKED) == progress
         callback(tracer.TracerCallbackArg(
             frame_number=3,
             frame_data=None,

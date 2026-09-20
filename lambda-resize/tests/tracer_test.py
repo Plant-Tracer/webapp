@@ -219,3 +219,28 @@ def test_trackpoint_colors_prefer_marker_color_property():
     assert colors["Base"] == tracer.BRIGHT_BLUE
     assert colors["Ruler 0mm"] == tracer.RED
     assert colors["Tip"] == tracer.MAGENTA
+
+
+def test_download_label_uses_capture_time_and_original_zero_based_frame(tmp_path):
+    """A trimmed download keeps original frame indices and uses capture, not playback time."""
+    output = tmp_path / 'timed.mp4'
+    tracer.trace_movie_v2(
+        movie_url=TEST_MOVIE, frame_start=1, frame_end=2,
+        trackpoints=[Trackpoint(x=370, y=298, label="Apex", frame_number=0)],
+        movie_traced_path=output,
+        movie_traced_frame_range=tracer.TracedMovieFrameRange(start=2, end=2, seconds_per_frame=30),
+        callback=None,
+    )
+    capture = cv2.VideoCapture(str(output))
+    success, decoded = capture.read()
+    assert not capture.read()[0]
+    capture.release()
+    assert success
+    reference = np.zeros_like(decoded)
+    tracer.cv2_label_frame(frame=reference, trackpoints=[], frame_label="2  60 s")
+    # Blue pixels establish export styling; white glyph pixels distinguish the exact label.
+    region = decoded[:35, -140:].astype(int)
+    assert np.any((region[:, :, 0] > 150) & (region[:, :, 2] < 100))
+    glyphs = np.all(reference[:35, -140:] > 200, axis=2)
+    assert glyphs.sum() > 100
+    assert np.mean(region[glyphs]) > 175

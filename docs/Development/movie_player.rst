@@ -180,8 +180,8 @@ Portable Analysis-MP4 Bundle
 ``make analysis-mp4-bundle`` creates a manual-test directory for an arbitrary
 local MP4. It uses the same Python encoder service that Lambda will use for the
 analysis derivative: rotation is applied once, the frame fits within the chosen
-analysis dimensions, and every output frame has its one-based frame number
-burned into the upper-right corner. The MP4 uses a fixed 4 FPS H.264
+analysis dimensions, and every output frame has its zero-based frame number
+burned into the upper-right corner. The MP4 uses a fixed 15 FPS H.264
 ``yuv420p`` baseline profile with P-frames and no B-frames.
 
 For example:
@@ -203,3 +203,29 @@ module and fetch rules vary by platform.
 ``make analysis-mp4-browser-test`` validates the generated bundle through a
 real local Chrome browser. It checks the rendered four-frame sequence forward
 and backward before a bundle is used for manual testing.
+
+
+Frame Numbers, Traces, and Recoding
+-----------------------------------
+
+Every frame index is zero-based, including red analysis labels, player controls,
+marker ranges, API parameters, spreadsheets, and blue download labels. Frame 0
+is capture time zero; frame N is N times the capture interval, regardless of
+playback FPS or trimming. Old analysis derivatives are regenerated once on demand
+using encoder version 2. Previously downloaded files remain unchanged.
+
+The analyzer draws all saved path segments: segments ending at or before the
+current frame are opaque, later segments have 70 percent opacity. Missing frames
+do not create connecting lines. The marker table lists each saved marker's first
+and last frame even when it has no location at the current frame (shown as n/a).
+
+Recoding preserves the established coordinate height, including legacy videos
+that were enlarged to 640 pixels. If saved points have no recorded height, stored
+frame images can establish it; otherwise recoding stops with a diagnostic rather
+than guessing. Movies already containing mixed coordinate spaces require an
+explicit data repair; coordinates must not be rescaled indiscriminately.
+
+Tracing starts after the selected seed frame. Earlier frames are read to render
+the download, but their points and tracing progress are not rewritten. Downloads
+use a blue frame/time label; elapsed seconds appear only when capture timing is
+known, never inferred from the playback frame rate.

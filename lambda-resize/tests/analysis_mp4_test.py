@@ -156,3 +156,23 @@ def test_validator_rejects_b_frames(tmp_path):
         writer.close()
     with pytest.raises(ValueError, match="contains B-frames"):
         analysis_mp4.validate_encoded_movie(path, frame_count=12, width=64, height=48)
+
+
+def test_analysis_labels_start_at_zero(tmp_path):
+    """Decoded label pixels match zero at the beginning, not the old one-based label."""
+    source = tmp_path / 'source.mp4'
+    output = tmp_path / 'analysis.mp4'
+    write_four_color_movie(source, width=160, height=120)
+    analysis_mp4.encode_analysis_mp4(source_path=source, output_path=output,
+                                      options=analysis_mp4.AnalysisMp4Options())
+    capture = cv2.VideoCapture(str(output))
+    success, decoded = capture.read()
+    capture.release()
+    assert success
+    clean = next(analysis_mp4.source_frames(str(source)))
+    zero = analysis_mp4.burn_frame_number(clean, 0)
+    one = analysis_mp4.burn_frame_number(clean, 1)
+    region = decoded[:35, -45:].astype(float)
+    zero_error = np.mean(np.abs(region - zero[:35, -45:]))
+    one_error = np.mean(np.abs(region - one[:35, -45:]))
+    assert zero_error < one_error / 2

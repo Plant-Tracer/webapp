@@ -199,3 +199,19 @@ The server may still be processing: reopen Analyze to check before starting agai
 Terminal tracing failures display their stored reason immediately.
 A decoder or processing error appears above the player instead of falling back to
 imprecise video seeking.
+
+
+Reading movie traces
+--------------------
+
+Frame counting starts at 0, which is also time zero. The marker table's Frames
+column gives each marker's first and last saved frame. A marker with no saved
+position on the displayed frame remains in the table with location ``n/a``.
+Past and current trace segments are fully opaque; future segments use 70 percent
+opacity. Tracing from the displayed frame preserves earlier points.
+
+Downloaded traced movies show a blue frame-number label at the top right. When
+you have set the capture interval, the label also shows elapsed capture seconds
+from the original frame 0. The red analysis-player label uses the same zero-based
+frame index. Older analysis movies are recoded when opened; old downloads need
+to be generated again to receive the new labels.

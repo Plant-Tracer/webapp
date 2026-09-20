@@ -1125,22 +1125,37 @@ class TracerController extends MovieController {
         // Generate the HTML for the table body
         let rows = '';
         let calculations = this.calculate_scale(this.objects)
+        const ranges = new Map();
+        for (const [frameNumber, frame] of (this.frames || []).entries()) {
+            for (const point of frame?.markers || []) {
+                const range = ranges.get(point.label);
+                if (range) range.last = frameNumber;
+                else ranges.set(point.label, {first: frameNumber, last: frameNumber, point});
+            }
+        }
         const tableMarkers = this.objects
             .map((obj, index) => ({obj, index}))
-            .filter(({obj}) => obj.constructor.name == Marker.name)
-            .sort((a, b) => compare_marker_labels(a.obj.name, b.obj.name));
+            .filter(({obj}) => obj.constructor.name == Marker.name);
+        const present = new Set(tableMarkers.map(({obj}) => obj.name));
+        for (const [label, range] of ranges) {
+            if (!present.has(label)) tableMarkers.push({obj: this.marker_from_trackpoint(range.point), index: null});
+        }
+        tableMarkers.sort((a, b) => compare_marker_labels(a.obj.name, b.obj.name));
         for (const {obj, index} of tableMarkers) {
             obj.table_cell_id = "td-" + (++cell_id_counter);
             obj.name_cell_id = "td-marker-name-" + cell_id_counter;
             const trackpoint = this.canvas_marker_to_trackpoint(obj);
-            obj.loc_mm = this.marker_location_mm(obj, calculations);
+            const visible = index !== null;
+            const range = ranges.get(obj.name) || {first: this.frame_number, last: this.frame_number};
+            obj.loc_mm = visible ? this.marker_location_mm(obj, calculations) : 'n/a';
             rows += `<tr>` +
                 `<td class="dot" style="color:${obj.fill};">●</td>` +
                 `<td><span id="${obj.name_cell_id}" x-marker-index="${index}">${html_escape(obj.name)}</span> ` +
-                `<span class='editor marker-name-editor nodemo' x-target-id='${obj.name_cell_id}'> ✏️  </span></td>` +
-                `<td id="${obj.table_cell_id}">${this.format_trackpoint_location(trackpoint)}</td>` +
+                (visible ? `<span class='editor marker-name-editor nodemo' x-target-id='${obj.name_cell_id}'> ✏️  </span></td>` : '</td>') +
+                `<td>${range.first}-${range.last}</td>` +
+                `<td id="${obj.table_cell_id}">${visible ? this.format_trackpoint_location(trackpoint) : 'n/a'}</td>` +
                 `<td id="${obj.table_cell_id}-mm" class="obj-mm"> ${obj.loc_mm}</td>`;
-            if (marker_is_undeletable(obj)) {
+            if (!visible || marker_is_undeletable(obj)) {
                 rows += `<td class="nodemo"></td></tr>`;
             } else {
                 rows += `<td class="del-row nodemo" object_index="${index}" >🚫</td></tr>`;
@@ -1655,29 +1670,18 @@ class TracerController extends MovieController {
             this.create_marker_table();
             return;
         }
-        // Add the lines for every previous frame if each previous frame has markers
-        if (frame>0 && this.frames[frame-1].markers && this.frames[frame].markers){
-            for (let f0=0;f0<frame;f0++){
-                if (!this.isFrameInTrim(f0) || !this.isFrameInTrim(f0 + 1)) {
-                    continue;
-                }
-                var starts = [];
-                var ends   = {};
-                for (let tp of this.frames[f0].markers){
-                    starts.push(tp);
-                }
-                for (let tp of this.frames[f0+1].markers){
-                    ends[tp.label] = tp
-                }
-                // now add the lines between the markers in the previous frames
-                // We could cache this moving from frame to frame, rather than deleting and re-drawing them each time
-                for (let st of starts){
-                    if (ends[st.label]){
-                        const canvasStart = this.trackpoint_to_canvas(st);
-                        const canvasEnd = this.trackpoint_to_canvas(ends[st.label]);
-                        this.add_object( new Line(canvasStart.x, canvasStart.y, canvasEnd.x, canvasEnd.y, 2, this.marker_color_for_label(st.label)));
-                    }
-                }
+        // Include the entire saved trajectory, even before its first visible marker.
+        for (let f0 = 0; f0 + 1 < this.frames.length; f0++) {
+            if (!this.isFrameInTrim(f0) || !this.isFrameInTrim(f0 + 1)) continue;
+            const ends = new Map((this.frames[f0 + 1]?.markers || []).map(tp => [tp.label, tp]));
+            for (const start of this.frames[f0]?.markers || []) {
+                const end = ends.get(start.label);
+                if (!end) continue;
+                const a = this.trackpoint_to_canvas(start);
+                const b = this.trackpoint_to_canvas(end);
+                const line = new Line(a.x, a.y, b.x, b.y, 2, this.marker_color_for_label(start.label));
+                line.opacity = f0 + 1 <= frame ? 1 : 0.7;
+                this.add_object(line);
             }
         }
 
@@ -1758,7 +1762,8 @@ class TracerController extends MovieController {
                         self.report_tracking_stalled();
                         return;
                     }
-                    const last = data.metadata.last_frame_tracked;
+                    const reported = data.metadata.last_frame_tracked;
+                    const last = reported == null ? null : Math.max(reported, self.pending_trace_start_frame ?? 0);
                     let statusText;
                     if (last != null) {
                         statusText = `Tracing frame ${last}`;

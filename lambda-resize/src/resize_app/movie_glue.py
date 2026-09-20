@@ -9,6 +9,7 @@ import time
 from typing import NamedTuple
 from pathlib import Path
 import tempfile
+import zipfile
 
 from aws_lambda_powertools import Logger
 from botocore.exceptions import ClientError
@@ -22,7 +23,7 @@ from .src.app.odb import (
     clear_movie_tracking_after_frame,
     LAST_FRAME_TRACKED,
 )
-from .src.app.odb_movie_data import (write_object_from_path )
+from .src.app.odb_movie_data import copy_object_to_path, read_object, write_object_from_path
 from .src.app import mp4_metadata_lib
 from .src.app import s3_presigned
 from .src.app import odb
@@ -58,7 +59,7 @@ from .src.app.odb import (
     USER_NAME,
 )
 
-from .analysis_mp4 import AnalysisMp4Options, encode_analysis_mp4
+from .analysis_mp4 import ANALYSIS_ENCODER_VERSION, AnalysisMp4Options, encode_analysis_mp4
 from . import async_work
 from . import local_queue
 from . import mpeg_jpeg_zip
@@ -403,6 +404,35 @@ def complete_movie_upload(*, api_key: str, movie_id: str) -> UploadCompletion:
     )
 
 
+def saved_coordinate_height(movie):
+    """Preserve established trace geometry when recoding a legacy small upload."""
+    if movie.get(odb.FRAME_HEIGHT_PX):
+        return int(movie[odb.FRAME_HEIGHT_PX])
+    frames = DDBO().get_frames(movie[MOVIE_ID])
+    if not any(frame.get('trackpoints') for frame in frames):
+        return None
+    urns = [movie.get(odb.FIRST_FRAME_URN)]
+    urns.extend(frame.get(odb.FRAME_URN) for frame in frames[:3])
+    for urn in filter(None, urns):
+        data = read_object(urn)
+        if data:
+            dimensions = mpeg_jpeg_zip.get_jpeg_dimensions(data)
+            if dimensions:
+                return dimensions[1]
+    if movie.get(MOVIE_ZIPFILE_URN):
+        with tempfile.NamedTemporaryFile(suffix='.zip') as archive:
+            copy_object_to_path(movie[MOVIE_ZIPFILE_URN], archive.name)
+            with zipfile.ZipFile(archive.name) as frames_zip:
+                name = next((name for name in frames_zip.namelist()
+                             if name.lower().endswith(('.jpg', '.jpeg'))), None)
+                if name:
+                    dimensions = mpeg_jpeg_zip.get_jpeg_dimensions(frames_zip.read(name))
+                    if dimensions:
+                        return dimensions[1]
+    # Source dimensions cannot establish the geometry of previously scaled traces.
+    raise ValueError('Saved tracing geometry is unknown; recover the original frame height before recoding.')
+
+
 def process_uploaded_movie(*, movie_id: str, processing_attempt=None, completed_status=MOVIE_STATE_READY):
     """Extract post-upload metadata and finish the asynchronous resize phase."""
     ddbo = DDBO()
@@ -449,7 +479,8 @@ def process_uploaded_movie(*, movie_id: str, processing_attempt=None, completed_
                 output_path = Path(output_dir) / 'analysis.mp4'
                 result = encode_analysis_mp4(
                     source_path=Path(movie_file.name), output_path=output_path,
-                    options=AnalysisMp4Options(rotation=movie_rotation(movie), max_width=640, max_height=640),
+                    options=AnalysisMp4Options(rotation=movie_rotation(movie), max_width=640, max_height=640,
+                                               frame_height=saved_coordinate_height(movie) if processing_attempt else None),
                     comment=mp4_metadata_lib.build_comment(
                         movie.get('research_use', 0) or 0, movie.get('credit_by_name', 0) or 0,
                         movie.get('attribution_name')),
@@ -461,7 +492,7 @@ def process_uploaded_movie(*, movie_id: str, processing_attempt=None, completed_
                 analysis = AnalysisMp4(
                     urn=analysis_urn, width=result.width, height=result.height,
                     frame_count=result.frame_count, rotation=result.rotation,
-                    sha256=digest, generated_at=int(time.time()),
+                    sha256=digest, generated_at=int(time.time()), encoder_version=ANALYSIS_ENCODER_VERSION,
                 )
                 write_object_from_path(urn=analysis_urn, path=output_path)
         resized_at = int(time.time())
@@ -596,7 +627,8 @@ def run_tracing(*, movie_id, frame_start, frame_end=None, job_id=None):
             )
             if job_id:
                 ddbo.heartbeat_movie_trace_lock(movie_id=movie_id, job_id=job_id)
-            if obj.frame_trackpoints and (frame_end_number is None or obj.frame_number <= frame_end_number):
+            if (obj.frame_trackpoints and obj.frame_number >= tracing_frame_start
+                    and (frame_end_number is None or obj.frame_number <= frame_end_number)):
                 frame_trackpoints = odb.flip_trackpoints_y(obj.frame_trackpoints, frame_height)
                 ddbo.update_movie(
                     movie_id,
@@ -613,12 +645,15 @@ def run_tracing(*, movie_id, frame_start, frame_end=None, job_id=None):
                                             render_source = (
                                                 s3_presigned.make_signed_url(urn=movie_urn),
                                                 AnalysisMp4Options(rotation=movie_rotation(movie_record),
-                                                                   max_width=640, max_height=640),
+                                                                   max_width=640, max_height=640,
+                                                                   frame_height=analysis.height),
                                             ) if analysis else None,
                                             movie_traced_path = movie_traced_path,
                                             movie_traced_frame_range = tracer.TracedMovieFrameRange(
                                                 start=movie_traced_frame_start,
                                                 end=movie_traced_frame_end,
+                                                seconds_per_frame=(60 / float(movie_record[odb.FPM])
+                                                                   if float(movie_record.get(odb.FPM) or 0) > 0 else None),
                                             ),
                                             rotation = rotation,
                                             callback = tracer_callback,
@@ -629,7 +664,7 @@ def run_tracing(*, movie_id, frame_start, frame_end=None, job_id=None):
 
         # Best-effort snapshot of the capture interval into the traced MP4. DynamoDB remains
         # authoritative; later edits update only the DB (see docs/Development/MOVIE_METADATA.rst).
-        movie_fpm = movie_record.get("fpm")
+        movie_fpm = movie_record.get(odb.FPM)
         if movie_fpm:
             try:
                 mp4_metadata_lib.set_fpm(str(movie_traced_path), movie_fpm)

@@ -22,6 +22,7 @@ FFMPEG_FRAME_SIZE = "size"
 DEFAULT_ANALYSIS_WIDTH = 640
 DEFAULT_ANALYSIS_HEIGHT = 640
 DEFAULT_ANALYSIS_FPS = 15.0
+ANALYSIS_ENCODER_VERSION = 2
 ANALYSIS_PLAYER_FILENAME = "index.html"
 ANALYSIS_PLAYER_LIBRARY_FILENAME = "mp4box.all.js"
 ANALYSIS_PLAYER_LIBRARY_DEPENDENCIES = (
@@ -44,6 +45,7 @@ class AnalysisMp4Options(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
+    frame_height: int | None = Field(default=None, gt=0)
     rotation: int = 0
     max_width: int = Field(default=DEFAULT_ANALYSIS_WIDTH, gt=0)
     max_height: int = Field(default=DEFAULT_ANALYSIS_HEIGHT, gt=0)
@@ -117,6 +119,9 @@ def scale_frame(frame: np.ndarray, options: AnalysisMp4Options) -> np.ndarray:
         max_width=options.max_width,
         max_height=options.max_height,
     )
+    if options.frame_height is not None:
+        scaled_height = options.frame_height
+        scaled_width = max(2, int(round(width * scaled_height / height)) // 2 * 2)
     if (scaled_width, scaled_height) == (width, height):
         return frame
     return cv2.resize(frame, (scaled_width, scaled_height), interpolation=cv2.INTER_AREA)
@@ -154,7 +159,7 @@ def unlabelled_analysis_frames(source_url: str, options: AnalysisMp4Options):
 
 
 def burn_frame_number(frame: np.ndarray, frame_number: int) -> np.ndarray:
-    """Burn a one-based frame number into an analysis frame."""
+    """Burn a zero-based frame number into an analysis frame."""
     labelled = frame.copy()
     text = str(frame_number)
     text_face = cv2.FONT_HERSHEY_DUPLEX
@@ -194,8 +199,8 @@ def encode_analysis_mp4(*, source_path: Path, output_path: Path, options: Analys
         )
         for frame in source_frames(str(source_path)):
             frame = scale_frame(rotate_frame(frame, options.rotation), options)
-            frame_count += 1
             labelled = burn_frame_number(frame, frame_count)
+            frame_count += 1
             writer.append_data(cv2.cvtColor(labelled, cv2.COLOR_BGR2RGB))
             height, width = labelled.shape[:2]
     finally:

@@ -8,6 +8,7 @@ from botocore.exceptions import ClientError
 from pydantic import BaseModel
 
 from . import async_work, local_queue, movie_glue
+from .analysis_mp4 import ANALYSIS_ENCODER_VERSION
 from .src.app import odb, s3_presigned
 
 RECODE_STATE = 'recode_state'
@@ -54,12 +55,19 @@ def reserve(movie):
     condition &= Attr(odb.PROCESSING_FAILED_AT).not_exists()
     condition &= (Attr(odb.ANALYSIS_MP4).eq(movie[odb.ANALYSIS_MP4]) if movie.get(odb.ANALYSIS_MP4)
                   else Attr(odb.ANALYSIS_MP4).not_exists())
+    height = movie.get(odb.FRAME_HEIGHT_PX)
+    condition &= (Attr(odb.FRAME_HEIGHT_PX).eq(height) if height is not None
+                  else Attr(odb.FRAME_HEIGHT_PX).not_exists())
+    analysis = odb.movie_analysis_mp4(movie)
+    if height is None and analysis:
+        height = analysis.height
     ddbo = odb.DDBO()
     try:
         ddbo.update_table(ddbo.movies, job.movie_id, {
             odb.PROCESSING_ATTEMPT: job.attempt, odb.PROCESSING_EXPIRES_AT: now + 15 * 60,
             odb.MOVIE_STATUS: odb.MOVIE_STATE_PROCESSING, RECODE_STATE: QUEUED,
             RECODE_STATUS: status, odb.ANALYSIS_MP4: None,
+            **({odb.FRAME_HEIGHT_PX: height} if height is not None else {}),
         }, condition_expression=condition)
     except ClientError as exc:
         if exc.response[ERROR][CODE] != 'ConditionalCheckFailedException':
@@ -78,7 +86,7 @@ def prepare(*, api_key, request: RecodeRequest):
     if movie.get(odb.PROCESSING_EXPIRES_AT, 0) > time.time():
         return RecodeResponse()
     analysis = odb.movie_analysis_mp4(movie)
-    if analysis:
+    if analysis and analysis.encoder_version >= ANALYSIS_ENCODER_VERSION:
         bucket, key = s3_presigned.parse_s3_urn(urn=analysis.urn)
         try:
             s3_presigned.s3_client().head_object(Bucket=bucket, Key=key)

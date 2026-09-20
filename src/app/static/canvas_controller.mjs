@@ -521,17 +521,19 @@ class Marker extends CanvasItem {
 }
 
 class Line extends CanvasItem {
-    constructor(x, y, x2, y2, width, color) {
+    constructor(x, y, x2, y2, width, color, opacity = 1) {
         super(x, y, 'line');
         this.x2 = x2;
         this.y2 = y2;
         this.width = width;
         this.color = color;
+        this.opacity = opacity;
     }
 
     draw(ctx, _selected) {
         ctx.save();
         ctx.beginPath();
+        ctx.globalAlpha = this.opacity;
         ctx.lineWidth = this.width;
         ctx.moveTo(this.x, this.y);
         ctx.lineTo(this.x2, this.y2);

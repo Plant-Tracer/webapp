@@ -3253,10 +3253,11 @@ describe('TracerController.add_frame_objects', () => {
         jest.clearAllMocks();
     });
 
-    test('frame=0: no Line objects added', () => {
+    test('frame=0: future paths are drawn at seventy percent opacity', () => {
         tc.add_frame_objects(0);
         const lines = tc.objects.filter(o => o instanceof MockLineClass);
-        expect(lines).toHaveLength(0);
+        expect(lines).toHaveLength(2);
+        expect(lines.every(line => line.opacity === 0.7)).toBe(true);
     });
 
     test('frame=0: Marker objects added for each marker in frame 0', () => {
@@ -3294,6 +3295,26 @@ describe('TracerController.add_frame_objects', () => {
         tc.add_frame_objects(1);
         const lines = tc.objects.filter(o => o instanceof MockLineClass);
         expect(lines).toHaveLength(2); // Apex line + Base line
+    });
+
+    test('paths split opacity at the current frame without bridging missing points', () => {
+        tc.frames.push({markers: [{x: 30, y: 40, label: 'Apex'}]},
+                       {}, {markers: [{x: 50, y: 60, label: 'Apex'}]});
+        tc.add_frame_objects(1);
+        const lines = tc.objects.filter(o => o instanceof MockLineClass);
+        expect(lines.map(line => line.opacity)).toEqual([1, 1, 0.7]);
+    });
+
+    test('table includes future markers with ranges and unavailable locations', () => {
+        tc.frames = [{markers: []}, {markers: [{x: 20, y: 30, label: 'Future'}]},
+                     {markers: [{x: 21, y: 31, label: 'Future'}]}];
+        tc.add_frame_objects(0);
+        const call = mock$.mock.calls.findIndex(a => a[0]?.includes('tbody.marker_table_body'));
+        const html = mock$.mock.results[call].value.html.mock.calls[0][0];
+        expect(html).toContain('Future');
+        expect(html).toContain('<td>1-2</td>');
+        expect(html.match(/n\/a/g)).toHaveLength(2);
+        expect(tc.objects.filter(o => o instanceof MockMarkerClass)).toHaveLength(0);
     });
 
     test('frame=1: Line objects use marker colors for their labels', () => {

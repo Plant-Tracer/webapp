@@ -25,6 +25,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+from pydantic import BaseModel, Field
 
 from .src.app.schema import Trackpoint
 from .src.app.constants import C
@@ -73,9 +74,11 @@ class TrackpointSegment(NamedTuple):
     y2:float
 
 
-class TracedMovieFrameRange(NamedTuple):
+class TracedMovieFrameRange(BaseModel):
+    """Export bounds and optional capture interval, independent of playback FPS."""
     start:int = 0
     end:int | None = None
+    seconds_per_frame: float | None = Field(default=None, gt=0)
 
 
 def trackpoint_with_updates(trackpoint: Trackpoint, **updates):
@@ -246,7 +249,7 @@ def cv2_label_frame(*,
         WHITE = (255, 255, 255)  # pylint: disable=invalid-name
         text_size, _ = cv2.getTextSize(text, TEXT_FACE, TEXT_SCALE, TEXT_THICKNESS)
         text_origin = (frame_width - text_size[0] - TEXT_MARGIN, text_size[1] + TEXT_MARGIN)
-        cv2.rectangle(frame, text_origin, (text_origin[0] + text_size[0], text_origin[1] - text_size[1]), RED, -1)
+        cv2.rectangle(frame, text_origin, (text_origin[0] + text_size[0], text_origin[1] - text_size[1]), (255, 0, 0), -1)
         cv2.putText(frame, text, text_origin, TEXT_FACE, TEXT_SCALE, WHITE, TEXT_THICKNESS, cv2.LINE_4)
 
 
@@ -277,7 +280,9 @@ def trace_movie_v2(*, movie_url,
     :param rotation: the rotation (in degrees) to apply to the movie before scaling
     """
 
-    # track from frame frame_start+1 to end using data from frame_start
+    seconds_per_frame = movie_traced_frame_range.seconds_per_frame if movie_traced_frame_range else None
+
+    # frame_start is the first computed frame; its predecessor supplies the seed.
 
     if frame_start==0:
         frame_start=1
@@ -351,7 +356,8 @@ def trace_movie_v2(*, movie_url,
                 frame_to_label = clean_frame.copy()
                 cv2_label_frame(frame=frame_to_label,
                                 trackpoints=trackpoints_this,
-                                frame_label=None,
+                                frame_label=(f"{frame_number}  {frame_number * seconds_per_frame:g} s"
+                                             if seconds_per_frame else str(frame_number)),
                                 trackpoint_segments=trackpoint_segments,
                                 colors_by_label=colors_by_label)
                 # IMPORTANT: OpenCV uses BGR colors, but the H.264 writer expects RGB.

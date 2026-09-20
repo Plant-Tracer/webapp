@@ -78,6 +78,19 @@ Release Notes
 Unreleased Summary
 ******************
 
+    * Standardize all movie frame numbers on zero-based indexing: frame 0 is
+      time zero. Correct the formerly one-based red analysis labels; older
+      analysis derivatives are recoded on demand. Downloaded traced movies now
+      show zero-based frame numbers and elapsed capture time (when the capture
+      interval is known) on a blue background at the top right (refs PR #1235).
+
+    * Preserve saved tracing geometry when recoding small legacy videos. Show
+      complete trace paths, with past/current segments at full opacity and
+      future segments at 70 percent. The marker table always lists saved markers,
+      adds their Frames range, and shows n/a for absent current locations.
+      Retracing progress starts at the selected source frame; rendering earlier
+      export frames does not rewrite those saved points (refs PR #1235).
+
     * Recode missing analysis MP4s on demand when Analyze opens, with one
       background job and a message to return in a few minutes. Preserve saved
       markers and select the movie's course for direct Analyze links (refs PR #1235).
@@ -115,10 +128,10 @@ Unreleased Summary
 
     * New uploads generate a validated H.264 analysis MP4 containing every source
       frame, rotated once, resized to fit 640 by 640 without enlargement, and
-      labeled with one-based frame numbers. The analyzer uses WebCodecs for exact
+      labeled with zero-based frame numbers. The analyzer uses WebCodecs for exact
       forward/reverse stepping before and after tracing, with adjustable playback
       speed. Tracing consumes analysis pixels and generates no JPEG ZIP. Original
-      uploads are preserved; traced movies show markers without frame-number labels.
+      uploads are preserved; traced movies show markers and blue frame/time labels.
       Desktop browser checks encode and play real analysis movies on Windows and
       macOS in landscape and portrait formats without requiring local database
       services. Restore tracing controls after stepping through an untracked movie.

@@ -1,10 +1,16 @@
 """On-demand recoding against real DynamoDB, MinIO, and the local worker."""
+# pylint: disable=no-member
 
 import time
+import io
+import zipfile
+
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import parse_qs, urlparse
 
+import cv2
+import numpy as np
 import pytest
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -16,14 +22,14 @@ from tests.fixtures.analysis_mp4_fixture import write_four_color_movie
 from .selenium_utils import authenticate_browser
 
 
-def seed_legacy(cfg, tmp_path):
+def seed_legacy(cfg, tmp_path, *, width=640, height=480):
     """A previously traced movie without an analysis descriptor."""
     movie_id = cfg[odb.MOVIE_ID]
     path = tmp_path / 'legacy.mp4'
-    write_four_color_movie(path, width=640, height=480)
+    write_four_color_movie(path, width=width, height=height)
     odb_movie_data.set_movie_data(movie_id=movie_id, movie_data=path.read_bytes())
     ddbo = odb.DDBO()
-    ddbo.update_movie(movie_id, {odb.RESIZED_AT: 1, odb.WIDTH: 640, odb.HEIGHT: 480,
+    ddbo.update_movie(movie_id, {odb.RESIZED_AT: 1, odb.WIDTH: width, odb.HEIGHT: height,
                                 odb.FRAME_HEIGHT_PX: 480, odb.TOTAL_FRAMES: 4,
                                 odb.MOVIE_STATUS: odb.MOVIE_STATE_TRACING_COMPLETED,
                                 odb.LAST_FRAME_TRACKED: 3})
@@ -66,7 +72,8 @@ def test_recode_single_reservation_fences_duplicates_and_preserves_data(new_movi
                        headers={'x-api-key': cfg[odb.API_KEY]}).get_json()['ready']
 
 
-def test_recode_missing_object_uses_real_queue(new_movie_record, tmp_path, monkeypatch):
+@pytest.mark.parametrize("repair", ["missing-object", "old-labels"])
+def test_recode_missing_object_uses_real_queue(new_movie_record, tmp_path, monkeypatch, repair):
     ddbo = seed_legacy(new_movie_record, tmp_path)
     movie_id = new_movie_record[odb.MOVIE_ID]
     job = recode.reserve(ddbo.get_movie(movie_id))
@@ -74,7 +81,12 @@ def test_recode_missing_object_uses_real_queue(new_movie_record, tmp_path, monke
     original = ddbo.get_movie(movie_id)
     urn = original[odb.ANALYSIS_MP4]['urn']
     bucket, key = s3_presigned.parse_s3_urn(urn=urn)
-    s3_presigned.s3_client().delete_object(Bucket=bucket, Key=key)
+    if repair == "missing-object":
+        s3_presigned.s3_client().delete_object(Bucket=bucket, Key=key)
+    else:
+        descriptor = original[odb.ANALYSIS_MP4]
+        descriptor['encoder_version'] = 1
+        ddbo.update_movie(movie_id, {odb.ANALYSIS_MP4: descriptor})
     monkeypatch.setenv('TRACING_QUEUE_MODE', 'local')
     local_queue.start_worker(processor=lambda_tracing_handler.process_local_queue_message)
     try:
@@ -85,6 +97,7 @@ def test_recode_missing_object_uses_real_queue(new_movie_record, tmp_path, monke
             time.sleep(.05)
         assert odb_movie_data.read_object(ddbo.get_movie(movie_id)[odb.ANALYSIS_MP4]['urn'])
         assert ddbo.get_movie(movie_id)[odb.LAST_FRAME_TRACKED] == 3
+        assert ddbo.get_movie(movie_id)[odb.ANALYSIS_MP4]['encoder_version'] == 2
     finally:
         local_queue.stop_worker(timeout=30)
 
@@ -149,3 +162,47 @@ def test_analyze_link_selects_movie_course(client, new_movie):
             odb.COURSE_ID: other}).status_code == 409
     finally:
         odb.delete_course(course_id=other)
+
+
+def test_recode_small_source_preserves_legacy_coordinate_space(new_movie_record, tmp_path):
+    """A small upload's old enlarged tracings stay on the recoded image."""
+    ddbo = seed_legacy(new_movie_record, tmp_path, width=320, height=240)
+    movie_id = new_movie_record[odb.MOVIE_ID]
+    points = ddbo.get_frames(movie_id)
+    recode.process(recode.reserve(ddbo.get_movie(movie_id)))
+    analysis = ddbo.get_movie(movie_id)[odb.ANALYSIS_MP4]
+    assert (analysis['width'], analysis['height']) == (640, 480)
+    assert analysis['encoder_version'] == 2
+    assert ddbo.get_frames(movie_id) == points
+
+
+def test_recode_recovers_legacy_geometry_from_archive(new_movie_record, tmp_path):
+    """A legacy JPEG establishes coordinates when the source and saved points differ in size."""
+    ddbo = seed_legacy(new_movie_record, tmp_path, width=320, height=240)
+    movie_id = new_movie_record[odb.MOVIE_ID]
+    _, jpeg = cv2.imencode('.jpg', np.zeros((480, 640, 3), dtype=np.uint8))
+    data = io.BytesIO()
+    with zipfile.ZipFile(data, 'w') as archive:
+        archive.writestr('frame0000.jpg', jpeg.tobytes())
+    urn = ddbo.get_movie(movie_id)[odb.MOVIE_DATA_URN] + '.zip'
+    odb_movie_data.write_object(urn, data.getvalue())
+    ddbo.movies.update_item(Key={odb.MOVIE_ID: movie_id},
+                           UpdateExpression='SET #zip=:zip REMOVE #height',
+                           ExpressionAttributeNames={'#zip': odb.MOVIE_ZIPFILE_URN, '#height': odb.FRAME_HEIGHT_PX},
+                           ExpressionAttributeValues={':zip': urn})
+    before = ddbo.get_frames(movie_id)
+    recode.process(recode.reserve(ddbo.get_movie(movie_id)))
+    assert ddbo.get_movie(movie_id)[odb.ANALYSIS_MP4]['height'] == 480
+    assert ddbo.get_frames(movie_id) == before
+
+
+def test_recode_reservation_does_not_overwrite_newer_geometry(new_movie_record, tmp_path):
+    """A stale preparer cannot overwrite a height established by another request."""
+    ddbo = seed_legacy(new_movie_record, tmp_path)
+    movie_id = new_movie_record[odb.MOVIE_ID]
+    stale = ddbo.get_movie(movie_id)
+    stale.pop(odb.FRAME_HEIGHT_PX)
+    current = ddbo.get_movie(movie_id)
+    with pytest.raises(ValueError, match='Movie changed'):
+        recode.reserve(stale)
+    assert ddbo.get_movie(movie_id) == current
