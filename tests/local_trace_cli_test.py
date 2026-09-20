@@ -112,6 +112,7 @@ def test_trace_movie_v2_closes_outputs_when_callback_fails(monkeypatch, tmp_path
         tracer.trace_movie_v2(
             movie_url="https://example.com/movie.mp4",
             frame_start=1,
+            render_only=True,
             trackpoints=[Trackpoint(x=1, y=1, label="apex", frame_number=0)],
             movie_traced_path=movie_path,
             callback=fail_callback,

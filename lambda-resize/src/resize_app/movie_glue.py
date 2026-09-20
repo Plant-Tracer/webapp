@@ -639,6 +639,14 @@ def run_tracing(*, movie_id, frame_start, frame_end=None, job_id=None):
                 put_frame_trackpoints(movie_id=movie_id, frame_number=obj.frame_number, trackpoints=frame_trackpoints)
 
 
+        last_render_heartbeat = time.monotonic()
+
+        def render_callback(_obj):
+            nonlocal last_render_heartbeat
+            if job_id and time.monotonic() - last_render_heartbeat >= 30:
+                ddbo.heartbeat_movie_trace_lock(movie_id=movie_id, job_id=job_id)
+                last_render_heartbeat = time.monotonic()
+
         trackpoints = tracer.trace_movie_v2(movie_url = movie_url,
                                             frame_start = tracing_frame_start,
                                             frame_end = frame_end_number,
@@ -658,6 +666,7 @@ def run_tracing(*, movie_id, frame_start, frame_end=None, job_id=None):
                                             ),
                                             rotation = rotation,
                                             callback = tracer_callback,
+                                            render_callback = render_callback,
                                             comment = research_comment )
 
         # Publish only the traced MP4; playback uses the immutable analysis derivative.

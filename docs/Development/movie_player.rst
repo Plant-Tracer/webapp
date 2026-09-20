@@ -247,6 +247,16 @@ clips to the inclusive trim, and draws blue source-frame/time labels. It never
 runs optical-flow tracking, writes frame records, or clears ``needs_retracing``.
 The matrix computes ranges inside the trim but keeps rows for markers outside it.
 
+Traced exports include future paths at 50 percent opacity and 1 pixel wide, with
+past/current segments at full opacity and 2 pixels wide. Complete paths inside
+the trim are rasterized once into a thin overlay; opaque past segments cover
+that overlay as playback advances. Missing marker frames never bridge a gap.
+New tracing completes its position pass before rendering, so the first exported
+frame includes the computed future. Rendering progress renews the worker lease
+without rewriting points or tracing progress. Video frames are streamed per
+pass, not retained in memory. Export fingerprint version 2 invalidates older
+past-only exports when a download is requested.
+
 Worker leases have named purposes: ``trace``, ``reset``, ``render_traced``, and
 ``render_untraced``. Their existing trace/processing storage fields remain for
 compatibility. Acquisitions remain mutually exclusive with other movie work and

@@ -78,6 +78,11 @@ Release Notes
 Unreleased Summary
 ******************
 
+    * Version 0.9.9.18: downloaded traced MP4s include future paths at 50 percent
+      opacity and 1 pixel wide, with past paths at full opacity and 2 pixels wide.
+      Complete tracking before rendering so early frames include the new future
+      path. Older exports rebuild on the next download request (refs PR #1235).
+
     * Version 0.9.9.17: bump the deployment version for the trim-aware traced
       download changes and schema validation correction (refs PR #1235).
 

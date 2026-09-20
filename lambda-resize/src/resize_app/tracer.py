@@ -25,7 +25,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from .src.app.schema import Trackpoint
 from .src.app.constants import C
@@ -79,6 +79,34 @@ class TracedMovieFrameRange(BaseModel):
     start:int = 0
     end:int | None = None
     seconds_per_frame: float | None = Field(default=None, gt=0)
+
+
+class TracePathOverlay(BaseModel):
+    """Cache thin paths once; opaque past segments subsequently cover them."""
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+    colors: np.ndarray
+    mask: np.ndarray
+
+    def draw(self, frame):
+        """Blend only path pixels, leaving source pixels unchanged elsewhere."""
+        blended = cv2.addWeighted(frame, 0.5, self.colors, 0.5, 0)
+        frame[self.mask != 0] = blended[self.mask != 0]
+
+
+def trace_path_overlay(frame, points_by_frame, first, last, colors_by_label):
+    """Rasterize complete paths inside the trim without connecting missing frames."""
+    overlay = TracePathOverlay(colors=np.zeros_like(frame), mask=np.zeros(frame.shape[:2], dtype=np.uint8))
+    for number in sorted(points_by_frame):
+        if number <= first or (last is not None and number > last):
+            continue
+        segments = []
+        update_trackpoint_segments(previous_trackpoints=points_by_frame.get(number - 1),
+                                   current_trackpoints=points_by_frame[number], segments=segments)
+        for segment in segments:
+            start, end = (int(segment.x1), int(segment.y1)), (int(segment.x2), int(segment.y2))
+            cv2.line(overlay.colors, start, end, colors_by_label.get(segment.label, CIRCLE_COLOR), 1)
+            cv2.line(overlay.mask, start, end, 255, 1)
+    return overlay
 
 
 def trackpoint_with_updates(trackpoint: Trackpoint, **updates):
@@ -213,7 +241,8 @@ def cv2_label_frame(*,
                     trackpoints:List[Trackpoint],
                     frame_label=None,
                     trackpoint_segments:List[TrackpointSegment] | None = None,
-                    colors_by_label:dict[str, tuple[int, int, int]] | None = None):
+                    colors_by_label:dict[str, tuple[int, int, int]] | None = None,
+                    path_overlay:TracePathOverlay | None = None):
     """
     :param: frame - cv2 frame
     :param: trackpoints - array of dicts where each dict has at least an ['x'] and a ['y']
@@ -225,6 +254,8 @@ def cv2_label_frame(*,
 
     colors_by_label = colors_by_label or {}
 
+    if path_overlay is not None:
+        path_overlay.draw(frame)
     # Use the points to annotate the colored frames. Write to colored tracked video.
     for segment in trackpoint_segments or []:
         cv2.line(frame,
@@ -266,6 +297,7 @@ def trace_movie_v2(*, movie_url,  # pylint: disable=too-many-arguments
                    rotation=0,
                    render_source: tuple[str, AnalysisMp4Options] | None = None,
                    render_only: bool = False,
+                   render_callback = None,
                    callback = prototype_callback,
                    comment="Processed by PlantTracer AWS Lambda"):
     """
@@ -279,6 +311,7 @@ def trace_movie_v2(*, movie_url,  # pylint: disable=too-many-arguments
     :param movie_traced_frame_range: inclusive frame range to include in the traced MP4.
     :param render_source: original URL and shared transform options when movie_url is an untraced MP4.
     :param render_only: draw existing points without tracking or requiring a seed.
+    :param render_callback: rendering progress/lease heartbeat, never a trackpoint writer.
     :param rotation: the rotation (in degrees) to apply to the movie before scaling
     """
 
@@ -308,13 +341,26 @@ def trace_movie_v2(*, movie_url,  # pylint: disable=too-many-arguments
         if not Path(movie_url).exists():
             raise FileNotFoundError(movie_url)
 
-    trackpoints_output = list(trackpoints) if render_only else [tp for tp in trackpoints if tp.frame_number <= frame_start]
+    trackpoints_output = list(trackpoints) if render_only else [
+        tp for tp in trackpoints if tp.frame_number < frame_start or (frame_end is not None and tp.frame_number > frame_end)]
     points_by_frame = {}
     for point in trackpoints:
         points_by_frame.setdefault(point.frame_number, []).append(point)
     # make sure we have trackpoints for frame_start-1
     if not render_only and not any((tp for tp in trackpoints if tp.frame_number == frame_start-1)):
         raise ValueError(f"len(trackpoints)={len(trackpoints)} but no tracked points for frame {frame_start-1}")
+
+    # Validate before invoking callbacks, then compute future positions before
+    # rendering frame zero. Each phase streams frames without retaining the movie.
+    if movie_traced_path is not None and not render_only:
+        points = trace_movie_v2(movie_url=movie_url, frame_start=frame_start, frame_end=frame_end,
+                                trackpoints=trackpoints, rotation=rotation, render_source=render_source,
+                                callback=callback)
+        trace_movie_v2(movie_url=movie_url, frame_start=frame_start, frame_end=frame_end,
+                       trackpoints=points, rotation=rotation, render_source=render_source,
+                       movie_traced_path=movie_traced_path, movie_traced_frame_range=movie_traced_frame_range,
+                       render_only=True, callback=render_callback, comment=comment)
+        return points
 
     # Check to see if we are making a movie_traced
     movie_traced_writer = None
@@ -324,7 +370,6 @@ def trace_movie_v2(*, movie_url,  # pylint: disable=too-many-arguments
             fps=15,
             output_params=['-metadata', f'comment={comment}'],
         )
-    render_frames = unlabelled_analysis_frames(*render_source) if render_source and not render_only else None
     source_frames = (unlabelled_analysis_frames(*render_source) if render_source and render_only
                      else get_frames_from_url(movie_url, rotation, transform=render_source is None))
     trackpoints_prev = None
@@ -333,11 +378,11 @@ def trace_movie_v2(*, movie_url,  # pylint: disable=too-many-arguments
     trackpoint_segments:list[TrackpointSegment] = []
     colors_by_label = trackpoint_colors(trackpoints)
     written_frames = 0
+    path_overlay = None
     try:
         for (frame_number, frame) in enumerate(source_frames):
             if render_only and movie_traced_frame_end is not None and frame_number > movie_traced_frame_end:
                 break
-            clean_frame = next(render_frames) if render_frames else frame
             # Trace only in the requested range; outside it use existing trackpoints for rendering/callbacks.
             gray_frame = None if render_only else cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             if not render_only and frame_number >= frame_start and (frame_end is None or frame_number <= frame_end):
@@ -363,12 +408,16 @@ def trace_movie_v2(*, movie_url,  # pylint: disable=too-many-arguments
 
             # Label the frame and write to the mp4 output if we are doing that
             if movie_traced_writer and frame_in_traced_movie:
-                frame_to_label = clean_frame.copy()
+                if path_overlay is None:
+                    path_overlay = trace_path_overlay(frame, points_by_frame, movie_traced_frame_start,
+                                                      movie_traced_frame_end, colors_by_label)
+                frame_to_label = frame.copy()
                 cv2_label_frame(frame=frame_to_label,
                                 trackpoints=trackpoints_this,
                                 frame_label=(f"{frame_number}  {frame_number * seconds_per_frame:g} s"
                                              if seconds_per_frame else str(frame_number)),
                                 trackpoint_segments=trackpoint_segments,
+                                path_overlay=path_overlay,
                                 colors_by_label=colors_by_label)
                 # IMPORTANT: OpenCV uses BGR colors, but the H.264 writer expects RGB.
                 frame_rgb = cv2.cvtColor(frame_to_label, cv2.COLOR_BGR2RGB)
@@ -385,8 +434,6 @@ def trace_movie_v2(*, movie_url,  # pylint: disable=too-many-arguments
     finally:
         if hasattr(source_frames, "close"):
             source_frames.close()
-        if render_frames:
-            render_frames.close()
         if movie_traced_writer:
             movie_traced_writer.close()
     if render_only and movie_traced_writer and movie_traced_frame_end is not None:

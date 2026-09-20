@@ -26,7 +26,7 @@ class MovieRenderInputs(BaseModel):
 
     def key(self):
         """Versioned fingerprint; legacy exports without this key rebuild once."""
-        return hashlib.sha256(('1:' + self.model_dump_json()).encode()).hexdigest()
+        return hashlib.sha256(('2:' + self.model_dump_json()).encode()).hexdigest()
 
 
 def render_key(movie):

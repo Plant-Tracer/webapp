@@ -232,8 +232,11 @@ shown as ``n/a``.
 The **untraced MP4** is the analyzer's playback video; the **traced MP4** is the
 export with saved markers and paths. Neither operation creates JPEG ZIPs.
 
-Downloaded traced movies show a blue frame-number label at the top right. When
-you have set the capture interval, the label also shows elapsed capture seconds
+Downloaded traced movies show a blue frame-number label at the top right.
+During playback, future paths are also visible at 50 percent opacity and
+1 pixel wide; paths already reached are fully opaque and 2 pixels wide, matching
+the analyzer. Only paths within the selected trim are included.
+When you have set the capture interval, the label also shows elapsed capture seconds
 from the original frame 0. The red analysis-player label uses the same zero-based
 frame index. Older analysis movies are recoded when opened; old downloads need
 to be generated again to receive the new labels.
