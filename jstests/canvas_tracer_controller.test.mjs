@@ -3313,11 +3313,11 @@ describe('TracerController.add_frame_objects', () => {
         jest.clearAllMocks();
     });
 
-    test('frame=0: future paths are drawn at seventy percent opacity', () => {
+    test('frame=0: future paths are drawn at fifty percent opacity and one pixel wide', () => {
         tc.add_frame_objects(0);
         const lines = tc.objects.filter(o => o instanceof MockLineClass);
         expect(lines).toHaveLength(2);
-        expect(lines.every(line => line.opacity === 0.7)).toBe(true);
+        expect(lines.map(line => [line.opacity, line.width])).toEqual([[0.5, 1], [0.5, 1]]);
     });
 
     test('frame=0: Marker objects added for each marker in frame 0', () => {
@@ -3357,12 +3357,12 @@ describe('TracerController.add_frame_objects', () => {
         expect(lines).toHaveLength(2); // Apex line + Base line
     });
 
-    test('paths split opacity at the current frame without bridging missing points', () => {
+    test('paths split opacity and width at the current frame without bridging missing points', () => {
         tc.frames.push({markers: [{x: 30, y: 40, label: 'Apex'}]},
                        {}, {markers: [{x: 50, y: 60, label: 'Apex'}]});
         tc.add_frame_objects(1);
         const lines = tc.objects.filter(o => o instanceof MockLineClass);
-        expect(lines.map(line => line.opacity)).toEqual([1, 1, 0.7]);
+        expect(lines.map(line => [line.opacity, line.width])).toEqual([[1, 2], [1, 2], [0.5, 1]]);
     });
 
     test('table includes future markers with ranges and unavailable locations', () => {

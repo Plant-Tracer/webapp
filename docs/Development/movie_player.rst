@@ -215,8 +215,9 @@ playback FPS or trimming. Old analysis derivatives are regenerated once on deman
 using encoder version 2. Previously downloaded files remain unchanged.
 
 The analyzer draws all saved path segments: segments ending at or before the
-current frame are opaque, later segments have 70 percent opacity. Missing frames
-do not create connecting lines. The marker table lists each saved marker's first
+current frame are opaque and 2 pixels wide; later segments have 50 percent
+opacity and are 1 pixel wide. Missing frames do not create connecting lines.
+The marker table lists each saved marker's first
 and last frame even when it has no location at the current frame (shown as n/a).
 
 Recoding preserves the established coordinate height, including legacy videos

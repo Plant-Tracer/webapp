@@ -1723,8 +1723,9 @@ class TracerController extends MovieController {
                 if (!end) continue;
                 const a = this.trackpoint_to_canvas(start);
                 const b = this.trackpoint_to_canvas(end);
-                const line = new Line(a.x, a.y, b.x, b.y, 2, this.marker_color_for_label(start.label));
-                line.opacity = f0 + 1 <= frame ? 1 : 0.7;
+                const past = f0 + 1 <= frame;
+                const line = new Line(a.x, a.y, b.x, b.y, past ? 2 : 1, this.marker_color_for_label(start.label));
+                line.opacity = past ? 1 : 0.5;
                 this.add_object(line);
             }
         }

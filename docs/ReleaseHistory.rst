@@ -97,7 +97,8 @@ Unreleased Summary
       pixels, including small sources (320 by 240 becomes 640 by 480). Preserve
       established tracing geometry when recoding existing annotations. Show
       complete trace paths, with past/current segments at full opacity and
-      future segments at 70 percent. The marker table always lists saved markers,
+      2 pixels wide, and future segments at 50 percent opacity and 1 pixel wide.
+      The marker table always lists saved markers,
       adds their Frames range, and shows n/a for absent current locations.
       Retracing progress starts at the selected source frame; rendering earlier
       export frames does not rewrite those saved points (refs PR #1235).

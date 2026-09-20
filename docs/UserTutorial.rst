@@ -212,8 +212,9 @@ movie, including outside the trim range. You can delete it from an ``n/a`` row;
 protected ruler markers cannot be deleted. Retrace to update a previously
 generated movie download. Reusing the name starts a new marker without restoring
 the deleted path.
-Past and current trace segments are fully opaque; future segments use 70 percent
-opacity. Tracing from the displayed frame preserves earlier points.
+Past and current trace segments are fully opaque and 2 pixels wide; future
+segments use 50 percent opacity and are 1 pixel wide. Tracing from the displayed
+frame preserves earlier points.
 
 Downloaded traced movies show a blue frame-number label at the top right. When
 you have set the capture interval, the label also shows elapsed capture seconds
