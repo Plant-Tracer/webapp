@@ -123,8 +123,9 @@ def test_upload_movie_end_to_end(chrome_driver, live_server, new_course):
     assert movie["description"] == description
     assert movie["deleted"] == 0
     assert movie[odb.MOVIE_ROTATION] == 90
-    assert movie[odb.FRAME_HEIGHT_PX] == 320  # 320x240 source rotated once, without enlargement
-    assert movie[odb.ANALYSIS_MP4]["height"] == 320
+    assert movie[odb.FRAME_HEIGHT_PX] == 640  # 320x240 source rotated once and enlarged to 480x640
+    assert movie[odb.ANALYSIS_MP4]["width"] == 480
+    assert movie[odb.ANALYSIS_MP4]["height"] == 640
     assert not chrome_driver.find_elements(By.ID, "rotate_movie_link")
 
     # Verify MinIO object exists and matches file length

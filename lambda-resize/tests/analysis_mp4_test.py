@@ -169,7 +169,7 @@ def test_analysis_labels_start_at_zero(tmp_path):
     success, decoded = capture.read()
     capture.release()
     assert success
-    clean = next(analysis_mp4.source_frames(str(source)))
+    clean = next(analysis_mp4.unlabelled_analysis_frames(str(source), analysis_mp4.AnalysisMp4Options()))
     zero = analysis_mp4.burn_frame_number(clean, 0)
     one = analysis_mp4.burn_frame_number(clean, 1)
     region = decoded[:35, -45:].astype(float)

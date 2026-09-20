@@ -84,7 +84,9 @@ Unreleased Summary
       show zero-based frame numbers and elapsed capture time (when the capture
       interval is known) on a blue background at the top right (refs PR #1235).
 
-    * Preserve saved tracing geometry when recoding small legacy videos. Show
+    * Remove the no-enlargement rule: recoding scales the longest edge to 640
+      pixels, including small sources (320 by 240 becomes 640 by 480). Preserve
+      established tracing geometry when recoding existing annotations. Show
       complete trace paths, with past/current segments at full opacity and
       future segments at 70 percent. The marker table always lists saved markers,
       adds their Frames range, and shows n/a for absent current locations.
@@ -124,10 +126,10 @@ Unreleased Summary
       decoding for consistent Linux/macOS behavior (refs #1162, #1166).
 
     * Recover missing coordinate height from the validated analysis MP4 descriptor
-      so small uploads retain their actual unscaled height (refs #1162).
+      so saved coordinates retain their established analysis height (refs #1162).
 
     * New uploads generate a validated H.264 analysis MP4 containing every source
-      frame, rotated once, resized to fit 640 by 640 without enlargement, and
+      frame, rotated once, scaled to fit 640 by 640, including enlargement, and
       labeled with zero-based frame numbers. The analyzer uses WebCodecs for exact
       forward/reverse stepping before and after tracing, with adjustable playback
       speed. Tracing consumes analysis pixels and generates no JPEG ZIP. Original

@@ -17,7 +17,7 @@ from app.schema import AnalysisMp4, Trackpoint
 from tests.fixtures.analysis_mp4_fixture import write_four_color_movie
 
 
-@pytest.mark.parametrize('width,height', [(640, 480), (480, 640), (1280, 960)])
+@pytest.mark.parametrize('width,height', [(320, 240), (240, 320), (640, 480), (480, 640), (1280, 960)])
 @pytest.mark.parametrize('rotation', [0, 90, 270])
 @pytest.mark.parametrize('source_frame', [0, 2])
 def test_uploaded_mp4_is_rotated_scaled_complete_and_traceable(client, new_movie_record, tmp_path,
@@ -43,6 +43,10 @@ def test_uploaded_mp4_is_rotated_scaled_complete_and_traceable(client, new_movie
     movie_glue.process_uploaded_movie(movie_id=movie_id)
     movie = ddbo.get_movie(movie_id)
     analysis = AnalysisMp4.model_validate(movie[odb.ANALYSIS_MP4])
+    expected_dimensions = (640, 480) if width > height else (480, 640)
+    if rotation in (90, 270):
+        expected_dimensions = expected_dimensions[::-1]
+    assert (analysis.width, analysis.height) == expected_dimensions
     pixels = odb_movie_data.read_object(analysis.urn)
     output = tmp_path / 'analysis.mp4'
     output.write_bytes(pixels)
@@ -122,7 +126,7 @@ def test_failed_recode_keeps_original_and_does_not_publish_derivative(new_movie_
 @pytest.mark.parametrize('width,height,rotation', [(480, 360, 0), (360, 480, 0), (480, 360, 90)])
 def test_missing_height_uses_analysis_descriptor_before_legacy_frames(client, new_movie_record, tmp_path,
                                                                     width, height, rotation):
-    """Metadata and migration retain no-enlargement dimensions even with stale legacy JPEGs."""
+    """Metadata and migration retain analysis dimensions even with stale legacy JPEGs."""
     movie_id = new_movie_record[odb.MOVIE_ID]
     source = tmp_path / 'small.mp4'
     write_four_color_movie(source, width=width, height=height)
@@ -130,7 +134,7 @@ def test_missing_height_uses_analysis_descriptor_before_legacy_frames(client, ne
     ddbo.update_movie(movie_id, {odb.MOVIE_ROTATION: rotation})
     odb_movie_data.set_movie_data(movie_id=movie_id, movie_data=source.read_bytes())
     movie_glue.process_uploaded_movie(movie_id=movie_id)
-    expected_height = width if rotation else height
+    expected_height = 640 if (rotation or height > width) else 480
     movie = ddbo.get_movie(movie_id)
     assert movie[odb.ANALYSIS_MP4]['height'] == expected_height
     # A legacy frame artifact must not override the immutable analysis descriptor.

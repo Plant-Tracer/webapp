@@ -103,8 +103,8 @@ def rotate_frame(frame: np.ndarray, rotation: int) -> np.ndarray:
 
 
 def dimensions_to_fit(*, width: int, height: int, max_width: int, max_height: int) -> tuple[int, int]:
-    """Fit a frame inside the analysis rectangle without enlarging it."""
-    scale = min(1.0, max_width / width, max_height / height)
+    """Scale a frame to fit the analysis rectangle, including enlarging small inputs."""
+    scale = min(max_width / width, max_height / height)
     scaled_width = max(2, int(round(width * scale)) // 2 * 2)
     scaled_height = max(2, int(round(height * scale)) // 2 * 2)
     return scaled_width, scaled_height

@@ -180,8 +180,8 @@ Portable Analysis-MP4 Bundle
 ``make analysis-mp4-bundle`` creates a manual-test directory for an arbitrary
 local MP4. It uses the same Python encoder service that Lambda will use for the
 analysis derivative: rotation is applied once, the frame fits within the chosen
-analysis dimensions, and every output frame has its zero-based frame number
-burned into the upper-right corner. The MP4 uses a fixed 15 FPS H.264
+analysis dimensions (enlarging small sources as needed), and every output frame
+has its zero-based frame number burned into the upper-right corner. The MP4 uses a fixed 15 FPS H.264
 ``yuv420p`` baseline profile with P-frames and no B-frames.
 
 For example:

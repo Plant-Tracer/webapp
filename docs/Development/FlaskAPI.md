@@ -1079,10 +1079,11 @@ SHA-256, generated_at, encoder_version, profile, pixel_format and b_frames) and
 `metadata.analysis_mp4_url`, an authenticated signed playback URL. The source
 `movie_data_urn` and source dimensions remain separate and unchanged. The analysis
 MP4 is H.264 baseline/yuv420p, 15 fps, no B-frames, GOP 30 and CRF 18. It fits within
-640 by 640 pixels without enlargement. `frame_height_px` is its decoded height.
+640 by 640 pixels, including enlargement of smaller inputs (320 by 240 becomes
+640 by 480). `frame_height_px` is its decoded height.
 All source frames survive; trim controls select analysis ranges rather than
-removing frames from this derivative. Burned-in labels count from 1; API and
-trackpoint frame indices remain zero-based.
+removing frames from this derivative. Burned-in labels, API indices, and
+trackpoint frame indices all count from zero.
 
 The production analyzer requires the analysis MP4 and a compatible WebCodecs
 browser (tested with Chrome on macOS and Windows). It exposes a visible error if
