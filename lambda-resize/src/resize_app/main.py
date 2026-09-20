@@ -33,6 +33,7 @@ from . import mpeg_jpeg_zip
 from . import lambda_tracing_handler
 from . import upload_event
 from . import reset_tracing
+from . import recode
 from .src.app.constants import (
     __version__,
     stack_name,
@@ -261,6 +262,23 @@ def api_reset_tracing():
     except ValueError as exc:
         return Response(status_code=400, body=str(exc))
     return Response(status_code=202, content_type="application/json", body=result.model_dump_json())
+
+
+@app.post("/resize-api/v1/prepare-analysis")
+def api_prepare_analysis():
+    """Queue missing analysis video encoding before the browser acquires a lease."""
+    api_key = next((value for name, value in app.current_event.headers.items()
+                    if name.lower() == 'x-api-key'), None)
+    if not api_key:
+        return Response(status_code=401, body='x-api-key header must be provided')
+    try:
+        result = recode.prepare(api_key=api_key,
+                               request=recode.RecodeRequest.model_validate(app.current_event.json_body))
+    except ValueError as exc:
+        return Response(status_code=400, content_type='application/json',
+                        body=recode.RecodeResponse(error=True, message=str(exc)).model_dump_json())
+    return Response(status_code=200 if result.ready else 202, content_type='application/json',
+                    body=result.model_dump_json())
 
 
 @app.get("/resize-api/v1/reset-tracing")

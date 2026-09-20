@@ -1855,6 +1855,12 @@ describe('trace_movie', () => {
         if (!global.demo_mode) {
             mockPost.mockReturnValueOnce({
                 done: jest.fn().mockImplementation(cb => {
+                    cb({ready: true});
+                    return {fail: jest.fn().mockReturnThis()};
+                }),
+            });
+            mockPost.mockReturnValueOnce({
+                done: jest.fn().mockImplementation(cb => {
                     cb({ error: false, lease_id: 'analysis-lease-123' });
                     return { fail: jest.fn().mockReturnThis() };
                 }),
@@ -1884,10 +1890,22 @@ describe('trace_movie', () => {
         mockApiResponse(makeResp());
         trace_movie('div#tracer', 'movie-123', 'my-api-key');
         expect(mockPost).toHaveBeenNthCalledWith(
-            1,
+            2,
             expect.stringContaining('acquire-movie-analysis-lease'),
             expect.objectContaining({ movie_id: 'movie-123', api_key: 'my-api-key' }),
         );
+    });
+
+    test('pending recoding makes one request without acquiring an editing lease', () => {
+        mockPost.mockReturnValueOnce({done: jest.fn().mockImplementation(cb => {
+            cb({ready: false, message: 'Recoding is in progress, come back in a few minutes.'});
+            return {fail: jest.fn().mockReturnThis()};
+        })});
+        trace_movie('div#tracer', 'movie-123', 'my-api-key');
+        expect(mockPost).toHaveBeenCalledTimes(1);
+        expect(mockPost.mock.calls[0][0].url).toContain('prepare-analysis');
+        expect(mock$.mock.results.some(result => result.value.text?.mock.calls.some(
+            args => args[0] === 'Recoding is in progress, come back in a few minutes.'))).toBe(true);
     });
 
     test('passes frame_start=0 to the API', () => {

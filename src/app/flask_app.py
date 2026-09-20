@@ -9,7 +9,7 @@ import os
 import time
 import logging
 
-from flask import Flask, request, render_template, jsonify, make_response, Response, redirect
+from flask import Flask, request, render_template, jsonify, make_response, Response, redirect, url_for
 from werkzeug.exceptions import NotFound
 from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -291,6 +291,11 @@ def func_admin() -> str | tuple[str, int]:
 @app.route('/analyze', methods=GET)
 def func_analyze() -> str:
     """Serve the analyze page."""
+    movie_id = request.args.get(odb.MOVIE_ID)
+    if movie_id and not request.args.get(odb.COURSE_ID):
+        user = apikey.get_user_dict()
+        movie = odb.can_access_movie(user_id=user[odb.USER_ID], movie_id=movie_id)
+        return redirect(url_for('func_analyze', **{**request.args, odb.COURSE_ID: movie[odb.COURSE_ID]}))
     return render_template('analyze.html', **page_dict('Analyze Movie', require_auth=True))
 
 ##

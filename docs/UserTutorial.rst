@@ -182,6 +182,12 @@ forward/reverse play and the speed selector. Choose the orientation before uploa
 the original file is preserved and the analysis MP4 is rotated and resized for you.
 Frame-number labels in the movie start at 1, while the frame field starts at 0.
 
+Opening an older movie automatically requests its analysis video if it is missing.
+The page shows "Recoding is in progress, come back in a few minutes."
+Leave the page and reopen Analyze after a few minutes. Your saved markers and
+original upload remain intact. If recoding reports a failure, contact an
+administrator with the displayed reason.
+
 Place or move markers on the desired frame, then choose Trace. The current markers
 are saved before tracking starts. After tracking completes, the same player shows
 the resulting markers and lets you step backward and forward to inspect them.

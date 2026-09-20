@@ -78,6 +78,10 @@ Release Notes
 Unreleased Summary
 ******************
 
+    * Recode missing analysis MP4s on demand when Analyze opens, with one
+      background job and a message to return in a few minutes. Preserve saved
+      markers and select the movie's course for direct Analyze links (refs PR #1235).
+
     * On small screens, the navigation menu scrolls horizontally within the page
       so all links remain reachable without shifting the page sideways (refs PR #1235).
 

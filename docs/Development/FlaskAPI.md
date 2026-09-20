@@ -786,6 +786,30 @@ rename, trim, and capture-interval writes; the owning browser includes its
 
 ---
 
+#### `POST /resize-api/v1/prepare-analysis`
+
+Analyze calls this endpoint before acquiring its editing lease. The JSON body
+contains `movie_id`; the `x-api-key` header must authorize access to the movie.
+For a completed upload, a valid analysis descriptor and existing S3 object return
+HTTP 200 with `ready: true`. A missing descriptor or object starts asynchronous
+recoding and returns HTTP 202 with `ready: false` and
+"Recoding is in progress, come back in a few minutes."
+
+A conditional 15-minute processing reservation deduplicates concurrent page
+openings and excludes active editing/tracing. Queue deliveries claim execution
+once; stale or duplicate jobs do no encoding. After a worker timeout, a later
+page opening can reserve a replacement job. Terminal processing failures are
+reported without automatic re-enqueueing; administrators must investigate and
+clear the processing failure before retrying. S3 permission/service errors are
+not treated as missing objects. The browser does not poll or acquire an editing
+lease while recoding is pending. Source objects, saved frame data, annotations,
+and the prior completed tracing status are preserved; geometry conflicts fail
+without rewriting saved coordinates.
+
+Analyze links lacking `course_id` redirect to the authorized movie's course,
+so an unrelated default course does not cause a lease-context conflict. Explicit
+course conflicts remain rejected by the metadata/editing APIs.
+
 #### `POST /resize-api/v1/reset-tracing`
 
 Reset annotations with one JSON request authenticated by the `x-api-key` header

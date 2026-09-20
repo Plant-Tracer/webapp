@@ -31,6 +31,15 @@ class PostUploadJob(BaseModel):
     movie_id: str
 
 
+class RecodeJob(BaseModel):
+    """On-demand analysis encoding with a preclaimed processing lease."""
+
+    job_type: Literal["recode"] = "recode"
+    movie_id: str
+    attempt: str
+    completed_status: str
+
+
 class ResetRequest(BaseModel):
     """Inclusive frame range and replacement markers for its seed frame."""
 
@@ -58,7 +67,7 @@ class ResetJob(ResetRequest):
     job_id: str
 
 
-AsyncJob = Annotated[TraceJob | PostUploadJob | ResetJob, Field(discriminator="job_type")]
+AsyncJob = Annotated[TraceJob | PostUploadJob | ResetJob | RecodeJob, Field(discriminator="job_type")]
 JOB_ADAPTER = TypeAdapter(AsyncJob)
 
 
@@ -89,7 +98,7 @@ def eventbridge_client():
     )
 
 
-def publish_job(job: TraceJob | PostUploadJob | ResetJob) -> None:
+def publish_job(job: TraceJob | PostUploadJob | ResetJob | RecodeJob) -> None:
     """Publish one stack-scoped work item and reject partial PutEvents failure."""
     detail = AsyncWorkDetail(stack_name=storage_deployment_id(), job=job)
     response = eventbridge_client().put_events(Entries=[{

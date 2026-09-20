@@ -403,7 +403,7 @@ def complete_movie_upload(*, api_key: str, movie_id: str) -> UploadCompletion:
     )
 
 
-def process_uploaded_movie(*, movie_id: str):
+def process_uploaded_movie(*, movie_id: str, processing_attempt=None, completed_status=MOVIE_STATE_READY):
     """Extract post-upload metadata and finish the asynchronous resize phase."""
     ddbo = DDBO()
     movie = ddbo.get_movie(movie_id)
@@ -424,7 +424,7 @@ def process_uploaded_movie(*, movie_id: str):
             if_absent=True,
         )
         return
-    attempt = ddbo.claim_movie_processing(movie_id)
+    attempt = processing_attempt or ddbo.claim_movie_processing(movie_id)
     if attempt is None:
         return
     movie = ddbo.get_movie(movie_id)  # Read rotation only after processing has closed editing.
@@ -474,7 +474,7 @@ def process_uploaded_movie(*, movie_id: str):
             odb.FRAME_HEIGHT_PX: analysis.height,
             odb.ANALYSIS_MP4: analysis.model_dump(),
             RESIZED_AT: resized_at,
-            MOVIE_STATUS: MOVIE_STATE_READY,
+            MOVIE_STATUS: completed_status,
         }
         updates.update({odb.PROCESSING_ATTEMPT: None, odb.PROCESSING_EXPIRES_AT: None})
         ddbo.update_movie(movie_id, updates, expected_processing_attempt=attempt)

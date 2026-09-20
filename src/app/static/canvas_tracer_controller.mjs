@@ -2367,15 +2367,29 @@ function trace_movie(div_controller, movie_id, api_key) {
         load_analyze({lease_id: null});
         return;
     }
-    $.post(`${API_BASE}api/acquire-movie-analysis-lease`, {
-        api_key: api_key,
-        course_id: activeCourseId(),
-        movie_id: movie_id,
-    }).done((response) => {
-        start_analysis_lease(movie_id, api_key, response.lease_id);
-        load_analyze(response);
+    $.post({
+        url: `${LAMBDA_API_BASE}resize-api/v1/prepare-analysis`,
+        contentType: 'application/json',
+        headers: {'x-api-key': api_key},
+        data: JSON.stringify({movie_id: movie_id}),
+        timeout: 15000,
+    }).done((prepared) => {
+        if (!prepared.ready || prepared.error) {
+            $('#status-big').text(prepared.message);
+            return;
+        }
+        $.post(`${API_BASE}api/acquire-movie-analysis-lease`, {
+            api_key: api_key,
+            course_id: activeCourseId(),
+            movie_id: movie_id,
+        }).done((response) => {
+            start_analysis_lease(movie_id, api_key, response.lease_id);
+            load_analyze(response);
+        }).fail((response) => {
+            alert(response.responseJSON?.message || 'Unable to open Analyze.');
+        });
     }).fail((response) => {
-        alert(response.responseJSON?.message || 'Unable to open Analyze.');
+        $('#status-big').text(response.responseJSON?.message || 'Unable to prepare this movie. Reopen Analyze to try again.');
     });
 }
 

@@ -722,7 +722,8 @@ class DDBO:
                                   "#expires=:expires, #started_by_id=:started_by_id, "
                                   "#started_by_name=:started_by_name REMOVE #trace_job"),
                 ConditionExpression=("(attribute_not_exists(#analysis_expires) OR #analysis_expires < :now) "
-                                     "AND (attribute_not_exists(#trace_expires) OR #trace_expires < :now)"),
+                                     "AND (attribute_not_exists(#trace_expires) OR #trace_expires < :now) "
+                                     "AND (attribute_not_exists(#processing_expires) OR #processing_expires <= :now)"),
                 ExpressionAttributeNames={
                     "#lease_id": ANALYSIS_LEASE_ID, "#acquired": ANALYSIS_LOCK_ACQUIRED_AT,
                     "#heartbeat": ANALYSIS_LOCK_HEARTBEAT_AT, "#analysis_expires": ANALYSIS_LOCK_EXPIRES_AT,
@@ -731,6 +732,7 @@ class DDBO:
                     "#started_by_name": ANALYSIS_LOCK_STARTED_BY_USER_NAME,
                     "#trace_expires": TRACE_LOCK_EXPIRES_AT,
                     "#trace_job": TRACE_JOB_ID,
+                    "#processing_expires": PROCESSING_EXPIRES_AT,
                 },
                 ExpressionAttributeValues={
                     ":lease_id": lock.lease_id, ":now": now, ":expires": lock.expires_at,
@@ -811,7 +813,8 @@ class DDBO:
                                   "#analysis_started_by_id, #analysis_started_by_name"),
                 ConditionExpression=("(attribute_not_exists(#expires) OR #expires < :now) AND "
                                      "(attribute_not_exists(#analysis_expires) OR #analysis_expires < :now "
-                                     "OR #analysis_id=:analysis_id)"),
+                                     "OR #analysis_id=:analysis_id) AND "
+                                     "(attribute_not_exists(#processing_expires) OR #processing_expires <= :now)"),
                 ExpressionAttributeNames={
                     "#job_id": TRACE_JOB_ID, "#state": TRACE_LOCK_STATE,
                     "#acquired": TRACE_LOCK_ACQUIRED_AT, "#heartbeat": TRACE_LOCK_HEARTBEAT_AT,
@@ -819,6 +822,7 @@ class DDBO:
                     "#started_by_name": TRACE_LOCK_STARTED_BY_USER_NAME, "#status": MOVIE_STATUS,
                     "#last_activity_at": LAST_ACTIVITY_AT, "#failed_at": TRACING_FAILED_AT,
                     "#failure_summary": TRACING_FAILURE_SUMMARY,
+                    "#processing_expires": PROCESSING_EXPIRES_AT,
                     "#analysis_id": ANALYSIS_LEASE_ID, "#analysis_acquired": ANALYSIS_LOCK_ACQUIRED_AT,
                     "#analysis_heartbeat": ANALYSIS_LOCK_HEARTBEAT_AT,
                     "#analysis_expires": ANALYSIS_LOCK_EXPIRES_AT,
