@@ -3,7 +3,7 @@ Movie Player Design
 
 The Analyze page is a browser-side canvas application. Flask serves the page and
 metadata APIs; lambda-resize supplies video/frame data. New uploads are converted
-into an immutable H.264 baseline/yuv420p analysis MP4, with every source frame in
+into an immutable H.264 baseline/yuv420p untraced MP4, with every source frame in
 order and no B-frames. The production analyzer uses ``mp4_frame_player.mjs`` for
 forward/backward frame access; it does not download a JPEG ZIP.
 
@@ -230,3 +230,36 @@ Tracing starts after the selected seed frame. Earlier frames are read to render
 the download, but their points and tracing progress are not rewritten. Downloads
 use a blue frame/time label; elapsed seconds appear only when capture timing is
 known, never inferred from the playback frame rate.
+
+On-demand Traced Downloads
+--------------------------
+
+Both download controls POST to ``/resize-api/v1/download-traced``. Trim edits
+only change metadata. The request compares a versioned fingerprint of the source,
+geometry, trim, annotation revision, capture interval, and attribution against
+``traced_render_key``. A matching existing object returns a signed URL; otherwise
+one ``render_traced`` event is queued. Legacy exports without a fingerprint are
+rebuilt once when requested. There is no per-frame database query to decide
+whether an export is current.
+
+Render-only mode draws current saved annotations on unlabelled source pixels,
+clips to the inclusive trim, and draws blue source-frame/time labels. It never
+runs optical-flow tracking, writes frame records, or clears ``needs_retracing``.
+The matrix computes ranges inside the trim but keeps rows for markers outside it.
+
+Worker leases have named purposes: ``trace``, ``reset``, ``render_traced``, and
+``render_untraced``. Their existing trace/processing storage fields remain for
+compatibility. Acquisitions remain mutually exclusive with other movie work and
+foreign editing sessions. A traced download can atomically transfer its caller's
+editing lease to the worker. Duplicate events cannot claim running jobs. The
+render worker renews its lease at most once every 30 seconds while decoding and
+again before publication; retries after expiry get a different job identifier.
+Publication checks the live lease and unchanged input fields. Each job writes a
+separate S3 object, so an expired worker cannot overwrite a newer download.
+Queue failures release the reservation; rendering failures retain the previous
+export reference and record a diagnostic. Another explicit download can retry.
+
+The product term is **untraced MP4**. Internal ``analysis_mp4`` descriptors,
+module names, and the ``prepare-analysis`` endpoint remain compatible. Untraced
+MP4 regeneration retains its processing lease and saved coordinate geometry.
+No ZIP creation or automatic deletion of legacy ZIPs is introduced.

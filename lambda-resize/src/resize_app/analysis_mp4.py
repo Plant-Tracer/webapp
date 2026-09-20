@@ -174,8 +174,8 @@ def burn_frame_number(frame: np.ndarray, frame_number: int) -> np.ndarray:
 
 
 def encode_analysis_mp4(*, source_path: Path, output_path: Path, options: AnalysisMp4Options,
-                        comment: str = "PlantTracer analysis MP4") -> AnalysisMp4Result:
-    """Encode one rotated, scaled, frame-numbered analysis MP4."""
+                        comment: str = "PlantTracer untraced MP4") -> AnalysisMp4Result:
+    """Encode one rotated, scaled, frame-numbered untraced MP4."""
     capture = cv2.VideoCapture(str(source_path))
     if not capture.isOpened():
         capture.release()
@@ -240,18 +240,18 @@ def validate_encoded_movie(path: Path, *, frame_count: int, width: int, height: 
                 break
             frame_type = int(capture.get(cv2.CAP_PROP_FRAME_TYPE))
             if frame_type == ord('B'):
-                raise ValueError("Analysis MP4 contains B-frames")
+                raise ValueError("Untraced MP4 contains B-frames")
             if frame_type not in (ord('I'), ord('P')):
-                raise ValueError(f"Cannot validate analysis MP4 frame type: {frame_type}")
+                raise ValueError(f"Cannot validate untraced MP4 frame type: {frame_type}")
             if frame.shape[:2] != (height, width):
-                raise ValueError("Analysis MP4 dimensions changed during encoding")
+                raise ValueError("Untraced MP4 dimensions changed during encoding")
             count += 1
     finally:
         capture.release()
     if count != frame_count:
-        raise ValueError(f"Analysis MP4 retained {count} of {frame_count} frames")
+        raise ValueError(f"Untraced MP4 retained {count} of {frame_count} frames")
     if not all(value in description for value in ("h264", "Baseline", "yuv420p", "15 fps")):
-        raise ValueError("Analysis MP4 does not satisfy the H.264 baseline/yuv420p/15 fps contract")
+        raise ValueError("Untraced MP4 does not satisfy the H.264 baseline/yuv420p/15 fps contract")
 
 
 def copy_player_bundle(*, bundle_dir: Path, movie_name: str) -> Path:
@@ -288,7 +288,7 @@ def require_file(path: Path, *, missing_message: str) -> Path:
 
 
 def create_analysis_bundle(*, source_path: Path, output_dir: Path, options: AnalysisMp4Options) -> AnalysisMp4Result:
-    """Atomically create a portable analysis MP4 and WebCodecs player bundle."""
+    """Atomically create a portable untraced MP4 and WebCodecs player bundle."""
     source_path = source_path.resolve()
     output_dir = output_dir.resolve()
     if not source_path.is_file():

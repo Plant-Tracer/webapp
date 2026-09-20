@@ -179,10 +179,10 @@ Frame-by-frame MP4 analysis
 After upload processing finishes, open Analyze to browse the whole movie before
 tracing. Use +1 and -1 for exact frame steps, enter a frame number to jump, or use
 forward/reverse play and the speed selector. Choose the orientation before upload;
-the original file is preserved and the analysis MP4 is rotated and resized for you.
-Frame-number labels in the movie start at 1, while the frame field starts at 0.
+the original file is preserved and the untraced MP4 is rotated and resized for you.
+Frame-number labels and the frame field both start at 0, which is time zero.
 
-Opening an older movie automatically requests its analysis video if it is missing.
+Opening an older movie automatically requests its untraced video if it is missing.
 The page shows "Recoding is in progress, come back in a few minutes."
 Leave the page and reopen Analyze after a few minutes. Your saved markers and
 original upload remain intact. If recoding reports a failure, contact an
@@ -205,16 +205,32 @@ Reading movie traces
 --------------------
 
 Frame counting starts at 0, which is also time zero. The marker table's Frames
-column gives each marker's first and last saved frame. A marker with no saved
+column gives each marker's first and last saved frame within the selected trim. A marker with no saved
 position on the displayed frame remains in the table with location ``n/a``.
 Deleting a marker removes its row and all of its saved traces throughout the
 movie, including outside the trim range. You can delete it from an ``n/a`` row;
 protected ruler markers cannot be deleted. Retrace to update a previously
-generated movie download. Reusing the name starts a new marker without restoring
+generated movie download, or click **Download traced movie** to render the saved
+points without tracking again. Reusing the name starts a new marker without restoring
 the deleted path.
 Past and current trace segments are fully opaque and 2 pixels wide; future
 segments use 50 percent opacity and are 1 pixel wide. Tracing from the displayed
 frame preserves earlier points.
+
+**Download traced movie** is available on both the analyzer and movie list.
+Changing the trim does not immediately create a video. On download, an outdated
+or missing traced MP4 is rendered in the background using the current saved
+markers and the inclusive trim. The message is: "Re-rendering; download the
+traced movie in a few minutes." Click Download again later to retrieve it.
+Repeated requests while rendering reuse the same job. Reopen Analyze afterward
+to edit. Rendering does not retrack points or clear a needs-retracing warning.
+A trim of 0-43 produces 44 frames; labels retain original source frame numbers
+and capture times. Saved points outside the trim remain available if it expands.
+Markers with no points inside the trim remain listed with Frames and Location
+shown as ``n/a``.
+
+The **untraced MP4** is the analyzer's playback video; the **traced MP4** is the
+export with saved markers and paths. Neither operation creates JPEG ZIPs.
 
 Downloaded traced movies show a blue frame-number label at the top right. When
 you have set the capture interval, the label also shows elapsed capture seconds

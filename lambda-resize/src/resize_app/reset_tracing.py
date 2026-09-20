@@ -88,17 +88,17 @@ def prepare(*, api_key, request: async_work.ResetRequest):
         raise ValueError("Reset range exceeds the movie's frame count")
     if movie.get(odb.TRACKPOINT_ORIGIN) != odb.TRACKPOINT_ORIGIN_BOTTOM_LEFT:
         raise ValueError("Open Analyze to initialize the movie's coordinate system first")
-    lock = ddbo.acquire_movie_trace_lock(
-        movie=movie, started_by_user_id=user_id,
+    lock = ddbo.acquire_movie_work_lock(
+        movie=movie, purpose="reset", started_by_user_id=user_id,
         started_by_user_name=ddbo.get_user(user_id)[odb.USER_NAME],
         analysis_lease_id=request.analysis_lease_id)
     job = async_work.ResetJob(**request.model_dump(), job_id=lock.job_id)
     try:
         ddbo.movies.update_item(
             Key={odb.MOVIE_ID: request.movie_id},
-            UpdateExpression="SET #reset=:job, #next=:start, #end=:end, #state=:running, #dirty=:dirty, #status=:ready",
+            UpdateExpression="SET #revision=:job, #reset=:job, #next=:start, #end=:end, #state=:running, #dirty=:dirty, #status=:ready",
             ConditionExpression="#trace=:job",
-            ExpressionAttributeNames={"#reset": RESET_JOB_ID, "#next": RESET_NEXT_FRAME,
+            ExpressionAttributeNames={"#revision": odb.RENDER_REVISION, "#reset": RESET_JOB_ID, "#next": RESET_NEXT_FRAME,
                                       "#end": RESET_END_FRAME, "#state": RESET_STATE,
                                       "#trace": odb.TRACE_JOB_ID, "#dirty": odb.NEEDS_RETRACING,
                                       "#status": odb.MOVIE_STATUS},

@@ -1,5 +1,6 @@
 "use strict";
 
+import { requestTracedDownload, openTracedDownload } from './traced_download.js';
 import { activeCourseId } from "./course_context.js";
 
 //code for /analyze
@@ -441,7 +442,7 @@ class TracerController extends MovieController {
     }
 
     editingLocked() {
-        return this.analysis_read_only || this.frame_loading || this.tracking || this.resetting_tracing || this.deleting_marker || this.movieStatusIsTracing();
+        return this.preparing_download || this.analysis_read_only || this.frame_loading || this.tracking || this.resetting_tracing || this.deleting_marker || this.movieStatusIsTracing();
     }
 
     analysisLeaseParams() {
@@ -706,6 +707,7 @@ class TracerController extends MovieController {
                 this.refreshTrimControls();
                 this.goto_frame(frameNumber);
                 this.refreshVisibleGraphs();
+                this.create_marker_table();
             })
             .fail((res) => {
                 const msg = res.responseJSON && res.responseJSON.message
@@ -816,13 +818,36 @@ class TracerController extends MovieController {
     }
 
     refreshTracedMovieDownload() {
-        const tracedMovieUrl = this.movie_metadata[MOVIE_TRACED_URL];
-        if (tracedMovieUrl) {
-            this.traced_movie_download_link.attr('href', tracedMovieUrl);
-            this.traced_movie_download_control.show();
-        } else {
-            this.traced_movie_download_link.attr('href', '#');
-            this.traced_movie_download_control.hide();
+        this.traced_movie_download_control.show();
+        this.traced_movie_download_link.attr('href', '#').off('click.traced-download')
+            .on('click.traced-download', event => {
+                event.preventDefault();
+                this.downloadTracedMovie();
+            });
+    }
+
+    async downloadTracedMovie() {
+        if (this.preparing_download) return;
+        this.preparing_download = true;
+        this.refreshFrameEditState();
+        try {
+            await Promise.all(Array.from(this.marker_save_requests || []));
+            const result = await requestTracedDownload(this.movie_id, this.api_key, this.analysis_lease_id);
+            if (result.ready) {
+                openTracedDownload(result.url);
+            } else {
+                stop_analysis_lease();
+                this.analysis_lease_id = null;
+                this.analysis_read_only = true;
+                this.refreshFrameEditState();
+                $('#status-big').text(result.message + ' Reopen Analyze afterward to edit.');
+                alert(result.message);
+            }
+        } catch (error) {
+            alert(error.message);
+        } finally {
+            this.preparing_download = false;
+            this.refreshFrameEditState();
         }
     }
 
@@ -1126,8 +1151,11 @@ class TracerController extends MovieController {
         let rows = '';
         let calculations = this.calculate_scale(this.objects)
         const ranges = new Map();
+        const savedMarkers = new Map();
         for (const [frameNumber, frame] of (this.frames || []).entries()) {
             for (const point of frame?.markers || []) {
+                savedMarkers.set(point.label, point);
+                if (!this.isFrameInTrim(frameNumber)) continue;
                 const range = ranges.get(point.label);
                 if (range) range.last = frameNumber;
                 else ranges.set(point.label, {first: frameNumber, last: frameNumber, point});
@@ -1137,22 +1165,22 @@ class TracerController extends MovieController {
             .map((obj, index) => ({obj, index}))
             .filter(({obj}) => obj.constructor.name == Marker.name);
         const present = new Set(tableMarkers.map(({obj}) => obj.name));
-        for (const [label, range] of ranges) {
-            if (!present.has(label)) tableMarkers.push({obj: this.marker_from_trackpoint(range.point), index: null});
+        for (const [label, point] of savedMarkers) {
+            if (!present.has(label)) tableMarkers.push({obj: this.marker_from_trackpoint(point), index: null});
         }
         tableMarkers.sort((a, b) => compare_marker_labels(a.obj.name, b.obj.name));
         for (const {obj, index} of tableMarkers) {
             obj.table_cell_id = "td-" + (++cell_id_counter);
             obj.name_cell_id = "td-marker-name-" + cell_id_counter;
             const trackpoint = this.canvas_marker_to_trackpoint(obj);
-            const visible = index !== null;
-            const range = ranges.get(obj.name) || {first: this.frame_number, last: this.frame_number};
+            const visible = index !== null && this.isFrameInTrim(this.frame_number);
+            const range = ranges.get(obj.name);
             obj.loc_mm = visible ? this.marker_location_mm(obj, calculations) : 'n/a';
             rows += `<tr>` +
                 `<td class="dot" style="color:${obj.fill};">●</td>` +
                 `<td><span id="${obj.name_cell_id}" x-marker-index="${index}">${html_escape(obj.name)}</span> ` +
                 (visible ? `<span class='editor marker-name-editor nodemo' x-target-id='${obj.name_cell_id}'> ✏️  </span></td>` : '</td>') +
-                `<td>${range.first}-${range.last}</td>` +
+                `<td>${range ? `${range.first}-${range.last}` : 'n/a'}</td>` +
                 `<td id="${obj.table_cell_id}">${visible ? this.format_trackpoint_location(trackpoint) : 'n/a'}</td>` +
                 `<td id="${obj.table_cell_id}-mm" class="obj-mm"> ${obj.loc_mm}</td>`;
             if (marker_is_undeletable(obj)) {
@@ -2388,10 +2416,10 @@ function trace_movie(div_controller, movie_id, api_key) {
             ? `Analysis is open in another browser — started ${new Date(analysisLock.acquired_at * 1000).toLocaleString()} by ${analysisLock.started_by_user_name}. This page is view-only.`
             : leaseResponse.message;
         const tracingMessage = traceLock
-            ? `Tracing in progress — started ${new Date(traceLock.acquired_at * 1000).toLocaleString()} by ${traceLock.started_by_user_name}. This page is read-only; leave and click Analyze again later.`
+            ? `${traceLock.purpose === 'render_traced' ? 'Rendering traced MP4' : 'Movie work'} in progress — started ${new Date(traceLock.acquired_at * 1000).toLocaleString()} by ${traceLock.started_by_user_name}. This page is read-only; leave and click Analyze again later.`
             : null;
         if (!resp.metadata.analysis_mp4_url) {
-            $('#status-big').text('The analysis MP4 is not ready. Wait for upload processing to finish, then reopen Analyze.');
+            $('#status-big').text('The untraced MP4 is not ready. Wait for upload processing to finish, then reopen Analyze.');
             return;
         }
         const showResults = is_movie_tracked(resp.metadata);

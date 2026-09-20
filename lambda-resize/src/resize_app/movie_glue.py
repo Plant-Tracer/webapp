@@ -25,6 +25,7 @@ from .src.app.odb import (
 )
 from .src.app.odb_movie_data import copy_object_to_path, read_object, write_object_from_path
 from .src.app import mp4_metadata_lib
+from .src.app.movie_render import render_key
 from .src.app import s3_presigned
 from .src.app import odb
 from .src.app.odb import (
@@ -507,7 +508,7 @@ def process_uploaded_movie(*, movie_id: str, processing_attempt=None, completed_
             RESIZED_AT: resized_at,
             MOVIE_STATUS: completed_status,
         }
-        updates.update({odb.PROCESSING_ATTEMPT: None, odb.PROCESSING_EXPIRES_AT: None})
+        updates.update({odb.WORK_PURPOSE: None, odb.PROCESSING_ATTEMPT: None, odb.PROCESSING_EXPIRES_AT: None})
         ddbo.update_movie(movie_id, updates, expected_processing_attempt=attempt)
     except Exception as exc:
         reason = ("Decoded movie dimensions conflict with saved geometry"
@@ -517,7 +518,7 @@ def process_uploaded_movie(*, movie_id: str, processing_attempt=None, completed_
                 MOVIE_STATUS: odb.MOVIE_STATE_PROCESSING_FAILED,
                 odb.PROCESSING_FAILED_AT: int(time.time()),
                 odb.PROCESSING_FAILURE_SUMMARY: reason[:500],
-                odb.PROCESSING_ATTEMPT: None, odb.PROCESSING_EXPIRES_AT: None,
+                odb.WORK_PURPOSE: None, odb.PROCESSING_ATTEMPT: None, odb.PROCESSING_EXPIRES_AT: None,
             }, expected_processing_attempt=attempt)
         except odb.MovieProcessingLeaseLost:
             LOGGER.info("Discarding stale processing failure movie_id=%s attempt=%s", movie_id, attempt)
@@ -671,13 +672,14 @@ def run_tracing(*, movie_id, frame_start, frame_end=None, job_id=None):
             except Exception:  # pylint: disable=broad-exception-caught
                 LOGGER.exception("failed to write fpm metadata to traced movie movie_id=%s", movie_id)
 
-        movie_traced_urn = s3_presigned.traced_movie_urn(movie_data_urn=movie_urn)
+        movie_traced_urn = s3_presigned.traced_movie_urn(movie_data_urn=movie_urn, render_id=job_id)
         write_object_from_path(urn=movie_traced_urn, path=movie_traced_path)
 
         # Update the database
         # note: should we update width, height and fps?
         updates = {TOTAL_FRAMES: total_frames, MOVIE_STATUS: MOVIE_STATE_TRACING_COMPLETED,
-                   NEEDS_RETRACING: 0, MOVIE_TRACED_URN: movie_traced_urn}
+                   NEEDS_RETRACING: 0, MOVIE_TRACED_URN: movie_traced_urn,
+                   odb.TRACED_RENDER_KEY: render_key(ddbo.get_movie(movie_id))}
         if job_id:
             ddbo.finish_movie_trace(movie_id=movie_id, job_id=job_id, updates=updates)
         else:

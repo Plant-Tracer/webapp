@@ -327,3 +327,17 @@ Some naming changes were made for clarity or to avoid conflicts with DynamoDB's 
    * - ``name``
      - ``user_name``
      - ``name`` is a DynamoDB reserved word
+
+
+Traced export freshness and named work
+--------------------------------------
+
+``work_purpose`` identifies ``trace``, ``reset``, ``render_traced`` or
+``render_untraced`` while the existing renewable trace/processing lease fields
+retain ownership and expiry. These operations remain mutually exclusive per
+movie; names do not permit conflicting workers to run together.
+``render_revision`` changes when saved annotations change. ``traced_render_key``
+records the versioned input fingerprint of a published traced MP4. Trim, source,
+geometry, capture interval and attribution also participate in that fingerprint.
+``render_failed_at`` and ``render_failure_summary`` describe a failed render
+without replacing a successful export or declaring tracing complete.

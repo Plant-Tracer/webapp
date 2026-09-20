@@ -320,7 +320,7 @@ of the selected analysis frame range.
 MP4 player validation on a dev stack
 ------------------------------------
 
-New uploads on the ``new-movieplayer`` branch use the analysis MP4 immediately
+New uploads on the ``new-movieplayer`` branch use the untraced MP4 immediately
 when processing completes. The original stays intact. The browser and tracker
 share the derivative's pixel dimensions; the source rotation must not be applied
 again. The analysis derivative includes every source frame, regardless of trim.
@@ -344,7 +344,7 @@ workflow, test on Windows and macOS:
 4. After tracing, step in both directions and inspect marker overlays. Change
    playback speed and reverse direction. Change the trim range and verify that
    the full movie remains navigable.
-5. Verify the source download is unchanged, an analysis MP4 exists, and no new
+5. Verify the source download is unchanged, an untraced MP4 exists, and no new
    ZIP object appears. The traced download contains marker overlays without
    burned-in frame-number labels.
 

@@ -34,6 +34,7 @@ from . import lambda_tracing_handler
 from . import upload_event
 from . import reset_tracing
 from . import recode
+from . import render_traced
 from .src.app.constants import (
     __version__,
     stack_name,
@@ -248,6 +249,26 @@ def handle_post_actions():
         return Response(status_code=403, body=str(e.args))
 
 
+@app.post("/resize-api/v1/download-traced")
+def api_download_traced():
+    """Return a current traced MP4 or queue one render using saved annotations."""
+    api_key = next((value for name, value in app.current_event.headers.items()
+                    if name.lower() == 'x-api-key'), None)
+    if not api_key:
+        return Response(status_code=401, body='x-api-key header must be provided')
+    try:
+        result = render_traced.prepare(api_key=api_key,
+                                       request=render_traced.RenderRequest.model_validate(app.current_event.json_body))
+    except movie_glue.odb.MovieTracingLocked as exc:
+        return Response(status_code=409, content_type='application/json',
+                        body=render_traced.RenderResponse(error=True, message=str(exc)).model_dump_json())
+    except ValueError as exc:
+        return Response(status_code=400, content_type='application/json',
+                        body=render_traced.RenderResponse(error=True, message=str(exc)).model_dump_json())
+    return Response(status_code=200 if result.ready else 202, content_type='application/json',
+                    body=result.model_dump_json())
+
+
 @app.post("/resize-api/v1/reset-tracing")
 def api_reset_tracing():
     """Queue one inclusive frame range; never perform frame writes in HTTP."""
@@ -266,7 +287,7 @@ def api_reset_tracing():
 
 @app.post("/resize-api/v1/prepare-analysis")
 def api_prepare_analysis():
-    """Queue missing analysis video encoding before the browser acquires a lease."""
+    """Queue missing untraced video encoding before the browser acquires a lease."""
     api_key = next((value for name, value in app.current_event.headers.items()
                     if name.lower() == 'x-api-key'), None)
     if not api_key:

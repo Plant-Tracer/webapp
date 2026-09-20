@@ -78,6 +78,14 @@ Release Notes
 Unreleased Summary
 ******************
 
+    * Version 0.9.9.16: apply the selected trim to matrix frame ranges, retaining
+      out-of-range markers with n/a. Keep traced downloads available in the
+      analyzer and movie list; regenerate stale downloads on request using saved
+      markers without retracking. Named leases prevent duplicate or conflicting
+      rendering, and publication checks input freshness and worker ownership.
+      Use "untraced MP4" for the analyzer video; preserve internal field names.
+      Analyzer tutorial screenshots need manual review (refs PR #1235).
+
     * Version 0.9.9.15: deleting a marker removes it from every frame, the marker
       table and graphs, including when its current location is n/a. Preserve
       other markers and frame data, reject deletion of protected rulers, and
@@ -103,7 +111,7 @@ Unreleased Summary
       Retracing progress starts at the selected source frame; rendering earlier
       export frames does not rewrite those saved points (refs PR #1235).
 
-    * Recode missing analysis MP4s on demand when Analyze opens, with one
+    * Recode missing untraced MP4s on demand when Analyze opens, with one
       background job and a message to return in a few minutes. Preserve saved
       markers and select the movie's course for direct Analyze links (refs PR #1235).
 
@@ -128,17 +136,17 @@ Unreleased Summary
 
     * Failed upload processing reports its reason and retries without replacing
       source bytes. Worker leases prevent overlapping or stale attempts from
-      replacing a successful result; analysis MP4 objects include their checksum
+      replacing a successful result; untraced MP4 objects include their checksum
       in the key. Failed demo seeds resume on the next run (refs #1162).
     * Tracing from an empty source frame preserves later results. Demo movies
-      include analysis MP4s, and MOV edit lists do not hide stored frames from
+      include untraced MP4s, and MOV edit lists do not hide stored frames from
       analysis or traced rendering. Remote sources are downloaded before FFmpeg
       decoding for consistent Linux/macOS behavior (refs #1162, #1166).
 
-    * Recover missing coordinate height from the validated analysis MP4 descriptor
+    * Recover missing coordinate height from the validated untraced MP4 descriptor
       so saved coordinates retain their established analysis height (refs #1162).
 
-    * New uploads generate a validated H.264 analysis MP4 containing every source
+    * New uploads generate a validated H.264 untraced MP4 containing every source
       frame, rotated once, scaled to fit 640 by 640, including enlargement, and
       labeled with zero-based frame numbers. The analyzer uses WebCodecs for exact
       forward/reverse stepping before and after tracing, with adjustable playback

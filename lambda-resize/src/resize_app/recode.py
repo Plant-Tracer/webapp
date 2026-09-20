@@ -1,4 +1,4 @@
-"""Request-driven analysis MP4 repair without per-view duplicate encoding."""
+"""Request-driven untraced MP4 repair without per-view duplicate encoding."""
 
 import time
 import uuid
@@ -64,6 +64,7 @@ def reserve(movie):
     ddbo = odb.DDBO()
     try:
         ddbo.update_table(ddbo.movies, job.movie_id, {
+            odb.WORK_PURPOSE: "render_untraced",
             odb.PROCESSING_ATTEMPT: job.attempt, odb.PROCESSING_EXPIRES_AT: now + 15 * 60,
             odb.MOVIE_STATUS: odb.MOVIE_STATE_PROCESSING, RECODE_STATE: QUEUED,
             RECODE_STATUS: status, odb.ANALYSIS_MP4: None,
@@ -105,7 +106,7 @@ def prepare(*, api_key, request: RecodeRequest):
         except Exception:
             # A publish failure permits a later explicit page opening to retry.
             odb.DDBO().update_movie(job.movie_id, {
-                odb.PROCESSING_ATTEMPT: None, odb.PROCESSING_EXPIRES_AT: None,
+                odb.WORK_PURPOSE: None, odb.PROCESSING_ATTEMPT: None, odb.PROCESSING_EXPIRES_AT: None,
                 odb.MOVIE_STATUS: job.completed_status, RECODE_STATE: None,
             }, expected_processing_attempt=job.attempt)
             raise

@@ -855,6 +855,7 @@ def test_active_trace_lease_is_visible_and_rejects_movie_writes(client, new_movi
     for payload in (listed, metadata_response.get_json()['metadata']):
         assert payload[odb.MOVIE_STATUS] == odb.MOVIE_STATE_TRACING
         assert payload['tracking_lock'] == {
+            'purpose': 'trace',
             'active': True,
             'acquired_at': lock.acquired_at,
             'started_by_user_name': lock.started_by_user_name,

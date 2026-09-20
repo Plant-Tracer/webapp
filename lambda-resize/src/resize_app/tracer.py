@@ -257,7 +257,7 @@ def prototype_callback(obj:TracerCallbackArg):
     """Demo"""
     logging.debug("frame_number=%s len(frame_data)=%s frame_trackpoints=%s", obj.frame_number, len(obj.frame_data), obj.frame_trackpoints)
 
-def trace_movie_v2(*, movie_url,
+def trace_movie_v2(*, movie_url,  # pylint: disable=too-many-arguments
                    frame_start:int,
                    frame_end:int | None = None,
                    trackpoints:List[Trackpoint],
@@ -265,6 +265,7 @@ def trace_movie_v2(*, movie_url,
                    movie_traced_frame_range:TracedMovieFrameRange | None = None,
                    rotation=0,
                    render_source: tuple[str, AnalysisMp4Options] | None = None,
+                   render_only: bool = False,
                    callback = prototype_callback,
                    comment="Processed by PlantTracer AWS Lambda"):
     """
@@ -276,7 +277,8 @@ def trace_movie_v2(*, movie_url,
     :param frame_end: optional inclusive final frame to track.
     :param trackpoints: a trackpoints data structure. Trackpoints for frame_start-1 must be provided.
     :param movie_traced_frame_range: inclusive frame range to include in the traced MP4.
-    :param render_source: original URL and shared transform options when movie_url is an analysis MP4.
+    :param render_source: original URL and shared transform options when movie_url is an untraced MP4.
+    :param render_only: draw existing points without tracking or requiring a seed.
     :param rotation: the rotation (in degrees) to apply to the movie before scaling
     """
 
@@ -306,9 +308,12 @@ def trace_movie_v2(*, movie_url,
         if not Path(movie_url).exists():
             raise FileNotFoundError(movie_url)
 
-    trackpoints_output = [tp for tp in trackpoints if tp.frame_number <= frame_start]
+    trackpoints_output = list(trackpoints) if render_only else [tp for tp in trackpoints if tp.frame_number <= frame_start]
+    points_by_frame = {}
+    for point in trackpoints:
+        points_by_frame.setdefault(point.frame_number, []).append(point)
     # make sure we have trackpoints for frame_start-1
-    if not any((tp for tp in trackpoints if tp.frame_number == frame_start-1)):
+    if not render_only and not any((tp for tp in trackpoints if tp.frame_number == frame_start-1)):
         raise ValueError(f"len(trackpoints)={len(trackpoints)} but no tracked points for frame {frame_start-1}")
 
     # Check to see if we are making a movie_traced
@@ -319,18 +324,23 @@ def trace_movie_v2(*, movie_url,
             fps=15,
             output_params=['-metadata', f'comment={comment}'],
         )
-    render_frames = unlabelled_analysis_frames(*render_source) if render_source else None
+    render_frames = unlabelled_analysis_frames(*render_source) if render_source and not render_only else None
+    source_frames = (unlabelled_analysis_frames(*render_source) if render_source and render_only
+                     else get_frames_from_url(movie_url, rotation, transform=render_source is None))
     trackpoints_prev = None
     gray_frame_prev = None
     trackpoints_this = None
     trackpoint_segments:list[TrackpointSegment] = []
     colors_by_label = trackpoint_colors(trackpoints)
+    written_frames = 0
     try:
-        for (frame_number, frame) in enumerate(get_frames_from_url(movie_url, rotation, transform=render_source is None)):
+        for (frame_number, frame) in enumerate(source_frames):
+            if render_only and movie_traced_frame_end is not None and frame_number > movie_traced_frame_end:
+                break
             clean_frame = next(render_frames) if render_frames else frame
             # Trace only in the requested range; outside it use existing trackpoints for rendering/callbacks.
-            gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            if frame_number >= frame_start and (frame_end is None or frame_number <= frame_end):
+            gray_frame = None if render_only else cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            if not render_only and frame_number >= frame_start and (frame_end is None or frame_number <= frame_end):
                 trackpoints_this = cv2_trace_frame(
                     gray_frame_prev = gray_frame_prev,
                     gray_frame = gray_frame,
@@ -339,7 +349,7 @@ def trace_movie_v2(*, movie_url,
                 )
                 trackpoints_output.extend(trackpoints_this) # add to the output
             else:
-                trackpoints_this = [tp for tp in trackpoints if tp.frame_number == frame_number]
+                trackpoints_this = points_by_frame.get(frame_number, [])
 
             frame_in_traced_movie = (
                 frame_number >= movie_traced_frame_start
@@ -363,6 +373,7 @@ def trace_movie_v2(*, movie_url,
                 # IMPORTANT: OpenCV uses BGR colors, but the H.264 writer expects RGB.
                 frame_rgb = cv2.cvtColor(frame_to_label, cv2.COLOR_BGR2RGB)
                 movie_traced_writer.append_data(frame_rgb)
+                written_frames += 1
 
             if callback is not None:
                 callback(TracerCallbackArg(frame_number=frame_number, frame_data=frame,
@@ -372,10 +383,15 @@ def trace_movie_v2(*, movie_url,
             trackpoints_prev = trackpoints_this
             gray_frame_prev = gray_frame
     finally:
+        if hasattr(source_frames, "close"):
+            source_frames.close()
         if render_frames:
             render_frames.close()
         if movie_traced_writer:
             movie_traced_writer.close()
+    if render_only and movie_traced_writer and movie_traced_frame_end is not None:
+        if written_frames != movie_traced_frame_end - movie_traced_frame_start + 1:
+            raise ValueError("Source movie ended before the requested trim range")
     return trackpoints_output
 
 

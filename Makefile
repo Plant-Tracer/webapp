@@ -81,6 +81,7 @@ VEND_FILES := src/app/odb.py \
               src/app/build_metadata.py \
               src/app/constants.py \
               src/app/mp4_metadata_lib.py \
+              src/app/movie_render.py \
               src/app/paths.py \
               src/app/odb_movie_data.py \
               src/app/s3_presigned.py

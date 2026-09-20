@@ -1087,7 +1087,7 @@ Check DynamoDB connectivity, S3 CORS configuration, and S3 bucket region. No aut
 ```
 
 
-## Analysis MP4 playback contract
+## Untraced MP4 playback contract
 
 New uploads remain in processing until the shared analysis encoder has decoded every
 source frame and validated its output. `/api/get-movie-metadata` returns
@@ -1102,14 +1102,14 @@ All source frames survive; trim controls select analysis ranges rather than
 removing frames from this derivative. Burned-in labels, API indices, and
 trackpoint frame indices all count from zero.
 
-The production analyzer requires the analysis MP4 and a compatible WebCodecs
+The production analyzer requires the untraced MP4 and a compatible WebCodecs
 browser (tested with Chrome on macOS and Windows). It exposes a visible error if
 encoding is incomplete or decoding is unavailable. It never downloads a ZIP.
 It saves the selected frame's markers before requesting tracing; a first marker
 may be saved on any frame after upload completion. Trace completion refreshes
 marker metadata while retaining the same analysis pixels. Frame endpoints select
 the derivative with no additional scaling or rotation. Tracking decodes the same
-analysis MP4; the traced movie renders source pixels through the same transform
+untraced MP4; the traced movie renders source pixels through the same transform
 with marker overlays, avoiding the analysis movie's burned-in frame numbers.
 No new trace generates a ZIP. Legacy backfill and bulk S3 cleanup are separate
 operations and are not performed by deployment of this change.
@@ -1148,3 +1148,26 @@ matches. Retrying preserves saved dimensions, points, and source bytes.
 The saved-frame check counts only non-negative frame numbers. The marker-map
 companion item at frame `-100` alone does not finalize geometry or block source
 initialization; other finalization conditions still apply.
+
+
+## Traced download preparation
+
+`POST /resize-api/v1/download-traced` (lambda-resize) accepts JSON `movie_id`
+and optional `analysis_lease_id`, authenticated with `x-api-key`. Movie read
+permission is required. It returns `200` with `{ready: true, url, message: "",
+error: false}` for a current export, or `202` with `ready: false` and
+"Re-rendering; download the traced movie in a few minutes." for a newly queued
+or already active render. Conflicting editing/tracing/untraced-render work
+returns `409`; invalid requests return `400`, missing authentication `401`.
+
+The server selects the source, current saved markers and inclusive trim. It
+never trusts a client-supplied output range or URL. Taking the render lease
+releases the requesting browser's matching editing lease. Rendering preserves
+source bytes, frame records, trace progress, and the needs-retracing flag. Both
+analyzer and movie-list downloads use this endpoint instead of cached S3 URLs.
+
+`list-movies` and `get-movie-metadata` include the worker's named `purpose` in
+`tracking_lock`. Their displayed status distinguishes rendering/reset work from
+tracing. Existing `analysis_mp4` fields refer to the **untraced MP4**; their names
+remain unchanged for compatibility. Trim changes update export freshness without
+enqueuing work; marker writes and renames/deletions update `render_revision`.

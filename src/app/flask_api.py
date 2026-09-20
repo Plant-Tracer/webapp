@@ -1034,9 +1034,11 @@ def api_list_movies():
     for movie in movies:
         trace_lock = odb.movie_trace_lock_from_record(movie)
         if trace_lock:
-            movie[MOVIE_STATUS] = odb.MOVIE_STATE_TRACING
+            movie[MOVIE_STATUS] = (odb.MOVIE_STATE_TRACING if trace_lock.purpose == "trace"
+                                   else trace_lock.purpose.replace("_", " "))
             movie['tracking_lock'] = {
                 'active': True,
+                'purpose': trace_lock.purpose,
                 'acquired_at': trace_lock.acquired_at,
                 'started_by_user_name': trace_lock.started_by_user_name,
             }
@@ -1103,9 +1105,11 @@ def api_get_movie_metadata():
     movie_metadata = odb.movie_metadata_with_trim_defaults(movie_metadata)
     trace_lock = odb.movie_trace_lock_from_record(movie)
     if trace_lock:
-        movie_metadata[MOVIE_STATUS] = odb.MOVIE_STATE_TRACING
+        movie_metadata[MOVIE_STATUS] = (odb.MOVIE_STATE_TRACING if trace_lock.purpose == "trace"
+                                      else trace_lock.purpose.replace("_", " "))
         movie_metadata['tracking_lock'] = {
             'active': True,
+            'purpose': trace_lock.purpose,
             'acquired_at': trace_lock.acquired_at,
             'started_by_user_name': trace_lock.started_by_user_name,
         }

@@ -104,7 +104,7 @@ export class Mp4FramePlayer {
             throw new Error('This browser does not support precise MP4 playback. Use a current Chrome or Edge browser.');
         }
         const response = await fetch(url);
-        if (!response.ok) throw new Error(`Unable to load analysis MP4 (${response.status}).`);
+        if (!response.ok) throw new Error(`Unable to load untraced MP4 (${response.status}).`);
         const reader = response.body.getReader();
         const chunks = [];
         let size = 0;
@@ -113,7 +113,7 @@ export class Mp4FramePlayer {
                 const {value, done} = await reader.read();
                 if (done) break;
                 size += value.byteLength;
-                if (size > MAX_ENCODED_BYTES) throw new Error('Analysis MP4 exceeds the 256 MiB playback limit.');
+                if (size > MAX_ENCODED_BYTES) throw new Error('Untraced MP4 exceeds the 256 MiB playback limit.');
                 chunks.push(value);
             }
         } finally {
@@ -123,7 +123,7 @@ export class Mp4FramePlayer {
         let offset = 0;
         for (const chunk of chunks) { data.set(chunk, offset); offset += chunk.byteLength; }
         const {samples, videoTrack} = await extractMp4Samples(data.buffer);
-        if (!samples.length || !samples[0].description.avcC) throw new Error('Analysis MP4 must contain H.264 video.');
+        if (!samples.length || !samples[0].description.avcC) throw new Error('Untraced MP4 must contain H.264 video.');
         this.samples = samplesInDecodeOrder(samples);
         this.presentation = [...this.samples].sort((a, b) => a.cts - b.cts);
         this.width = videoTrack.video.width;

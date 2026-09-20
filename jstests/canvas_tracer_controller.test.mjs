@@ -824,7 +824,8 @@ describe('TracerController constructor', () => {
 
         new TracerController('div#tc', makeMovieMetadata({ movie_traced_url: 'https://example.com/traced.mp4' }), 'k');
 
-        expect(tracedLink.attr).toHaveBeenCalledWith('href', 'https://example.com/traced.mp4');
+        expect(tracedLink.attr).toHaveBeenCalledWith('href', '#');
+        expect(tracedLink.on).toHaveBeenCalledWith('click.traced-download', expect.any(Function));
         expect(tracedControl.show).toHaveBeenCalled();
     });
 
@@ -849,6 +850,39 @@ describe('TracerController constructor', () => {
 
         expect(retraceMessage.show).toHaveBeenCalled();
         expect(retraceMessage.hide).not.toHaveBeenCalled();
+    });
+});
+
+describe('TracerController.downloadTracedMovie', () => {
+    beforeEach(() => { global.fetch = jest.fn(); global.alert = jest.fn(); });
+
+    test('visible without an old URL; drains saves and queues only once', async () => {
+        const tc = new TracerController('div#tc', makeMovieMetadata({analysis_lease_id: 'editor'}), 'k');
+        expect(tc.traced_movie_download_control.show).toHaveBeenCalled();
+        let saved;
+        tc.marker_save_requests = new Set([new Promise(resolve => { saved = resolve; })]);
+        global.fetch.mockResolvedValue({ok: true, json: async () => ({ready: false, message: 'Re-rendering; download the traced movie in a few minutes.'})});
+        const pending = tc.downloadTracedMovie();
+        await tc.downloadTracedMovie();
+        expect(global.fetch).not.toHaveBeenCalled();
+        saved();
+        await pending;
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+        const [url, request] = global.fetch.mock.calls[0];
+        expect(url).toContain('/resize-api/v1/download-traced');
+        expect(JSON.parse(request.body)).toEqual({movie_id: tc.movie_id, analysis_lease_id: 'editor'});
+        expect(tc.analysis_read_only).toBe(true);
+        expect(tc.analysis_lease_id).toBeNull();
+        expect(global.alert).toHaveBeenCalledWith('Re-rendering; download the traced movie in a few minutes.');
+    });
+
+    test('failed preparation reports the error and releases the local request guard', async () => {
+        const tc = new TracerController('div#tc', makeMovieMetadata(), 'k');
+        global.fetch.mockResolvedValue({ok: false, json: async () => ({message: 'Movie is busy'})});
+        await tc.downloadTracedMovie();
+        expect(global.alert).toHaveBeenCalledWith('Movie is busy');
+        expect(tc.preparing_download).toBe(false);
+        expect(tc.analysis_read_only).toBe(false);
     });
 });
 
@@ -3318,6 +3352,27 @@ describe('TracerController.add_frame_objects', () => {
         const lines = tc.objects.filter(o => o instanceof MockLineClass);
         expect(lines).toHaveLength(2);
         expect(lines.map(line => [line.opacity, line.width])).toEqual([[0.5, 1], [0.5, 1]]);
+    });
+
+    test('matrix ranges follow the trim while retaining outside markers as n/a', () => {
+        const table = makeEl();
+        useSelectorElements({'div#tracer tbody.marker_table_body': table});
+        tc = new TracerController('div#tracer', makeMovieMetadata({total_frames: 54, trim_start_frame: 0, trim_end_frame: 43}), 'api-key');
+        tc.frames = Array.from({length: 54}, (_, frame) => ({markers: [
+            {x: frame, y: 20, label: 'Apex'},
+            ...(frame === 50 ? [{x: 50, y: 30, label: 'Later'}] : []),
+        ]}));
+        tc.frame_number = 43;
+        tc.add_frame_objects(43);
+        const html = table.html.mock.calls.at(-1)[0];
+        expect(html).toContain('<td>0-43</td>');
+        expect(html).not.toContain('<td>0-53</td>');
+        expect(html).toContain('Later');
+        expect(html.split('<tr>')[2].match(/n\/a/g)).toHaveLength(3);
+        expect(tc.frames[50].markers).toHaveLength(2);
+        tc.movie_metadata.trim_end_frame = 53;
+        tc.create_marker_table();
+        expect(table.html.mock.calls.at(-1)[0]).toContain('<td>50-50</td>');
     });
 
     test('frame=0: Marker objects added for each marker in frame 0', () => {

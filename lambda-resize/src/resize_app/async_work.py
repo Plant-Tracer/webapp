@@ -6,6 +6,7 @@ from typing import Annotated, Literal
 import boto3
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 
+from . import local_queue
 from .src.app.constants import C, storage_deployment_id
 from .src.app.schema import Trackpoint
 
@@ -22,6 +23,14 @@ class TraceJob(BaseModel):
     frame_start: int = 0
     frame_end: int | None = None
     job_id: str | None = None
+
+
+class RenderTracedJob(BaseModel):
+    """Render saved annotations with no tracking or frame-data writes."""
+
+    job_type: Literal["render_traced"] = "render_traced"
+    movie_id: str
+    job_id: str
 
 
 class PostUploadJob(BaseModel):
@@ -67,7 +76,7 @@ class ResetJob(ResetRequest):
     job_id: str
 
 
-AsyncJob = Annotated[TraceJob | PostUploadJob | ResetJob | RecodeJob, Field(discriminator="job_type")]
+AsyncJob = Annotated[TraceJob | PostUploadJob | ResetJob | RecodeJob | RenderTracedJob, Field(discriminator="job_type")]
 JOB_ADAPTER = TypeAdapter(AsyncJob)
 
 
@@ -98,7 +107,7 @@ def eventbridge_client():
     )
 
 
-def publish_job(job: TraceJob | PostUploadJob | ResetJob | RecodeJob) -> None:
+def publish_job(job: TraceJob | PostUploadJob | ResetJob | RecodeJob | RenderTracedJob) -> None:
     """Publish one stack-scoped work item and reject partial PutEvents failure."""
     detail = AsyncWorkDetail(stack_name=storage_deployment_id(), job=job)
     response = eventbridge_client().put_events(Entries=[{
@@ -112,3 +121,12 @@ def publish_job(job: TraceJob | PostUploadJob | ResetJob | RecodeJob) -> None:
         code = entry.get("ErrorCode", "unknown")
         message = entry.get("ErrorMessage", "unknown error")
         raise RuntimeError(f"EventBridge rejected async work: {code}: {message}")
+
+
+def enqueue_job(job):
+    """Send one typed job to the configured local worker or EventBridge."""
+    mode = (os.environ.get("TRACING_QUEUE_MODE") or os.environ.get("TRACKING_QUEUE_MODE", "")).strip().lower()
+    if mode == "local":
+        local_queue.enqueue_message(job.model_dump())
+    else:
+        publish_job(job)

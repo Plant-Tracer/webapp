@@ -138,6 +138,9 @@ class AnalysisMp4(BaseModel):
     b_frames: int = 0
 
 
+MovieWorkPurpose = Literal["trace", "reset", "render_traced", "render_untraced"]
+
+
 class Movie(BaseModel):
     """DynamoDB movies table"""
 
@@ -152,6 +155,11 @@ class Movie(BaseModel):
     tracing_failed_at: int | None = None
     tracing_failure_summary: str | None = None
     trace_job_id: str | None = None
+    work_purpose: MovieWorkPurpose | None = None
+    render_revision: str | None = None
+    traced_render_key: str | None = None
+    render_failed_at: int | None = None
+    render_failure_summary: str | None = None
     tracing_state: Literal["queued", "running"] | None = None
     tracing_started_at: int | None = None
     tracing_heartbeat_at: int | None = None
@@ -325,6 +333,7 @@ class MovieTraceLock(BaseModel):
 
     movie_id: str
     job_id: str
+    purpose: MovieWorkPurpose = "trace"
     state: Literal["queued", "running"]
     acquired_at: Annotated[int, Field(ge=0)]
     heartbeat_at: Annotated[int, Field(ge=0)]
