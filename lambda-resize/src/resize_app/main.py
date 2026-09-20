@@ -32,6 +32,9 @@ from . import movie_glue
 from . import mpeg_jpeg_zip
 from . import lambda_tracing_handler
 from . import upload_event
+from . import reset_tracing
+from . import recode
+from . import render_traced
 from .src.app.constants import (
     __version__,
     stack_name,
@@ -199,7 +202,7 @@ def handle_first_frame() -> Any:
         case _:
             try:
                 obj = movie_glue.get_movie_url_and_rotation(api_key=api_key, movie_id=movie_id)
-                frame = mpeg_jpeg_zip.get_first_frame_from_url(obj.signed_url,obj.rotation)
+                frame = mpeg_jpeg_zip.get_first_frame_from_url(obj.signed_url, obj.rotation, transform=obj.transform)
                 data = mpeg_jpeg_zip.convert_frame_to_jpeg(frame)
             except ValueError as e:
                 LOGGER.exception("e=%s",e)
@@ -244,6 +247,74 @@ def handle_post_actions():
     except ValueError as e:
         LOGGER.exception("trace-movie rejected: %s", e)
         return Response(status_code=403, body=str(e.args))
+
+
+@app.post("/resize-api/v1/download-traced")
+def api_download_traced():
+    """Return a current traced MP4 or queue one render using saved annotations."""
+    api_key = next((value for name, value in app.current_event.headers.items()
+                    if name.lower() == 'x-api-key'), None)
+    if not api_key:
+        return Response(status_code=401, body='x-api-key header must be provided')
+    try:
+        result = render_traced.prepare(api_key=api_key,
+                                       request=render_traced.RenderRequest.model_validate(app.current_event.json_body))
+    except movie_glue.odb.MovieTracingLocked as exc:
+        return Response(status_code=409, content_type='application/json',
+                        body=render_traced.RenderResponse(error=True, message=str(exc)).model_dump_json())
+    except ValueError as exc:
+        return Response(status_code=400, content_type='application/json',
+                        body=render_traced.RenderResponse(error=True, message=str(exc)).model_dump_json())
+    return Response(status_code=200 if result.ready else 202, content_type='application/json',
+                    body=result.model_dump_json())
+
+
+@app.post("/resize-api/v1/reset-tracing")
+def api_reset_tracing():
+    """Queue one inclusive frame range; never perform frame writes in HTTP."""
+    api_key = app.current_event.headers.get("x-api-key")
+    if not api_key:
+        return Response(status_code=401, body="x-api-key header must be provided")
+    try:
+        request = async_work.ResetRequest.model_validate(app.current_event.json_body)
+        result = reset_tracing.prepare(api_key=api_key, request=request)
+    except movie_glue.odb.MovieTracingLocked:
+        return Response(status_code=409, body="Movie is being edited or traced. Reopen Analyze.")
+    except ValueError as exc:
+        return Response(status_code=400, body=str(exc))
+    return Response(status_code=202, content_type="application/json", body=result.model_dump_json())
+
+
+@app.post("/resize-api/v1/prepare-analysis")
+def api_prepare_analysis():
+    """Queue missing untraced video encoding before the browser acquires a lease."""
+    api_key = next((value for name, value in app.current_event.headers.items()
+                    if name.lower() == 'x-api-key'), None)
+    if not api_key:
+        return Response(status_code=401, body='x-api-key header must be provided')
+    try:
+        result = recode.prepare(api_key=api_key,
+                               request=recode.RecodeRequest.model_validate(app.current_event.json_body))
+    except ValueError as exc:
+        return Response(status_code=400, content_type='application/json',
+                        body=recode.RecodeResponse(error=True, message=str(exc)).model_dump_json())
+    return Response(status_code=200 if result.ready else 202, content_type='application/json',
+                    body=result.model_dump_json())
+
+
+@app.get("/resize-api/v1/reset-tracing")
+def api_reset_tracing_status():
+    """Read only the movie's reset checkpoint, not its per-frame annotations."""
+    try:
+        _, _, movie = movie_glue.validate_movie_access(
+            api_key=app.current_event.headers.get("x-api-key"),
+            movie_id=app.current_event.get_query_string_value("movie_id"))
+    except ValueError as exc:
+        return Response(status_code=403, body=str(exc))
+    job_id = app.current_event.get_query_string_value("job_id")
+    if not job_id:
+        return Response(status_code=400, body="job_id must be provided")
+    return reset_tracing.progress(movie, job_id).model_dump()
 
 
 def process_eventbridge_event(event: Dict[str, Any]) -> Dict[str, Any]:

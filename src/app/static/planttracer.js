@@ -1,6 +1,7 @@
 "use strict";
 /* jshint esversion: 8 */
 import { $, begin_inline_text_edit } from "./utils.js";
+import { requestTracedDownload, openTracedDownload } from './traced_download.js';
 import { RETRACE_REQUIRED_MESSAGE } from "./ui_constants.js";
 import { activeCourseId, appendCourseContext } from "./course_context.js";
 
@@ -118,8 +119,15 @@ function check_upload_metadata()
 {
   const title = $('#movie-title').val();
   const description = $('#movie-description').val();
-  const movie_file = $('#movie-file').val();
-  $('#upload-button').prop('disabled', (title.length < 3 || description.length < 3 || movie_file.length<1));
+  const movieFile = $('#movie-file').prop('files')[0];
+  const sizeError = upload_size_error(movieFile);
+  $('#upload-size-error').text(sizeError);
+  $('#upload-button').prop('disabled', (title.length < 3 || description.length < 3 || !movieFile || !!sizeError));
+}
+
+function upload_size_error(file) {
+  return file && file.size > MAX_FILE_UPLOAD
+    ? `Choose a movie of ${MAX_FILE_UPLOAD / (1024 * 1024)} MiB or less.` : '';
 }
 
 function sync_attribution_ui() {
@@ -427,8 +435,10 @@ function upload_movie()
     return;
   }
 
-  if (movieFile.size > MAX_FILE_UPLOAD) {
-    $('#message').html(`That file is too big to upload. Please chose a file smaller than ${MAX_FILE_UPLOAD} bytes.`);
+  const sizeError = upload_size_error(movieFile);
+  if (sizeError) {
+    $('#message').text(sizeError);
+    check_upload_metadata();
     return;
   }
   // Hide the form immediately so the user sees that something is happening.
@@ -612,18 +622,20 @@ function movie_is_available(movie) {
   return Boolean(movie && (movie.uploaded_at || movie.date_uploaded));
 }
 
-function download_traced_clicked( e ) {
-  const url = e.getAttribute('x-movie_traced_url');
-  if (!url) {
-    return;
+async function download_traced_clicked(e) {
+  if (e.disabled) return;
+  e.disabled = true;
+  try {
+    const result = await requestTracedDownload(e.getAttribute('x-movie_id'), api_key);
+    if (result.ready) openTracedDownload(result.url);
+    else alert(result.message);
+  } catch (error) {
+    alert(error.message);
+  } finally {
+    e.disabled = false;
   }
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = '';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
 }
+
 
 ////////////////
 // EDIT METADATA
@@ -889,8 +901,8 @@ function list_movies_data( movies ) {
       const analyze   = (m.orig_movie || readOnlySuperauditorMovie)
         ? ''
         : `<input class='analyze' x-rowid='${rowid}' x-movie_id='${movie_id}' type='button' value='${analyze_label}'${unavailable} onclick='analyze_clicked(this)'>`;
-      const downloadTraced = m.movie_traced_url
-        ? `<input class='play traced-movie-download' x-movie_traced_url="${html_attr(m.movie_traced_url)}" type='button' value='download traced' onclick='download_traced_clicked(this)'>`
+      const downloadTraced = movieAvailable
+        ? `<input class='play traced-movie-download' x-movie_id="${html_attr(movie_id)}" type='button' value='download traced' onclick='download_traced_clicked(this)'>`
         : '';
 
       const you_class = (m.user_id == user_id) ? "you" : "";

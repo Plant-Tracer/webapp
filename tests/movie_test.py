@@ -855,6 +855,7 @@ def test_active_trace_lease_is_visible_and_rejects_movie_writes(client, new_movi
     for payload in (listed, metadata_response.get_json()['metadata']):
         assert payload[odb.MOVIE_STATUS] == odb.MOVIE_STATE_TRACING
         assert payload['tracking_lock'] == {
+            'purpose': 'trace',
             'active': True,
             'acquired_at': lock.acquired_at,
             'started_by_user_name': lock.started_by_user_name,
@@ -1011,6 +1012,7 @@ def test_movie_writes_reject_trace_and_foreign_analysis_leases(client, new_movie
         ('/api/rename-marker', {
             'old_label': 'Apex', 'new_label': 'Tip',
         }),
+        ('/api/delete-marker', {'label': 'Apex'}),
     )
     acquired = client.post(
         '/api/acquire-movie-analysis-lease', data=request_data).get_json()

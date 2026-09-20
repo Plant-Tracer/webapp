@@ -4,7 +4,13 @@
 
 import json
 import shutil
+import subprocess
+import tempfile
+from contextlib import ExitStack
 from pathlib import Path
+from urllib.request import urlopen
+
+import imageio_ffmpeg
 
 import cv2
 import numpy as np
@@ -12,9 +18,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .video_writer import H264Writer
 
+FFMPEG_FRAME_SIZE = "size"
 DEFAULT_ANALYSIS_WIDTH = 640
-DEFAULT_ANALYSIS_HEIGHT = 480
+DEFAULT_ANALYSIS_HEIGHT = 640
 DEFAULT_ANALYSIS_FPS = 15.0
+ANALYSIS_ENCODER_VERSION = 2
 ANALYSIS_PLAYER_FILENAME = "index.html"
 ANALYSIS_PLAYER_LIBRARY_FILENAME = "mp4box.all.js"
 ANALYSIS_PLAYER_LIBRARY_DEPENDENCIES = (
@@ -37,6 +45,7 @@ class AnalysisMp4Options(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
+    frame_height: int | None = Field(default=None, gt=0)
     rotation: int = 0
     max_width: int = Field(default=DEFAULT_ANALYSIS_WIDTH, gt=0)
     max_height: int = Field(default=DEFAULT_ANALYSIS_HEIGHT, gt=0)
@@ -94,8 +103,8 @@ def rotate_frame(frame: np.ndarray, rotation: int) -> np.ndarray:
 
 
 def dimensions_to_fit(*, width: int, height: int, max_width: int, max_height: int) -> tuple[int, int]:
-    """Fit a frame inside the analysis rectangle without enlarging it."""
-    scale = min(1.0, max_width / width, max_height / height)
+    """Scale a frame to fit the analysis rectangle, including enlarging small inputs."""
+    scale = min(max_width / width, max_height / height)
     scaled_width = max(2, int(round(width * scale)) // 2 * 2)
     scaled_height = max(2, int(round(height * scale)) // 2 * 2)
     return scaled_width, scaled_height
@@ -110,13 +119,47 @@ def scale_frame(frame: np.ndarray, options: AnalysisMp4Options) -> np.ndarray:
         max_width=options.max_width,
         max_height=options.max_height,
     )
+    if options.frame_height is not None:
+        scaled_height = options.frame_height
+        scaled_width = max(2, int(round(width * scaled_height / height)) // 2 * 2)
     if (scaled_width, scaled_height) == (width, height):
         return frame
     return cv2.resize(frame, (scaled_width, scaled_height), interpolation=cv2.INTER_AREA)
 
 
+def source_frames(source_url: str):
+    """Decode every stored frame from a local file, including frames hidden by edit lists."""
+    with ExitStack() as resources:
+        source_path = source_url
+        if source_url.startswith(("http://", "https://")):
+            # Avoid platform-specific FFmpeg HTTP support during traced rendering.
+            source_file = resources.enter_context(tempfile.NamedTemporaryFile(suffix=".mov"))
+            with urlopen(source_url, timeout=60) as response:
+                shutil.copyfileobj(response, source_file)
+            source_file.flush()
+            source_path = source_file.name
+        reader = imageio_ffmpeg.read_frames(
+            source_path, input_params=["-ignore_editlist", "1"], output_params=["-vsync", "0"])
+        try:
+            metadata = next(reader, None)
+            if metadata is None:
+                raise ValueError("Source decoder returned no metadata")
+            width, height = metadata[FFMPEG_FRAME_SIZE]
+            for pixels in reader:
+                yield cv2.cvtColor(np.frombuffer(pixels, dtype=np.uint8).reshape(height, width, 3),
+                                   cv2.COLOR_RGB2BGR)
+        finally:
+            reader.close()
+
+
+def unlabelled_analysis_frames(source_url: str, options: AnalysisMp4Options):
+    """Render source frames in the same geometry, without permanent playback labels."""
+    for frame in source_frames(source_url):
+        yield scale_frame(rotate_frame(frame, options.rotation), options)
+
+
 def burn_frame_number(frame: np.ndarray, frame_number: int) -> np.ndarray:
-    """Burn a one-based frame number into an analysis frame."""
+    """Burn a zero-based frame number into an analysis frame."""
     labelled = frame.copy()
     text = str(frame_number)
     text_face = cv2.FONT_HERSHEY_DUPLEX
@@ -130,12 +173,15 @@ def burn_frame_number(frame: np.ndarray, frame_number: int) -> np.ndarray:
     return labelled
 
 
-def encode_analysis_mp4(*, source_path: Path, output_path: Path, options: AnalysisMp4Options) -> AnalysisMp4Result:
-    """Encode one rotated, scaled, frame-numbered analysis MP4."""
+def encode_analysis_mp4(*, source_path: Path, output_path: Path, options: AnalysisMp4Options,
+                        comment: str = "PlantTracer untraced MP4") -> AnalysisMp4Result:
+    """Encode one rotated, scaled, frame-numbered untraced MP4."""
     capture = cv2.VideoCapture(str(source_path))
     if not capture.isOpened():
         capture.release()
         raise ValueError(f"cannot open MP4: {source_path}")
+    expected_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT))
+    capture.release()
     fps = DEFAULT_ANALYSIS_FPS
     frame_count = 0
     width = 0
@@ -147,26 +193,26 @@ def encode_analysis_mp4(*, source_path: Path, output_path: Path, options: Analys
             fps=fps,
             output_params=[
                 *H264_OUTPUT_PARAMETERS,
-                "-metadata", "comment=PlantTracer analysis MP4",
+                "-metadata", f"comment={comment}",
             ],
             quality=None,
         )
-        while True:
-            success, frame = capture.read()
-            if not success or frame is None:
-                break
+        for frame in source_frames(str(source_path)):
             frame = scale_frame(rotate_frame(frame, options.rotation), options)
-            frame_count += 1
             labelled = burn_frame_number(frame, frame_count)
+            frame_count += 1
             writer.append_data(cv2.cvtColor(labelled, cv2.COLOR_BGR2RGB))
             height, width = labelled.shape[:2]
     finally:
-        capture.release()
         if writer is not None:
             writer.close()
     if frame_count == 0:
         output_path.unlink(missing_ok=True)
         raise ValueError(f"MP4 has no decodable frames: {source_path}")
+    if expected_count > 0 and frame_count != expected_count:
+        output_path.unlink(missing_ok=True)
+        raise ValueError(f"Decoded {frame_count} of {expected_count} source frames")
+    validate_encoded_movie(output_path, frame_count=frame_count, width=width, height=height)
     return AnalysisMp4Result(
         bundle_dir=output_path.parent,
         movie_path=output_path,
@@ -177,6 +223,35 @@ def encode_analysis_mp4(*, source_path: Path, output_path: Path, options: Analys
         fps=fps,
         rotation=options.rotation,
     )
+
+
+def validate_encoded_movie(path: Path, *, frame_count: int, width: int, height: int) -> None:
+    """Decode the completed artifact and verify its frame count and H.264 contract."""
+    description = subprocess.run(
+        [imageio_ffmpeg.get_ffmpeg_exe(), "-hide_banner", "-i", str(path)],
+        capture_output=True, text=True, check=False,
+    ).stderr
+    capture = cv2.VideoCapture(str(path), cv2.CAP_FFMPEG)
+    count = 0
+    try:
+        while True:
+            success, frame = capture.read()
+            if not success:
+                break
+            frame_type = int(capture.get(cv2.CAP_PROP_FRAME_TYPE))
+            if frame_type == ord('B'):
+                raise ValueError("Untraced MP4 contains B-frames")
+            if frame_type not in (ord('I'), ord('P')):
+                raise ValueError(f"Cannot validate untraced MP4 frame type: {frame_type}")
+            if frame.shape[:2] != (height, width):
+                raise ValueError("Untraced MP4 dimensions changed during encoding")
+            count += 1
+    finally:
+        capture.release()
+    if count != frame_count:
+        raise ValueError(f"Untraced MP4 retained {count} of {frame_count} frames")
+    if not all(value in description for value in ("h264", "Baseline", "yuv420p", "15 fps")):
+        raise ValueError("Untraced MP4 does not satisfy the H.264 baseline/yuv420p/15 fps contract")
 
 
 def copy_player_bundle(*, bundle_dir: Path, movie_name: str) -> Path:
@@ -213,7 +288,7 @@ def require_file(path: Path, *, missing_message: str) -> Path:
 
 
 def create_analysis_bundle(*, source_path: Path, output_dir: Path, options: AnalysisMp4Options) -> AnalysisMp4Result:
-    """Atomically create a portable analysis MP4 and WebCodecs player bundle."""
+    """Atomically create a portable untraced MP4 and WebCodecs player bundle."""
     source_path = source_path.resolve()
     output_dir = output_dir.resolve()
     if not source_path.is_file():

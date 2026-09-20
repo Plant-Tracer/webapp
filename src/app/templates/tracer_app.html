@@ -29,6 +29,10 @@
       <input type='button' value='⏵'  class='play_forward' disabled='true'>
       <input type='button' value='⏭ ' class='last_button frame_movement movement_forwards' disabled='true'>
 
+      <label>speed: <select class="playback_speed">
+        <option value="0.25">0.25×</option><option value="0.5">0.5×</option>
+        <option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option>
+      </select></label>
       <label for="zoom-id">zoom:</label>
       <select id="zoom-id" name="zoom" class='zoom'>
         <option value="25">25%</option>
@@ -65,6 +69,7 @@
       <thead>
         <tr><th>Marker</th>
           <th>Name</th>
+          <th>Frames</th>
           <th>Location (pixels)</th>
           <th>Location (mm)</th>
           <th class='nodemo'>Delete</th></tr>
@@ -98,7 +103,7 @@
           <span class="traced_movie_download_control">
             <a class="traced_movie_download_link pure-button pure-button-primary"
                href="#"
-               download>Download traced movie</a>
+               >Download traced movie</a>
           </span>
         </div>
         <div class='pure-control-group nodemo'>

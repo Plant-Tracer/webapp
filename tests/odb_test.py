@@ -452,6 +452,43 @@ def test_get_movie_trackpoints_carries_marker_metadata(local_ddb):
     ]
 
 
+def test_delete_movie_marker_hides_all_frames_and_preserves_raw_data(local_ddb):
+    movie_id = create_trim_test_movie(local_ddb, total_frames=3)
+    for frame in range(3):
+        odb.put_frame_trackpoints(movie_id=movie_id, frame_number=frame, trackpoints=[
+            Trackpoint(x=10, y=20, label='Apex'),
+            Trackpoint(x=30, y=40, label='Keep'),
+            Trackpoint(x=40, y=50, label='Ruler 0mm', undeletable=True),
+        ])
+    # Cover legacy points with no stable IDs, including a renamed alias.
+    key = {odb.MOVIE_ID: movie_id, odb.FRAME_NUMBER: 2}
+    raw = local_ddb.movie_frames.get_item(Key=key)['Item']['trackpoints']
+    for point in raw:
+        point.pop(odb.MARKER_ID, None)
+    local_ddb.movie_frames.update_item(Key=key, UpdateExpression='SET trackpoints=:points',
+                                     ExpressionAttributeValues={':points': raw})
+    odb.rename_movie_marker(movie_id=movie_id, old_label='Apex', new_label='Tip')
+    before = local_ddb.get_frames(movie_id)
+    odb.delete_movie_marker(movie_id=movie_id, label='Tip')
+    odb.delete_movie_marker(movie_id=movie_id, label='Tip')  # Repeat delivery is harmless.
+    assert local_ddb.get_frames(movie_id) == before
+    assert {point['label'] for point in odb.get_movie_trackpoints(movie_id=movie_id)} == {'Keep', 'Ruler 0mm'}
+    assert local_ddb.get_movie(movie_id)[odb.NEEDS_RETRACING] == 1
+    with pytest.raises(ValueError, match='cannot be deleted'):
+        odb.delete_movie_marker(movie_id=movie_id, label='Ruler 0mm')
+    # Reusing a deleted name creates a new identity without reviving its old path.
+    odb.put_frame_trackpoints(movie_id=movie_id, frame_number=1,
+                              trackpoints=[Trackpoint(x=80, y=90, label='Tip')])
+    points = odb.get_movie_trackpoints(movie_id=movie_id)
+    assert [(point['frame_number'], point['x']) for point in points if point['label'] == 'Tip'] == [(1, 80)]
+    assert not any(point['label'] == 'Apex' for point in points)
+    odb.put_frame_trackpoints(movie_id=movie_id, frame_number=0,
+                              trackpoints=[Trackpoint(x=70, y=80, label='Apex')])
+    odb.rename_movie_marker(movie_id=movie_id, old_label='Apex', new_label='Fresh')
+    points = odb.get_movie_trackpoints(movie_id=movie_id)
+    assert [(point['frame_number'], point['x']) for point in points if point['label'] == 'Fresh'] == [(0, 70)]
+
+
 def test_rename_movie_marker_preserves_marker_metadata(local_ddb):
     movie_id = create_trim_test_movie(local_ddb, total_frames=2)
     odb.put_frame_trackpoints(

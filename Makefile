@@ -81,6 +81,7 @@ VEND_FILES := src/app/odb.py \
               src/app/build_metadata.py \
               src/app/constants.py \
               src/app/mp4_metadata_lib.py \
+              src/app/movie_render.py \
               src/app/paths.py \
               src/app/odb_movie_data.py \
               src/app/s3_presigned.py
@@ -230,7 +231,7 @@ ANALYSIS_MP4_INPUT ?=
 ANALYSIS_MP4_OUTPUT ?=
 ANALYSIS_MP4_ROTATION ?= 0
 ANALYSIS_MP4_MAX_WIDTH ?= 640
-ANALYSIS_MP4_MAX_HEIGHT ?= 480
+ANALYSIS_MP4_MAX_HEIGHT ?= 640
 
 .PHONY: analysis-mp4-bundle analysis-mp4-browser-test
 analysis-mp4-bundle: install-lambda-deps
@@ -243,9 +244,8 @@ analysis-mp4-bundle: install-lambda-deps
 		--max-width "$(ANALYSIS_MP4_MAX_WIDTH)" \
 		--max-height "$(ANALYSIS_MP4_MAX_HEIGHT)"
 
-analysis-mp4-browser-test: install-lambda-deps
-	$(MAKE) vend-lambda-resize
-	PYTHONPATH=.:lambda-resize/src:$$PYTHONPATH uv run pytest -v --log-cli-level=$(LOG_LEVEL) browser_tests/analysis_mp4_browser_test.py
+analysis-mp4-browser-test: .venv/pyvenv.cfg
+	uv run --group lambda python -m pytest -o "pythonpath=. lambda-resize/src" -v --log-cli-level=$(LOG_LEVEL) browser_tests/analysis_mp4_browser_test.py
 
 # Set these during development to speed testing of the one function you care about:
 TEST1MODULE=tests/endpoint_test.py
@@ -275,7 +275,7 @@ delete-local:
 	$(MAKE) stop-local-services
 	/bin/rm -rf var
 
-make-local-demo:
+make-local-demo: vend-lambda-resize
 	@echo creating local demo tables, course, and movies with the prefix demo-
 	$(MAKE) start-local-services
 	$(MAKE) make-local-bucket
@@ -818,7 +818,10 @@ sam-build: $(REQ)
 	done
 	@echo "Size check passed! All functions are under 250MB."
 
-.PHONY: sam-resize-artifact-test
+.PHONY: sam-resize-artifact-test lambda-media-import-check
+lambda-media-import-check:
+	PYTHONPATH=lambda-resize/src uv run --isolated --only-group lambda python -c 'from resize_app import analysis_mp4'
+
 sam-resize-artifact-test:
 	find .aws-sam/build/LambdaResizeFunction -name .DS_Store -delete
 	@FFMPEG_BINARY=$$(find .aws-sam/build/LambdaResizeFunction/imageio_ffmpeg/binaries -type f -name 'ffmpeg-*' -print -quit); \

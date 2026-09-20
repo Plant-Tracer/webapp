@@ -78,6 +78,93 @@ Release Notes
 Unreleased Summary
 ******************
 
+    * Version 0.9.9.18: downloaded traced MP4s include future paths at 50 percent
+      opacity and 1 pixel wide, with past paths at full opacity and 2 pixels wide.
+      Complete tracking before rendering so early frames include the new future
+      path. Older exports rebuild on the next download request (refs PR #1235).
+
+    * Version 0.9.9.17: bump the deployment version for the trim-aware traced
+      download changes and schema validation correction (refs PR #1235).
+
+    * Version 0.9.9.16: apply the selected trim to matrix frame ranges, retaining
+      out-of-range markers with n/a. Keep traced downloads available in the
+      analyzer and movie list; regenerate stale downloads on request using saved
+      markers without retracking. Named leases prevent duplicate or conflicting
+      rendering, and publication checks input freshness and worker ownership.
+      Use "untraced MP4" for the analyzer video; preserve internal field names.
+      Analyzer tutorial screenshots need manual review (refs PR #1235).
+
+    * Version 0.9.9.15: deleting a marker removes it from every frame, the marker
+      table and graphs, including when its current location is n/a. Preserve
+      other markers and frame data, reject deletion of protected rulers, and
+      mark existing traced downloads for regeneration (refs PR #1235).
+
+    * Deployment: validate CSV coordinate metadata separately from legacy
+      reference coordinates, and account for calibrated export rounding in the
+      two-pixel tracing comparison (refs PR #1235).
+
+    * Standardize all movie frame numbers on zero-based indexing: frame 0 is
+      time zero. Correct the formerly one-based red analysis labels; older
+      analysis derivatives are recoded on demand. Downloaded traced movies now
+      show zero-based frame numbers and elapsed capture time (when the capture
+      interval is known) on a blue background at the top right (refs PR #1235).
+
+    * Remove the no-enlargement rule: recoding scales the longest edge to 640
+      pixels, including small sources (320 by 240 becomes 640 by 480). Preserve
+      established tracing geometry when recoding existing annotations. Show
+      complete trace paths, with past/current segments at full opacity and
+      2 pixels wide, and future segments at 50 percent opacity and 1 pixel wide.
+      The marker table always lists saved markers,
+      adds their Frames range, and shows n/a for absent current locations.
+      Retracing progress starts at the selected source frame; rendering earlier
+      export frames does not rewrite those saved points (refs PR #1235).
+
+    * Recode missing untraced MP4s on demand when Analyze opens, with one
+      background job and a message to return in a few minutes. Preserve saved
+      markers and select the movie's course for direct Analyze links (refs PR #1235).
+
+    * On small screens, the navigation menu scrolls horizontally within the page
+      so all links remain reachable without shifting the page sideways (refs PR #1235).
+
+    * Reset Tracing sends one frame-range request instead of up to 50,000
+      per-frame requests. Background batches report progress, preserve frame
+      images, and fence duplicate work from newer edits (refs PR #1235).
+
+    * Disable Upload when the selected movie exceeds 256 MiB and show the size
+      limit before transfer (refs #1162).
+
+    * Use standard-library HTTP downloads in the Lambda decoder and verify imports
+      against only deployment dependencies. Expand analysis metadata to 50,000
+      frames, reopen the player after browser Back navigation, and stop status
+      polling with a warning after 30 seconds without tracing progress. Report
+      terminal tracing failures immediately (refs #1162, #1165).
+
+    * Validate decoded analysis-frame types before publication; reject B-frames
+      and unknown types, and document checksum-addressed object keys (refs #1162).
+
+    * Failed upload processing reports its reason and retries without replacing
+      source bytes. Worker leases prevent overlapping or stale attempts from
+      replacing a successful result; untraced MP4 objects include their checksum
+      in the key. Failed demo seeds resume on the next run (refs #1162).
+    * Tracing from an empty source frame preserves later results. Demo movies
+      include untraced MP4s, and MOV edit lists do not hide stored frames from
+      analysis or traced rendering. Remote sources are downloaded before FFmpeg
+      decoding for consistent Linux/macOS behavior (refs #1162, #1166).
+
+    * Recover missing coordinate height from the validated untraced MP4 descriptor
+      so saved coordinates retain their established analysis height (refs #1162).
+
+    * New uploads generate a validated H.264 untraced MP4 containing every source
+      frame, rotated once, scaled to fit 640 by 640, including enlargement, and
+      labeled with zero-based frame numbers. The analyzer uses WebCodecs for exact
+      forward/reverse stepping before and after tracing, with adjustable playback
+      speed. Tracing consumes analysis pixels and generates no JPEG ZIP. Original
+      uploads are preserved; traced movies show markers and blue frame/time labels.
+      Desktop browser checks encode and play real analysis movies on Windows and
+      macOS in landscape and portrait formats without requiring local database
+      services. Restore tracing controls after stepping through an untracked movie.
+      Version 0.9.9.11 supports testing this workflow on a dev stack
+      (refs #1162, #1163, #1164, #1165, #1166, #1168, #1038).
     * Reject coordinate migration and marker changes before upload completion;
       report saved-dimension conflicts as processing failures; exclude marker-map
       metadata from saved-frame checks (refs #1233).

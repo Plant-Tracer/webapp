@@ -121,6 +121,26 @@ class CourseAdmin(BaseModel):
     courses: List[AdminCourse]
 
 
+class AnalysisMp4(BaseModel):
+    """Validated immutable playback derivative; original upload remains separate."""
+
+    urn: str
+    width: Annotated[int, Field(gt=0)]
+    height: Annotated[int, Field(gt=0)]
+    frame_count: Annotated[int, Field(gt=0)]
+    fps: int = 15
+    rotation: Literal[0, 90, 180, 270]
+    sha256: str
+    generated_at: int
+    encoder_version: int = 1
+    profile: str = "baseline"
+    pixel_format: str = "yuv420p"
+    b_frames: int = 0
+
+
+MovieWorkPurpose = Literal["trace", "reset", "render_traced", "render_untraced"]
+
+
 class Movie(BaseModel):
     """DynamoDB movies table"""
 
@@ -135,6 +155,11 @@ class Movie(BaseModel):
     tracing_failed_at: int | None = None
     tracing_failure_summary: str | None = None
     trace_job_id: str | None = None
+    work_purpose: MovieWorkPurpose | None = None
+    render_revision: str | None = None
+    traced_render_key: str | None = None
+    render_failed_at: int | None = None
+    render_failure_summary: str | None = None
     tracing_state: Literal["queued", "running"] | None = None
     tracing_started_at: int | None = None
     tracing_heartbeat_at: int | None = None
@@ -158,6 +183,8 @@ class Movie(BaseModel):
     resize_queued_at: int | None = None
     resize_started_at: int | None = None
     resized_at: int | None = None
+    processing_attempt: str | None = None
+    processing_expires_at: int | None = None
     processing_failed_at: int | None = None
     processing_failure_summary: str | None = None
     # Read compatibility for DynamoDB rows created before uploaded_at replaced
@@ -176,6 +203,7 @@ class Movie(BaseModel):
     trim_end_frame: Annotated[int | None, Field(ge=0, le=999999)] = None
     total_bytes: Annotated[int | None, Field(ge=0)] = None
 
+    analysis_mp4: AnalysisMp4 | None = None
     movie_data_urn: str | None = None
     movie_zipfile_urn: str | None = None
     first_frame_urn: str | None = None
@@ -244,6 +272,17 @@ class Trackpoint(BaseModel):
         return d.quantize(Decimal("0.1"), rounding=ROUND_HALF_UP)
 
 
+class DeleteMarkerRequest(BaseModel):
+    """Delete one named marker throughout a movie."""
+
+    label: Annotated[str, Field(min_length=1, max_length=100)]
+
+    @field_validator("label", mode="before")
+    @classmethod
+    def strip_label(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+
 class RenameMarkerRequest(BaseModel):
     """Request to rename a marker label across a movie's stored trackpoints."""
 
@@ -294,6 +333,7 @@ class MovieTraceLock(BaseModel):
 
     movie_id: str
     job_id: str
+    purpose: MovieWorkPurpose = "trace"
     state: Literal["queued", "running"]
     acquired_at: Annotated[int, Field(ge=0)]
     heartbeat_at: Annotated[int, Field(ge=0)]

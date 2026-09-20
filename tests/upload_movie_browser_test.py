@@ -6,13 +6,14 @@ verifies the movie is stored in both S3 (MinIO) and DynamoDB.
 from pathlib import Path
 import uuid
 import hashlib
-import time
 
 import pytest
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
+
+from resize_app import local_queue, lambda_tracing_handler
 
 from app import odb
 from app import odb_movie_data
@@ -60,7 +61,19 @@ def _section_contains_title(driver, title):
         return False
 
 
+@pytest.fixture
+def local_trace_worker(monkeypatch, request):
+    """Use the real local asynchronous worker for browser tracing."""
+    # The worker must stop before the course fixture deletes its movie records.
+    request.getfixturevalue("new_course")
+    monkeypatch.setenv('TRACING_QUEUE_MODE', 'local')
+    local_queue.start_worker(processor=lambda_tracing_handler.process_local_queue_message)
+    yield
+    local_queue.stop_worker(timeout=180)
+
+
 @pytest.mark.selenium
+@pytest.mark.usefixtures("local_trace_worker")
 def test_upload_movie_end_to_end(chrome_driver, live_server, new_course):
     """
     Upload a movie via the UI and verify:
@@ -102,8 +115,7 @@ def test_upload_movie_end_to_end(chrome_driver, live_server, new_course):
     except TimeoutException:
         pytest.fail("Movie ID was not displayed after upload completed")
 
-    # Wait a bit for async operations to complete and coverage to be updated
-    time.sleep(1)
+    wait.until(lambda _browser: odb.get_movie(movie_id=movie_id).get(odb.ANALYSIS_MP4))
 
     # Verify database entry
     movie = odb.get_movie(movie_id=movie_id)
@@ -111,8 +123,9 @@ def test_upload_movie_end_to_end(chrome_driver, live_server, new_course):
     assert movie["description"] == description
     assert movie["deleted"] == 0
     assert movie[odb.MOVIE_ROTATION] == 90
-    assert movie[odb.FRAME_HEIGHT_PX] == odb.trackpoint_frame_height({
-        odb.WIDTH: movie[odb.WIDTH], odb.HEIGHT: movie[odb.HEIGHT], odb.MOVIE_ROTATION: 90})
+    assert movie[odb.FRAME_HEIGHT_PX] == 640  # 320x240 source rotated once and enlarged to 480x640
+    assert movie[odb.ANALYSIS_MP4]["width"] == 480
+    assert movie[odb.ANALYSIS_MP4]["height"] == 640
     assert not chrome_driver.find_elements(By.ID, "rotate_movie_link")
 
     # Verify MinIO object exists and matches file length
@@ -130,6 +143,79 @@ def test_upload_movie_end_to_end(chrome_driver, live_server, new_course):
         assert wait.until(lambda d: _section_contains_title(d, title))
     except TimeoutException:
         pytest.fail("Uploaded movie title never appeared in /list")
+
+    chrome_driver.get(f"{live_server}/analyze?movie_id={movie_id}")
+    # Establish the ready state before navigation so initialization cannot mask
+    # a failure to re-enable tracing after asynchronous frame decoding.
+    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .track_button')))
+    next_button = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .next_frame')))
+    next_button.click()
+    wait.until(lambda browser: browser.find_element(By.CSS_SELECTOR, '#tracer .frame_number_field')
+               .get_attribute('value') == '1')
+    chrome_driver.find_element(By.CSS_SELECTOR, '#tracer .prev_frame').click()
+    wait.until(lambda browser: browser.find_element(By.CSS_SELECTOR, '#tracer .frame_number_field')
+               .get_attribute('value') == '0')
+    # Observe the application's actual API replies, not direct DynamoDB reads.
+    chrome_driver.execute_script("""
+        window.testTraceProgress = null;
+        $.ajaxPrefilter((settings, _original, xhr) => {
+            if (new URL(settings.url, location.href).pathname === '/api/get-movie-metadata') {
+                xhr.done(data => {
+                    if (data.error === false) {
+                        window.testTraceProgress = [data.metadata.status, data.metadata.last_frame_tracked];
+                    }
+                });
+            }
+        });
+    """)
+    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .track_button'))).click()
+    last_frame = 0
+
+    def tracing_advanced(browser):
+        progress = browser.execute_script('return window.testTraceProgress;')
+        if progress is None:
+            return False
+        status, frame = progress
+        assert status != odb.MOVIE_STATE_TRACING_FAILED, "Background tracing failed"
+        if status == odb.MOVIE_STATE_TRACING_COMPLETED or (frame is not None and frame > last_frame):
+            return progress
+        return False
+
+    # Each increase earns a fresh 30 seconds; there is no total movie deadline.
+    while True:
+        status, last_frame = wait.until(tracing_advanced, 'No API tracing progress for 30 seconds')
+        if status == odb.MOVIE_STATE_TRACING_COMPLETED:
+            break
+    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .next_frame'))).click()
+    wait.until(lambda browser: browser.find_element(By.CSS_SELECTOR, '#tracer .frame_number_field')
+               .get_attribute('value') == '1')
+    assert not odb.get_movie(movie_id=movie_id).get(odb.MOVIE_ZIPFILE_URN)
+    assert not chrome_driver.execute_script(
+        "return performance.getEntriesByType('resource').some(r => /zip|unzip/.test(r.name));")
+
+    # Reset through the real browser, HTTP receiver, queue, and DynamoDB worker.
+    before_reset = odb.get_movie(movie_id=movie_id)
+    source_urn = before_reset[odb.MOVIE_DATA_URN]
+    analysis_urn = before_reset[odb.ANALYSIS_MP4]['urn']
+    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .delete_all_markers_button'))).click()
+    wait.until(EC.alert_is_present()).accept()
+    wait.until(lambda browser: 'Tracing reset.' in browser.find_element(By.ID, 'status-big').text)
+    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .track_button')))
+    after_reset = odb.get_movie(movie_id=movie_id)
+    assert after_reset[odb.MOVIE_DATA_URN] == source_urn
+    assert after_reset[odb.ANALYSIS_MP4]['urn'] == analysis_urn
+    assert after_reset[odb.NEEDS_RETRACING] == 1
+    assert after_reset[odb.LAST_FRAME_TRACKED] == 0
+    assert after_reset.get(odb.ANALYSIS_LEASE_ID)
+    points = odb.get_movie_trackpoints(movie_id=movie_id)
+    assert {point[odb.FRAME_NUMBER] for point in points} == {0}
+    assert {point['label'] for point in points} == {'Apex', 'Ruler 0mm', 'Ruler 10mm'}
+    assert chrome_driver.execute_script("""
+        return performance.getEntriesByType('resource').filter(entry => {
+            const url = new URL(entry.name);
+            return url.pathname.endsWith('/reset-tracing') && !url.search;
+        }).length;
+    """) == 1
 
     logger.info("Successfully uploaded movie %s via browser end-to-end test", movie_id)
 

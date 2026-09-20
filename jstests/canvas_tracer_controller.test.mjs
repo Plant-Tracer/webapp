@@ -71,9 +71,15 @@ jest.unstable_mockModule('canvas_controller.mjs', () => {
     };
 });
 
-jest.unstable_mockModule('unzipit.module.mjs', () => ({
-    unzip: jest.fn().mockResolvedValue({ entries: {} }),
-    setOptions: jest.fn(),
+// jsdom has no VideoDecoder; real decoding is covered by the production-browser gate.
+let mockFrameCount = 4;
+const mockMp4Close = jest.fn();
+const mockMp4Load = jest.fn().mockImplementation(async function () {
+    this.width = 640; this.height = 480; this.frameCount = mockFrameCount;
+    return this;
+});
+jest.unstable_mockModule('mp4_frame_player.mjs', () => ({
+    Mp4FramePlayer: class { load = mockMp4Load; close = mockMp4Close; },
 }));
 
 // ── CJS mocks (.js) ─────────────────────────────────────────────────────────
@@ -154,6 +160,8 @@ jest.unstable_mockModule('canvas_movie_controller.js', () => {
         add_object(obj) { this.objects.push(obj); }
         clear_objects() { this.objects = []; }
         redraw() {}
+        stop_button_pressed() { this.playing = false; }
+        resize(w, h) { this.naturalWidth = w; this.naturalHeight = h; }
         load_movie(frames) { this.frames = frames; }
         goto_frame(f) { this.frame_number = f; }
         set_movie_control_buttons() {}
@@ -222,7 +230,7 @@ const defaultRequestAnimationFrame = global.requestAnimationFrame || ((callback)
 
 // ── Import module under test (after all mocks are registered) ────────────────
 const {
-    BACKEND_LAMBDA_UNRESPONSIVE_MESSAGE,
+    TRACING_PROGRESS_TIMEOUT_MESSAGE,
     MARKER_NAME_IN_USE_MESSAGE,
     MOVIE_CANNOT_BE_TRACED_DEMO_MESSAGE,
     MOVIE_IS_TRACED_MESSAGE,
@@ -236,7 +244,7 @@ const {
     TRACING_STARTING_MESSAGE,
 } = await import('ui_constants.js');
 
-const {
+const { load_remaining_frame_metadata,
     get_ruler_size,
     frame_index_from_zip_name,
     is_movie_tracked,
@@ -259,7 +267,7 @@ const { Marker: MockMarkerClass, Line: MockLineClass } = await import('canvas_co
 const { MovieController: MockMovieControllerClass } = await import('canvas_movie_controller.js');
 
 // Grab the unzip mock so individual tests can configure its return value
-const { unzip: mockUnzip } = await import('unzipit.module.mjs');
+
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function makeMovieMetadata(overrides = {}) {
@@ -708,6 +716,24 @@ describe('TracerController constructor', () => {
         expect(tc.dl_movie_id.prop).toHaveBeenCalledWith('disabled', false);
     });
 
+    test.each([
+        [-1, false],
+        [1, false],
+        [2, true],
+    ])('decoding restores the correct trace state with last tracked frame %i', (lastTracked, disabled) => {
+        const tc = new TracerController('div#tc',
+            makeMovieMetadata({ total_frames: 3, last_frame_tracked: lastTracked }), 'k');
+        tc.frames = Array.from({ length: 3 }, (_, frame_number) => ({ frame_number, markers: [] }));
+        tc.frame_number = 0;
+        tc.frame_loading = true;
+        tc.refreshFrameEditState();
+        expect(tc.track_button.prop).toHaveBeenLastCalledWith('disabled', true);
+
+        tc.frame_loading = false;
+        tc.refreshFrameEditState();
+        expect(tc.track_button.prop).toHaveBeenLastCalledWith('disabled', disabled);
+    });
+
     test('fully traced movie keeps Retrace disabled until marker data changes', () => {
         const tc = new TracerController(
             'div#tc',
@@ -798,7 +824,8 @@ describe('TracerController constructor', () => {
 
         new TracerController('div#tc', makeMovieMetadata({ movie_traced_url: 'https://example.com/traced.mp4' }), 'k');
 
-        expect(tracedLink.attr).toHaveBeenCalledWith('href', 'https://example.com/traced.mp4');
+        expect(tracedLink.attr).toHaveBeenCalledWith('href', '#');
+        expect(tracedLink.on).toHaveBeenCalledWith('click.traced-download', expect.any(Function));
         expect(tracedControl.show).toHaveBeenCalled();
     });
 
@@ -823,6 +850,39 @@ describe('TracerController constructor', () => {
 
         expect(retraceMessage.show).toHaveBeenCalled();
         expect(retraceMessage.hide).not.toHaveBeenCalled();
+    });
+});
+
+describe('TracerController.downloadTracedMovie', () => {
+    beforeEach(() => { global.fetch = jest.fn(); global.alert = jest.fn(); });
+
+    test('visible without an old URL; drains saves and queues only once', async () => {
+        const tc = new TracerController('div#tc', makeMovieMetadata({analysis_lease_id: 'editor'}), 'k');
+        expect(tc.traced_movie_download_control.show).toHaveBeenCalled();
+        let saved;
+        tc.marker_save_requests = new Set([new Promise(resolve => { saved = resolve; })]);
+        global.fetch.mockResolvedValue({ok: true, json: async () => ({ready: false, message: 'Re-rendering; download the traced movie in a few minutes.'})});
+        const pending = tc.downloadTracedMovie();
+        await tc.downloadTracedMovie();
+        expect(global.fetch).not.toHaveBeenCalled();
+        saved();
+        await pending;
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+        const [url, request] = global.fetch.mock.calls[0];
+        expect(url).toContain('/resize-api/v1/download-traced');
+        expect(JSON.parse(request.body)).toEqual({movie_id: tc.movie_id, analysis_lease_id: 'editor'});
+        expect(tc.analysis_read_only).toBe(true);
+        expect(tc.analysis_lease_id).toBeNull();
+        expect(global.alert).toHaveBeenCalledWith('Re-rendering; download the traced movie in a few minutes.');
+    });
+
+    test('failed preparation reports the error and releases the local request guard', async () => {
+        const tc = new TracerController('div#tc', makeMovieMetadata(), 'k');
+        global.fetch.mockResolvedValue({ok: false, json: async () => ({message: 'Movie is busy'})});
+        await tc.downloadTracedMovie();
+        expect(global.alert).toHaveBeenCalledWith('Movie is busy');
+        expect(tc.preparing_download).toBe(false);
+        expect(tc.analysis_read_only).toBe(false);
     });
 });
 
@@ -1754,231 +1814,29 @@ describe('trace_movie_one_frame', () => {
 
 // ── trace_movie_frames ────────────────────────────────────────────────────────
 describe('trace_movie_frames', () => {
-    let capturedTc;
-    let frameNumberAtLoad;
-    let loadMovieSpy;
-    let setMovieControlButtonsSpy;
-    let enableTrackButtonSpy;
-
-    beforeAll(() => {
-        // graph_data() calls document.getElementById('apex-xChart/yChart').getContext('2d')
-        // jsdom doesn't implement Canvas 2D, so we add minimal stubs.
-        ['apex-xChart', 'apex-yChart'].forEach(id => {
-            if (!document.getElementById(id)) {
-                const el = document.createElement('canvas');
-                el.id = id;
-                el.getContext = jest.fn().mockReturnValue({});
-                document.body.appendChild(el);
-            }
-        });
-        // URL.createObjectURL is not available in jsdom
-        global.URL.createObjectURL = jest.fn().mockReturnValue('blob:mock-url');
+    beforeEach(() => { mockFrameCount = 4; jest.clearAllMocks(); });
+    test('loads every MP4 frame before tracking and keeps server coordinates', async () => {
+        const point = {x: 13, y: 29, label: 'Apex'};
+        const controller = await trace_movie_frames('div#tracer',
+            {movie_id: 'm1', total_frames: 4, trackpoint_origin: 'bottom-left'},
+            'https://example.com/analysis.mp4', {2: {markers: [point]}}, 'key', false);
+        expect(mockMp4Load).toHaveBeenCalledWith('https://example.com/analysis.mp4');
+        expect(controller.frames).toHaveLength(4);
+        expect(controller.frames[2].markers).toEqual([point]);
+        expect(controller.getMaxViewableFrame()).toBe(3);
+        expect(controller.movie_metadata.frame_height_px).toBe(480);
+        expect(controller.frames.every(frame => !frame.frame_url)).toBe(true);
     });
-
-    beforeEach(() => {
-        jest.clearAllMocks();
-        capturedTc = null;
-        frameNumberAtLoad = null;
-
-        loadMovieSpy = jest.spyOn(MockMovieControllerClass.prototype, 'load_movie')
-            .mockImplementation(function (frames) {
-                capturedTc = this;
-                frameNumberAtLoad = this.frame_number;
-                this.frames = frames;
-            });
-        setMovieControlButtonsSpy = jest.spyOn(MockMovieControllerClass.prototype, 'set_movie_control_buttons');
-        // TracerController overrides enableTrackButtonIfAllowed, so spy on its own prototype
-        enableTrackButtonSpy = jest.spyOn(TracerController.prototype, 'enableTrackButtonIfAllowed');
-    });
-
-    afterEach(() => {
-        loadMovieSpy.mockRestore();
-        setMovieControlButtonsSpy.mockRestore();
-        enableTrackButtonSpy.mockRestore();
-    });
-
-    /** Build a fake unzip `entries` object from a list of filenames. */
-    function makeEntries(...names) {
-        const entries = {};
-        names.forEach(name => {
-            entries[name] = { blob: jest.fn().mockResolvedValue({ _name: name }) };
-        });
-        return entries;
-    }
-
-    /** Run trace_movie_frames and return the captured TracerController. */
-    async function callTmf(entries, metadata_frames = null, metaOverrides = {}, show_results = true) {
-        mockUnzip.mockResolvedValueOnce({ entries });
-        await trace_movie_frames(
-            'div#tracer',
-            makeMovieMetadata(metaOverrides),
-            'http://example.com/movie.zip',
-            metadata_frames,
-            'test-api-key',
-            show_results
-        );
-        return capturedTc;
-    }
-
-    // A. Entry filtering ───────────────────────────────────────────────────────
-    test('includes only .jpg and .jpeg entries, ignores other types', async () => {
-        const tc = await callTmf(makeEntries(
-            'frame_0000.jpg', 'frame_0001.jpeg', 'thumb.png', 'notes.txt', 'movie.mp4'
-        ));
-        expect(tc.frames).toHaveLength(2);
-    });
-
-    test('returns zero frames when there are no jpeg entries', async () => {
-        const tc = await callTmf(makeEntries('cover.png', 'README.txt'));
-        expect(tc.frames).toHaveLength(0);
-    });
-
-    // B. Sorting ───────────────────────────────────────────────────────────────
-    // Supply entries in reverse order; verify that markers follow sorted frame indices.
-    test('sorts frames by frame index regardless of entry order', async () => {
-        const entries = makeEntries('frame_0001.jpg', 'frame_0000.jpg');
-        const metadata_frames = {
-            '0': { markers: [{ x: 1, y: 2, label: 'Apex' }] },
-            '1': { markers: [{ x: 9, y: 9, label: 'Base' }] },
-        };
-        const tc = await callTmf(entries, metadata_frames);
-        expect(tc.frames[0].markers[0].label).toBe('Apex');
-        expect(tc.frames[1].markers[0].label).toBe('Base');
-    });
-
-    // C. Marker selection ──────────────────────────────────────────────────────
-    test('uses markers from metadata_frames when present and non-empty', async () => {
-        const markers = [{ x: 10, y: 20, label: 'Apex' }];
-        const tc = await callTmf(makeEntries('frame_0000.jpg'), { '0': { markers } });
-        expect(tc.frames[0].markers).toEqual(markers);
-    });
-
-    test('uses [] when metadata_frames is null', async () => {
-        const tc = await callTmf(makeEntries('frame_0000.jpg'), null);
-        expect(tc.frames[0].markers).toEqual([]);
-    });
-
-    test('uses [] when metadata_frames[key].markers is empty', async () => {
-        const tc = await callTmf(makeEntries('frame_0000.jpg'), { '0': { markers: [] } });
-        expect(tc.frames[0].markers).toEqual([]);
-    });
-
-    test('uses [] when frame key is missing from metadata_frames', async () => {
-        const tc = await callTmf(makeEntries('frame_0000.jpg'), { '99': { markers: [{ x: 1, y: 2, label: 'Apex' }] } });
-        expect(tc.frames[0].markers).toEqual([]);
-    });
-
-    // D. Frame URL ─────────────────────────────────────────────────────────────
-    test('frame_url is the result of URL.createObjectURL called with the blob', async () => {
-        global.URL.createObjectURL.mockReturnValueOnce('blob:test-url-frame0');
-        const tc = await callTmf(makeEntries('frame_0000.jpg'));
-        expect(tc.frames[0].frame_url).toBe('blob:test-url-frame0');
-        expect(global.URL.createObjectURL).toHaveBeenCalledTimes(1);
-    });
-
-    test('URL.createObjectURL is called once per jpeg entry', async () => {
-        await callTmf(makeEntries('frame_0000.jpg', 'frame_0001.jpg', 'frame_0002.jpg'));
-        expect(global.URL.createObjectURL).toHaveBeenCalledTimes(3);
-    });
-
-    // E. TracerController setup ────────────────────────────────────────────────
-    test('load_movie is called with the correct number of frames', async () => {
-        const tc = await callTmf(makeEntries('frame_0000.jpg', 'frame_0001.jpg', 'frame_0002.jpg'));
-        expect(tc.frames).toHaveLength(3);
-    });
-
-    test('trimmed movie selects the first included frame before loading', async () => {
-        const tc = await callTmf(
-            makeEntries('frame_0000.jpg', 'frame_0001.jpg', 'frame_0002.jpg'),
-            null,
-            { total_frames: 3, last_frame_tracked: 2, trim_start_frame: 1, trim_end_frame: 2 }
-        );
-
-        expect(frameNumberAtLoad).toBe(1);
-        expect(tc.frame_number).toBe(1);
-    });
-
-    test('set_movie_control_buttons is called once', async () => {
-        await callTmf(makeEntries('frame_0000.jpg'));
-        expect(setMovieControlButtonsSpy).toHaveBeenCalledTimes(1);
-    });
-
-    test('enableTrackButtonIfAllowed is called once', async () => {
-        await callTmf(makeEntries('frame_0000.jpg'));
-        expect(enableTrackButtonSpy).toHaveBeenCalledTimes(1);
-    });
-
-    // F. show_results ──────────────────────────────────────────────────────────
-    test('show_results=true: #analysis-results is shown', async () => {
-        await callTmf(makeEntries('frame_0000.jpg'), null, {}, true);
-        const idx = mock$.mock.calls.findIndex(args => args[0] === '#analysis-results');
-        expect(idx).toBeGreaterThanOrEqual(0);
-        expect(mock$.mock.results[idx].value.show).toHaveBeenCalled();
-    });
-
-    test('show_results=false: #analysis-results is not queried', async () => {
-        await callTmf(makeEntries('frame_0000.jpg'), null, {}, false);
-        const idx = mock$.mock.calls.findIndex(args => args[0] === '#analysis-results');
-        expect(idx).toBe(-1);
-    });
-
-    // G. did_onload_callback ───────────────────────────────────────────────────
-    test('resizes video (not canvas) when metadata has no dimensions and image has valid natural size', async () => {
-        // Regression for #1020: canvas attr('width') must NOT be set directly — that bypasses
-        // zoom and resets the canvas to 100%. resize() in WebImage.onload already applies zoom.
-        // Only the video element layout dimensions are set here.
-        const tc = await callTmf(makeEntries('frame_0000.jpg'), null, { width: null, height: null });
-        jest.clearAllMocks();
-        tc.did_onload_callback({ img: { naturalWidth: 640, naturalHeight: 480 } });
-        const canvasIdx = mock$.mock.calls.findIndex(args => args[0] && args[0].includes(' #canvas-id'));
-        const videoIdx  = mock$.mock.calls.findIndex(args => args[0] && args[0].includes(' video'));
-        expect(canvasIdx).toBe(-1);  // canvas must NOT be touched directly — zoom would be lost
-        expect(videoIdx).toBeGreaterThanOrEqual(0);
-        expect(mock$.mock.results[videoIdx].value.attr).toHaveBeenCalledWith('height', 480);
-    });
-
-    test('does not resize when metadata already has dimensions', async () => {
-        const tc = await callTmf(makeEntries('frame_0000.jpg'), null, { width: 200, height: 150 });
-        jest.clearAllMocks();
-        tc.did_onload_callback({ img: { naturalWidth: 640, naturalHeight: 480 } });
-        const canvasIdx = mock$.mock.calls.findIndex(args => args[0] && args[0].includes(' #canvas-id'));
-        expect(canvasIdx).toBe(-1);
-    });
-
-    test('does not resize when natural dimensions are 0', async () => {
-        const tc = await callTmf(makeEntries('frame_0000.jpg'), null, { width: null, height: null });
-        jest.clearAllMocks();
-        tc.did_onload_callback({ img: { naturalWidth: 0, naturalHeight: 0 } });
-        const canvasIdx = mock$.mock.calls.findIndex(args => args[0] && args[0].includes(' #canvas-id'));
-        expect(canvasIdx).toBe(-1);
-    });
-
-    test('rebuilds current frame after loaded image supplies missing bottom-left frame height', async () => {
-        const tc = await callTmf(
-            makeEntries('frame_0000.jpg'),
-            { 0: { markers: [{ x: 216, y: 232, label: 'jjjj' }] } },
-            { width: null, height: null, trackpoint_origin: 'bottom-left' }
-        );
-        const gotoSpy = jest.spyOn(tc, 'goto_frame');
-
-        tc.did_onload_callback({ img: { naturalWidth: 640, naturalHeight: 381 } });
-
-        expect(tc.movie_metadata.height).toBe(381);
-        expect(tc.trackpoint_to_canvas(tc.frames[0].markers[0])).toMatchObject({ x: 216, y: 149, label: 'jjjj' });
-        expect(gotoSpy).toHaveBeenCalledWith(0);
-        gotoSpy.mockRestore();
-    });
-
-    test('does not resize when imgStack is null', async () => {
-        const tc = await callTmf(makeEntries('frame_0000.jpg'), null, { width: null, height: null });
-        jest.clearAllMocks();
-        tc.did_onload_callback(null);
-        const canvasIdx = mock$.mock.calls.findIndex(args => args[0] && args[0].includes(' #canvas-id'));
-        expect(canvasIdx).toBe(-1);
+    test('reopening releases the previous player and selects the trim start', async () => {
+        await trace_movie_frames('div#tracer', {movie_id: 'm1', total_frames: 4}, 'movie.mp4', {}, 'key', false);
+        const controller = await trace_movie_frames('div#tracer',
+            {movie_id: 'm1', total_frames: 4, trim_start_frame: 2, trim_end_frame: 3},
+            'movie.mp4', {}, 'key', false);
+        expect(mockMp4Close).toHaveBeenCalled();
+        expect(controller.frame_number).toBe(2);
     });
 });
 
-// ── trace_movie ───────────────────────────────────────────────────────────────
 describe('trace_movie', () => {
     let capturedTc;
     let loadMovieSpy;
@@ -2031,6 +1889,12 @@ describe('trace_movie', () => {
         if (!global.demo_mode) {
             mockPost.mockReturnValueOnce({
                 done: jest.fn().mockImplementation(cb => {
+                    cb({ready: true});
+                    return {fail: jest.fn().mockReturnThis()};
+                }),
+            });
+            mockPost.mockReturnValueOnce({
+                done: jest.fn().mockImplementation(cb => {
                     cb({ error: false, lease_id: 'analysis-lease-123' });
                     return { fail: jest.fn().mockReturnThis() };
                 }),
@@ -2060,10 +1924,22 @@ describe('trace_movie', () => {
         mockApiResponse(makeResp());
         trace_movie('div#tracer', 'movie-123', 'my-api-key');
         expect(mockPost).toHaveBeenNthCalledWith(
-            1,
+            2,
             expect.stringContaining('acquire-movie-analysis-lease'),
             expect.objectContaining({ movie_id: 'movie-123', api_key: 'my-api-key' }),
         );
+    });
+
+    test('pending recoding makes one request without acquiring an editing lease', () => {
+        mockPost.mockReturnValueOnce({done: jest.fn().mockImplementation(cb => {
+            cb({ready: false, message: 'Recoding is in progress, come back in a few minutes.'});
+            return {fail: jest.fn().mockReturnThis()};
+        })});
+        trace_movie('div#tracer', 'movie-123', 'my-api-key');
+        expect(mockPost).toHaveBeenCalledTimes(1);
+        expect(mockPost.mock.calls[0][0].url).toContain('prepare-analysis');
+        expect(mock$.mock.results.some(result => result.value.text?.mock.calls.some(
+            args => args[0] === 'Recoding is in progress, come back in a few minutes.'))).toBe(true);
     });
 
     test('passes frame_start=0 to the API', () => {
@@ -2120,115 +1996,14 @@ describe('trace_movie', () => {
     });
 
     // D. No-zip path: trace_movie_one_frame ────────────────────────────────────
-    test('when no movie_zipfile_url: creates a TracerController with one frame', () => {
+    test('missing derivative reports processing instead of loading a ZIP', () => {
         mockApiResponse(makeResp());
-        trace_movie('div#tracer', 'movie-123', 'api-key');
-        expect(capturedTc).not.toBeNull();
-        expect(capturedTc.frames).toHaveLength(1);
-    });
-
-    test('frame0 URL contains the movie_id and api_key', () => {
-        mockApiResponse(makeResp());
-        trace_movie('div#tracer', 'movie-123', 'my-api-key');
-        expect(capturedTc.frames[0].frame_url).toContain('movie_id=movie-123');
-        expect(capturedTc.frames[0].frame_url).toContain('api_key=my-api-key');
-    });
-
-    test('no-zip + non-demo mode: status asks user to place markers', () => {
-        mockApiResponse(makeResp());
-        trace_movie('div#tracer', 'movie-123', 'api-key');
-        const idx = mock$.mock.calls.findLastIndex(args => args[0] === '#status-big');
-        expect(mock$.mock.results[idx].value.html)
-            .toHaveBeenCalledWith(expect.stringContaining('Place markers'));
-    });
-
-    test('no-zip + demo mode: status says movie is ready', () => {
-        global.demo_mode = true;
-        mockApiResponse(makeResp());
-        trace_movie('div#tracer', 'movie-123', 'api-key');
-        const idx = mock$.mock.calls.findLastIndex(args => args[0] === '#status-big');
-        expect(mock$.mock.results[idx].value.html)
-            .toHaveBeenCalledWith(MOVIE_READY_FOR_TRACING_MESSAGE);
-    });
-
-    test('no-zip path: unzip is NOT called', () => {
-        mockApiResponse(makeResp());
-        trace_movie('div#tracer', 'movie-123', 'api-key');
-        expect(mockUnzip).not.toHaveBeenCalled();
-    });
-
-    // E. Zip path: trace_movie_frames ──────────────────────────────────────────
-    test('when movie_zipfile_url present: calls trace_movie_frames (unzip invoked)', () => {
-        mockUnzip.mockResolvedValueOnce({ entries: {} });
-        mockApiResponse(makeResp({ movie_zipfile_url: 'http://example.com/movie.zip' }));
-        trace_movie('div#tracer', 'movie-123', 'api-key');
-        expect(mockUnzip).toHaveBeenCalledWith('http://example.com/movie.zip');
-    });
-
-    test('zip path: trace_movie_one_frame NOT called (unzip called, load_movie not called sync)', () => {
-        mockUnzip.mockResolvedValueOnce({ entries: {} });
-        mockApiResponse(makeResp({ movie_zipfile_url: 'http://example.com/movie.zip' }));
-        trace_movie('div#tracer', 'movie-123', 'api-key');
-        // load_movie is called inside trace_movie_frames which is async — not yet called here
-        expect(capturedTc).toBeNull();
-    });
-
-    test('zip + non-demo + tracked: status says movie is traced', () => {
-        mockUnzip.mockResolvedValueOnce({ entries: {} });
-        mockApiResponse(makeResp({ movie_zipfile_url: 'http://example.com/movie.zip', last_frame_tracked: 5, total_frames: 10 }));
-        trace_movie('div#tracer', 'movie-123', 'api-key');
-        const idx = mock$.mock.calls.findLastIndex(args => args[0] === '#status-big');
-        expect(mock$.mock.results[idx].value.html)
-            .toHaveBeenCalledWith(expect.stringContaining(MOVIE_IS_TRACED_MESSAGE));
-    });
-
-    test('zip + non-demo + not tracked: status says "Movie ready for tracing"', () => {
-        mockUnzip.mockResolvedValueOnce({ entries: {} });
-        mockApiResponse(makeResp({ movie_zipfile_url: 'http://example.com/movie.zip' }));
-        trace_movie('div#tracer', 'movie-123', 'api-key');
-        const idx = mock$.mock.calls.findLastIndex(args => args[0] === '#status-big');
-        expect(mock$.mock.results[idx].value.html)
-            .toHaveBeenCalledWith(expect.stringContaining(MOVIE_READY_FOR_TRACING_MESSAGE));
-    });
-
-    test('zip + demo + tracked: status says exactly traced', () => {
-        global.demo_mode = true;
-        mockUnzip.mockResolvedValueOnce({ entries: {} });
-        mockApiResponse(makeResp({ movie_zipfile_url: 'http://example.com/movie.zip', last_frame_tracked: 5, total_frames: 10 }));
-        trace_movie('div#tracer', 'movie-123', 'api-key');
-        const idx = mock$.mock.calls.findLastIndex(args => args[0] === '#status-big');
-        expect(mock$.mock.results[idx].value.html).toHaveBeenCalledWith(MOVIE_IS_TRACED_MESSAGE);
-    });
-
-    test('zip + demo + not tracked: status says exactly ready', () => {
-        global.demo_mode = true;
-        mockUnzip.mockResolvedValueOnce({ entries: {} });
-        mockApiResponse(makeResp({ movie_zipfile_url: 'http://example.com/movie.zip' }));
-        trace_movie('div#tracer', 'movie-123', 'api-key');
-        const idx = mock$.mock.calls.findLastIndex(args => args[0] === '#status-big');
-        expect(mock$.mock.results[idx].value.html).toHaveBeenCalledWith(MOVIE_READY_FOR_TRACING_MESSAGE);
-    });
-
-    // F. Play-trigger wiring ───────────────────────────────────────────────────
-    test('wires up the demo-popup close button', () => {
-        mockApiResponse(makeResp());
-        trace_movie('div#tracer', 'movie-123', 'api-key');
-        const idx = mock$.mock.calls.findIndex(args => args[0] === '#demo-popup-close');
-        expect(idx).toBeGreaterThanOrEqual(0);
-        expect(mock$.mock.results[idx].value.on).toHaveBeenCalledWith('click', expect.any(Function));
-    });
-
-    test('wires up the .status-big-play-trigger click handler on document', () => {
-        mockApiResponse(makeResp());
-        trace_movie('div#tracer', 'movie-123', 'api-key');
-        const docIdx = mock$.mock.calls.findIndex(args => args[0] === document);
-        expect(docIdx).toBeGreaterThanOrEqual(0);
-        expect(mock$.mock.results[docIdx].value.on)
-            .toHaveBeenCalledWith('click', '.status-big-play-trigger', expect.any(Function));
+        trace_movie('div#tracer', 'movie-123', 'test-key');
+        expect(loadMovieSpy).not.toHaveBeenCalled();
+        expect(mockMp4Load).not.toHaveBeenCalled();
     });
 });
 
-// ── TracerController.track_to_end ─────────────────────────────────────────────
 describe('TracerController.track_to_end', () => {
     let tc;
 
@@ -2357,7 +2132,7 @@ describe('TracerController.track_to_end', () => {
     test('on 200 success: tracking remains true and completion polling starts', async () => {
         mockFetchResponse(200, { error: false });
         tc.track_to_end();
-        await jest.runAllTimersAsync();
+        await jest.advanceTimersByTimeAsync(10000);
         expect(tc.tracking).toBe(true);
         expect(tc.movie_metadata.status).toBe('tracing');
         expect(tc.poll_for_track_end).toHaveBeenCalledTimes(1);
@@ -2369,14 +2144,14 @@ describe('TracerController.track_to_end', () => {
     test('on 200 success: no alert is fired', async () => {
         mockFetchResponse(200, { error: false });
         tc.track_to_end();
-        await jest.runAllTimersAsync();
+        await jest.advanceTimersByTimeAsync(10000);
         expect(global.alert).not.toHaveBeenCalled();
     });
 
     test('on 200 success: tracing remains dimmed and read-only while polling', async () => {
         mockFetchResponse(200, { error: false });
         tc.track_to_end();
-        await jest.runAllTimersAsync();
+        await jest.advanceTimersByTimeAsync(10000);
         const dimmedRemoved = mock$.mock.calls.some(
             (_, i) => mock$.mock.results[i].value.removeClass.mock.calls
                 .some(c => c[0] === 'tracing-dimmed')
@@ -2387,7 +2162,7 @@ describe('TracerController.track_to_end', () => {
     test('on 200 success: fetch is called exactly once (no retry)', async () => {
         mockFetchResponse(200, { error: false });
         tc.track_to_end();
-        await jest.runAllTimersAsync();
+        await jest.advanceTimersByTimeAsync(10000);
         expect(global.fetch).toHaveBeenCalledTimes(1);
     });
 
@@ -2395,21 +2170,21 @@ describe('TracerController.track_to_end', () => {
     test('on 400: sets tracking = false', async () => {
         mockFetchResponse(400, { error: true, message: 'Bad request' });
         tc.track_to_end();
-        await jest.runAllTimersAsync();
+        await jest.advanceTimersByTimeAsync(10000);
         expect(tc.tracking).toBe(false);
     });
 
     test('on 400: alerts with the server error message', async () => {
         mockFetchResponse(400, { error: true, message: 'Bad request' });
         tc.track_to_end();
-        await jest.runAllTimersAsync();
+        await jest.advanceTimersByTimeAsync(10000);
         expect(global.alert).toHaveBeenCalledWith('Bad request');
     });
 
     test('on 400: removes tracing-dimmed', async () => {
         mockFetchResponse(400, { error: true, message: 'Bad request' });
         tc.track_to_end();
-        await jest.runAllTimersAsync();
+        await jest.advanceTimersByTimeAsync(10000);
         const dimmedRemoved = mock$.mock.calls.some(
             (_, i) => mock$.mock.results[i].value.removeClass.mock.calls
                 .some(c => c[0] === 'tracing-dimmed')
@@ -2420,21 +2195,21 @@ describe('TracerController.track_to_end', () => {
     test('on 400: re-enables the track button via enableTrackButtonIfAllowed', async () => {
         mockFetchResponse(400, { error: true, message: 'Bad request' });
         tc.track_to_end();
-        await jest.runAllTimersAsync();
+        await jest.advanceTimersByTimeAsync(10000);
         expect(tc.track_button.prop).toHaveBeenCalledWith('disabled', false);
     });
 
     test('on 400: only one fetch attempt (no retry for client errors)', async () => {
         mockFetchResponse(400, { error: true, message: 'Bad request' });
         tc.track_to_end();
-        await jest.runAllTimersAsync();
+        await jest.advanceTimersByTimeAsync(10000);
         expect(global.fetch).toHaveBeenCalledTimes(1);
     });
 
     test('on 400: sets tracking_status to the error message', async () => {
         mockFetchResponse(400, { error: true, message: 'Bad request' });
         tc.track_to_end();
-        await jest.runAllTimersAsync();
+        await jest.advanceTimersByTimeAsync(10000);
         expect(tc.tracking_status.text).toHaveBeenCalledWith('Bad request');
     });
 
@@ -2445,7 +2220,7 @@ describe('TracerController.track_to_end', () => {
             json: () => Promise.resolve({ error: true, message: 'Server error' }),
         });
         tc.track_to_end();
-        await jest.runAllTimersAsync();
+        await jest.advanceTimersByTimeAsync(10000);
         expect(global.fetch).toHaveBeenCalledTimes(3);
     });
 
@@ -2455,7 +2230,7 @@ describe('TracerController.track_to_end', () => {
             json: () => Promise.resolve({ error: true, message: 'Server error' }),
         });
         tc.track_to_end();
-        await jest.runAllTimersAsync();
+        await jest.advanceTimersByTimeAsync(10000);
         expect(global.alert).toHaveBeenCalledWith('Server error');
     });
 
@@ -2465,7 +2240,7 @@ describe('TracerController.track_to_end', () => {
             json: () => Promise.resolve({ error: true, message: 'Server error' }),
         });
         tc.track_to_end();
-        await jest.runAllTimersAsync();
+        await jest.advanceTimersByTimeAsync(10000);
         expect(tc.tracking).toBe(false);
     });
 
@@ -2474,7 +2249,7 @@ describe('TracerController.track_to_end', () => {
             .mockResolvedValueOnce({ status: 500, json: () => Promise.resolve({ error: true, message: 'Transient' }) })
             .mockResolvedValueOnce({ status: 200, json: () => Promise.resolve({ error: false }) });
         tc.track_to_end();
-        await jest.runAllTimersAsync();
+        await jest.advanceTimersByTimeAsync(10000);
         expect(global.fetch).toHaveBeenCalledTimes(2);
         expect(global.alert).not.toHaveBeenCalled();
     });
@@ -2483,14 +2258,14 @@ describe('TracerController.track_to_end', () => {
     test('on network error: retries exactly 3 times total', async () => {
         global.fetch.mockRejectedValue(new Error('Network failure'));
         tc.track_to_end();
-        await jest.runAllTimersAsync();
+        await jest.advanceTimersByTimeAsync(10000);
         expect(global.fetch).toHaveBeenCalledTimes(3);
     });
 
     test('on network error: alerts with the error message after all retries', async () => {
         global.fetch.mockRejectedValue(new Error('Network failure'));
         tc.track_to_end();
-        await jest.runAllTimersAsync();
+        await jest.advanceTimersByTimeAsync(10000);
         expect(global.alert).toHaveBeenCalledWith('Network failure');
         expect(tc.tracking).toBe(false);
     });
@@ -2498,7 +2273,7 @@ describe('TracerController.track_to_end', () => {
     test('on network error with no message: alerts with fallback text', async () => {
         global.fetch.mockRejectedValue(null);
         tc.track_to_end();
-        await jest.runAllTimersAsync();
+        await jest.advanceTimersByTimeAsync(10000);
         expect(global.alert).toHaveBeenCalledWith('Tracing request failed.');
     });
 
@@ -2507,7 +2282,7 @@ describe('TracerController.track_to_end', () => {
             .mockRejectedValueOnce(new Error('Transient'))
             .mockResolvedValueOnce({ status: 200, json: () => Promise.resolve({ error: false }) });
         tc.track_to_end();
-        await jest.runAllTimersAsync();
+        await jest.advanceTimersByTimeAsync(10000);
         expect(global.fetch).toHaveBeenCalledTimes(2);
         expect(global.alert).not.toHaveBeenCalled();
     });
@@ -2838,6 +2613,8 @@ describe('TracerController.del_row', () => {
         tc = new TracerController('div#tracer', makeMovieMetadata(), 'api-key');
         jest.clearAllMocks();
         global.demo_mode = false;
+        global.alert = jest.fn();
+        tc.clear_selection = () => { tc.selected = null; };
     });
 
     test('does not delete undeletable markers', () => {
@@ -2852,18 +2629,76 @@ describe('TracerController.del_row', () => {
         expect(mockPost).not.toHaveBeenCalled();
     });
 
-    test('deletes marker with ruler label when it is not undeletable', () => {
+    test('deletes marker with ruler label when it is not undeletable', async () => {
         const ruler = new MockMarkerClass(10, 20, 5, 'red', 'red', 'Ruler 0mm');
         const apex = new MockMarkerClass(30, 40, 5, 'orange', 'orange', 'Apex');
         tc.objects.push(ruler, apex);
+        tc.frames = [{markers: [{label: 'Ruler 0mm', x: 10, y: 20}, {label: 'Apex', x: 30, y: 40}]}];
+        mockPost.mockReturnValueOnce({done: callback => { callback({error: false}); return {fail: jest.fn()}; }});
+        await tc.del_row(0);
 
-        tc.del_row(0);
-
-        expect(tc.objects).toEqual([apex]);
+        expect(tc.objects.filter(obj => obj.constructor.name === MockMarkerClass.name).map(obj => obj.name)).toEqual(['Apex']);
         expect(mockPost).toHaveBeenCalledWith(
-            expect.stringContaining('put-frame-trackpoints'),
-            expect.objectContaining({ frame_number: 0 })
+            expect.stringContaining('delete-marker'),
+            expect.objectContaining({ label: 'Ruler 0mm' })
         );
+    });
+
+    test('removes an off-frame marker and every trajectory only after server success', async () => {
+        const tbody = makeEl();
+        useSelectorElements({'div#tracer tbody.marker_table_body': tbody});
+        tc.frames = [
+            {markers: [{label: 'Keep', x: 10, y: 20}]},
+            {markers: [{label: 'Gone', x: 30, y: 40}, {label: 'Keep', x: 11, y: 21}]},
+            {markers: [{label: 'Gone', x: 35, y: 45}, {label: 'Keep', x: 12, y: 22}]},
+        ];
+        tc.movie_metadata.total_frames = 3;
+        tc.trim_end_frame_missing = true;
+        tc.add_frame_objects(0);
+        expect(tbody.html.mock.calls.at(-1)[0]).toContain('marker_label="Gone"');
+        expect(tbody.html.mock.calls.at(-1)[0]).toContain('n/a');
+        let respond;
+        mockPost.mockReturnValueOnce({done: callback => { respond = callback; return {fail: jest.fn()}; }});
+        const pending = tc.delete_marker('Gone');
+        await Promise.resolve();
+        expect(tc.frames[1].markers.some(point => point.label === 'Gone')).toBe(true);
+        respond({error: false});
+        await expect(pending).resolves.toBe(true);
+        expect(tc.frames.flatMap(frame => frame.markers).map(point => point.label)).toEqual(['Keep', 'Keep', 'Keep']);
+        expect(tc.objects.filter(obj => obj.constructor.name === MockLineClass.name)).toHaveLength(2);
+        expect(tc.objects.filter(obj => obj.constructor.name === MockMarkerClass.name).map(obj => obj.name)).toEqual(['Keep']);
+        expect(tc.movie_metadata.needs_retracing).toBe(1);
+        expect(tc.deleting_marker).toBe(false);
+        expect(tbody.html.mock.calls.at(-1)[0]).not.toContain('Gone');
+        expect(mockPost).toHaveBeenCalledTimes(1);
+    });
+
+    test('preserves the marker and all frames when deletion fails', async () => {
+        tc.frames = [{markers: [{label: 'Apex', x: 30, y: 40}]}];
+        const before = JSON.stringify(tc.frames);
+        mockPost.mockReturnValueOnce({done: callback => { callback({error: true, message: 'Conflict'}); return {fail: jest.fn()}; }});
+        await expect(tc.delete_marker('Apex')).resolves.toBe(false);
+        expect(JSON.stringify(tc.frames)).toBe(before);
+        expect(global.alert).toHaveBeenCalledWith('Error deleting marker: Conflict');
+        expect(tc.deleting_marker).toBe(false);
+    });
+
+    test('waits for every outstanding marker save before deleting', async () => {
+        tc.frames = [{markers: [{label: 'Apex', x: 30, y: 40}]}];
+        let first;
+        let second;
+        tc.marker_save_requests = new Set([
+            new Promise(resolve => { first = resolve; }),
+            new Promise(resolve => { second = resolve; }),
+        ]);
+        mockPost.mockReturnValueOnce({done: callback => { callback({error: false}); return {fail: jest.fn()}; }});
+        const pending = tc.delete_marker('Apex');
+        second();
+        await Promise.resolve();
+        expect(mockPost).not.toHaveBeenCalled();
+        first();
+        await expect(pending).resolves.toBe(true);
+        expect(tc.frames[0].markers).toEqual([]);
     });
 });
 
@@ -2897,8 +2732,13 @@ describe('TracerController.reset_tracing', () => {
         global.alert = jest.fn();
         global.demo_mode = false;
         jest.clearAllMocks();
+        global.fetch = jest.fn();
+        jest.useFakeTimers();
     });
     afterEach(() => {
+        jest.clearAllTimers();
+        jest.useRealTimers();
+        delete global.fetch;
         global.demo_mode = false;
         delete global.confirm;
         delete global.alert;
@@ -2907,9 +2747,10 @@ describe('TracerController.reset_tracing', () => {
     });
 
     function mockSuccessfulFramePosts() {
+        global.fetch.mockResolvedValue({ok: true, json: async () => ({job_id: "reset-job", state: "completed"})});
         mockPost.mockImplementation(() => ({
             done: jest.fn().mockImplementation(cb => {
-                cb({ error: false });
+                cb({ error: false, lease_id: "new-lease" });
                 return { fail: jest.fn() };
             }),
             fail: jest.fn(),
@@ -2983,17 +2824,14 @@ describe('TracerController.reset_tracing', () => {
             ],
             [],
         ]);
-        expect(mockPost).toHaveBeenCalledTimes(3);
-        expect(mockPost.mock.calls.map(call => call[1].frame_number)).toEqual([0, 1, 2]);
-        expect(mockPost.mock.calls.map(call => JSON.parse(call[1].trackpoints))).toEqual([
-            [],
-            [
-                { x: 50, y: 50, label: 'Apex', color: 'orange', frame_number: 1 },
-                { x: 50, y: 100, label: 'Ruler 0mm', color: 'red', frame_number: 1, undeletable: true },
-                { x: 50, y: 150, label: 'Ruler 10mm', color: 'red', frame_number: 1, undeletable: true },
-            ],
-            [],
-        ]);
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+        expect(global.fetch.mock.calls[0][0]).toContain('resize-api/v1/reset-tracing');
+        expect(JSON.parse(global.fetch.mock.calls[0][1].body)).toMatchObject({
+            frame_start: 0, frame_end: 2, seed_frame: 1,
+            trackpoints: tc.frames[1].markers,
+        });
+        expect(mockPost).toHaveBeenCalledTimes(1);
+        expect(mockPost.mock.calls[0][0].url).toContain('acquire-movie-analysis-lease');
         expect(global.confirm).toHaveBeenCalledWith(
             RESET_TRACING_CONFIRM_MESSAGE
         );
@@ -3020,35 +2858,55 @@ describe('TracerController.reset_tracing', () => {
     });
 
     test('disables reset button and ignores re-entry while save requests are pending', () => {
-        mockPost.mockReturnValue({
-            done: jest.fn().mockReturnThis(),
-            fail: jest.fn().mockReturnThis(),
-        });
+        global.fetch.mockReturnValue(new Promise(() => {}));
 
         const promise = tc.reset_tracing();
         tc.reset_tracing();
 
         expect(resetButton.prop).toHaveBeenCalledWith('disabled', true);
         expect(global.confirm).toHaveBeenCalledTimes(1);
-        expect(mockPost).toHaveBeenCalledTimes(3);
+        expect(global.fetch).toHaveBeenCalledTimes(1);
         expect(promise).toBeInstanceOf(Promise);
     });
 
     test('keeps local markers when persistence fails', async () => {
-        mockPost.mockReturnValue({
-            done: jest.fn().mockReturnValue({
-                fail: jest.fn().mockImplementation(cb => {
-                    cb({ responseText: 'Save failed' });
-                }),
-            }),
-        });
+        global.fetch.mockResolvedValue({ok: false, text: async () => 'Save failed'});
 
         await tc.reset_tracing();
 
         expect(global.alert).toHaveBeenCalledWith(expect.stringContaining('Save failed'));
-        expect(resetButton.prop).toHaveBeenCalledWith('disabled', false);
+        expect(tc.analysis_read_only).toBe(true);
+        expect(resetButton.prop).toHaveBeenCalledWith('disabled', true);
         expect(tc.frames[0].markers).toContainEqual({ x: 10, y: 20, label: 'Apex', color: 'orange' });
         expect(tc.frames[1].markers).toContainEqual({ x: 30, y: 40, label: 'Base', color: 'magenta' });
+    });
+
+    test('50,000 frames use one mutation request and bounded status polling', async () => {
+        mockSuccessfulFramePosts();
+        tc.total_frames = 50000;
+        tc.frames = Array.from({length: 50000}, (_, frame_number) => ({
+            frame_number, markers: [{x: 10, y: 20, label: 'Apex'}],
+        }));
+        global.fetch.mockResolvedValueOnce({ok: true, json: async () => ({
+            job_id: 'reset-job', state: 'running', next_frame: 0,
+        })});
+        const promise = tc.reset_tracing();
+        await jest.advanceTimersByTimeAsync(2000);
+        await promise;
+        expect(global.fetch.mock.calls.filter(([, options]) => options.method === 'POST')).toHaveLength(1);
+        expect(JSON.parse(global.fetch.mock.calls[0][1].body)).toMatchObject({frame_start: 0, frame_end: 49999});
+        expect(global.fetch).toHaveBeenCalledTimes(2);
+        expect(tc.frames[49999].markers).toEqual([]);
+        expect(tc.last_tracked_frame).toBe(1);
+        expect(tc.analysis_lease_id).toBe('new-lease');
+    });
+
+    test('expired reset leaves the page read-only and directs the user to reload', async () => {
+        global.fetch.mockResolvedValue({ok: true, json: async () => ({job_id: 'old', state: 'expired'})});
+        await tc.reset_tracing();
+        expect(tc.analysis_read_only).toBe(true);
+        expect(global.alert).toHaveBeenCalledWith(expect.stringContaining('Reopen Analyze'));
+        expect(mockPost).not.toHaveBeenCalled();
     });
 
     test('in demo_mode shows popup and does not ask for confirmation', () => {
@@ -3237,6 +3095,7 @@ describe('TracerController.poll_for_track_end', () => {
     let tc;
     beforeEach(() => {
         jest.useFakeTimers();
+        resetPostMock();
         global.alert = jest.fn();
         tc = new TracerController('div#tracer', makeMovieMetadata(), 'api-key');
         tc.tracking = true;
@@ -3308,24 +3167,109 @@ describe('TracerController.poll_for_track_end', () => {
         );
     });
 
-    test('done: no progress beyond source frame after deadline → alerts backend lambda unresponsive', () => {
+    test('done: no progress beyond source frame after deadline → warns that progress stalled', () => {
         tc.pending_trace_start_frame = 0;
-        tc.tracking_start_deadline_ms = Date.now() - 1;
+        tc.tracking_progress_deadline_ms = Date.now() - 1;
         fireDone({ error: false, metadata: { status: 'tracing', last_frame_tracked: 0 } });
         tc.poll_for_track_end();
-        expect(global.alert).toHaveBeenCalledWith(BACKEND_LAMBDA_UNRESPONSIVE_MESSAGE);
+        expect(global.alert).toHaveBeenCalledWith(TRACING_PROGRESS_TIMEOUT_MESSAGE);
         expect(tc.tracking).toBe(false);
     });
 
-    test('done: progress beyond source frame after deadline → does not alert backend lambda unresponsive', () => {
+    test('done: progress beyond source frame after deadline → renews progress timeout', () => {
         tc.pending_trace_start_frame = 0;
-        tc.tracking_start_deadline_ms = Date.now() - 1;
+        tc.tracking_progress_deadline_ms = Date.now() - 1;
         fireDone({ error: false, metadata: { status: 'tracing', last_frame_tracked: 1 } });
         tc.poll_for_track_end();
-        expect(global.alert).not.toHaveBeenCalledWith(BACKEND_LAMBDA_UNRESPONSIVE_MESSAGE);
+        expect(global.alert).not.toHaveBeenCalledWith(TRACING_PROGRESS_TIMEOUT_MESSAGE);
         expect(tc.tracking_status.text).toHaveBeenCalledWith(
             'Tracing frame 1 — You may leave this page and click Analyze again later.'
         );
+    });
+
+    test('new frames renew the 30-second deadline; repeated or older frames do not', () => {
+        tc.last_progress_frame = 5;
+        tc.reset_tracking_progress_timeout();
+        jest.advanceTimersByTime(29000);
+        expect(tc.tracking_progress_timed_out({last_frame_tracked: 6})).toBe(false);
+        jest.advanceTimersByTime(29000);
+        expect(tc.tracking).toBe(true);
+        tc.tracking_progress_timed_out({last_frame_tracked: 6});
+        tc.tracking_progress_timed_out({last_frame_tracked: 4});
+        jest.advanceTimersByTime(1000);
+        expect(tc.tracking).toBe(false);
+        expect(global.alert).toHaveBeenCalledTimes(1);
+        expect(global.alert).toHaveBeenCalledWith(TRACING_PROGRESS_TIMEOUT_MESSAGE);
+    });
+
+    test('increasing API frame updates keep polling beyond three minutes until progress stalls', () => {
+        const metadata = {status: 'tracing', last_frame_tracked: 0};
+        mockPost.mockImplementation(() => ({
+            done(callback) { callback({error: false, metadata}); return this; },
+            fail() { return this; },
+        }));
+        tc.poll_for_track_end();
+        for (let frame = 1; frame <= 8; frame++) {
+            jest.advanceTimersByTime(25000);
+            metadata.last_frame_tracked = frame;
+            jest.advanceTimersByTime(1000);
+            expect(tc.tracking).toBe(true);
+            expect(tc.last_progress_frame).toBe(frame);
+        }
+        expect(global.alert).not.toHaveBeenCalled();
+        jest.advanceTimersByTime(30000);
+        expect(tc.tracking).toBe(false);
+        expect(global.alert).toHaveBeenCalledWith(TRACING_PROGRESS_TIMEOUT_MESSAGE);
+    });
+
+    test('retracking recognizes progress after the previous run counter resets', () => {
+        tc.last_progress_frame = 49999;
+        tc.reset_tracking_progress_timeout();
+        const initialDeadline = tc.tracking_progress_deadline_ms;
+        jest.advanceTimersByTime(20000);
+        tc.tracking_progress_timed_out({last_frame_tracked: 0});
+        expect(tc.tracking_progress_deadline_ms).toBe(initialDeadline);
+        jest.advanceTimersByTime(9000);
+        tc.tracking_progress_timed_out({last_frame_tracked: 1});
+        jest.advanceTimersByTime(29000);
+        expect(tc.tracking).toBe(true);
+        tc.tracking_progress_timed_out({last_frame_tracked: 2});
+        jest.advanceTimersByTime(30000);
+        expect(tc.tracking).toBe(false);
+        expect(global.alert).toHaveBeenCalledTimes(1);
+    });
+
+    test('a hung status request is aborted at 30 seconds and late replies are ignored', () => {
+        let reply;
+        const request = {done: jest.fn(cb => {reply = cb; return request;}),
+            fail: jest.fn().mockReturnThis(), abort: jest.fn()};
+        mockPost.mockReturnValueOnce(request);
+        const completed = jest.spyOn(tc, 'movie_tracked');
+        tc.poll_for_track_end();
+        jest.advanceTimersByTime(29999);
+        expect(tc.tracking).toBe(true);
+        jest.advanceTimersByTime(1);
+        expect(request.abort).toHaveBeenCalledTimes(1);
+        expect(tc.tracking).toBe(false);
+        reply({error: false, metadata: {status: 'tracing completed'}});
+        expect(completed).not.toHaveBeenCalled();
+        jest.advanceTimersByTime(60000);
+        expect(mockPost).toHaveBeenCalledTimes(1);
+        expect(global.alert).toHaveBeenCalledTimes(1);
+    });
+
+    test('terminal failure after progress displays its reason and stops polling immediately', () => {
+        tc.last_progress_frame = 6;
+        tc.reset_tracking_progress_timeout();
+        fireDone({error: false, metadata: {status: 'tracing failed', last_frame_tracked: 6,
+            tracing_failure_summary: 'Source download failed'}});
+        tc.poll_for_track_end();
+        expect(tc.tracking).toBe(false);
+        expect(tc.analysis_read_only).toBe(true);
+        expect(global.alert).toHaveBeenCalledWith('Source download failed');
+        jest.advanceTimersByTime(60000);
+        expect(mockPost).toHaveBeenCalledTimes(1);
+        expect(global.alert).toHaveBeenCalledTimes(1);
     });
 
     test('done: error response → increments poll_error_count', () => {
@@ -3334,11 +3278,11 @@ describe('TracerController.poll_for_track_end', () => {
         expect(tc.poll_error_count).toBe(1);
     });
 
-    test('done: poll_error_count reaches STATUS_POLL_MAX_ERRORS → alerts', () => {
+    test('done: repeated errors use the progress deadline instead of repeated popups', () => {
         tc.poll_error_count = 4; // one more will hit 5
         fireDone({ error: true });
         tc.poll_for_track_end();
-        expect(global.alert).toHaveBeenCalledWith(expect.stringContaining('5 times'));
+        expect(global.alert).not.toHaveBeenCalled();
     });
 
     test('done: error but tracking=true → schedules next poll', () => {
@@ -3354,11 +3298,11 @@ describe('TracerController.poll_for_track_end', () => {
         expect(tc.poll_error_count).toBe(1);
     });
 
-    test('fail: poll_error_count reaches STATUS_POLL_MAX_ERRORS → alerts', () => {
+    test('fail: repeated errors use the progress deadline instead of repeated popups', () => {
         tc.poll_error_count = 4;
         fireFail({}, 500, 'err');
         tc.poll_for_track_end();
-        expect(global.alert).toHaveBeenCalledWith(expect.stringContaining('5 times'));
+        expect(global.alert).not.toHaveBeenCalled();
     });
 
     test('fail: tracking=true → schedules next poll', () => {
@@ -3378,89 +3322,20 @@ describe('TracerController.poll_for_track_end', () => {
 
 // ── movie_tracked ─────────────────────────────────────────────────────────────
 describe('TracerController.movie_tracked', () => {
-    let tc;
-    beforeEach(() => {
-        jest.useFakeTimers();
-        global.alert = jest.fn();
-        tc = new TracerController('div#tracer', makeMovieMetadata(), 'api-key');
+    test('refreshes coordinate data without downloading pixels or a ZIP again', () => {
+        const tc = new TracerController('div#tracer', {movie_id: 'm1', total_frames: 4}, 'key');
+        tc.frames = Array.from({length: 4}, () => ({markers: []}));
         tc.tracking = true;
-        jest.clearAllMocks();
-    });
-    afterEach(() => { jest.useRealTimers(); });
-
-    function makeTrackedData(zipUrl = null, framesOverride = {}) {
-        return {
-            metadata: { movie_zipfile_url: zipUrl, movie_id: 'test-movie-001', width: null, height: null, rotation: 0, last_frame_tracked: -1, total_frames: 0 },
-            frames: framesOverride,
-        };
-    }
-
-    test('sets tracking = false', () => {
-        tc.movie_tracked(makeTrackedData('http://example.com/m.zip'));
+        const point = {x: 12, y: 23, label: 'Apex'};
+        const before = mockMp4Load.mock.calls.length;
+        tc.movie_tracked({metadata: {last_frame_tracked: 3, total_frames: 4}, frames: {3: {markers: [point]}}});
+        expect(tc.frames[3].markers).toEqual([point]);
         expect(tc.tracking).toBe(false);
-    });
-
-    test('sets tracking_status while loading the traced movie', () => {
-        tc.movie_tracked(makeTrackedData('http://example.com/m.zip'));
-        expect(tc.tracking_status.text).toHaveBeenCalledWith(TRACING_COMPLETE_LOADING_MOVIE_MESSAGE);
-    });
-
-    test('with zip URL: unzip is called with the zip URL', async () => {
-        mockUnzip.mockResolvedValueOnce({ entries: {} });
-        tc.movie_tracked(makeTrackedData('http://example.com/m.zip'));
-        await jest.runAllTimersAsync();
-        expect(mockUnzip).toHaveBeenCalledWith('http://example.com/m.zip');
-    });
-
-    test('with zip URL: removes tracing-dimmed from controller div', async () => {
-        mockUnzip.mockResolvedValueOnce({ entries: {} });
-        tc.movie_tracked(makeTrackedData('http://example.com/m.zip'));
-        await jest.runAllTimersAsync();
-        const dimmedRemoved = mock$.mock.calls.some(
-            (_, i) => mock$.mock.results[i].value.removeClass.mock.calls.some(c => c[0] === 'tracing-dimmed')
-        );
-        expect(dimmedRemoved).toBe(true);
-    });
-
-    test('with zip URL: shows playable status after load', async () => {
-        mockUnzip.mockResolvedValueOnce({ entries: {} });
-        tc.movie_tracked(makeTrackedData('http://example.com/m.zip'));
-        await jest.runAllTimersAsync();
-        const statusIdx = mock$.mock.calls.findLastIndex(a => a[0] === '#status-big');
-        expect(mock$.mock.results[statusIdx].value.html)
-            .toHaveBeenCalledWith(expect.stringContaining(PRESS_PLAY_STATUS_TEXT));
-    });
-
-    test('with zip URL: keeps Retrace disabled after tracing completes', async () => {
-        mockUnzip.mockResolvedValueOnce({ entries: {} });
-        tc.movie_tracked(makeTrackedData('http://example.com/m.zip'));
-        await jest.runAllTimersAsync();
-        expect(tc.track_button.prop).toHaveBeenCalledWith('disabled', true);
-    });
-
-    test('no zip URL and timeout: alerts and removes tracing-dimmed', async () => {
-        // Each poll fires done with { error: false, metadata: {} } (no zip URL), so
-        // poll() re-schedules itself via setTimeout.  runAllTimersAsync advances fake
-        // time past MAX_ZIP_WAIT_MS (10 000 ms), the deadline check triggers a reject,
-        // and the catch block removes tracing-dimmed and alerts.
-        mockPost.mockImplementation(() => ({
-            done: jest.fn().mockImplementation(cb => {
-                cb({ error: false, metadata: {} });
-                return { fail: jest.fn() };
-            }),
-            fail: jest.fn(),
-        }));
-        tc.movie_tracked(makeTrackedData(null));
-        await jest.runAllTimersAsync();
-        expect(global.alert).toHaveBeenCalled();
-        const dimmedRemoved = mock$.mock.calls.some(
-            (_, i) => mock$.mock.results[i].value.removeClass.mock.calls.some(c => c[0] === 'tracing-dimmed')
-        );
-        expect(dimmedRemoved).toBe(true);
+        expect(tc.movie_metadata.needs_retracing).toBe(0);
+        expect(mockMp4Load.mock.calls.length).toBe(before);
     });
 });
 
-// ── add_frame_objects ─────────────────────────────────────────────────────────
 describe('TracerController.add_frame_objects', () => {
     let tc;
     beforeEach(() => {
@@ -3472,10 +3347,32 @@ describe('TracerController.add_frame_objects', () => {
         jest.clearAllMocks();
     });
 
-    test('frame=0: no Line objects added', () => {
+    test('frame=0: future paths are drawn at fifty percent opacity and one pixel wide', () => {
         tc.add_frame_objects(0);
         const lines = tc.objects.filter(o => o instanceof MockLineClass);
-        expect(lines).toHaveLength(0);
+        expect(lines).toHaveLength(2);
+        expect(lines.map(line => [line.opacity, line.width])).toEqual([[0.5, 1], [0.5, 1]]);
+    });
+
+    test('matrix ranges follow the trim while retaining outside markers as n/a', () => {
+        const table = makeEl();
+        useSelectorElements({'div#tracer tbody.marker_table_body': table});
+        tc = new TracerController('div#tracer', makeMovieMetadata({total_frames: 54, trim_start_frame: 0, trim_end_frame: 43}), 'api-key');
+        tc.frames = Array.from({length: 54}, (_, frame) => ({markers: [
+            {x: frame, y: 20, label: 'Apex'},
+            ...(frame === 50 ? [{x: 50, y: 30, label: 'Later'}] : []),
+        ]}));
+        tc.frame_number = 43;
+        tc.add_frame_objects(43);
+        const html = table.html.mock.calls.at(-1)[0];
+        expect(html).toContain('<td>0-43</td>');
+        expect(html).not.toContain('<td>0-53</td>');
+        expect(html).toContain('Later');
+        expect(html.split('<tr>')[2].match(/n\/a/g)).toHaveLength(3);
+        expect(tc.frames[50].markers).toHaveLength(2);
+        tc.movie_metadata.trim_end_frame = 53;
+        tc.create_marker_table();
+        expect(table.html.mock.calls.at(-1)[0]).toContain('<td>50-50</td>');
     });
 
     test('frame=0: Marker objects added for each marker in frame 0', () => {
@@ -3513,6 +3410,26 @@ describe('TracerController.add_frame_objects', () => {
         tc.add_frame_objects(1);
         const lines = tc.objects.filter(o => o instanceof MockLineClass);
         expect(lines).toHaveLength(2); // Apex line + Base line
+    });
+
+    test('paths split opacity and width at the current frame without bridging missing points', () => {
+        tc.frames.push({markers: [{x: 30, y: 40, label: 'Apex'}]},
+                       {}, {markers: [{x: 50, y: 60, label: 'Apex'}]});
+        tc.add_frame_objects(1);
+        const lines = tc.objects.filter(o => o instanceof MockLineClass);
+        expect(lines.map(line => [line.opacity, line.width])).toEqual([[1, 2], [1, 2], [0.5, 1]]);
+    });
+
+    test('table includes future markers with ranges and unavailable locations', () => {
+        tc.frames = [{markers: []}, {markers: [{x: 20, y: 30, label: 'Future'}]},
+                     {markers: [{x: 21, y: 31, label: 'Future'}]}];
+        tc.add_frame_objects(0);
+        const call = mock$.mock.calls.findIndex(a => a[0]?.includes('tbody.marker_table_body'));
+        const html = mock$.mock.results[call].value.html.mock.calls[0][0];
+        expect(html).toContain('Future');
+        expect(html).toContain('<td>1-2</td>');
+        expect(html.match(/n\/a/g)).toHaveLength(2);
+        expect(tc.objects.filter(o => o instanceof MockMarkerClass)).toHaveLength(0);
     });
 
     test('frame=1: Line objects use marker colors for their labels', () => {
@@ -3581,12 +3498,12 @@ describe('graph_data', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
-        mockUnzip.mockResolvedValue({ entries: {} }); // default: no frames
+        mockFrameCount = 4;
     });
 
     /** Run trace_movie_frames and flush all async. */
     async function runWithFrames(entries, metadata_frames = null, metadataOverrides = {}) {
-        mockUnzip.mockResolvedValueOnce({ entries });
+        mockFrameCount = Math.max(1, Object.keys(entries).length);
         await trace_movie_frames('div#tracer', makeMovieMetadata(metadataOverrides), 'http://example.com/m.zip',
             metadata_frames, 'api-key', true);
     }
@@ -3765,3 +3682,46 @@ describe('graph_data', () => {
 });
 
 export {};
+
+
+describe('paged movie annotations', () => {
+    beforeEach(resetPostMock);
+
+    test('loads all 50,000 frames in bounded requests without dropping initial points', async () => {
+        mockPost.mockImplementation(options => ({
+            done(callback) {
+                const last = options.data.frame_start + options.data.frame_count - 1;
+                callback({error: false, frames: {[last]: {markers: [{label: `point${last}`}]}}});
+                return this;
+            },
+            fail() { return this; },
+        }));
+        const response = await load_remaining_frame_metadata({metadata: {movie_id: 'm1', total_frames: 50000},
+            frames: {0: {markers: [{label: 'first'}]}}}, 'key');
+        expect(mockPost).toHaveBeenCalledTimes(49);
+        expect(mockPost.mock.calls.every(([options]) => options.data.frame_count <= 1000)).toBe(true);
+        expect(response.frames[0].markers[0].label).toBe('first');
+        expect(response.frames[10999].markers[0].label).toBe('point10999');
+        expect(response.frames[49999].markers[0].label).toBe('point49999');
+    });
+
+    test('rejects larger movies instead of silently displaying incomplete annotations', async () => {
+        await expect(load_remaining_frame_metadata({metadata: {total_frames: 50001}}, 'key'))
+            .rejects.toThrow('50,000 frames');
+        expect(mockPost).not.toHaveBeenCalled();
+    });
+
+    test('completion starts at zero and rejects failed pages instead of erasing markers', async () => {
+        mockPost.mockImplementation(options => ({
+            done(callback) {
+                expect(options.data.frame_start).toBe(0);
+                callback({error: true, message: 'Annotations unavailable'});
+                return this;
+            },
+            fail() { return this; },
+        }));
+        await expect(load_remaining_frame_metadata({metadata: {movie_id: 'm1', total_frames: 50000}}, 'key', 0))
+            .rejects.toThrow('Annotations unavailable');
+        expect(mockPost).toHaveBeenCalledTimes(1);
+    });
+});

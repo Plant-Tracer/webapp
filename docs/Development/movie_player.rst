@@ -2,7 +2,24 @@ Movie Player Design
 ===================
 
 The Analyze page is a browser-side canvas application. Flask serves the page and
-metadata APIs; lambda-resize supplies video/frame data.
+metadata APIs; lambda-resize supplies video/frame data. New uploads are converted
+into an immutable H.264 baseline/yuv420p untraced MP4, with every source frame in
+order and no B-frames. The production analyzer uses ``mp4_frame_player.mjs`` for
+forward/backward frame access; it does not download a JPEG ZIP.
+
+The analyzer and completed-tracing metadata window support 50,000 frames. The
+analyzer fetches marker metadata in 1,000-frame pages to bound HTTP responses.
+Analyze reports an explicit error for larger movies instead of showing partial
+annotations; the original upload and its complete derivative are preserved.
+A ``pageshow`` event with ``persisted=true`` reloads the analyzer after browser
+history restoration, reopening the disposed decoder and reacquiring its editing
+lease. Normal navigation does not show a data-loss confirmation.
+
+Tracing has a 30-second progress watchdog, renewed only when the last tracked
+frame advances. Unchanged frames, failed requests and a hung request do not
+extend it. On expiry the client aborts its status request, stops polling and warns
+that server work may continue. Late replies cannot restart polling. A terminal
+``tracing failed`` response stops immediately and displays its reason.
 
 Runtime Inputs
 --------------
@@ -163,8 +180,8 @@ Portable Analysis-MP4 Bundle
 ``make analysis-mp4-bundle`` creates a manual-test directory for an arbitrary
 local MP4. It uses the same Python encoder service that Lambda will use for the
 analysis derivative: rotation is applied once, the frame fits within the chosen
-analysis dimensions, and every output frame has its one-based frame number
-burned into the upper-right corner. The MP4 uses a fixed 4 FPS H.264
+analysis dimensions (enlarging small sources as needed), and every output frame
+has its zero-based frame number burned into the upper-right corner. The MP4 uses a fixed 15 FPS H.264
 ``yuv420p`` baseline profile with P-frames and no B-frames.
 
 For example:
@@ -186,3 +203,73 @@ module and fetch rules vary by platform.
 ``make analysis-mp4-browser-test`` validates the generated bundle through a
 real local Chrome browser. It checks the rendered four-frame sequence forward
 and backward before a bundle is used for manual testing.
+
+
+Frame Numbers, Traces, and Recoding
+-----------------------------------
+
+Every frame index is zero-based, including red analysis labels, player controls,
+marker ranges, API parameters, spreadsheets, and blue download labels. Frame 0
+is capture time zero; frame N is N times the capture interval, regardless of
+playback FPS or trimming. Old analysis derivatives are regenerated once on demand
+using encoder version 2. Previously downloaded files remain unchanged.
+
+The analyzer draws all saved path segments: segments ending at or before the
+current frame are opaque and 2 pixels wide; later segments have 50 percent
+opacity and are 1 pixel wide. Missing frames do not create connecting lines.
+The marker table lists each saved marker's first
+and last frame even when it has no location at the current frame (shown as n/a).
+
+Recoding preserves the established coordinate height, including legacy videos
+that were enlarged to 640 pixels. If saved points have no recorded height, stored
+frame images can establish it; otherwise recoding stops with a diagnostic rather
+than guessing. Movies already containing mixed coordinate spaces require an
+explicit data repair; coordinates must not be rescaled indiscriminately.
+
+Tracing starts after the selected seed frame. Earlier frames are read to render
+the download, but their points and tracing progress are not rewritten. Downloads
+use a blue frame/time label; elapsed seconds appear only when capture timing is
+known, never inferred from the playback frame rate.
+
+On-demand Traced Downloads
+--------------------------
+
+Both download controls POST to ``/resize-api/v1/download-traced``. Trim edits
+only change metadata. The request compares a versioned fingerprint of the source,
+geometry, trim, annotation revision, capture interval, and attribution against
+``traced_render_key``. A matching existing object returns a signed URL; otherwise
+one ``render_traced`` event is queued. Legacy exports without a fingerprint are
+rebuilt once when requested. There is no per-frame database query to decide
+whether an export is current.
+
+Render-only mode draws current saved annotations on unlabelled source pixels,
+clips to the inclusive trim, and draws blue source-frame/time labels. It never
+runs optical-flow tracking, writes frame records, or clears ``needs_retracing``.
+The matrix computes ranges inside the trim but keeps rows for markers outside it.
+
+Traced exports include future paths at 50 percent opacity and 1 pixel wide, with
+past/current segments at full opacity and 2 pixels wide. Complete paths inside
+the trim are rasterized once into a thin overlay; opaque past segments cover
+that overlay as playback advances. Missing marker frames never bridge a gap.
+New tracing completes its position pass before rendering, so the first exported
+frame includes the computed future. Rendering progress renews the worker lease
+without rewriting points or tracing progress. Video frames are streamed per
+pass, not retained in memory. Export fingerprint version 2 invalidates older
+past-only exports when a download is requested.
+
+Worker leases have named purposes: ``trace``, ``reset``, ``render_traced``, and
+``render_untraced``. Their existing trace/processing storage fields remain for
+compatibility. Acquisitions remain mutually exclusive with other movie work and
+foreign editing sessions. A traced download can atomically transfer its caller's
+editing lease to the worker. Duplicate events cannot claim running jobs. The
+render worker renews its lease at most once every 30 seconds while decoding and
+again before publication; retries after expiry get a different job identifier.
+Publication checks the live lease and unchanged input fields. Each job writes a
+separate S3 object, so an expired worker cannot overwrite a newer download.
+Queue failures release the reservation; rendering failures retain the previous
+export reference and record a diagnostic. Another explicit download can retry.
+
+The product term is **untraced MP4**. Internal ``analysis_mp4`` descriptors,
+module names, and the ``prepare-analysis`` endpoint remain compatible. Untraced
+MP4 regeneration retains its processing lease and saved coordinate geometry.
+No ZIP creation or automatic deletion of legacy ZIPs is introduced.

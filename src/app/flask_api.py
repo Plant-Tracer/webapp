@@ -162,7 +162,8 @@ def infer_trackpoint_frame_height(movie_id, movie, frame_start, *, recover_legac
     """Resolve height from the caller's raw movie snapshot (before API rotation)."""
     if recover_legacy_frames and not odb.movie_is_available(movie):
         raise odb.MovieUploadIncomplete(movie_id)
-    if (movie.get(odb.FRAME_HEIGHT_PX) is None and recover_legacy_frames):
+    if (movie.get(odb.FRAME_HEIGHT_PX) is None and not movie.get(odb.ANALYSIS_MP4)
+            and recover_legacy_frames):
         candidate_frames = [frame_start, 0] if frame_start not in (None, 0) else [0]
         height = next((height for frame_number in candidate_frames
                        if (height := _height_from_movie_frame(movie_id, frame_number))), None)
@@ -1033,9 +1034,11 @@ def api_list_movies():
     for movie in movies:
         trace_lock = odb.movie_trace_lock_from_record(movie)
         if trace_lock:
-            movie[MOVIE_STATUS] = odb.MOVIE_STATE_TRACING
+            movie[MOVIE_STATUS] = (odb.MOVIE_STATE_TRACING if trace_lock.purpose == "trace"
+                                   else trace_lock.purpose.replace("_", " "))
             movie['tracking_lock'] = {
                 'active': True,
+                'purpose': trace_lock.purpose,
                 'acquired_at': trace_lock.acquired_at,
                 'started_by_user_name': trace_lock.started_by_user_name,
             }
@@ -1102,9 +1105,11 @@ def api_get_movie_metadata():
     movie_metadata = odb.movie_metadata_with_trim_defaults(movie_metadata)
     trace_lock = odb.movie_trace_lock_from_record(movie)
     if trace_lock:
-        movie_metadata[MOVIE_STATUS] = odb.MOVIE_STATE_TRACING
+        movie_metadata[MOVIE_STATUS] = (odb.MOVIE_STATE_TRACING if trace_lock.purpose == "trace"
+                                      else trace_lock.purpose.replace("_", " "))
         movie_metadata['tracking_lock'] = {
             'active': True,
+            'purpose': trace_lock.purpose,
             'acquired_at': trace_lock.acquired_at,
             'started_by_user_name': trace_lock.started_by_user_name,
         }
@@ -1119,6 +1124,10 @@ def api_get_movie_metadata():
         if (movie_metadata.get(urn_name,"") or "").startswith("s3:"):
             url_name = urn_name.replace("urn","url")
             movie_metadata[url_name] = make_signed_url(urn=movie_metadata[urn_name])
+
+    analysis = odb.movie_analysis_mp4(movie)
+    if analysis:
+        movie_metadata[odb.ANALYSIS_MP4_URL] = make_signed_url(urn=analysis.urn)
 
     movie_metadata.update(TrackpointCoordinateMetadata(
         frame_height_px=frame_height,
@@ -1402,6 +1411,24 @@ def api_rename_marker():
         'frames_updated': rename_result['frames_updated'],
         'trackpoints_updated': rename_result['trackpoints_updated'],
     })
+
+
+@api_bp.route('/delete-marker', methods=POST)
+def api_delete_marker():
+    """Delete a marker throughout the movie, including outside its trim range."""
+    user_id = get_user_id(allow_demo=False)
+    movie = odb.can_edit_movie(user_id=user_id, movie_id=get_movie_id())
+    if response := tracing_lock_response(movie[MOVIE_ID]):
+        return response
+    if response := analysis_lock_response(movie):
+        return response
+    try:
+        odb.delete_movie_marker(movie_id=movie[MOVIE_ID], label=get('label'))
+    except ValueError as exc:
+        return jsonify({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: str(exc)}), 400
+    except AtomicRenameConflict as exc:
+        return jsonify({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: str(exc)}), 409
+    return jsonify({C.API_KEY_ERROR: False})
 
 
 ################################################################

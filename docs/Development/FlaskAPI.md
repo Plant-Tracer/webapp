@@ -627,6 +627,16 @@ the stored `status` remains visible.
 
 #### `POST /api/get-movie-metadata`
 
+The analyzer loads up to 50,000 frames of trackpoint metadata in 1,000-frame
+pages using `frame_start` and `frame_count`, avoiding a single oversized Lambda
+response. The
+`get_all_if_tracking_completed` window likewise covers 50,000 frames (previously
+10,000). Trackpoints remain in individual DynamoDB frame records. Browser polling
+stops with a warning after 30 seconds without frame progress, including stalled
+HTTP requests; this does not cancel server tracing. Terminal tracing failures
+show `tracing_failure_summary` immediately.
+
+
 Get metadata and optionally per-frame trackpoints for a specific movie.
 
 `metadata.frame_height_px` is the positive pixel height of the resized, rotated
@@ -775,6 +785,89 @@ rename, trim, and capture-interval writes; the owning browser includes its
 `analysis_lease_id` with those requests.
 
 ---
+
+#### `POST /resize-api/v1/prepare-analysis`
+
+Analyze calls this endpoint before acquiring its editing lease. The JSON body
+contains `movie_id`; the `x-api-key` header must authorize access to the movie.
+For a completed upload, a current-version analysis descriptor and existing S3 object return
+HTTP 200 with `ready: true`. A missing descriptor, object, or older encoder version starts asynchronous
+recoding and returns HTTP 202 with `ready: false` and
+"Recoding is in progress, come back in a few minutes."
+
+A conditional 15-minute processing reservation deduplicates concurrent page
+openings and excludes active editing/tracing. Queue deliveries claim execution
+once; stale or duplicate jobs do no encoding. After a worker timeout, a later
+page opening can reserve a replacement job. Terminal processing failures are
+reported without automatic re-enqueueing; administrators must investigate and
+clear the processing failure before retrying. S3 permission/service errors are
+not treated as missing objects. The browser does not poll or acquire an editing
+lease while recoding is pending. Source objects, saved frame data, annotations,
+and the prior completed tracing status are preserved; geometry conflicts fail
+without rewriting saved coordinates. Encoder version 2 uses zero-based burned-in
+frame numbers. Unknown saved-point geometry requires recovery before recoding.
+
+Analyze links lacking `course_id` redirect to the authorized movie's course,
+so an unrelated default course does not cause a lease-context conflict. Explicit
+course conflicts remain rejected by the metadata/editing APIs.
+
+#### `POST /resize-api/v1/reset-tracing`
+
+Reset annotations with one JSON request authenticated by the `x-api-key` header
+(non-demo, movie editor). Parameters: `movie_id`, inclusive zero-based
+`frame_start` and `frame_end`, `seed_frame` inside that range, replacement
+`trackpoints` for the seed (1–100), and the owning browser's `analysis_lease_id`.
+The range must fit within the movie and the 50,000-frame application limit.
+The Analyze button sends the entire movie range and seeds the first trimmed frame
+with the default markers. Other frames in the range lose only their `trackpoints`
+attribute; frame URNs, source/analysis/traced MP4s, and frames outside the range
+are preserved. The traced download is marked stale (`needs_retracing=1`).
+
+Returns HTTP 202 with `{ "error": false, "job_id": "...", "state": "running",
+"next_frame": 0, "frame_end": 49999 }`. Invalid input returns 400; an active
+trace or another browser's analysis lease returns 409. The operation takes the
+exclusive tracing lease, preventing concurrent marker/trim edits and tracing.
+
+The resize worker queries at most 80 frame records per batch and atomically
+removes annotations with a movie checkpoint. It yields after 100 batches or
+60 seconds and queues a continuation. Retries resume the durable cursor; each
+transaction checks the job, cursor, and unexpired lease, so duplicate or late
+workers cannot clear newer edits. Acquiring a new analysis lease also invalidates
+the expired worker token, including after that browser releases its lease.
+Seed markers and completion are committed
+atomically. DynamoDB has no range-delete operation: this still incurs per-item
+transactional write capacity (higher than ordinary writes), but no per-frame
+HTTP requests or S3 work. There is no storage-format migration.
+
+#### `GET /resize-api/v1/reset-tracing`
+
+Use the same authentication header with query parameters `movie_id` and `job_id`.
+Returns the small checkpoint response above, with state `running`, `completed`,
+`failed`, `expired`, or `superseded`. This reads movie metadata only; it does not
+query frame annotations. The browser polls every two seconds and reacquires its
+analysis lease on completion without reloading the MP4. On an uncertain result,
+expired lease, or failure, it becomes view-only and asks the user to reopen
+Analyze. A partial reset can be repeated safely. Leaving the page does not cancel
+the background job; leases expire after 15 minutes without worker progress.
+
+---
+
+#### `POST /api/delete-marker`
+
+Delete the named marker throughout a movie, including frames outside the trim
+range. Parameters: `api_key`, `movie_id`, `label`, and the current
+`analysis_lease_id` when an editing lease is active. Requires movie edit permission;
+demo writes, active tracing, foreign editing leases, and protected (`undeletable`)
+markers are rejected. Success returns `{ "error": false }`; repeat deletion is
+idempotent. Invalid/protected labels return 400; concurrent marker-map edits return 409.
+
+Deletion records a tombstone in the stable marker map and atomically sets
+`needs_retracing=1`. All trackpoint reads, exports and subsequent tracing exclude
+the deleted identity, including legacy label aliases. Frame data is retained;
+there are no per-frame writes or S3 changes. The client removes the table row,
+paths and graph series after success. A new marker with the same name receives
+a new identity and does not revive the old trace. Existing downloaded movies
+retain their rendered overlays until tracing regenerates them.
 
 #### `POST /api/rename-marker`
 
@@ -993,6 +1086,34 @@ Check DynamoDB connectivity, S3 CORS configuration, and S3 bucket region. No aut
 }
 ```
 
+
+## Untraced MP4 playback contract
+
+New uploads remain in processing until the shared analysis encoder has decoded every
+source frame and validated its output. `/api/get-movie-metadata` returns
+`metadata.analysis_mp4` (URN, width, height, frame_count, fps, applied rotation,
+SHA-256, generated_at, encoder_version, profile, pixel_format and b_frames) and
+`metadata.analysis_mp4_url`, an authenticated signed playback URL. The source
+`movie_data_urn` and source dimensions remain separate and unchanged. The analysis
+MP4 is H.264 baseline/yuv420p, 15 fps, no B-frames, GOP 30 and CRF 18. It fits within
+640 by 640 pixels, including enlargement of smaller inputs (320 by 240 becomes
+640 by 480). `frame_height_px` is its decoded height.
+All source frames survive; trim controls select analysis ranges rather than
+removing frames from this derivative. Burned-in labels, API indices, and
+trackpoint frame indices all count from zero.
+
+The production analyzer requires the untraced MP4 and a compatible WebCodecs
+browser (tested with Chrome on macOS and Windows). It exposes a visible error if
+encoding is incomplete or decoding is unavailable. It never downloads a ZIP.
+It saves the selected frame's markers before requesting tracing; a first marker
+may be saved on any frame after upload completion. Trace completion refreshes
+marker metadata while retaining the same analysis pixels. Frame endpoints select
+the derivative with no additional scaling or rotation. Tracking decodes the same
+untraced MP4; the traced movie renders source pixels through the same transform
+with marker overlays, avoiding the analysis movie's burned-in frame numbers.
+No new trace generates a ZIP. Legacy backfill and bulk S3 cleanup are separate
+operations and are not performed by deployment of this change.
+
 ### Tracing validation and saved coordinate data
 
 Queueing a trace acquires its lease and marks the movie as tracing, but preserves
@@ -1005,6 +1126,13 @@ initialization reject such records even if the frame table and dimensions are ab
 The geometry-conflict response names upload completion, processing, and saved
 frames as finalization conditions, including legacy rows whose status is still
 `uploading`. Select rotation before uploading a new movie.
+
+When `frame_height_px` is missing, a validated `analysis_mp4.height` takes
+precedence over legacy JPEG/ZIP recovery and source-dimension scaling.
+Metadata-only reads use this descriptor without caching or artifact reads;
+frame-range requests and downloads may persist it during coordinate migration.
+
+Movie processing failures return `status: "processing failed"`, `processing_failed_at`, and a bounded `processing_failure_summary` in movie metadata. The upload page stops polling and displays the reason. Retrying processing clears these failure fields and preserves the original source object.
 
 Trackpoint writes, coordinate migration, and marker-map creation or renaming
 require an upload-completion marker regardless of status or coordinate origin.
@@ -1020,3 +1148,26 @@ matches. Retrying preserves saved dimensions, points, and source bytes.
 The saved-frame check counts only non-negative frame numbers. The marker-map
 companion item at frame `-100` alone does not finalize geometry or block source
 initialization; other finalization conditions still apply.
+
+
+## Traced download preparation
+
+`POST /resize-api/v1/download-traced` (lambda-resize) accepts JSON `movie_id`
+and optional `analysis_lease_id`, authenticated with `x-api-key`. Movie read
+permission is required. It returns `200` with `{ready: true, url, message: "",
+error: false}` for a current export, or `202` with `ready: false` and
+"Re-rendering; download the traced movie in a few minutes." for a newly queued
+or already active render. Conflicting editing/tracing/untraced-render work
+returns `409`; invalid requests return `400`, missing authentication `401`.
+
+The server selects the source, current saved markers and inclusive trim. It
+never trusts a client-supplied output range or URL. Taking the render lease
+releases the requesting browser's matching editing lease. Rendering preserves
+source bytes, frame records, trace progress, and the needs-retracing flag. Both
+analyzer and movie-list downloads use this endpoint instead of cached S3 URLs.
+
+`list-movies` and `get-movie-metadata` include the worker's named `purpose` in
+`tracking_lock`. Their displayed status distinguishes rendering/reset work from
+tracing. Existing `analysis_mp4` fields refer to the **untraced MP4**; their names
+remain unchanged for compatibility. Trim changes update export freshness without
+enqueuing work; marker writes and renames/deletions update `render_revision`.

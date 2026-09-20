@@ -181,13 +181,21 @@ def parse_s3_urn(*, urn):
     return parsed.netloc, parsed.path[1:]
 
 
-def traced_movie_urn(*, movie_data_urn):
+def traced_movie_urn(*, movie_data_urn, render_id=None):
     """Return a traced-movie URN while preserving the source bucket and extension."""
     bucket, source_key = parse_s3_urn(urn=movie_data_urn)
+    key = traced_movie_object_key(source_movie_object_key=source_key)
+    if render_id:
+        key = key.rsplit(".", 1)[0] + "-" + render_id + ".mp4"
     return make_urn(
-        object_name=traced_movie_object_key(source_movie_object_key=source_key),
+        object_name=key,
         bucket=bucket,
     )
+
+
+def analysis_mp4_urn(*, movie_data_urn, sha256):
+    """Keep the source and its playback derivative in distinct objects."""
+    return movie_data_urn.rsplit('.', 1)[0] + f'_{sha256}_scaled.mp4'
 
 
 def analysis_zip_urn(*, movie_data_urn):

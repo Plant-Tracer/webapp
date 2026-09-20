@@ -221,7 +221,8 @@ describe('list_movies_data', () => {
     const publishedHtml = mockElements['#your-published-movies'].innerHTML;
     expect(publishedHtml).toContain('download traced');
     expect(publishedHtml).toContain("class='play traced-movie-download'");
-    expect(publishedHtml).toContain('https://example.com/traced.mp4?x=1&amp;y=2');
+    expect(publishedHtml).not.toContain('https://example.com/traced.mp4');
+    expect(publishedHtml).toContain('x-movie_id="1"');
     expect(publishedHtml).toContain(RETRACE_REQUIRED_MESSAGE);
   });
 

@@ -33,7 +33,7 @@ Viewing movies
 
 Uploading Movies (optional)
 ---------------------------
-- Ensure that your video is of a size that works well with Plant Tracer. You may have to resize it before uploading, either by trimming its length or reducing its resolution. The movement tracking algorithm works better with fairly low resolution, so no need to be concerned about losing fine detail. We recommend a frame size of no more than 640 pixels in either dimension. We recommend a maximum of 1,000 frames per movie, though we permit a maximum of 10,000 frames. Your movie file must be 256MB or less or you will not be able to upload it. Plant Tracer keeps the uploaded original movie, but analysis frames are scaled to the tracker size. See :doc:`VideoResizing` for some ways to resize videos.
+- Ensure that your video is of a size that works well with Plant Tracer. You may have to resize it before uploading, either by trimming its length or reducing its resolution. The movement tracking algorithm works better with fairly low resolution, so no need to be concerned about losing fine detail. We recommend a frame size of no more than 640 pixels in either dimension. We recommend a maximum of 1,000 frames per movie, though we permit a maximum of 50,000 frames. Your movie file must be 256 MiB (268,435,456 bytes) or less. Selecting a larger file disables Upload and displays a size warning; select a smaller file to continue. Plant Tracer keeps the uploaded original movie, but analysis frames are scaled to the tracker size. See :doc:`VideoResizing` for some ways to resize videos.
 - Plant Tracer will accept videos in most well-known video file formats, but MP4 is probably best.
 - To upload your movie, select Upload from the menu bar at the top of the browser frame.
 - Enter the title of the file and a description of the movie.
@@ -171,3 +171,72 @@ For example, if FR = 0.5, then:
 - t[1] = 1 * 1/0.5 = 2 seconds
 - t[2] = 2 * 1/0.5 = 4 seconds
 - etc.
+
+
+Frame-by-frame MP4 analysis
+---------------------------
+
+After upload processing finishes, open Analyze to browse the whole movie before
+tracing. Use +1 and -1 for exact frame steps, enter a frame number to jump, or use
+forward/reverse play and the speed selector. Choose the orientation before upload;
+the original file is preserved and the untraced MP4 is rotated and resized for you.
+Frame-number labels and the frame field both start at 0, which is time zero.
+
+Opening an older movie automatically requests its untraced video if it is missing.
+The page shows "Recoding is in progress, come back in a few minutes."
+Leave the page and reopen Analyze after a few minutes. Your saved markers and
+original upload remain intact. If recoding reports a failure, contact an
+administrator with the displayed reason.
+
+Place or move markers on the desired frame, then choose Trace. The current markers
+are saved before tracking starts. After tracking completes, the same player shows
+the resulting markers and lets you step backward and forward to inspect them.
+Use a current Chrome or Edge browser on Windows or macOS with WebCodecs support.
+Returning to Analyze with the browser's Back button reloads the
+player and reacquires the editing lease; saved annotations are preserved.
+If tracing makes no progress for 30 seconds, status polling stops with a warning.
+The server may still be processing: reopen Analyze to check before starting again.
+Terminal tracing failures display their stored reason immediately.
+A decoder or processing error appears above the player instead of falling back to
+imprecise video seeking.
+
+
+Reading movie traces
+--------------------
+
+Frame counting starts at 0, which is also time zero. The marker table's Frames
+column gives each marker's first and last saved frame within the selected trim. A marker with no saved
+position on the displayed frame remains in the table with location ``n/a``.
+Deleting a marker removes its row and all of its saved traces throughout the
+movie, including outside the trim range. You can delete it from an ``n/a`` row;
+protected ruler markers cannot be deleted. Retrace to update a previously
+generated movie download, or click **Download traced movie** to render the saved
+points without tracking again. Reusing the name starts a new marker without restoring
+the deleted path.
+Past and current trace segments are fully opaque and 2 pixels wide; future
+segments use 50 percent opacity and are 1 pixel wide. Tracing from the displayed
+frame preserves earlier points.
+
+**Download traced movie** is available on both the analyzer and movie list.
+Changing the trim does not immediately create a video. On download, an outdated
+or missing traced MP4 is rendered in the background using the current saved
+markers and the inclusive trim. The message is: "Re-rendering; download the
+traced movie in a few minutes." Click Download again later to retrieve it.
+Repeated requests while rendering reuse the same job. Reopen Analyze afterward
+to edit. Rendering does not retrack points or clear a needs-retracing warning.
+A trim of 0-43 produces 44 frames; labels retain original source frame numbers
+and capture times. Saved points outside the trim remain available if it expands.
+Markers with no points inside the trim remain listed with Frames and Location
+shown as ``n/a``.
+
+The **untraced MP4** is the analyzer's playback video; the **traced MP4** is the
+export with saved markers and paths. Neither operation creates JPEG ZIPs.
+
+Downloaded traced movies show a blue frame-number label at the top right.
+During playback, future paths are also visible at 50 percent opacity and
+1 pixel wide; paths already reached are fully opaque and 2 pixels wide, matching
+the analyzer. Only paths within the selected trim are included.
+When you have set the capture interval, the label also shows elapsed capture seconds
+from the original frame 0. The red analysis-player label uses the same zero-based
+frame index. Older analysis movies are recoded when opened; old downloads need
+to be generated again to receive the new labels.

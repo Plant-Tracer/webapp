@@ -219,3 +219,102 @@ def test_trackpoint_colors_prefer_marker_color_property():
     assert colors["Base"] == tracer.BRIGHT_BLUE
     assert colors["Ruler 0mm"] == tracer.RED
     assert colors["Tip"] == tracer.MAGENTA
+
+
+def test_future_path_opacity_width_and_past_overlap():
+    """Future pixels are half-opacity/thin; past segments cover them completely."""
+    points = {number: [Trackpoint(x=x, y=40, label='Apex', frame_number=number)]
+              for number, x in enumerate((10, 40, 70))}
+    frame = np.zeros((80, 80, 3), dtype=np.uint8)
+    overlay = tracer.trace_path_overlay(frame, points, 0, 2, {'Apex': tracer.ORANGE})
+    tracer.cv2_label_frame(frame=frame, trackpoints=[], path_overlay=overlay,
+                           colors_by_label={'Apex': tracer.ORANGE}, trackpoint_segments=[
+                               tracer.TrackpointSegment(label='Apex', x1=10, y1=40, x2=40, y2=40)])
+    assert frame[40, 55].tolist() == [0, 82, 128]
+    assert not frame[39, 55].any()
+    assert not frame[41, 55].any()
+    assert frame[40, 25].tolist() == list(tracer.ORANGE)
+    assert frame[39, 25].tolist() == list(tracer.ORANGE)
+
+
+def test_render_only_download_includes_future_paths_inside_trim(tmp_path):
+    source, output = tmp_path / 'source.mp4', tmp_path / 'traced.mp4'
+    writer = tracer.H264Writer(source, fps=15)
+    for _ in range(5):
+        writer.append_data(np.zeros((480, 640, 3), dtype=np.uint8))
+    writer.close()
+    points = [Trackpoint(x=x, y=200, label='Apex', frame_number=number)
+              for number, x in enumerate((20, 100, 300, 500, 600))]
+    points += [Trackpoint(x=x, y=350, label='Gap', frame_number=number)
+               for number, x in ((1, 100), (3, 500))]
+    tracer.trace_movie_v2(movie_url=source, frame_start=0, trackpoints=points,
+                          render_only=True, movie_traced_path=output, callback=None,
+                          movie_traced_frame_range=tracer.TracedMovieFrameRange(start=1, end=3))
+    capture = cv2.VideoCapture(str(output))
+    decoded = []
+    while True:
+        success, frame = capture.read()
+        if not success:
+            break
+        decoded.append(frame)
+    capture.release()
+    assert len(decoded) == 3
+    future_red = decoded[0][197:204, 350:450, 2].astype(int).sum()
+    past_red = decoded[-1][197:204, 350:450, 2].astype(int).sum()
+    assert future_red > 5000  # Future segment is present in the first downloaded frame.
+    assert past_red > 3 * future_red  # Wider and fully opaque after reaching it.
+    for frame in decoded:
+        assert frame[195:205, 45:65].max() < 10  # Before trim start.
+        assert frame[195:205, 545:565].max() < 10  # After trim end.
+        assert frame[345:355, 250:350].max() < 10  # Missing marker frame is not bridged.
+
+
+def test_new_tracing_renders_computed_future_positions(tmp_path):
+    """New tracking must finish before the first export frame is annotated."""
+    source, output = tmp_path / 'moving.mp4', tmp_path / 'traced.mp4'
+    patch = np.random.default_rng(7).integers(0, 256, (32, 32, 1), dtype=np.uint8).repeat(3, axis=2)
+    writer = tracer.H264Writer(source, fps=15)
+    for number in range(6):
+        frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        frame[104:136, 64 + number * 8:96 + number * 8] = patch
+        writer.append_data(frame)
+    writer.close()
+    tracked, rendered = [], []
+    points = tracer.trace_movie_v2(
+        movie_url=source, frame_start=0,
+        trackpoints=[Trackpoint(x=80, y=120, label='Apex', frame_number=0)],
+        movie_traced_path=output, callback=tracked.append, render_callback=rendered.append)
+    assert abs(float(points[-1].x) - 120) < 1
+    assert [obj.frame_number for obj in tracked] == list(range(6))
+    assert [obj.frame_number for obj in rendered] == list(range(6))
+    capture = cv2.VideoCapture(str(output))
+    success, first = capture.read()
+    capture.release()
+    assert success
+    # This region is black in source frame zero and well outside its current marker.
+    assert first[117:124, 105:113, 2].astype(int).sum() > 400
+
+
+def test_download_label_uses_capture_time_and_original_zero_based_frame(tmp_path):
+    """A trimmed download keeps original frame indices and uses capture, not playback time."""
+    output = tmp_path / 'timed.mp4'
+    tracer.trace_movie_v2(
+        movie_url=TEST_MOVIE, frame_start=1, frame_end=2,
+        trackpoints=[Trackpoint(x=370, y=298, label="Apex", frame_number=0)],
+        movie_traced_path=output,
+        movie_traced_frame_range=tracer.TracedMovieFrameRange(start=2, end=2, seconds_per_frame=30),
+        callback=None,
+    )
+    capture = cv2.VideoCapture(str(output))
+    success, decoded = capture.read()
+    assert not capture.read()[0]
+    capture.release()
+    assert success
+    reference = np.zeros_like(decoded)
+    tracer.cv2_label_frame(frame=reference, trackpoints=[], frame_label="2  60 s")
+    # Blue pixels establish export styling; white glyph pixels distinguish the exact label.
+    region = decoded[:35, -140:].astype(int)
+    assert np.any((region[:, :, 0] > 150) & (region[:, :, 2] < 100))
+    glyphs = np.all(reference[:35, -140:] > 200, axis=2)
+    assert glyphs.sum() > 100
+    assert np.mean(region[glyphs]) > 175

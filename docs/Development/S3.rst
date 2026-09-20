@@ -156,7 +156,11 @@ The resulting objects are:
      - ``movies/{deployment_id}/{course_id}/{movie_id}_traced.mov``
      - ``movie_traced_urn``
      - Derived and regenerable
-   * - Analysis-frame ZIP
+   * - Untraced MP4
+     - ``movies/{deployment_id}/{course_id}/{movie_id}_{sha256}_scaled.mp4``
+     - ``analysis_mp4.urn``
+     - Validated, frame-numbered playback derivative; original preserved
+   * - Historical analysis-frame ZIP
      - ``movies/{deployment_id}/{course_id}/{movie_id}_zipfile.mov``
      - ``movie_zipfile_urn``
      - Derived and regenerable
@@ -164,6 +168,10 @@ The resulting objects are:
      - ``movies/{deployment_id}/{course_id}/{movie_id}/{frame_number:06d}.jpg``
      - ``frame_urn`` on a ``movie_frames`` row
      - Optional and regenerable
+
+New upload processing writes the validated untraced MP4, and tracing writes only
+the traced MP4. Neither creates a ZIP. Existing ZIP objects are not bulk-deleted
+by this workflow.
 
 The ZIP key retains the original movie extension for compatibility even though
 the object contains ZIP bytes. Derived-artifact helpers preserve the original
@@ -249,6 +257,14 @@ and the final rendered frame of the traced movie. Post-trace validation runs in
 JSON, CSV, XLSX, then image order. The CSV gate reports frame coverage and Apex
 movement statistics before comparing every CSV and XLSX frame and marker
 coordinate with its reference using the two-pixel tracking tolerance.
+CSV coordinate-height and origin columns are validated on every row against the
+uploaded movie's analysis height and bottom-left coordinate system before the
+coordinate columns are compared with the older reference fixture. XLSX keeps
+these values in its Metadata worksheet, so its coordinate headers are unchanged.
+The two-pixel tracking tolerance accounts for the rounding uncertainty of
+calibrated values: each export rounds to 0.01 mm, so a comparison of two exported
+coordinates permits at most 0.01 mm of additional rounding error. Integer pixel
+ruler coordinates receive no rounding allowance.
 Downloaded exports, the traced movie, and its final frame remain in the logged
 artifact directory. Image comparison requires matching dimensions and a mean
 absolute channel difference no greater than 3 out of 255, avoiding failures on

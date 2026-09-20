@@ -26,12 +26,14 @@ from pydantic import BaseModel, ValidationError
 from .schema import (
     User,
     AdminCourse,
+    AnalysisMp4,
     Movie,
     LogEntry,
     MovieAnalysisLock,
     MovieTraceLock,
     Trackpoint,
     RenameMarkerRequest,
+    DeleteMarkerRequest,
     validate_movie_field,
     Course,
     fix_movie,
@@ -51,6 +53,11 @@ COURSES = 'courses'
 COURSE_USERS = 'course_users'
 LOGS = 'logs'
 LOG_ID = 'log_id'
+WORK_PURPOSE = 'work_purpose'
+RENDER_REVISION = 'render_revision'
+TRACED_RENDER_KEY = 'traced_render_key'
+RENDER_FAILED_AT = 'render_failed_at'
+RENDER_FAILURE_SUMMARY = 'render_failure_summary'
 TRACE_JOB_ID = 'trace_job_id'
 TRACE_LOCK_STATE = 'tracing_state'
 TRACE_LOCK_ACQUIRED_AT = 'tracing_started_at'
@@ -75,12 +82,20 @@ class MovieAnalysisLocked(ValueError):
     """The movie has an active analysis lease."""
 
 
+def movie_render_revision_update(updates):
+    """Invalidate exported annotations independently from trace correctness."""
+    if updates.get(NEEDS_RETRACING) or LAST_FRAME_TRACKED in updates:
+        return {RENDER_REVISION: uuid.uuid4().hex}
+    return {}
+
+
 def movie_trace_lock_from_record(movie):
     """Return an active trace lease represented by an already-fetched movie record."""
     if movie and int(movie.get(TRACE_LOCK_EXPIRES_AT, 0)) > int(time.time()):
         return MovieTraceLock.model_validate({
             MOVIE_ID: movie[MOVIE_ID],
             "job_id": movie[TRACE_JOB_ID],
+            "purpose": movie.get(WORK_PURPOSE) or "trace",
             "state": movie[TRACE_LOCK_STATE],
             "acquired_at": movie[TRACE_LOCK_ACQUIRED_AT],
             "heartbeat_at": movie[TRACE_LOCK_HEARTBEAT_AT],
@@ -142,6 +157,8 @@ MAX_ENROLLMENT = 'max_enrollment'       # course.max_enrollment
 # movies table
 
 MOVIE_ID = 'movie_id'
+ANALYSIS_MP4 = 'analysis_mp4'
+ANALYSIS_MP4_URL = 'analysis_mp4_url'
 MOVIE_DATA_URN = 'movie_data_urn'             # original, uploaded
 MOVIE_ROTATION = 'rotation'                   # should be None, or 0, 90, 270 or 180 (integer)
 MOVIE_TRACED_URN = 'movie_traced_urn'         # with tracing
@@ -149,6 +166,7 @@ MOVIE_ZIPFILE_URN = 'movie_zipfile_urn'       # rotated and scaled
 NEEDS_RETRACING = 'needs_retracing'           # traced MP4 may be stale after marker edits
 MARKER_ID = 'marker_id'
 MARKERS = 'markers'
+MARKER_DELETED = 'deleted'
 MARKER_LABELS = 'marker_labels'
 MARKER_ALIASES = 'marker_aliases'
 TITLE = 'title'
@@ -210,6 +228,8 @@ MOVIE_STATUS = 'status'
 MOVIE_STATE_UPLOADING  = 'uploading'
 MOVIE_STATE_PROCESSING = 'processing'
 MOVIE_STATE_PROCESSING_FAILED = 'processing failed'
+PROCESSING_ATTEMPT = 'processing_attempt'
+PROCESSING_EXPIRES_AT = 'processing_expires_at'
 PROCESSING_FAILED_AT = 'processing_failed_at'
 PROCESSING_FAILURE_SUMMARY = 'processing_failure_summary'
 MOVIE_STATE_READY      = 'ready'
@@ -319,6 +339,14 @@ class NoMovieData(ODB_Errors):
 
 class MovieGeometryFinalized(ODB_Errors):
     """Processing has fixed the movie geometry; upload another movie to change it."""
+
+class MovieProcessingLocked(ODB_Errors):
+    """An unexpired worker already owns upload processing."""
+
+
+class MovieProcessingLeaseLost(ODB_Errors):
+    """A stale worker must not publish a terminal result."""
+
 
 class MovieUploadIncomplete(ODB_Errors):
     """Upload must complete before coordinate data can be saved."""
@@ -544,7 +572,8 @@ class DDBO:
         # 5) run the update
         return table.update_item(**params)
 
-    def update_movie(self, movie_id, updates: dict, *, touch_activity=True, expected_status=None):
+    def update_movie(self, movie_id, updates: dict, *, touch_activity=True, expected_status=None,
+                     expected_processing_attempt=None):
         """Update a movie and, by default, record its latest write activity.
 
         The former MySQL movie table exposed an automatically maintained
@@ -557,9 +586,15 @@ class DDBO:
             prop: fix_movie_prop_value(prop, value)
             for prop, value in updates.items()
         }
+        movie_updates.update(movie_render_revision_update(updates))
         if touch_activity:
             movie_updates[LAST_ACTIVITY_AT] = int(time.time())
         condition = None if expected_status is None else Attr(MOVIE_STATUS).eq(expected_status)
+        if expected_processing_attempt is not None:
+            ownership = (Attr(PROCESSING_ATTEMPT).eq(expected_processing_attempt)
+                         & Attr(PROCESSING_EXPIRES_AT).gt(int(time.time()))
+                         & Attr(ANALYSIS_MP4).not_exists())
+            condition = ownership if condition is None else condition & ownership
         geometry_condition = None
         for prop in (MOVIE_ROTATION, WIDTH, HEIGHT, FRAME_HEIGHT_PX):
             if prop not in movie_updates:
@@ -577,6 +612,13 @@ class DDBO:
         try:
             return self.update_table(self.movies, movie_id, movie_updates, condition_expression=condition)
         except ClientError as exc:
+            if (expected_processing_attempt is not None
+                    and exc.response['Error']['Code'] == 'ConditionalCheckFailedException'):
+                current = self.get_movie(movie_id)
+                if (current.get(PROCESSING_ATTEMPT) != expected_processing_attempt
+                        or int(current.get(PROCESSING_EXPIRES_AT) or 0) <= int(time.time())
+                        or current.get(ANALYSIS_MP4)):
+                    raise MovieProcessingLeaseLost(movie_id) from exc
             if geometry_condition is not None and exc.response['Error']['Code'] == 'ConditionalCheckFailedException':
                 height = movie_updates.get(FRAME_HEIGHT_PX)
                 stored_height = self.get_movie(movie_id).get(FRAME_HEIGHT_PX) if height is not None else None
@@ -584,6 +626,29 @@ class DDBO:
                     raise TrackpointFrameHeightMismatch(movie_id) from exc
                 raise MovieGeometryFinalized(movie_id) from exc
             raise
+
+    def claim_movie_processing(self, movie_id):
+        """Claim upload work atomically; busy deliveries retry after the owner finishes."""
+        now = int(time.time())
+        attempt = str(uuid.uuid4())
+        available = (Attr(PROCESSING_ATTEMPT).not_exists()
+                     | Attr(PROCESSING_EXPIRES_AT).lte(now))
+        for field in (TRACE_LOCK_EXPIRES_AT, ANALYSIS_LOCK_EXPIRES_AT):
+            available &= Attr(field).not_exists() | Attr(field).lte(now)
+        try:
+            self.update_table(self.movies, movie_id, {
+                PROCESSING_ATTEMPT: attempt, PROCESSING_EXPIRES_AT: now + 15 * 60,
+                WORK_PURPOSE: "render_untraced",
+                MOVIE_STATUS: MOVIE_STATE_PROCESSING, RESIZE_STARTED_AT: now,
+                PROCESSING_FAILED_AT: None, PROCESSING_FAILURE_SUMMARY: None,
+            }, condition_expression=Attr(MOVIE_ID).exists() & Attr(ANALYSIS_MP4).not_exists() & available)
+        except ClientError as exc:
+            if exc.response['Error']['Code'] != 'ConditionalCheckFailedException':
+                raise
+            if self.get_movie(movie_id).get(ANALYSIS_MP4):
+                return None
+            raise MovieProcessingLocked(movie_id) from exc
+        return attempt
 
     def put_movie_log(self, *, event_type, movie, ipaddr, log_id=None, event_id=None,
                       object_key=None, sequencer=None, total_bytes=None,
@@ -661,7 +726,7 @@ class DDBO:
         return movie_analysis_lock_from_record(movie)
 
     def acquire_movie_analysis_lock(self, *, movie, started_by_user_id, started_by_user_name):
-        """Atomically obtain a 15-minute browser Analyze lease."""
+        """Obtain an Analyze lease and fence any expired background worker."""
         now = int(time.time())
         lock = MovieAnalysisLock(
             movie_id=movie[MOVIE_ID], lease_id=uuid.uuid4().hex,
@@ -674,9 +739,10 @@ class DDBO:
                 Key={MOVIE_ID: movie[MOVIE_ID]},
                 UpdateExpression=("SET #lease_id=:lease_id, #acquired=:now, #heartbeat=:now, "
                                   "#expires=:expires, #started_by_id=:started_by_id, "
-                                  "#started_by_name=:started_by_name"),
+                                  "#started_by_name=:started_by_name REMOVE #trace_job"),
                 ConditionExpression=("(attribute_not_exists(#analysis_expires) OR #analysis_expires < :now) "
-                                     "AND (attribute_not_exists(#trace_expires) OR #trace_expires < :now)"),
+                                     "AND (attribute_not_exists(#trace_expires) OR #trace_expires < :now) "
+                                     "AND (attribute_not_exists(#processing_expires) OR #processing_expires <= :now)"),
                 ExpressionAttributeNames={
                     "#lease_id": ANALYSIS_LEASE_ID, "#acquired": ANALYSIS_LOCK_ACQUIRED_AT,
                     "#heartbeat": ANALYSIS_LOCK_HEARTBEAT_AT, "#analysis_expires": ANALYSIS_LOCK_EXPIRES_AT,
@@ -684,6 +750,8 @@ class DDBO:
                     "#started_by_id": ANALYSIS_LOCK_STARTED_BY_USER_ID,
                     "#started_by_name": ANALYSIS_LOCK_STARTED_BY_USER_NAME,
                     "#trace_expires": TRACE_LOCK_EXPIRES_AT,
+                    "#trace_job": TRACE_JOB_ID,
+                    "#processing_expires": PROCESSING_EXPIRES_AT,
                 },
                 ExpressionAttributeValues={
                     ":lease_id": lock.lease_id, ":now": now, ":expires": lock.expires_at,
@@ -746,32 +814,43 @@ class DDBO:
 
     def acquire_movie_trace_lock(self, *, movie, started_by_user_id, started_by_user_name,
                                  analysis_lease_id=None):
-        """Atomically obtain a 15-minute lease and expose tracing status."""
+        """Compatibility entry point for tracing using the shared named work lease."""
+        return self.acquire_movie_work_lock(
+            movie=movie, started_by_user_id=started_by_user_id,
+            started_by_user_name=started_by_user_name, analysis_lease_id=analysis_lease_id,
+            purpose="trace")
+
+    def acquire_movie_work_lock(self, *, movie, started_by_user_id, started_by_user_name,
+                                purpose, analysis_lease_id=None):
+        """Obtain one named worker lease, mutually exclusive with editing and recoding."""
         now = int(time.time())
         lock = MovieTraceLock(
-            movie_id=movie[MOVIE_ID], job_id=uuid.uuid4().hex, state="queued",
+            movie_id=movie[MOVIE_ID], job_id=uuid.uuid4().hex, state="queued", purpose=purpose,
             acquired_at=now, heartbeat_at=now, expires_at=now + 15 * 60,
             started_by_user_id=started_by_user_id,
             started_by_user_name=started_by_user_name,
         )
+        cleared_failures = {"#failed_at": TRACING_FAILED_AT, "#failure_summary": TRACING_FAILURE_SUMMARY} if purpose == "trace" else {}
+        failure_expression = ", ".join(cleared_failures) + ", " if cleared_failures else ""
         try:
             self.movies.update_item(
                 Key={MOVIE_ID: movie[MOVIE_ID]},
                 UpdateExpression=("SET #job_id=:job_id, #state=:state, #acquired=:now, #heartbeat=:now, "
                                   "#expires=:expires, #started_by_id=:started_by_id, #started_by_name=:started_by_name, "
-                                  "#status=:status, #last_activity_at=:now REMOVE #failed_at, #failure_summary, "
+                                  "#purpose=:purpose, #status=:status, #last_activity_at=:now REMOVE " + failure_expression +
                                   "#analysis_id, #analysis_acquired, #analysis_heartbeat, #analysis_expires, "
                                   "#analysis_started_by_id, #analysis_started_by_name"),
                 ConditionExpression=("(attribute_not_exists(#expires) OR #expires < :now) AND "
                                      "(attribute_not_exists(#analysis_expires) OR #analysis_expires < :now "
-                                     "OR #analysis_id=:analysis_id)"),
+                                     "OR #analysis_id=:analysis_id) AND "
+                                     "(attribute_not_exists(#processing_expires) OR #processing_expires <= :now)"),
                 ExpressionAttributeNames={
-                    "#job_id": TRACE_JOB_ID, "#state": TRACE_LOCK_STATE,
+                    "#purpose": WORK_PURPOSE, "#job_id": TRACE_JOB_ID, "#state": TRACE_LOCK_STATE,
                     "#acquired": TRACE_LOCK_ACQUIRED_AT, "#heartbeat": TRACE_LOCK_HEARTBEAT_AT,
                     "#expires": TRACE_LOCK_EXPIRES_AT, "#started_by_id": TRACE_LOCK_STARTED_BY_USER_ID,
                     "#started_by_name": TRACE_LOCK_STARTED_BY_USER_NAME, "#status": MOVIE_STATUS,
-                    "#last_activity_at": LAST_ACTIVITY_AT, "#failed_at": TRACING_FAILED_AT,
-                    "#failure_summary": TRACING_FAILURE_SUMMARY,
+                    "#last_activity_at": LAST_ACTIVITY_AT, **cleared_failures,
+                    "#processing_expires": PROCESSING_EXPIRES_AT,
                     "#analysis_id": ANALYSIS_LEASE_ID, "#analysis_acquired": ANALYSIS_LOCK_ACQUIRED_AT,
                     "#analysis_heartbeat": ANALYSIS_LOCK_HEARTBEAT_AT,
                     "#analysis_expires": ANALYSIS_LOCK_EXPIRES_AT,
@@ -779,9 +858,10 @@ class DDBO:
                     "#analysis_started_by_name": ANALYSIS_LOCK_STARTED_BY_USER_NAME,
                 },
                 ExpressionAttributeValues={
-                    ":job_id": lock.job_id, ":state": lock.state, ":now": now,
+                    ":purpose": lock.purpose, ":job_id": lock.job_id, ":state": lock.state, ":now": now,
                     ":expires": lock.expires_at, ":started_by_id": lock.started_by_user_id,
-                    ":started_by_name": lock.started_by_user_name, ":status": MOVIE_STATE_TRACING,
+                    ":started_by_name": lock.started_by_user_name,
+                    ":status": MOVIE_STATE_TRACING if purpose == "trace" else (movie.get(MOVIE_STATUS) or MOVIE_STATE_READY),
                     ":analysis_id": analysis_lease_id or "",
                 },
             )
@@ -821,7 +901,7 @@ class DDBO:
             ExpressionAttributeValues={":job_id": job_id, ":now": now, ":expires": now + 15 * 60},
         )
 
-    def finish_movie_trace(self, *, movie_id, job_id, updates):
+    def finish_movie_trace(self, *, movie_id, job_id, updates, expected_inputs=None):
         """Publish a terminal state only while this worker owns the lease."""
         now = int(time.time())
         update_names = {f"#{key}": key for key in updates}
@@ -829,16 +909,28 @@ class DDBO:
         update_names["#last_activity_at"] = LAST_ACTIVITY_AT
         update_values[":last_activity_at"] = now
         update_names["#job_id"] = TRACE_JOB_ID
-        lock_fields = (TRACE_JOB_ID, TRACE_LOCK_STATE, TRACE_LOCK_ACQUIRED_AT,
+        lock_fields = (WORK_PURPOSE, TRACE_JOB_ID, TRACE_LOCK_STATE, TRACE_LOCK_ACQUIRED_AT,
                        TRACE_LOCK_HEARTBEAT_AT, TRACE_LOCK_EXPIRES_AT,
                        TRACE_LOCK_STARTED_BY_USER_ID, TRACE_LOCK_STARTED_BY_USER_NAME)
         update_names.update({f"#lock_{index}": field for index, field in enumerate(lock_fields)})
         expression = ("SET " + ", ".join(f"#{key}=:{key}" for key in updates)
                       + ", #last_activity_at=:last_activity_at REMOVE "
                       + ", ".join(f"#lock_{index}" for index in range(len(lock_fields))))
+        update_names["#expires"] = TRACE_LOCK_EXPIRES_AT
+        update_values[":now"] = now
+        condition = "#job_id=:job_id AND #expires > :now"
+        for index, (field, value) in enumerate((expected_inputs or {}).items()):
+            name, token = f"#input{index}", f":input{index}"
+            update_names[name] = field
+            if value is None:
+                condition += f" AND (attribute_not_exists({name}) OR {name}={token})"
+                update_values[token] = None
+            else:
+                condition += f" AND {name}={token}"
+                update_values[token] = value
         self.movies.update_item(
             Key={MOVIE_ID: movie_id}, UpdateExpression=expression,
-            ConditionExpression="#job_id=:job_id",
+            ConditionExpression=condition,
             ExpressionAttributeNames=update_names,
             ExpressionAttributeValues={**update_values, ":job_id": job_id},
         )
@@ -2517,11 +2609,20 @@ def get_frame_urn(*, movie_id, frame_number):
 ################################################################
 ## Trackpoints
 
+def movie_analysis_mp4(movie: dict) -> AnalysisMp4 | None:
+    """Read the validated analysis descriptor from a movie record."""
+    value = movie.get(ANALYSIS_MP4)
+    return AnalysisMp4.model_validate(value) if value else None
+
+
 def trackpoint_frame_height(movie: dict) -> int:
     """Return the analysis-frame height used to flip trackpoint Y coordinates."""
     explicit_height = movie.get(FRAME_HEIGHT_PX)
     if explicit_height is not None:
         return int(validate_movie_field(FRAME_HEIGHT_PX, explicit_height))
+    analysis = movie_analysis_mp4(movie)
+    if analysis is not None:
+        return analysis.height
     rotation_value = movie.get(MOVIE_ROTATION, 0)
     try:
         rotation = int(rotation_value)
@@ -2712,6 +2813,8 @@ def get_movie_trackpoints(*, movie_id, frame_start=None, frame_count=None, frame
     for frame in iter_movie_frames_in_range( DDBO().movie_frames, movie_id,
                                              frame_start, frame_end ):
         for tp in frame.get('trackpoints',[]):
+            if marker_is_deleted(marker_map, tp):
+                continue
             trackpoint = {key: value for key, value in tp.items()
                           if value is not None and key != MARKER_ID}
             trackpoint[FRAME_NUMBER] = int(frame[FRAME_NUMBER])
@@ -2746,7 +2849,8 @@ def _new_marker_id(label: str, markers: dict) -> str:
     digest = hashlib.sha256(label.encode("utf-8")).hexdigest()[:16]
     marker_id = f"marker-{digest}"
     counter = 1
-    while marker_id in markers and markers[marker_id].get('label') != label:
+    while marker_id in markers and (markers[marker_id].get('label') != label
+                                    or markers[marker_id].get(MARKER_DELETED)):
         counter += 1
         marker_id = f"marker-{digest}-{counter}"
     return marker_id
@@ -2837,6 +2941,12 @@ def _write_movie_marker_map(*, ddbo, old_item: dict, new_item: dict):
     )
 
 
+def marker_is_deleted(marker_map: dict, trackpoint: dict) -> bool:
+    """Resolve tombstones for stable IDs and legacy labels without rewriting frames."""
+    marker_id = trackpoint.get(MARKER_ID) or marker_map.get(MARKER_ALIASES, {}).get(trackpoint.get('label'))
+    return bool(marker_map.get(MARKERS, {}).get(marker_id, {}).get(MARKER_DELETED))
+
+
 def marker_label_for_trackpoint(marker_map: dict, trackpoint: dict) -> str:
     """Return a trackpoint's current label, resolving marker_id through the movie marker map."""
     marker_id = trackpoint.get(MARKER_ID)
@@ -2865,11 +2975,15 @@ def ensure_trackpoint_marker_ids(*, movie_id: str, trackpoints: list[dict]) -> l
         stored_trackpoint = copy.copy(trackpoint)
         label = stored_trackpoint['label']
         marker_id = stored_trackpoint.get(MARKER_ID) or marker_labels.get(label) or marker_aliases.get(label)
+        if markers.get(marker_id, {}).get(MARKER_DELETED):
+            if stored_trackpoint.get(MARKER_ID):
+                continue  # A stale writer must not revive a deleted marker ID.
+            marker_id = None
         if marker_id is None:
             marker_id = _new_marker_id(label, markers)
             markers[marker_id] = {'label': label}
             marker_labels[label] = marker_id
-            marker_aliases[label] = marker_id
+            marker_aliases.setdefault(label, marker_id)  # Legacy points keep their old identity.
             changed = True
         stored_trackpoint[MARKER_ID] = marker_id
         stored_trackpoints.append(stored_trackpoint)
@@ -2945,7 +3059,7 @@ def rename_movie_marker(*, movie_id: str, old_label: str, new_label: str,
 
     marker_labels.pop(old_label)
     marker_labels[new_label] = marker_id
-    marker_aliases[old_label] = marker_id
+    marker_aliases.setdefault(old_label, marker_id)
     marker_aliases[new_label] = marker_id
     markers[marker_id] = {**markers.get(marker_id, {}), 'label': new_label}
     trackpoints_updated = 0
@@ -2968,6 +3082,33 @@ def rename_movie_marker(*, movie_id: str, old_label: str, new_label: str,
         MARKER_LABELS: marker_labels,
         MARKER_ALIASES: marker_aliases,
     }
+    _commit_marker_map_change(ddbo, marker_map, new_marker_map, needs_retracing=needs_retracing)
+    return {'frames_updated': frames_updated, 'trackpoints_updated': trackpoints_updated}
+
+
+def delete_movie_marker(*, movie_id: str, label: str):
+    """Atomically hide a marker everywhere and invalidate its traced download."""
+    label = DeleteMarkerRequest(label=label).label
+    ddbo = DDBO()
+    frames = ddbo.get_frames(movie_id)
+    marker_map = get_movie_marker_map(movie_id=movie_id, frames=frames, create=True)
+    marker_id = marker_map[MARKER_LABELS].get(label)
+    if marker_id is None:
+        return
+    for frame in frames:
+        for point in frame.get('trackpoints', []):
+            point_id = point.get(MARKER_ID) or marker_map[MARKER_ALIASES].get(point.get('label'))
+            if point_id == marker_id and point.get('undeletable'):
+                raise ValueError("This marker cannot be deleted")
+    updated = copy.deepcopy(marker_map)
+    updated[MARKERS][marker_id][MARKER_DELETED] = True
+    updated[MARKER_LABELS].pop(label)
+    _commit_marker_map_change(ddbo, marker_map, updated, needs_retracing=True)
+
+
+def _commit_marker_map_change(ddbo, marker_map, new_marker_map, *, needs_retracing):
+    """Commit a marker-map edit and movie invalidation in one conditional transaction."""
+    movie_id = marker_map[MOVIE_ID]
     transact_items = [{
         'Update': {
             'TableName': ddbo.movie_frames.name,
@@ -2997,12 +3138,13 @@ def rename_movie_marker(*, movie_id: str, old_label: str, new_label: str,
             },
         },
     }]
-    movie_update_expression = 'SET #last_activity_at = :last_activity_at'
+    movie_update_expression = 'SET #last_activity_at = :last_activity_at, #revision = :revision'
     movie_expression_names = {
         '#movie_id': MOVIE_ID,
+        '#revision': RENDER_REVISION,
         '#last_activity_at': LAST_ACTIVITY_AT,
     }
-    movie_expression_values = {':last_activity_at': int(time.time())}
+    movie_expression_values = {':last_activity_at': int(time.time()), ':revision': uuid.uuid4().hex}
     if needs_retracing:
         movie_update_expression += ', #needs_retracing = :needs_retracing'
         movie_expression_names['#needs_retracing'] = NEEDS_RETRACING
@@ -3026,10 +3168,9 @@ def rename_movie_marker(*, movie_id: str, old_label: str, new_label: str,
     except ClientError as exc:
         if exc.response.get('Error', {}).get('Code') == 'TransactionCanceledException':
             raise AtomicRenameConflict(
-                f"marker rename for movie {movie_id} was canceled because the marker map changed"
+                f"marker edit for movie {movie_id} was canceled because the marker map changed"
             ) from exc
         raise
-    return {'frames_updated': frames_updated, 'trackpoints_updated': trackpoints_updated}
 
 def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackpoint],
                           needs_retracing:bool=False):
@@ -3054,7 +3195,6 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackp
     movie = ddbo.get_movie(movie_id, fields=[LAST_FRAME_TRACKED])
     current = movie.get(LAST_FRAME_TRACKED, None)
     if current is None:
-        assert frame_number==0,f"frame_number {frame_number} should be 0 if this is the first frame to be tracked"
         lft = frame_number
     else:
         lft = max(current, frame_number)
@@ -3201,7 +3341,7 @@ def set_metadata(*, user_id, set_movie_id=None, set_user_id=None, prop, value):
                 # permission not granted
                 raise UnauthorizedUser("permission denied")
 
-        if user_id != ROOT_USER_ID and prop in (WIDTH, HEIGHT):
+        if user_id != ROOT_USER_ID and prop in (WIDTH, HEIGHT, ANALYSIS_MP4):
             raise UnauthorizedUser("Movie dimensions are measured by processing and cannot be edited")
         ddbo.update_movie(set_movie_id, {prop:value})
     elif set_user_id is not None:

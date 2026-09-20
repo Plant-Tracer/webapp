@@ -1,5 +1,6 @@
 "use strict";
 
+import { requestTracedDownload, openTracedDownload } from './traced_download.js';
 import { activeCourseId } from "./course_context.js";
 
 //code for /analyze
@@ -27,14 +28,13 @@ const INFLECTION_MARKER_COLOR = '#2aa198';
 const MIN_MARKER_NAME_LEN = 4;  // markers must be this long (allows 'apex')
 const TRACING_COMPLETED_FLAG='tracing completed';
 const TRACING_FLAG='tracing';
-const MAX_FRAMES = 10000;
+const MAX_FRAMES = 50000;
+const FRAME_METADATA_PAGE_SIZE = 1000;
 const STATUS_POLL_MSEC = 500;
-const MAX_ZIP_WAIT_MS = 10000;
-const STATUS_POLL_MAX_ERRORS = 5;
 const TRACING_MAY_LEAVE_MESSAGE = 'You may leave this page and click Analyze again later.';
 const TRACE_MOVIE_RETRY_DELAY_MS = 5000; // if trace movie fails
 const TRACKPOINT_ORIGIN_BOTTOM_LEFT = 'bottom-left';
-const TRACKING_START_TIMEOUT_MS = 15000;
+const TRACKING_PROGRESS_TIMEOUT_MS = 30000;
 const TRIM_START_FRAME = 'trim_start_frame';
 const TRIM_END_FRAME = 'trim_end_frame';
 const MOVIE_TRACED_URL = 'movie_traced_url';
@@ -94,7 +94,7 @@ var cell_id_counter = 0;
 
 import { $, begin_inline_text_edit } from "./utils.js";
 import {
-    BACKEND_LAMBDA_UNRESPONSIVE_MESSAGE,
+    TRACING_PROGRESS_TIMEOUT_MESSAGE,
     MARKER_NAME_IN_USE_MESSAGE,
     MOVIE_CANNOT_BE_TRACED_DEMO_MESSAGE,
     MOVIE_IS_TRACED_MESSAGE,
@@ -102,8 +102,6 @@ import {
     MOVIE_READY_FOR_INITIAL_TRACING_MESSAGE,
     MOVIE_READY_FOR_TRACING_MESSAGE,
     MOVIE_READY_PLACE_MARKERS_TRACE_MESSAGE,
-    PLACE_MARKERS_TRACE_START_MESSAGE,
-    PRESS_PLAY_STATUS_TEXT,
     RETRACE_MOVIE,
     RETRACE_REQUIRED_MESSAGE,
     RETRACE_TO_END_OF_MOVIE,
@@ -111,12 +109,11 @@ import {
     TRACE_MOVIE,
     TRACE_TO_END_OF_MOVIE,
     TRACE_MOVIE_TRIM_DISABLED_TITLE,
-    TRACING_COMPLETE_LOADING_MOVIE_MESSAGE,
     TRACING_STARTING_MESSAGE,
 } from "./ui_constants.js";
 import { CanvasItem, Marker,Line } from "./canvas_controller.mjs";
 import { MovieController } from "./canvas_movie_controller.js"
-import { unzip, setOptions } from './unzipit.module.mjs';
+import { Mp4FramePlayer } from './mp4_frame_player.mjs';
 import { gravitropism_results, circumnutation_results } from "./analysis_results.mjs";
 
 // Default marker positions used only when a new movie is first loaded for analysis
@@ -163,10 +160,7 @@ function create_default_markers() {
     return DEFAULT_MARKERS.map(m => ({...m}));
 }
 
-setOptions({
-  workerURL: new URL('./unzipit-worker.module.mjs', import.meta.url).href,
-  numWorkers: 2,
-});
+
 
 const DISABLED='disabled';
 
@@ -280,7 +274,7 @@ class TracerController extends MovieController {
         this.pending_retrace_to_end = false;
         this.tracing_was_reset = false;
         this.pending_trace_start_frame = null;
-        this.tracking_start_deadline_ms = null;
+        this.tracking_progress_deadline_ms = null;
         this.trace_inputs_changed = Number(movie_metadata[NEEDS_RETRACING] || 0) === 1;
         this.marker_colors_by_label = new Map();
         this.loaded_analysis_frame_height = null;
@@ -448,7 +442,7 @@ class TracerController extends MovieController {
     }
 
     editingLocked() {
-        return this.analysis_read_only || this.tracking || this.resetting_tracing || this.movieStatusIsTracing();
+        return this.preparing_download || this.analysis_read_only || this.frame_loading || this.tracking || this.resetting_tracing || this.deleting_marker || this.movieStatusIsTracing();
     }
 
     analysisLeaseParams() {
@@ -633,7 +627,7 @@ class TracerController extends MovieController {
         if (!editable) {
             this.add_marker_button.prop(DISABLED, true);
             this.track_button.prop(DISABLED, true);
-        } else if (this.hasTraceableFrameData()) {
+        } else {
             this.refreshTrackButtonState();
         }
     }
@@ -713,6 +707,7 @@ class TracerController extends MovieController {
                 this.refreshTrimControls();
                 this.goto_frame(frameNumber);
                 this.refreshVisibleGraphs();
+                this.create_marker_table();
             })
             .fail((res) => {
                 const msg = res.responseJSON && res.responseJSON.message
@@ -823,13 +818,36 @@ class TracerController extends MovieController {
     }
 
     refreshTracedMovieDownload() {
-        const tracedMovieUrl = this.movie_metadata[MOVIE_TRACED_URL];
-        if (tracedMovieUrl) {
-            this.traced_movie_download_link.attr('href', tracedMovieUrl);
-            this.traced_movie_download_control.show();
-        } else {
-            this.traced_movie_download_link.attr('href', '#');
-            this.traced_movie_download_control.hide();
+        this.traced_movie_download_control.show();
+        this.traced_movie_download_link.attr('href', '#').off('click.traced-download')
+            .on('click.traced-download', event => {
+                event.preventDefault();
+                this.downloadTracedMovie();
+            });
+    }
+
+    async downloadTracedMovie() {
+        if (this.preparing_download) return;
+        this.preparing_download = true;
+        this.refreshFrameEditState();
+        try {
+            await Promise.all(Array.from(this.marker_save_requests || []));
+            const result = await requestTracedDownload(this.movie_id, this.api_key, this.analysis_lease_id);
+            if (result.ready) {
+                openTracedDownload(result.url);
+            } else {
+                stop_analysis_lease();
+                this.analysis_lease_id = null;
+                this.analysis_read_only = true;
+                this.refreshFrameEditState();
+                $('#status-big').text(result.message + ' Reopen Analyze afterward to edit.');
+                alert(result.message);
+            }
+        } catch (error) {
+            alert(error.message);
+        } finally {
+            this.preparing_download = false;
+            this.refreshFrameEditState();
         }
     }
 
@@ -861,6 +879,7 @@ class TracerController extends MovieController {
             return;
         }
         this.track_button.val(TRACE_MOVIE);
+        this.track_button.prop(DISABLED, false);
         this.refreshRetraceRequiredMessage();
     }
 
@@ -1131,25 +1150,43 @@ class TracerController extends MovieController {
         // Generate the HTML for the table body
         let rows = '';
         let calculations = this.calculate_scale(this.objects)
+        const ranges = new Map();
+        const savedMarkers = new Map();
+        for (const [frameNumber, frame] of (this.frames || []).entries()) {
+            for (const point of frame?.markers || []) {
+                savedMarkers.set(point.label, point);
+                if (!this.isFrameInTrim(frameNumber)) continue;
+                const range = ranges.get(point.label);
+                if (range) range.last = frameNumber;
+                else ranges.set(point.label, {first: frameNumber, last: frameNumber, point});
+            }
+        }
         const tableMarkers = this.objects
             .map((obj, index) => ({obj, index}))
-            .filter(({obj}) => obj.constructor.name == Marker.name)
-            .sort((a, b) => compare_marker_labels(a.obj.name, b.obj.name));
+            .filter(({obj}) => obj.constructor.name == Marker.name);
+        const present = new Set(tableMarkers.map(({obj}) => obj.name));
+        for (const [label, point] of savedMarkers) {
+            if (!present.has(label)) tableMarkers.push({obj: this.marker_from_trackpoint(point), index: null});
+        }
+        tableMarkers.sort((a, b) => compare_marker_labels(a.obj.name, b.obj.name));
         for (const {obj, index} of tableMarkers) {
             obj.table_cell_id = "td-" + (++cell_id_counter);
             obj.name_cell_id = "td-marker-name-" + cell_id_counter;
             const trackpoint = this.canvas_marker_to_trackpoint(obj);
-            obj.loc_mm = this.marker_location_mm(obj, calculations);
+            const visible = index !== null && this.isFrameInTrim(this.frame_number);
+            const range = ranges.get(obj.name);
+            obj.loc_mm = visible ? this.marker_location_mm(obj, calculations) : 'n/a';
             rows += `<tr>` +
                 `<td class="dot" style="color:${obj.fill};">●</td>` +
                 `<td><span id="${obj.name_cell_id}" x-marker-index="${index}">${html_escape(obj.name)}</span> ` +
-                `<span class='editor marker-name-editor nodemo' x-target-id='${obj.name_cell_id}'> ✏️  </span></td>` +
-                `<td id="${obj.table_cell_id}">${this.format_trackpoint_location(trackpoint)}</td>` +
+                (visible ? `<span class='editor marker-name-editor nodemo' x-target-id='${obj.name_cell_id}'> ✏️  </span></td>` : '</td>') +
+                `<td>${range ? `${range.first}-${range.last}` : 'n/a'}</td>` +
+                `<td id="${obj.table_cell_id}">${visible ? this.format_trackpoint_location(trackpoint) : 'n/a'}</td>` +
                 `<td id="${obj.table_cell_id}-mm" class="obj-mm"> ${obj.loc_mm}</td>`;
             if (marker_is_undeletable(obj)) {
                 rows += `<td class="nodemo"></td></tr>`;
             } else {
-                rows += `<td class="del-row nodemo" object_index="${index}" >🚫</td></tr>`;
+                rows += `<td class="del-row nodemo" marker_label="${encodeURIComponent(obj.name)}" >🚫</td></tr>`;
             }
         }
         // put the HTML in the window and wire up the delete object method
@@ -1157,7 +1194,7 @@ class TracerController extends MovieController {
         $(this.div_selector + " .marker-name-editor").on('click',
                      (event) => {this.begin_marker_rename(event.currentTarget);});
         $(this.div_selector + " .del-row").on('click',
-                     (event) => {this.del_row(event.target.getAttribute('object_index'));});
+                     (event) => {this.delete_marker(decodeURIComponent(event.currentTarget.getAttribute('marker_label')));});
         $(this.div_selector + " .del-row").css('cursor','default');
         this.redraw();          // redraw with the markers
         if (demo_mode) {        // be sure to hide the just-added delete option
@@ -1273,19 +1310,57 @@ class TracerController extends MovieController {
 
     // Delete a row and update the server
     del_row(i) {
+        return this.delete_marker(this.objects[i]?.name);
+    }
+
+    async delete_marker(label) {
         if (!this.isCurrentFrameEditable()) {
-            return;
+            return false;
         }
-        const obj = this.objects[i];
-        if (!obj || obj.constructor.name != Marker.name || marker_is_undeletable(obj)) {
-            return;
+        const obj = this.objects.find(item => item.constructor.name == Marker.name && item.name === label);
+        const points = (this.frames || []).flatMap(frame => frame?.markers || []).filter(point => point.label === label);
+        if ((!obj && points.length === 0) || (obj && marker_is_undeletable(obj)) || points.some(point => point.undeletable)) {
+            return false;
         }
-        this.objects.splice(i,1);
-        this.create_marker_table();
-        this.markFutureFramesDirty();
-        this.refreshResetTracingButtonState();
-        this.refreshFrameEditState(); // re-enable the inflection-point button if it was removed
-        this.put_markers();
+        if (demo_mode) {
+            $('#demo-popup').fadeIn(300);
+            return false;
+        }
+        this.deleting_marker = true;
+        this.refreshFrameEditState();
+        try {
+            await Promise.all(this.marker_save_requests || []);
+            const deleted = await new Promise(resolve => {
+                $.post(`${API_BASE}api/delete-marker`, {
+                    api_key: this.api_key, course_id: activeCourseId(), movie_id: this.movie_id,
+                    label, ...this.analysisLeaseParams(),
+                }).done(data => {
+                    if (data.error) alert('Error deleting marker: ' + data.message);
+                    resolve(!data.error);
+                }).fail(() => {
+                    alert('Failed to delete marker. Reopen Analyze to check its saved state.');
+                    resolve(false);
+                });
+            });
+            if (!deleted) return false;
+            for (const frame of this.frames || []) {
+                if (frame) frame.markers = (frame.markers || []).filter(point => point.label !== label);
+            }
+            this.clear_selection();
+            this.objects = this.objects.filter(item => item.constructor.name != Marker.name && item.constructor.name != Line.name);
+            this.add_frame_objects(this.frame_number);
+            this.markTracedMovieNeedsRetracing();
+            this.refreshVisibleGraphs();
+            return true;
+        } catch (error) {
+            console.error('marker deletion failed', error);
+            alert('Could not finish saving annotations before deleting the marker.');
+            return false;
+        } finally {
+            this.deleting_marker = false;
+            this.refreshResetTracingButtonState();
+            this.refreshFrameEditState();
+        }
     }
 
     default_trackpoints_from_template(frameNumber = this.frame_number) {
@@ -1313,70 +1388,85 @@ class TracerController extends MovieController {
         this.delete_all_markers_button.prop(DISABLED, true);
         this.refreshFrameEditState();
 
-        const updates = [];
         const firstTrimFrame = this.trim_start_frame;
-        for (let frameIndex = 0; frameIndex < this.frames.length; frameIndex++) {
-            const frame = this.frames[frameIndex];
-            const markers = this.reset_comparison_markers_for_frame(frame, frameIndex);
-            const frameNumber = graph_frame_number(frame, null, frameIndex);
-            const resetMarkers = this.reset_target_markers_for_frame(frameNumber);
-            if (same_reset_markers(resetMarkers, markers)) {
-                continue;
-            }
-            updates.push({
-                frame_index: frameIndex,
-                frame_number: frameNumber,
-                markers: resetMarkers,
+        const seedMarkers = this.reset_target_markers_for_frame(firstTrimFrame);
+        const url = `${LAMBDA_API_BASE}resize-api/v1/reset-tracing`;
+        const request = async (target, options = {}) => {
+            const response = await fetch(target, {
+                ...options,
+                headers: {'Content-Type': 'application/json', 'x-api-key': this.api_key},
+                signal: AbortSignal.timeout(15000),
             });
-        }
-        if (updates.length === 0) {
-            this.goto_frame(firstTrimFrame);
-            this.refreshVisibleGraphs();
-            this.resetting_tracing = false;
-            this.refreshFrameEditState();
-            return;
-        }
-
-        const requests = updates.map(update => new Promise((resolve, reject) => {
-            const params = {
-                api_key      : this.api_key,
-                course_id    : activeCourseId(),
-                movie_id     : this.movie_id,
-                frame_number : update.frame_number,
-                trackpoints  : JSON.stringify(update.markers),
-                ...this.analysisLeaseParams(),
-            };
-            $.post(`${API_BASE}api/put-frame-trackpoints`, params)
-                .done((data) => {
-                    if (data.error) {
-                        reject(new Error(data.message || 'Error resetting tracing.'));
+            if (!response.ok) throw new Error(await response.text());
+            const result = await response.json();
+            if (result.error) throw new Error(result.message || 'Reset failed.');
+            return result;
+        };
+        const performReset = async () => {
+            let result = await request(url, {
+                method: 'POST',
+                body: JSON.stringify({
+                    movie_id: this.movie_id,
+                    frame_start: 0,
+                    frame_end: this.total_frames - 1,
+                    seed_frame: firstTrimFrame,
+                    trackpoints: seedMarkers,
+                    ...this.analysisLeaseParams(),
+                }),
+            });
+            stop_analysis_lease();
+            this.analysis_lease_id = null;
+            const statusUrl = `${url}?${new URLSearchParams({movie_id: this.movie_id, job_id: result.job_id})}`;
+            const deadline = Date.now() + 15 * 60 * 1000;
+            while (result.state === 'running') {
+                $('#status-big').text(`Resetting tracing: ${result.next_frame} of ${this.total_frames} frames. ${TRACING_MAY_LEAVE_MESSAGE}`);
+                if (Date.now() >= deadline) throw new Error('Reset is taking longer than expected.');
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                result = await request(statusUrl);
+            }
+            if (result.state !== 'completed') throw new Error(`Reset ${result.state}.`);
+            // A reset replaces the editing lease. Reacquire it before allowing changes.
+            await new Promise((resolve, reject) => {
+                $.post({
+                    url: `${API_BASE}api/acquire-movie-analysis-lease`,
+                    data: {api_key: this.api_key, movie_id: this.movie_id, course_id: activeCourseId()},
+                    timeout: 15000,
+                }).done(data => {
+                    if (data.error || !data.lease_id) {
+                        reject(new Error(data.message || 'Could not reacquire the editing lease.'));
                         return;
                     }
+                    this.analysis_lease_id = data.lease_id;
+                    start_analysis_lease(this.movie_id, this.api_key, data.lease_id);
                     resolve();
-                })
-                .fail((res) => {
-                    reject(new Error(res.responseText || 'error from put-frame-trackpoints'));
-                });
-        }));
-
-        return Promise.all(requests)
-            .then(() => {
-                for (const update of updates) {
-                    this.frames[update.frame_index].markers = update.markers.map(marker => ({...marker}));
-                }
-                this.markTracedMovieNeedsRetracing();
-                this.tracing_was_reset = true;
-                this.goto_frame(firstTrimFrame);
-                this.refreshVisibleGraphs();
-                this.markFutureFramesDirty();
-            })
-            .catch((err) => {
-                alert("error from reset-tracing:\n"+err.message);
-            })
-            .finally(() => {
-                this.resetting_tracing = false;
-                this.refreshFrameEditState();
+                }).fail(() => reject(new Error('Could not reacquire the editing lease.')));
             });
+            for (let i = 0; i < this.frames.length; i++) {
+                this.frames[i].markers = graph_frame_number(this.frames[i], null, i) === firstTrimFrame
+                    ? seedMarkers.map(marker => ({...marker})) : [];
+            }
+            this.movie_metadata.status = 'ready';
+            this.last_tracked_frame = firstTrimFrame;
+            this.movie_metadata.last_frame_tracked = firstTrimFrame;
+            this.markTracedMovieNeedsRetracing();
+            this.tracing_was_reset = true;
+            this.pending_retrace_to_end = true;
+            this.goto_frame(firstTrimFrame);
+            this.refreshVisibleGraphs();
+            this.markFutureFramesDirty();
+            $('#status-big').text('Tracing reset. Place markers on the first trimmed frame to trace again.');
+        };
+        return performReset().catch(err => {
+            // A lost response can mean partial/completed server work. Do not edit stale data.
+            stop_analysis_lease();
+            this.analysis_read_only = true;
+            const message = `${err.message} Reopen Analyze to reload annotations and try again.`;
+            $('#status-big').text(message);
+            alert(`Error resetting tracing: ${message}`);
+        }).finally(() => {
+            this.resetting_tracing = false;
+            this.set_movie_control_buttons();
+        });
     }
 
     // Subclassed methods
@@ -1437,7 +1527,7 @@ class TracerController extends MovieController {
             trackpoints  : JSON.stringify(markers), // markers as a JSON string because we do POST as a form, not as REST
             ...this.analysisLeaseParams(),
         };
-        $.post(`${API_BASE}api/put-frame-trackpoints`, put_frame_markers_params )
+        const request = $.post(`${API_BASE}api/put-frame-trackpoints`, put_frame_markers_params )
             .done( (data) => {
                 if (data.error) {
                     alert("Error saving annotations: "+data.message);
@@ -1451,6 +1541,12 @@ class TracerController extends MovieController {
                 console.error("put-frame-trackpoints failed", res);
                 alert("error from put-frame-trackpoints:\n"+res.responseText);
             });
+        const pending = Promise.resolve(request);
+        this.marker_save_requests ||= new Set();
+        this.marker_save_requests.add(pending);
+        const finished = () => this.marker_save_requests.delete(pending);
+        pending.then(finished, finished);
+        return request;
     }
 
     /* track_to_end() is called when the track_button ('track to end') button is clicked.
@@ -1463,11 +1559,26 @@ class TracerController extends MovieController {
      * https://freshman.tech/custom-html5-video/
      * https://medium.com/@nathan5x/event-lifecycle-of-html-video-element-part-1-f63373c981d3
      */
-    track_to_end() {
-        if (!this.isCurrentFrameEditable()) {
+    async track_to_end() {
+        if (this.saving_track_request || !this.isCurrentFrameEditable()) {
             return;
         }
         const retraceStartFrame = this.frame_number;
+        if (this.mp4_player) {
+            this.saving_track_request = true;
+            this.set_movie_control_buttons();
+            try {
+                const saved = await this.put_markers();
+                if (saved?.error) throw new Error(saved.message || 'Unable to save markers.');
+                if (this.frame_number !== retraceStartFrame) throw new Error('Frame changed while saving markers. Select Trace again.');
+            } catch (error) {
+                $('#status-big').text(error.message || 'Unable to save markers; tracing has not started.');
+                return;
+            } finally {
+                this.saving_track_request = false;
+                this.set_movie_control_buttons();
+            }
+        }
         const traceVerb = retraceStartFrame > 0 ? 'Retracing' : 'Tracing';
         $('#status-big').text(`${traceVerb} from frame ${retraceStartFrame}...`);
         $(this.div_selector).addClass('tracing-dimmed');
@@ -1476,7 +1587,8 @@ class TracerController extends MovieController {
         this.tracking = true;
         this.pending_retrace_to_end = false;
         this.pending_trace_start_frame = retraceStartFrame;
-        this.tracking_start_deadline_ms = Date.now() + TRACKING_START_TIMEOUT_MS;
+        this.last_progress_frame = retraceStartFrame;
+        this.reset_tracking_progress_timeout();
         this.poll_error_count = 0;
         this.set_movie_control_buttons();
 
@@ -1496,6 +1608,7 @@ class TracerController extends MovieController {
         const TRACE_MOVIE_MAX_ATTEMPTS = 3;
 
         function tryTrackMovie(attempt) {
+            if (!self.tracking) return;
             attempt = attempt || 1;
             return fetch(url, {
                 method: 'POST',
@@ -1507,6 +1620,7 @@ class TracerController extends MovieController {
             })
                 .then((res) => res.json().then((data) => ({ status: res.status, data })).catch(() => ({ status: res.status, data: null })))
                 .then(({ status, data }) => {
+                    if (!self.tracking) return;
                     if (status >= 200 && status < 300 && !(data && data.error)) {
                         stop_analysis_lease();
                         self.movie_metadata.status = TRACING_FLAG;
@@ -1529,7 +1643,7 @@ class TracerController extends MovieController {
                     self.set_movie_control_buttons();
                     self.enableTrackButtonIfAllowed();
                     self.pending_trace_start_frame = null;
-                    self.tracking_start_deadline_ms = null;
+                    self.clear_tracking_progress_timeout();
                     self.tracking_status.text(msg);
                     console.error('[trace-movie] final failure (HTTP):', {
                         status,
@@ -1542,6 +1656,7 @@ class TracerController extends MovieController {
                     alert(msg);
                 })
                 .catch((err) => {
+                    if (!self.tracking) return;
                     if (attempt < TRACE_MOVIE_MAX_ATTEMPTS) {
                         console.warn('[trace-movie] attempt', attempt, 'failed (network error):', err && err.message, '- retrying in', TRACE_MOVIE_RETRY_DELAY_MS, 'ms');
                         return new Promise((resolve) => setTimeout(resolve, TRACE_MOVIE_RETRY_DELAY_MS)).then(() => tryTrackMovie(attempt + 1));
@@ -1552,7 +1667,7 @@ class TracerController extends MovieController {
                     self.set_movie_control_buttons();
                     self.enableTrackButtonIfAllowed();
                     self.pending_trace_start_frame = null;
-                    self.tracking_start_deadline_ms = null;
+                    self.clear_tracking_progress_timeout();
                     const msg = err && err.message ? err.message : "Tracing request failed.";
                     self.tracking_status.text(msg);
                     console.error('[trace-movie] final failure (network):', {
@@ -1568,35 +1683,48 @@ class TracerController extends MovieController {
         tryTrackMovie(1);
     }
 
-    tracking_has_started(metadata) {
-        if (!metadata || metadata.last_frame_tracked == null) {
-            return false;
-        }
-        const startFrame = (this.pending_trace_start_frame != null) ? this.pending_trace_start_frame : this.frame_number;
-        return Number(metadata.last_frame_tracked) > Number(startFrame);
+    clear_tracking_progress_timeout() {
+        clearTimeout(this.tracking_progress_timer);
+        this.tracking_progress_timer = null;
+        this.tracking_progress_deadline_ms = null;
     }
 
-    tracking_start_timed_out(metadata) {
-        if (!this.tracking || this.tracking_start_deadline_ms == null) {
-            return false;
-        }
-        if (this.tracking_has_started(metadata)) {
-            this.tracking_start_deadline_ms = null;
-            return false;
-        }
-        return Date.now() >= this.tracking_start_deadline_ms;
+    reset_tracking_progress_timeout() {
+        this.clear_tracking_progress_timeout();
+        this.tracking_progress_deadline_ms = Date.now() + TRACKING_PROGRESS_TIMEOUT_MS;
+        this.tracking_progress_timer = setTimeout(() => this.report_tracking_stalled(), TRACKING_PROGRESS_TIMEOUT_MS);
     }
 
-    report_backend_lambda_unresponsive() {
+    tracking_progress_timed_out(metadata) {
+        if (!this.tracking) return false;
+        const frame = metadata?.last_frame_tracked;
+        const previous = this.last_progress_frame ?? this.pending_trace_start_frame ?? this.frame_number;
+        if (frame != null && Number.isFinite(Number(frame))) {
+            // A new trace can reset the previous run's counter before advancing.
+            this.last_progress_frame = Number(frame);
+            if (Number(frame) > Number(previous)) this.reset_tracking_progress_timeout();
+        }
+        return this.tracking_progress_deadline_ms != null && Date.now() >= this.tracking_progress_deadline_ms;
+    }
+
+    stop_tracking_polling(message) {
         this.tracking = false;
+        this.analysis_read_only = true; // Reopen Analyze to reacquire the editing lease.
+        this.clear_tracking_progress_timeout();
+        clearTimeout(this.timeout);
+        this.timeout = null;
+        this.tracking_status_request?.abort?.();
+        this.pending_trace_start_frame = null;
         $(this.div_selector).removeClass('tracing-dimmed');
         this.set_movie_control_buttons();
         this.enableTrackButtonIfAllowed();
-        this.pending_trace_start_frame = null;
-        this.tracking_start_deadline_ms = null;
-        this.tracking_status.text(BACKEND_LAMBDA_UNRESPONSIVE_MESSAGE);
-        $('#status-big').text(BACKEND_LAMBDA_UNRESPONSIVE_MESSAGE);
-        alert(BACKEND_LAMBDA_UNRESPONSIVE_MESSAGE);
+        this.tracking_status.text(message);
+        $('#status-big').text(message);
+        alert(message);
+    }
+
+    report_tracking_stalled() {
+        if (this.tracking) this.stop_tracking_polling(TRACING_PROGRESS_TIMEOUT_MESSAGE);
     }
 
     load_movie(frames) {
@@ -1614,29 +1742,19 @@ class TracerController extends MovieController {
             this.create_marker_table();
             return;
         }
-        // Add the lines for every previous frame if each previous frame has markers
-        if (frame>0 && this.frames[frame-1].markers && this.frames[frame].markers){
-            for (let f0=0;f0<frame;f0++){
-                if (!this.isFrameInTrim(f0) || !this.isFrameInTrim(f0 + 1)) {
-                    continue;
-                }
-                var starts = [];
-                var ends   = {};
-                for (let tp of this.frames[f0].markers){
-                    starts.push(tp);
-                }
-                for (let tp of this.frames[f0+1].markers){
-                    ends[tp.label] = tp
-                }
-                // now add the lines between the markers in the previous frames
-                // We could cache this moving from frame to frame, rather than deleting and re-drawing them each time
-                for (let st of starts){
-                    if (ends[st.label]){
-                        const canvasStart = this.trackpoint_to_canvas(st);
-                        const canvasEnd = this.trackpoint_to_canvas(ends[st.label]);
-                        this.add_object( new Line(canvasStart.x, canvasStart.y, canvasEnd.x, canvasEnd.y, 2, this.marker_color_for_label(st.label)));
-                    }
-                }
+        // Include the entire saved trajectory, even before its first visible marker.
+        for (let f0 = 0; f0 + 1 < this.frames.length; f0++) {
+            if (!this.isFrameInTrim(f0) || !this.isFrameInTrim(f0 + 1)) continue;
+            const ends = new Map((this.frames[f0 + 1]?.markers || []).map(tp => [tp.label, tp]));
+            for (const start of this.frames[f0]?.markers || []) {
+                const end = ends.get(start.label);
+                if (!end) continue;
+                const a = this.trackpoint_to_canvas(start);
+                const b = this.trackpoint_to_canvas(end);
+                const past = f0 + 1 <= frame;
+                const line = new Line(a.x, a.y, b.x, b.y, past ? 2 : 1, this.marker_color_for_label(start.label));
+                line.opacity = past ? 1 : 0.5;
+                this.add_object(line);
             }
         }
 
@@ -1663,12 +1781,12 @@ class TracerController extends MovieController {
         if (!Number.isNaN(frame) && frame > maxViewable) {
             frame = maxViewable;
         }
-        super.goto_frame(frame);
+        return super.goto_frame(frame);
     }
 
     set_movie_control_buttons()  {
         /* override to disable everything if we are tracking */
-        if (this.tracking) {
+        if (this.tracking || this.saving_track_request || this.resetting_tracing) {
             $(this.div_selector + ' input, ' + this.div_selector + ' button').prop(DISABLED,true);
             return;
         }
@@ -1680,31 +1798,45 @@ class TracerController extends MovieController {
 
         /*
          * Poll the server to see if tracking has ended.
-         * On poll error we log to console and only alert after 3 consecutive errors.
+         * A separate progress watchdog also covers requests that never return.
          */
   poll_for_track_end() {
+        if (!this.tracking) return;
+        if (this.tracking_progress_deadline_ms == null) this.reset_tracking_progress_timeout();
         const params = {
             api_key:this.api_key,
             course_id:activeCourseId(),
             movie_id:this.movie_id,
-            get_all_if_tracking_completed: true
+            get_all_if_tracking_completed: this.total_frames <= FRAME_METADATA_PAGE_SIZE
         };
         const self = this;
-        $.post(`${API_BASE}api/get-movie-metadata`, params)
+        this.tracking_status_request = $.post(`${API_BASE}api/get-movie-metadata`, params)
             .done((data) => {
+                if (!self.tracking) return;
                 if (data.error === false) {
                     self.poll_error_count = 0;
+                    if (data.metadata.status === 'tracing failed') {
+                        self.movie_metadata = {...self.movie_metadata, ...data.metadata};
+                        self.stop_tracking_polling(data.metadata.tracing_failure_summary || 'Tracing failed. Reopen Analyze to try again.');
+                        return;
+                    }
                     if (data.metadata.status === TRACING_COMPLETED_FLAG) {
-                        if (self.tracking) {
+                        self.clear_tracking_progress_timeout();
+                        if (self.total_frames > FRAME_METADATA_PAGE_SIZE) {
+                            load_remaining_frame_metadata(data, self.api_key, 0)
+                                .then(complete => { if (self.tracking) self.movie_tracked(complete); })
+                                .catch(error => self.stop_tracking_polling(error.message));
+                        } else {
                             self.movie_tracked(data);
                         }
                         return;
                     }
-                    if (self.tracking_start_timed_out(data.metadata)) {
-                        self.report_backend_lambda_unresponsive();
+                    if (self.tracking_progress_timed_out(data.metadata)) {
+                        self.report_tracking_stalled();
                         return;
                     }
-                    const last = data.metadata.last_frame_tracked;
+                    const reported = data.metadata.last_frame_tracked;
+                    const last = reported == null ? null : Math.max(reported, self.pending_trace_start_frame ?? 0);
                     let statusText;
                     if (last != null) {
                         statusText = `Tracing frame ${last}`;
@@ -1719,26 +1851,21 @@ class TracerController extends MovieController {
                 }
                 self.poll_error_count = (self.poll_error_count || 0) + 1;
                 console.warn('[poll_for_track_end] get-movie-metadata error (consecutive:', self.poll_error_count + '):', data);
-                if (self.tracking_start_timed_out(null)) {
-                    self.report_backend_lambda_unresponsive();
+                if (self.tracking_progress_timed_out(null)) {
+                    self.report_tracking_stalled();
                     return;
-                }
-                if (self.poll_error_count >= STATUS_POLL_MAX_ERRORS) {
-                  alert(`Status check failed ${STATUS_POLL_MAX_ERRORS} times in a row. You can refresh the page to try again.`);
                 }
                 if (self.tracking) {
                     self.timeout = setTimeout(() => { self.poll_for_track_end(); }, STATUS_POLL_MSEC);
                 }
             })
             .fail((_xhr, status, err) => {
+                if (!self.tracking) return;
                 self.poll_error_count = (self.poll_error_count || 0) + 1;
                 console.warn('[poll_for_track_end] request failed (consecutive:', self.poll_error_count + '):', status, err);
-                if (self.tracking_start_timed_out(null)) {
-                    self.report_backend_lambda_unresponsive();
+                if (self.tracking_progress_timed_out(null)) {
+                    self.report_tracking_stalled();
                     return;
-                }
-                if (self.poll_error_count >= STATUS_POLL_MAX_ERRORS) {
-                  alert(`Status check failed ${STATUS_POLL_MAX_ERRORS} times in a row. You can refresh the page to try again.`);
                 }
                 if (self.tracking) {
                     self.timeout = setTimeout(() => { self.poll_for_track_end(); }, STATUS_POLL_MSEC);
@@ -1746,91 +1873,26 @@ class TracerController extends MovieController {
             });
     }
 
-    /** Tracing completed - stop polling, load zip (wait up to 5s if needed), then show full movie. */
-    movie_tracked(_data) {
+    /** Refresh marker metadata after tracing; the analysis pixels are immutable. */
+    movie_tracked(data) {
         this.tracking = false;
-        this.set_movie_control_buttons();
-        this.tracking_start_deadline_ms = null;
-        this.tracking_status.text(TRACING_COMPLETE_LOADING_MOVIE_MESSAGE);
-        const self = this;
-        const focusFrame = (this.pending_trace_start_frame != null) ? this.pending_trace_start_frame : this.frame_number;
-        const div = (this.div_selector || 'div#tracer').replace(/\s+$/, '');
-        const maxZipWaitMs = MAX_ZIP_WAIT_MS;
-        const zipPollMs = STATUS_POLL_MSEC;
-
-        /** Resolves with { zipUrl, metadata, frames } when zip is available, or rejects after maxZipWaitMs. */
-        function waitForZip() {
-            return new Promise((resolve, reject) => {
-                if (_data.metadata && _data.metadata.movie_zipfile_url) {
-                    resolve({ zipUrl: _data.metadata.movie_zipfile_url, metadata: _data.metadata, frames: _data.frames || {} });
-                    return;
-                }
-                const deadline = Date.now() + maxZipWaitMs;
-                function poll() {
-                    if (Date.now() > deadline) {
-                        $('#status-big').html('Tracing complete, but ZIP file did not become available in time. Please refresh and try again.');
-                        reject(new Error('ZIP file did not become available in time. Please refresh and try again.'));
-                        return;
-                    }
-                    // Show a visible, stable message while we wait for the ZIP.
-                    self.tracking_status.text('');
-                    $('#status-big').text('Tracing complete. Waiting for ZIP file to be processed…');
-                    $.post(`${API_BASE}api/get-movie-metadata`, {
-                        api_key: self.api_key,
-                        course_id: activeCourseId(),
-                        movie_id: self.movie_id,
-                        frame_start: 0,
-                        frame_count: MAX_FRAMES,
-                        get_all_if_tracking_completed: true
-                    }).done((resp) => {
-                        if (resp.error || !resp.metadata) {
-                            setTimeout(poll, zipPollMs);
-                            return;
-                        }
-                        if (resp.metadata.movie_zipfile_url) {
-                            resolve({
-                                zipUrl: resp.metadata.movie_zipfile_url,
-                                metadata: resp.metadata,
-                                frames: resp.frames || {}
-                            });
-                            return;
-                        }
-                        setTimeout(poll, zipPollMs);
-                    }).fail(() => setTimeout(poll, zipPollMs));
-                }
-                poll();
-            });
+        this.clear_tracking_progress_timeout();
+        $(this.div_selector).removeClass('tracing-dimmed');
+        this.movie_metadata = {...this.movie_metadata, ...data.metadata};
+        for (let i = 0; i < this.frames.length; i++) {
+            this.frames[i].markers = data.frames?.[i]?.markers || [];
         }
-
-        waitForZip()
-            .then(({ zipUrl, metadata, frames }) => {
-                $(div).removeClass('tracing-dimmed');
-                trace_movie_frames(div, metadata, zipUrl, frames, self.api_key, true, { initialFrame: focusFrame });
-                $(self.div_selector + ' input.track_button').val(RETRACE_MOVIE);
-                self.movie_metadata[NEEDS_RETRACING] = 0;
-                self.trace_inputs_changed = false;
-                self.track_button.prop(DISABLED, true);
-                self.download_button.show();
-                const endFrame = (metadata.last_frame_tracked != null && metadata.last_frame_tracked !== undefined)
-                    ? metadata.last_frame_tracked
-                    : ((metadata.total_frames != null && metadata.total_frames > 0) ? metadata.total_frames - 1 : focusFrame);
-                const completionMessage = (focusFrame > 0)
-                    ? `Retraced from frame ${focusFrame} to frame ${endFrame}.`
-                    : `Traced from frame 0 to frame ${endFrame}.`;
-                self.tracking_status.text(completionMessage);
-                $('#status-big').html(`${completionMessage} ${PRESS_PLAY_STATUS_TEXT} <span class="status-big-play-trigger" role="button" tabindex="0" title="Play">▶</span> to watch the trackpoints.`);
-                self.pending_trace_start_frame = null;
-            })
-            .catch((err) => {
-                $(div).removeClass('tracing-dimmed');
-                self.tracking_status.text('');
-                self.pending_trace_start_frame = null;
-                if (!$('#status-big').text()) {
-                    $('#status-big').text('Tracing complete, but ZIP file did not become available. Please refresh and try again.');
-                }
-                self.enableTrackButtonIfAllowed();
-                alert(err.message || 'Failed to load traced movie.');
-            });
+        this.last_tracked_frame = data.metadata.last_frame_tracked;
+        this.movie_metadata[NEEDS_RETRACING] = 0;
+        this.trace_inputs_changed = false;
+        this.pending_trace_start_frame = null;
+        this.goto_frame(this.frame_number);
+        this.set_movie_control_buttons();
+        this.download_button.show();
+        $('#status-big').text('Tracing complete. Play or step through the movie to inspect the trackpoints.');
+        $('#analysis-results').show();
+        graph_data(this, this.frames);
+        display_results(this, this.frames);
     }
 
 }
@@ -1890,61 +1952,66 @@ function frame_index_from_zip_name(name) {
     return m ? parseInt(m[1], 10) : 0;
 }
 
-async function trace_movie_frames(div_controller, movie_metadata, movie_zipfile_url,
-                                  metadata_frames, api_key, show_results=true, options={}) {
-    const movie_frames = [];
-    const {entries} = await unzip(movie_zipfile_url);
-    const names = Object.keys(entries).filter(name => /\.(jpg|jpeg)$/i.test(name));
-    names.sort((a, b) => frame_index_from_zip_name(a) - frame_index_from_zip_name(b));
+/** Bound each HTTP response while retaining marker metadata throughout the supported movie. */
+async function load_remaining_frame_metadata(response, apiKey, start = FRAME_METADATA_PAGE_SIZE) {
+    const frames = {...response.frames};
+    const count = Number(response.metadata.total_frames) || 0;
+    if (count > MAX_FRAMES) throw new Error('Analyze supports up to 50,000 frames. This movie exceeds that limit.');
+    for (let first = start; first < count; first += FRAME_METADATA_PAGE_SIZE) {
+        const page = await new Promise((resolve, reject) => {
+            $.post({
+                url: `${API_BASE}api/get-movie-metadata`, timeout: TRACKING_PROGRESS_TIMEOUT_MS,
+                data: {api_key: apiKey, course_id: activeCourseId(), movie_id: response.metadata.movie_id,
+                    frame_start: first, frame_count: Math.min(FRAME_METADATA_PAGE_SIZE, count - first)},
+            }).done(resolve).fail(result => reject(new Error(
+                result.responseJSON?.message || 'Unable to load frame annotations. Reopen Analyze to retry.')));
+        });
+        if (page.error) throw new Error(page.message || 'Unable to load frame annotations.');
+        Object.assign(frames, page.frames);
+    }
+    return {...response, frames};
+}
 
-    const blobs = await Promise.all(names.map(name => entries[name].blob()));
-
-    names.forEach((_name, i) => {
-        const frameIndex = frame_index_from_zip_name(_name);
-
-        // Access the dictionary using a string key to match JSON standards
-        const frameData = metadata_frames && metadata_frames[String(frameIndex)];
-
-        const markers = (frameData && frameData.markers && frameData.markers.length) ? frameData.markers : [];
-
-        movie_frames[i] = {'frame_url': URL.createObjectURL(blobs[i]), 'markers': markers, 'frame_number': frameIndex};
-    });
-
+async function trace_movie_frames(div_controller, movie_metadata, movie_url,
+                                  metadata_frames, api_key, show_results, options = {}) {
+    const player = await new Mp4FramePlayer().load(movie_url);
+    if (cc?.mp4_player) {
+        cc.stop_button_pressed();
+        cc.mp4_player.close();
+        cc.video_image?.frame.close();
+    }
     cc = new TracerController(div_controller, movie_metadata, api_key);
-    cc.did_onload_callback = (imgStack) => {
-        const dimensionsWereMissing = cc.set_analysis_dimensions_from_image(imgStack);
-        if (dimensionsWereMissing) {
-            // Do NOT set canvas attr('width'/'height') directly — that bypasses zoom and
-            // resets the canvas to natural (100%) size. resize() in WebImage.onload
-            // already ran before this callback and correctly applied cc.zoom.
-            $(cc.div_selector + ' video').attr('width', cc.movie_metadata.width).attr('height', cc.movie_metadata.height);
-        }
-        if (cc.loaded_analysis_frame_height != null) {
-            cc.goto_frame(cc.frame_number || 0);
-        }
-    };
-    cc.set_movie_control_buttons();
-    const initialFrame = options.initialFrame != null
-        ? Number(options.initialFrame)
-        : cc.trim_start_frame;
-    if (initialFrame > 0) {
-        // Prevent MovieController.load_movie() from displaying frame 0 before
-        // the requested first included frame is selected.
-        cc.frame_number = initialFrame;
+    cc.mp4_player = player;
+    cc.playback_fps = player.fps;
+    cc.loaded_analysis_frame_height = player.height;
+    cc.movie_metadata.frame_height_px = player.height;
+    cc.movie_metadata.total_frames = player.frameCount;
+    cc.total_frames = player.frameCount;
+    cc.resize(player.width, player.height);
+    const frames = Array.from({length: player.frameCount}, (_, index) => ({
+        frame_number: index, markers: metadata_frames?.[index]?.markers || [],
+    }));
+    if (!frames[0].markers.length && !show_results) {
+        frames[0].markers = create_default_markers().map(marker => cc.canvas_marker_to_trackpoint({...marker, name: marker.label}));
     }
-    cc.load_movie(movie_frames);
-    if (initialFrame > 0) {
-        cc.goto_frame(initialFrame);
-    }
-    cc.enableTrackButtonIfAllowed(); // enable Track when Lambda (if configured) is reachable
-    // Track button label and download visibility are set in constructor from last_tracked_frame / total_frames.
+    cc.frame_number = options.initialFrame ?? cc.trim_start_frame;
+    cc.load_movie(frames);
+    await cc.goto_frame(cc.frame_number);
+    cc.enableTrackButtonIfAllowed();
+    $(window).off('pageshow.mp4-player').on('pageshow.mp4-player', event => {
+        if (event.originalEvent?.persisted) window.location.reload();
+    });
+    $(window).off('pagehide.mp4-player').on('pagehide.mp4-player', () => {
+        cc.stop_button_pressed();
+        cc.mp4_player.close();
+        cc.video_image?.frame.close();
+    });
     if (show_results) {
         $('#analysis-results').show();
-        requestAnimationFrame(() => {
-            graph_data(cc, movie_frames);
-            display_results(cc, movie_frames);
-        });
+        graph_data(cc, frames);
+        display_results(cc, frames);
     }
+    return cc;
 }
 
 function calc_scale(markers) {
@@ -2318,7 +2385,7 @@ function trace_movie(div_controller, movie_id, api_key) {
         course_id: activeCourseId(),
         movie_id: movie_id,
         frame_start: 0,
-        frame_count: MAX_FRAMES
+        frame_count: FRAME_METADATA_PAGE_SIZE
     };
     function load_analyze(leaseResponse) {
         const leaseId = leaseResponse.lease_id;
@@ -2349,19 +2416,10 @@ function trace_movie(div_controller, movie_id, api_key) {
             ? `Analysis is open in another browser — started ${new Date(analysisLock.acquired_at * 1000).toLocaleString()} by ${analysisLock.started_by_user_name}. This page is view-only.`
             : leaseResponse.message;
         const tracingMessage = traceLock
-            ? `Tracing in progress — started ${new Date(traceLock.acquired_at * 1000).toLocaleString()} by ${traceLock.started_by_user_name}. This page is read-only; leave and click Analyze again later.`
+            ? `${traceLock.purpose === 'render_traced' ? 'Rendering traced MP4' : 'Movie work'} in progress — started ${new Date(traceLock.acquired_at * 1000).toLocaleString()} by ${traceLock.started_by_user_name}. This page is read-only; leave and click Analyze again later.`
             : null;
-        if (!resp.metadata.movie_zipfile_url) {
-            // No zip yet: show frame 0 only. User places markers and clicks "Trace movie".
-            const frame0 = `${LAMBDA_API_BASE}resize-api/v1/first-frame?api_key=${api_key}&movie_id=${movie_id}&course_id=${encodeURIComponent(activeCourseId() || '')}`;
-            trace_movie_one_frame(movie_id, div_controller, resp.metadata, frame0, resp.frames, api_key);
-            if (tracingMessage || analysisMessage) {
-                $('#status-big').text(tracingMessage || analysisMessage);
-            } else if (demo_mode) {
-                $('#status-big').html(MOVIE_READY_FOR_TRACING_MESSAGE);
-            } else {
-                $('#status-big').html(PLACE_MARKERS_TRACE_START_MESSAGE);
-            }
+        if (!resp.metadata.analysis_mp4_url) {
+            $('#status-big').text('The untraced MP4 is not ready. Wait for upload processing to finish, then reopen Analyze.');
             return;
         }
         const showResults = is_movie_tracked(resp.metadata);
@@ -2373,8 +2431,10 @@ function trace_movie(div_controller, movie_id, api_key) {
           $('#status-big').html(showResults ? MOVIE_IS_TRACED_RETRACE_AS_NEEDED_MESSAGE
                                 : MOVIE_READY_PLACE_MARKERS_TRACE_MESSAGE);
         }
-        const movie_zipfile_url = resp.metadata.movie_zipfile_url;
-        trace_movie_frames(div_controller, resp.metadata, movie_zipfile_url, resp.frames, api_key, showResults);
+        load_remaining_frame_metadata(resp, api_key)
+            .then(data => trace_movie_frames(div_controller, data.metadata, data.metadata.analysis_mp4_url,
+                                             data.frames, api_key, showResults))
+            .catch(error => { $('#status-big').text(error.message); });
         }).fail((response) => {
             $('#status-big').text(
                 response.responseJSON?.message || 'Unable to load this movie for analysis.'
@@ -2385,15 +2445,29 @@ function trace_movie(div_controller, movie_id, api_key) {
         load_analyze({lease_id: null});
         return;
     }
-    $.post(`${API_BASE}api/acquire-movie-analysis-lease`, {
-        api_key: api_key,
-        course_id: activeCourseId(),
-        movie_id: movie_id,
-    }).done((response) => {
-        start_analysis_lease(movie_id, api_key, response.lease_id);
-        load_analyze(response);
+    $.post({
+        url: `${LAMBDA_API_BASE}resize-api/v1/prepare-analysis`,
+        contentType: 'application/json',
+        headers: {'x-api-key': api_key},
+        data: JSON.stringify({movie_id: movie_id}),
+        timeout: 15000,
+    }).done((prepared) => {
+        if (!prepared.ready || prepared.error) {
+            $('#status-big').text(prepared.message);
+            return;
+        }
+        $.post(`${API_BASE}api/acquire-movie-analysis-lease`, {
+            api_key: api_key,
+            course_id: activeCourseId(),
+            movie_id: movie_id,
+        }).done((response) => {
+            start_analysis_lease(movie_id, api_key, response.lease_id);
+            load_analyze(response);
+        }).fail((response) => {
+            alert(response.responseJSON?.message || 'Unable to open Analyze.');
+        });
     }).fail((response) => {
-        alert(response.responseJSON?.message || 'Unable to open Analyze.');
+        $('#status-big').text(response.responseJSON?.message || 'Unable to prepare this movie. Reopen Analyze to try again.');
     });
 }
 
@@ -2411,7 +2485,7 @@ function is_movie_tracked(metadata) {
 }
 
 export { TracerController, trace_movie, trace_movie_one_frame, trace_movie_frames,
-         get_ruler_size, frame_index_from_zip_name, is_movie_tracked,
+         load_remaining_frame_metadata, get_ruler_size, frame_index_from_zip_name, is_movie_tracked,
          movie_is_available_for_analysis,
          create_default_markers, calc_scale,
          is_inflection_marker_label, is_graphable_marker, INFLECTION_POINT_LABEL,
