@@ -13,6 +13,9 @@ body {
 
 .pure-menu.pure-menu-horizontal {
   background: linear-gradient(to right, rgb(53, 181, 147), rgb(161, 210, 68));
+  box-sizing: border-box;
+  overflow-x: auto;
+  overflow-y: hidden;
   padding: 0 10px;
 }
 

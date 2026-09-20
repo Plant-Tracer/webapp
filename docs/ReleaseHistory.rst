@@ -78,6 +78,9 @@ Release Notes
 Unreleased Summary
 ******************
 
+    * On small screens, the navigation menu scrolls horizontally within the page
+      so all links remain reachable without shifting the page sideways (refs PR #1235).
+
     * Reset Tracing sends one frame-range request instead of up to 50,000
       per-frame requests. Background batches report progress, preserve frame
       images, and fence duplicate work from newer edits (refs PR #1235).
