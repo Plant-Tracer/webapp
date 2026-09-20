@@ -47,8 +47,10 @@ def main() -> int:
         result = analysis_mp4.encode_analysis_mp4(
             source_path=output_path, output_path=Path(temp_dir) / "analysis.mp4",
             options=analysis_mp4.AnalysisMp4Options())
-        if result.frame_count != 1 or (result.width, result.height) != (32, 24):
-            raise RuntimeError("Packaged production analysis encoder changed frame count or geometry")
+        if result.frame_count != 1 or (result.width, result.height) != (640, 480):
+            raise RuntimeError(
+                "Packaged production analysis encoder expected 1 frame at 640x480; "
+                f"got {result.frame_count} frames at {result.width}x{result.height}")
     print(f"lambda-resize artifact media smoke passed: {executable}")
     return 0
 
