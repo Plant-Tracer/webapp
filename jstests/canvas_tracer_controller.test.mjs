@@ -1793,8 +1793,9 @@ describe('trace_movie_one_frame', () => {
     });
 
     // E. did_onload_callback — status message and demo mode ───────────────────
-    test('in normal mode: shows ready status and enables track button', () => {
+    test('in normal mode: shows ready status and enables track button with markers', () => {
         const tc = callTmof(null);
+        tc.objects.push(new MockMarkerClass(10, 20, 5, 'orange', 'orange', 'Apex'));
         jest.clearAllMocks();
         tc.did_onload_callback(null);
         const statusIdx = mock$.mock.calls.findIndex(args => args[0] === '#status-big');

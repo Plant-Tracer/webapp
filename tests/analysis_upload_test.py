@@ -176,12 +176,12 @@ def test_empty_source_preserves_later_points(new_movie_record, tmp_path, queued)
     odb.put_frame_trackpoints(movie_id=movie_id, frame_number=2,
                              trackpoints=[Trackpoint(x=20, y=30, label='Apex')])
     before = ddbo.get_frames(movie_id)
-    job_id = None
-    if queued:
-        job_id = movie_glue.prepare_tracing_request(
-            api_key=new_movie_record[odb.API_KEY], movie_id=movie_id, frame_start=1)['job_id']
     with pytest.raises(ValueError, match='selected source frame'):
-        movie_glue.run_tracing(movie_id=movie_id, frame_start=1, job_id=job_id)
+        if queued:
+            movie_glue.prepare_tracing_request(
+                api_key=new_movie_record[odb.API_KEY], movie_id=movie_id, frame_start=1)
+        else:
+            movie_glue.run_tracing(movie_id=movie_id, frame_start=1)
     assert ddbo.get_frames(movie_id) == before
     assert ddbo.get_movie(movie_id)[odb.LAST_FRAME_TRACKED] == 2
     assert ddbo.get_active_movie_trace_lock(movie_id) is None

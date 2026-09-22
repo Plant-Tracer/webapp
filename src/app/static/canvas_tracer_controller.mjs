@@ -1923,7 +1923,7 @@ function trace_movie_one_frame(_movie_id, div_controller, movie_metadata, frame0
             $('#status-big').html(MOVIE_CANNOT_BE_TRACED_DEMO_MESSAGE);
         } else {
             $('#status-big').html(MOVIE_READY_FOR_INITIAL_TRACING_MESSAGE);
-            cc.track_button.prop(DISABLED,false); // enable
+            cc.enableTrackButtonIfAllowed();
         }
     };
 
