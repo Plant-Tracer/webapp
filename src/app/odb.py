@@ -3223,11 +3223,13 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackp
     ddbo = DDBO()
     frame_key = {MOVIE_ID:movie_id, FRAME_NUMBER:frame_number}
     if require_unlocked:
+        alias_condition = ('#marker_aliases=:old_aliases' if MARKER_ALIASES in marker_map
+                           else 'attribute_not_exists(#marker_aliases)')
         map_item = {
             'TableName': ddbo.movie_frames.name,
             'Item': new_marker_map,
             'ConditionExpression': ('#markers=:old_markers AND #marker_labels=:old_labels '
-                                    'AND #marker_aliases=:old_aliases' if marker_map_present
+                                    f'AND {alias_condition}' if marker_map_present
                                     else 'attribute_not_exists(#movie_id)'),
             'ExpressionAttributeNames': ({'#markers': MARKERS, '#marker_labels': MARKER_LABELS,
                                           '#marker_aliases': MARKER_ALIASES} if marker_map_present
@@ -3237,7 +3239,7 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackp
             map_item['ExpressionAttributeValues'] = {
                 ':old_markers': marker_map.get(MARKERS, {}),
                 ':old_labels': marker_map.get(MARKER_LABELS, {}),
-                ':old_aliases': marker_map.get(MARKER_ALIASES, marker_map.get(MARKER_LABELS, {})),
+                **({':old_aliases': marker_map[MARKER_ALIASES]} if MARKER_ALIASES in marker_map else {}),
             }
         frame_update = {
             'TableName': ddbo.movie_frames.name, 'Key': frame_key,
@@ -3248,14 +3250,17 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackp
             frame_update['ExpressionAttributeValues'] = {':trackpoints': trackpoints}
         movie_update = {
             'TableName': ddbo.movies.name, 'Key': {MOVIE_ID: movie_id},
-            'UpdateExpression': ('SET #needs_retracing=:needs_retracing REMOVE #last_frame_tracked'
-                                 if needs_retracing else 'REMOVE #last_frame_tracked'),
+            'UpdateExpression': ('SET #last_activity_at=:now, #render_revision=:revision'
+                                 + (', #needs_retracing=:needs_retracing' if needs_retracing else '')
+                                 + ' REMOVE #last_frame_tracked'),
             'ConditionExpression': ('attribute_exists(#movie_id) AND '
                                     '(attribute_not_exists(#trace_expires) OR #trace_expires < :now)'),
             'ExpressionAttributeNames': {'#movie_id': MOVIE_ID, '#trace_expires': TRACE_LOCK_EXPIRES_AT,
                                          '#last_frame_tracked': LAST_FRAME_TRACKED,
+                                         '#last_activity_at': LAST_ACTIVITY_AT,
+                                         '#render_revision': RENDER_REVISION,
                                          **({'#needs_retracing': NEEDS_RETRACING} if needs_retracing else {})},
-            'ExpressionAttributeValues': {':now': int(time.time()),
+            'ExpressionAttributeValues': {':now': int(time.time()), ':revision': uuid.uuid4().hex,
                                           **({':needs_retracing': 1} if needs_retracing else {})},
         }
         try:

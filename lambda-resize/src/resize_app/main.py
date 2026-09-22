@@ -70,6 +70,7 @@ class TraceErrorResponse(BaseModel):
 
     message: str
     error: bool = True
+    lease_reacquire_required: bool | None = None
 
 
 def deploy_metadata(metadata_path: Path | None = None) -> Dict[str, str]:
@@ -251,11 +252,15 @@ def handle_post_actions():
         return movie_glue.queue_tracing(api_key, movie_id, frame_start, frame_end, prepared["job_id"])
     except movie_glue.odb.MovieTracingLocked:
         return Response(status_code=409, content_type="application/json",
-                        body=TraceErrorResponse(message="This movie is already being traced").model_dump_json())
+                        body=TraceErrorResponse(message="This movie is already being traced").model_dump_json(exclude_none=True))
+    except movie_glue.TraceSourceEmptyAfterLease as e:
+        return Response(status_code=403, content_type="application/json",
+                        body=TraceErrorResponse(message=str(e),
+                                                lease_reacquire_required=True).model_dump_json())
     except ValueError as e:
         LOGGER.exception("trace-movie rejected: %s", e)
         return Response(status_code=403, content_type="application/json",
-                        body=TraceErrorResponse(message=str(e)).model_dump_json())
+                        body=TraceErrorResponse(message=str(e)).model_dump_json(exclude_none=True))
 
 
 @app.post("/resize-api/v1/download-traced")

@@ -87,7 +87,9 @@ trackpoints after it through `frame_end` when supplied, marks the movie as
 in-process queue; in deployed mode a stack-scoped EventBridge rule pushes the
 custom work event to lambda-resize without idle polling.
 Rejected source frames return HTTP 403 with JSON `error` and `message` fields
-that Analyze displays to the user.
+that Analyze displays to the user. If the source becomes empty after the
+request consumes its Analyze lease, the response also includes
+`lease_reacquire_required: true`; Analyze becomes read-only until reopened.
 
 ## Local Development
 

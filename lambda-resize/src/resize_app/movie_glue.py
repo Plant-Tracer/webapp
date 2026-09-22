@@ -318,6 +318,10 @@ def source_frame_has_visible_markers(ddbo: DDBO, movie_id: str, frame_number: in
                for point in frame[odb.TRACKPOINTS])
 
 
+class TraceSourceEmptyAfterLease(ValueError):
+    """The requested source became empty after its Analyze lease was consumed."""
+
+
 def prepare_tracing_request(*, api_key: str, movie_id: str, frame_start: int,
                             frame_end: int|None=None,
                             analysis_lease_id: str|None=None) -> dict:
@@ -346,7 +350,7 @@ def prepare_tracing_request(*, api_key: str, movie_id: str, frame_start: int,
             movie_id=movie_id, job_id=lock.job_id,
             updates={MOVIE_STATUS: movie.get(MOVIE_STATUS) or odb.MOVIE_STATE_READY},
         )
-        raise ValueError("Cannot trace movie without points on the selected source frame")
+        raise TraceSourceEmptyAfterLease("Cannot trace movie without points on the selected source frame")
     # Preserve saved points until the worker validates the decoded coordinate height.
     cleared_frames = 0
     LOGGER.info(

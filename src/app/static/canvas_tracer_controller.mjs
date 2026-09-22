@@ -1640,7 +1640,7 @@ class TracerController extends MovieController {
                     }
                     const failedFrameStart = self.pending_trace_start_frame;
                     self.tracking = false;
-                    if (status === 403) {
+                    if (data?.lease_reacquire_required) {
                         stop_analysis_lease();
                         self.analysis_lease_id = null;
                         self.analysis_read_only = true;
