@@ -1386,6 +1386,8 @@ def api_put_frame_trackpoints():
     except odb.MovieTracingLocked:
         return jsonify({C.API_KEY_ERROR: True,
                         C.API_KEY_MESSAGE: "This movie is currently being traced and is read-only."}), 409
+    except odb.MovieCoordinateMigrationRequired as exc:
+        return jsonify({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: str(exc)}), 409
 
     return {'error': False, 'message':f'trackpoints recorded: {len(trackpoints)} '}
 

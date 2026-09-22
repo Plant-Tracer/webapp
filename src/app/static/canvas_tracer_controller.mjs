@@ -1632,7 +1632,7 @@ class TracerController extends MovieController {
                         self.poll_for_track_end();
                         return;
                     }
-                    const msg = (data && data.message) ? data.message : `Tracing request failed (${status}).`;
+                    let msg = (data && data.message) ? data.message : `Tracing request failed (${status}).`;
                     const retryable = (status >= 500 || status === 0) && attempt < TRACE_MOVIE_MAX_ATTEMPTS;
                     if (retryable) {
                         console.warn('[trace-movie] attempt', attempt, 'failed:', status, msg, '- retrying in', TRACE_MOVIE_RETRY_DELAY_MS, 'ms');
@@ -1640,6 +1640,12 @@ class TracerController extends MovieController {
                     }
                     const failedFrameStart = self.pending_trace_start_frame;
                     self.tracking = false;
+                    if (status === 403) {
+                        stop_analysis_lease();
+                        self.analysis_lease_id = null;
+                        self.analysis_read_only = true;
+                        msg += ' Reopen Analyze to reacquire the editing lease.';
+                    }
                     $(self.div_selector).removeClass('tracing-dimmed');
                     self.set_movie_control_buttons();
                     self.enableTrackButtonIfAllowed();

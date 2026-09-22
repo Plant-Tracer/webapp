@@ -78,6 +78,10 @@ class MovieTracingLocked(ValueError):
     """The movie has an active tracing lease."""
 
 
+class MovieCoordinateMigrationRequired(ValueError):
+    """The browser must reload coordinates before writing annotations."""
+
+
 class MovieAnalysisLocked(ValueError):
     """The movie has an active analysis lease."""
 
@@ -2961,11 +2965,20 @@ def marker_label_for_trackpoint(marker_map: dict, trackpoint: dict) -> str:
     return trackpoint.get('label')
 
 
-def ensure_trackpoint_marker_ids(*, movie_id: str, trackpoints: list[dict]) -> list[dict]:
+def ensure_trackpoint_marker_ids(*, movie_id: str, trackpoints: list[dict], persist=True):
     """Ensure stored trackpoints carry stable marker ids and update the movie marker map."""
     assert is_movie_id(movie_id)
     ddbo = DDBO()
-    marker_map = get_movie_marker_map(movie_id=movie_id, create=True)
+    if persist:
+        marker_map = get_movie_marker_map(movie_id=movie_id, create=True)
+        marker_map_present = True
+    else:
+        marker_map = ddbo.movie_frames.get_item(
+            Key=movie_marker_map_key(movie_id), ConsistentRead=True,
+        ).get('Item')
+        marker_map_present = marker_map is not None
+        if marker_map is None:
+            marker_map = _marker_map_from_frames(movie_id=movie_id, frames=ddbo.get_frames(movie_id))
     old_marker_map = copy.deepcopy(marker_map)
     markers = copy.deepcopy(marker_map.get(MARKERS, {}))
     marker_labels = copy.deepcopy(marker_map.get(MARKER_LABELS, {}))
@@ -2990,7 +3003,7 @@ def ensure_trackpoint_marker_ids(*, movie_id: str, trackpoints: list[dict]) -> l
         stored_trackpoint[MARKER_ID] = marker_id
         stored_trackpoints.append(stored_trackpoint)
 
-    if changed:
+    if changed and persist:
         new_marker_map = {
             MOVIE_ID: marker_map[MOVIE_ID],
             FRAME_NUMBER: MOVIE_MARKER_MAP_FRAME_NUMBER,
@@ -3005,6 +3018,12 @@ def ensure_trackpoint_marker_ids(*, movie_id: str, trackpoints: list[dict]) -> l
             if exc.response.get('Error', {}).get('Code') == 'ConditionalCheckFailedException':
                 raise AtomicRenameConflict(f"marker map for movie {movie_id} changed while updating") from exc
             raise
+    if not persist:
+        return stored_trackpoints, marker_map, {
+            MOVIE_ID: movie_id, FRAME_NUMBER: MOVIE_MARKER_MAP_FRAME_NUMBER,
+            ORIG_MOVIE: movie_id, MARKERS: markers,
+            MARKER_LABELS: marker_labels, MARKER_ALIASES: marker_aliases,
+        }, marker_map_present
     return stored_trackpoints
 
 
@@ -3186,15 +3205,40 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackp
     :param: trackpoints - array of Tractpoints.
     """
     assert int(frame_number) >= 0
-    ensure_bottom_left_trackpoints(movie_id=movie_id)
+    if require_unlocked:
+        movie = DDBO().get_movie(movie_id)
+        if movie.get(TRACKPOINT_ORIGIN) != TRACKPOINT_ORIGIN_BOTTOM_LEFT:
+            raise MovieCoordinateMigrationRequired("Reopen Analyze to reload annotations before editing.")
+    else:
+        ensure_bottom_left_trackpoints(movie_id=movie_id)
     # Remove numpy from trackpoints
     trackpoints = [ tp.model_dump(exclude_none=True, exclude_defaults=True) for tp in trackpoints ]
-    trackpoints = ensure_trackpoint_marker_ids(movie_id=movie_id, trackpoints=trackpoints)
+    if require_unlocked:
+        trackpoints, marker_map, new_marker_map, marker_map_present = ensure_trackpoint_marker_ids(
+            movie_id=movie_id, trackpoints=trackpoints, persist=False)
+    else:
+        trackpoints = ensure_trackpoint_marker_ids(movie_id=movie_id, trackpoints=trackpoints)
     logger.debug("put trackpoints frame=%s trackpoints=%s",frame_number,trackpoints)
 
     ddbo = DDBO()
     frame_key = {MOVIE_ID:movie_id, FRAME_NUMBER:frame_number}
     if require_unlocked:
+        map_item = {
+            'TableName': ddbo.movie_frames.name,
+            'Item': new_marker_map,
+            'ConditionExpression': ('#markers=:old_markers AND #marker_labels=:old_labels '
+                                    'AND #marker_aliases=:old_aliases' if marker_map_present
+                                    else 'attribute_not_exists(#movie_id)'),
+            'ExpressionAttributeNames': ({'#markers': MARKERS, '#marker_labels': MARKER_LABELS,
+                                          '#marker_aliases': MARKER_ALIASES} if marker_map_present
+                                         else {'#movie_id': MOVIE_ID}),
+        }
+        if marker_map_present:
+            map_item['ExpressionAttributeValues'] = {
+                ':old_markers': marker_map.get(MARKERS, {}),
+                ':old_labels': marker_map.get(MARKER_LABELS, {}),
+                ':old_aliases': marker_map.get(MARKER_ALIASES, marker_map.get(MARKER_LABELS, {})),
+            }
         frame_update = {
             'TableName': ddbo.movie_frames.name, 'Key': frame_key,
             'UpdateExpression': 'SET #trackpoints=:trackpoints' if trackpoints else 'REMOVE #trackpoints',
@@ -3216,7 +3260,7 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackp
         }
         try:
             ddbo.dynamodb.meta.client.transact_write_items(
-                TransactItems=[{'Update': frame_update}, {'Update': movie_update}],
+                TransactItems=[{'Put': map_item}, {'Update': frame_update}, {'Update': movie_update}],
                 ClientRequestToken=uuid.uuid4().hex,
             )
         except ClientError as exc:
