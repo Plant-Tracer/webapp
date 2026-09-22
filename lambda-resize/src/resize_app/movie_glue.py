@@ -644,12 +644,12 @@ def run_tracing(*, movie_id, frame_start, frame_end=None, job_id=None):
             if (obj.frame_trackpoints and obj.frame_number >= tracing_frame_start
                     and (frame_end_number is None or obj.frame_number <= frame_end_number)):
                 frame_trackpoints = odb.flip_trackpoints_y(obj.frame_trackpoints, frame_height)
+                put_frame_trackpoints(movie_id=movie_id, frame_number=obj.frame_number, trackpoints=frame_trackpoints)
                 ddbo.update_movie(
                     movie_id,
                     {LAST_FRAME_TRACKED: obj.frame_number},
                     touch_activity=False,
                 )
-                put_frame_trackpoints(movie_id=movie_id, frame_number=obj.frame_number, trackpoints=frame_trackpoints)
 
 
         last_render_heartbeat = time.monotonic()
