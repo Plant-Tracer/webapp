@@ -3265,7 +3265,9 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackp
             )
         except ClientError as exc:
             if exc.response.get('Error', {}).get('Code') == 'TransactionCanceledException':
-                raise MovieTracingLocked(movie_id) from exc
+                if ddbo.get_active_movie_trace_lock(movie_id):
+                    raise MovieTracingLocked(movie_id) from exc
+                raise AtomicRenameConflict(f"marker map for movie {movie_id} changed while saving") from exc
             raise
         return
     if trackpoints:

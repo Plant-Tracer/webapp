@@ -787,6 +787,8 @@ The marker-map, frame, and movie updates are committed together only if no
 trace lease is active, so an edit racing a trace request cannot change its
 source frame. A browser with legacy coordinates must reload Analyze so its
 annotations are migrated before saving; this returns HTTP 409.
+Concurrent marker-map changes also return HTTP 409 so the browser can reload
+the latest annotations before retrying.
 
 ---
 
