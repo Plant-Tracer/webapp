@@ -3029,7 +3029,7 @@ def last_tracked_movie_frame(*, movie_id):
         response = movie_frames.query(**query_kwargs)
         items = response.get('Items', [])
         if items:
-            return items[0][FRAME_NUMBER]
+            return int(items[0][FRAME_NUMBER])
 
         last_evaluated_key = response.get('LastEvaluatedKey')
         if not last_evaluated_key:
@@ -3146,8 +3146,11 @@ def _commit_marker_map_change(ddbo, marker_map, new_marker_map, *, needs_retraci
         '#movie_id': MOVIE_ID,
         '#revision': RENDER_REVISION,
         '#last_activity_at': LAST_ACTIVITY_AT,
+        '#trace_expires': TRACE_LOCK_EXPIRES_AT,
     }
-    movie_expression_values = {':last_activity_at': int(time.time()), ':revision': uuid.uuid4().hex}
+    now = int(time.time())
+    movie_expression_values = {':last_activity_at': now, ':revision': uuid.uuid4().hex,
+                               ':now': now}
     if needs_retracing:
         movie_update_expression += ', #needs_retracing = :needs_retracing'
         movie_expression_names['#needs_retracing'] = NEEDS_RETRACING
@@ -3157,7 +3160,8 @@ def _commit_marker_map_change(ddbo, marker_map, new_marker_map, *, needs_retraci
             'TableName': ddbo.movies.name,
             'Key': {MOVIE_ID: movie_id},
             'UpdateExpression': movie_update_expression,
-            'ConditionExpression': 'attribute_exists(#movie_id)',
+            'ConditionExpression': ('attribute_exists(#movie_id) AND '
+                                    '(attribute_not_exists(#trace_expires) OR #trace_expires < :now)'),
             'ExpressionAttributeNames': movie_expression_names,
             'ExpressionAttributeValues': movie_expression_values,
         },
@@ -3176,7 +3180,7 @@ def _commit_marker_map_change(ddbo, marker_map, new_marker_map, *, needs_retraci
         raise
 
 def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackpoint],
-                          needs_retracing:bool=False):
+                          needs_retracing:bool=False, require_unlocked:bool=False):
     """
     :frame_number: the frame to replace. If the frame has existing trackpoints, they are overwritten
     :param: trackpoints - array of Tractpoints.
@@ -3190,6 +3194,36 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackp
 
     ddbo = DDBO()
     frame_key = {MOVIE_ID:movie_id, FRAME_NUMBER:frame_number}
+    if require_unlocked:
+        frame_update = {
+            'TableName': ddbo.movie_frames.name, 'Key': frame_key,
+            'UpdateExpression': 'SET #trackpoints=:trackpoints' if trackpoints else 'REMOVE #trackpoints',
+            'ExpressionAttributeNames': {'#trackpoints': TRACKPOINTS},
+        }
+        if trackpoints:
+            frame_update['ExpressionAttributeValues'] = {':trackpoints': trackpoints}
+        movie_update = {
+            'TableName': ddbo.movies.name, 'Key': {MOVIE_ID: movie_id},
+            'UpdateExpression': ('SET #needs_retracing=:needs_retracing REMOVE #last_frame_tracked'
+                                 if needs_retracing else 'REMOVE #last_frame_tracked'),
+            'ConditionExpression': ('attribute_exists(#movie_id) AND '
+                                    '(attribute_not_exists(#trace_expires) OR #trace_expires < :now)'),
+            'ExpressionAttributeNames': {'#movie_id': MOVIE_ID, '#trace_expires': TRACE_LOCK_EXPIRES_AT,
+                                         '#last_frame_tracked': LAST_FRAME_TRACKED,
+                                         **({'#needs_retracing': NEEDS_RETRACING} if needs_retracing else {})},
+            'ExpressionAttributeValues': {':now': int(time.time()),
+                                          **({':needs_retracing': 1} if needs_retracing else {})},
+        }
+        try:
+            ddbo.dynamodb.meta.client.transact_write_items(
+                TransactItems=[{'Update': frame_update}, {'Update': movie_update}],
+                ClientRequestToken=uuid.uuid4().hex,
+            )
+        except ClientError as exc:
+            if exc.response.get('Error', {}).get('Code') == 'TransactionCanceledException':
+                raise MovieTracingLocked(movie_id) from exc
+            raise
+        return
     if trackpoints:
         ddbo.movie_frames.update_item(Key=frame_key, UpdateExpression=f'SET {TRACKPOINTS}=:val',
                                       ExpressionAttributeValues={':val':trackpoints})

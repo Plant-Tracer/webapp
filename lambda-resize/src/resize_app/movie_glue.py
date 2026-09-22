@@ -341,6 +341,12 @@ def prepare_tracing_request(*, api_key: str, movie_id: str, frame_start: int,
         movie=movie, started_by_user_id=user_id,
         started_by_user_name=ddbo.get_user(user_id)[USER_NAME],
         analysis_lease_id=analysis_lease_id)
+    if not source_frame_has_visible_markers(ddbo, movie_id, source_frame_number):
+        ddbo.finish_movie_trace(
+            movie_id=movie_id, job_id=lock.job_id,
+            updates={MOVIE_STATUS: movie.get(MOVIE_STATUS) or odb.MOVIE_STATE_READY},
+        )
+        raise ValueError("Cannot trace movie without points on the selected source frame")
     # Preserve saved points until the worker validates the decoded coordinate height.
     cleared_frames = 0
     LOGGER.info(

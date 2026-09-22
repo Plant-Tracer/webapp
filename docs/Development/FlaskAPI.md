@@ -783,6 +783,8 @@ Returns HTTP 409 when an active trace lease makes the movie read-only, or when
 another browser owns the active analysis lease. The same rule applies to marker
 rename, trim, and capture-interval writes; the owning browser includes its
 `analysis_lease_id` with those requests.
+The frame write and movie update are committed together only if no trace lease
+is active, so an edit racing a trace request cannot change its source frame.
 
 ---
 
