@@ -1566,20 +1566,18 @@ class TracerController extends MovieController {
             return;
         }
         const retraceStartFrame = this.frame_number;
-        if (this.mp4_player) {
-            this.saving_track_request = true;
+        this.saving_track_request = true;
+        this.set_movie_control_buttons();
+        try {
+            const saved = await this.put_markers();
+            if (saved?.error) throw new Error(saved.message || 'Unable to save markers.');
+            if (this.frame_number !== retraceStartFrame) throw new Error('Frame changed while saving markers. Select Trace again.');
+        } catch (error) {
+            $('#status-big').text(error.message || 'Unable to save markers; tracing has not started.');
+            return;
+        } finally {
+            this.saving_track_request = false;
             this.set_movie_control_buttons();
-            try {
-                const saved = await this.put_markers();
-                if (saved?.error) throw new Error(saved.message || 'Unable to save markers.');
-                if (this.frame_number !== retraceStartFrame) throw new Error('Frame changed while saving markers. Select Trace again.');
-            } catch (error) {
-                $('#status-big').text(error.message || 'Unable to save markers; tracing has not started.');
-                return;
-            } finally {
-                this.saving_track_request = false;
-                this.set_movie_control_buttons();
-            }
         }
         const traceVerb = retraceStartFrame > 0 ? 'Retracing' : 'Tracing';
         $('#status-big').text(`${traceVerb} from frame ${retraceStartFrame}...`);

@@ -3196,15 +3196,20 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackp
         ddbo.movie_frames.update_item(Key=frame_key, UpdateExpression=f'REMOVE {TRACKPOINTS}')
 
     # update the last frame tracked. This is way, way more expensive than it should be.
-    movie = ddbo.get_movie(movie_id, fields=[LAST_FRAME_TRACKED])
-    current = movie.get(LAST_FRAME_TRACKED, None)
     movie_metadata = {}
     if trackpoints:
+        current = ddbo.get_movie(movie_id, fields=[LAST_FRAME_TRACKED]).get(LAST_FRAME_TRACKED)
         movie_metadata[LAST_FRAME_TRACKED] = frame_number if current is None else max(current, frame_number)
-    elif current is not None and int(current) == frame_number:
-        ddbo.movies.update_item(Key={MOVIE_ID: movie_id},
-                                UpdateExpression='REMOVE #last_frame_tracked',
-                                ExpressionAttributeNames={'#last_frame_tracked': LAST_FRAME_TRACKED})
+    else:
+        try:
+            ddbo.movies.update_item(
+                Key={MOVIE_ID: movie_id}, UpdateExpression='REMOVE #last_frame_tracked',
+                ConditionExpression='#last_frame_tracked=:frame_number',
+                ExpressionAttributeNames={'#last_frame_tracked': LAST_FRAME_TRACKED},
+                ExpressionAttributeValues={':frame_number': frame_number})
+        except ClientError as exc:
+            if exc.response.get('Error', {}).get('Code') != 'ConditionalCheckFailedException':
+                raise
     if needs_retracing:
         movie_metadata[NEEDS_RETRACING] = 1
     set_movie_metadata(movie_id=movie_id, movie_metadata=movie_metadata)
