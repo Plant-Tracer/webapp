@@ -308,6 +308,16 @@ def complete_uploaded_object(*, movie_id: str, staging_urn: str, event_id: str,
     )
 
 
+def source_frame_has_visible_markers(ddbo: DDBO, movie_id: str, frame_number: int) -> bool:
+    """Check the source frame against the current marker tombstones."""
+    frame = ddbo.get_movie_frame(movie_id, frame_number, consistent_read=True)
+    if not frame or not frame.get(odb.TRACKPOINTS):
+        return False
+    marker_map = odb.get_movie_marker_map(movie_id=movie_id, create=False)
+    return any(not odb.marker_is_deleted(marker_map, point)
+               for point in frame[odb.TRACKPOINTS])
+
+
 def prepare_tracing_request(*, api_key: str, movie_id: str, frame_start: int,
                             frame_end: int|None=None,
                             analysis_lease_id: str|None=None) -> dict:
@@ -325,8 +335,7 @@ def prepare_tracing_request(*, api_key: str, movie_id: str, frame_start: int,
     frame_end_number = None if frame_end is None else int(frame_end)
     if source_frame_number < 0:
         raise ValueError("frame_start must be non-negative")
-    source_frame = ddbo.get_movie_frame(movie_id, source_frame_number, consistent_read=True)
-    if not source_frame or not source_frame.get(odb.TRACKPOINTS):
+    if not source_frame_has_visible_markers(ddbo, movie_id, source_frame_number):
         raise ValueError("Cannot trace movie without points on the selected source frame")
     lock = ddbo.acquire_movie_trace_lock(
         movie=movie, started_by_user_id=user_id,
@@ -586,8 +595,7 @@ def run_tracing(*, movie_id, frame_start, frame_end=None, job_id=None):
         movie_url = s3_presigned.make_signed_url(urn=analysis.urn if analysis else movie_urn)
         frame_height = analysis.height if analysis else analysis_frame_height_from_movie(
             movie_url=movie_url, rotation=rotation)
-        source_frame = ddbo.get_movie_frame(movie_id, source_frame_number)
-        if not source_frame or not source_frame.get('trackpoints'):
+        if not source_frame_has_visible_markers(ddbo, movie_id, source_frame_number):
             raise ValueError("Cannot trace movie without points on the selected source frame")
         remember_trackpoint_frame_height(movie=movie_record, frame_height=frame_height)
         odb.ensure_bottom_left_trackpoints(movie_id=movie_id, frame_height=frame_height)
