@@ -722,11 +722,7 @@ class TracerController extends MovieController {
             this.track_button.prop(DISABLED, true);
             return;
         }
-        if (this.isFullyTraced()) {
-            this.refreshTrackButtonState();
-        } else {
-            this.track_button.prop(DISABLED, false);
-        }
+        this.refreshTrackButtonState();
         this.tracking_status.text('');
     }
 
@@ -858,16 +854,17 @@ class TracerController extends MovieController {
     }
 
     refreshTrackButtonState() {
+        const noSourceMarkers = !this.objects.some(obj => obj.constructor.name == Marker.name);
         if (this.pending_retrace_to_end) {
             this.track_button.val(this.traceToEndLabel());
-            this.track_button.prop(DISABLED, false);
+            this.track_button.prop(DISABLED, noSourceMarkers);
             this.download_button.hide();
             this.refreshRetraceRequiredMessage();
             return;
         }
         if (this.isFullyTraced()) {
             this.track_button.val(RETRACE_MOVIE);
-            this.track_button.prop(DISABLED, !this.trace_inputs_changed);
+            this.track_button.prop(DISABLED, noSourceMarkers || !this.trace_inputs_changed);
             this.download_button.prop('disabled', false);
             this.download_button.show();
             // Re-enable the hidden form inputs so they are included in the POST body.
@@ -879,7 +876,7 @@ class TracerController extends MovieController {
             return;
         }
         this.track_button.val(TRACE_MOVIE);
-        this.track_button.prop(DISABLED, false);
+        this.track_button.prop(DISABLED, noSourceMarkers);
         this.refreshRetraceRequiredMessage();
     }
 
@@ -1561,6 +1558,11 @@ class TracerController extends MovieController {
      */
     async track_to_end() {
         if (this.saving_track_request || !this.isCurrentFrameEditable()) {
+            return;
+        }
+        if (!this.get_markers().length) {
+            $('#status-big').text('Place markers on the selected frame before tracing.');
+            this.refreshTrackButtonState();
             return;
         }
         const retraceStartFrame = this.frame_number;

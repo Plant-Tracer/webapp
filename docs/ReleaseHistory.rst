@@ -78,6 +78,10 @@ Release Notes
 Unreleased Summary
 ******************
 
+    * Prevent tracing from a frame with no markers. Reject empty source frames
+      before queueing and keep empty marker saves from advancing the tracked
+      frame, so a failed attempt does not leave Analyze read-only (fixes #1238).
+
     * Version 0.9.9.18: downloaded traced MP4s include future paths at 50 percent
       opacity and 1 pixel wide, with past paths at full opacity and 2 pixels wide.
       Complete tracking before rendering so early frames include the new future

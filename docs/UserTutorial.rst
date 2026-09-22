@@ -57,8 +57,8 @@ Tracking the Uploaded Movie
 .. image:: tutorial_images/track_uploaded_movie.png
    :alt: Post-upload confirmation page showing the movie's first frame and a Next Steps section with Analyze and Track the uploaded movie links
 
-- On the Analyze page, position the markers (described below), then click **Trace movie** to begin tracking.
-- You can optionally trim the movie to a specific frame range before tracing. Use the **Trim start** and **Trim end** controls to set the first and last frame Plant Tracer will analyze. Trimming lets you exclude frames before the plant starts moving or after tracking becomes unreliable without re-uploading the movie. When you reopen a trimmed movie, Plant Tracer starts on the first included frame.
+- On the Analyze page, position the markers (described below), then click **Trace movie** to begin tracking. Trace is available only on a frame with markers; return to the marked frame if you stepped to an empty one.
+- After the first trace, you can optionally trim the movie to a specific frame range. Use the **Trim start** and **Trim end** controls to set the first and last frame Plant Tracer will analyze. Trimming lets you exclude frames before the plant starts moving or after tracking becomes unreliable without re-uploading the movie. When you reopen a trimmed movie, Plant Tracer starts on the first included frame.
 - Plant Tracer places three markers on newly uploaded movies automatically. They initially appear on the left side of the movie frame. These also appear in the Marker Table to the right (or beneath) the video frame.
 - Plant Tracer will attempt to track the motion of whatever part of the image a marker is placed over, frame by frame.
 - It is the user's job to position the markers appropriately. To move a marker, click on it, and drag it to the desired location.

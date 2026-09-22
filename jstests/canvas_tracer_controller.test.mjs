@@ -725,6 +725,7 @@ describe('TracerController constructor', () => {
             makeMovieMetadata({ total_frames: 3, last_frame_tracked: lastTracked }), 'k');
         tc.frames = Array.from({ length: 3 }, (_, frame_number) => ({ frame_number, markers: [] }));
         tc.frame_number = 0;
+        tc.objects.push(new MockMarkerClass(10, 20, 5, 'orange', 'orange', 'Apex'));
         tc.frame_loading = true;
         tc.refreshFrameEditState();
         expect(tc.track_button.prop).toHaveBeenLastCalledWith('disabled', true);
@@ -750,6 +751,8 @@ describe('TracerController constructor', () => {
             makeMovieMetadata({ total_frames: 5, last_frame_tracked: 4, needs_retracing: 1 }),
             'k'
         );
+        tc.objects.push(new MockMarkerClass(10, 20, 5, 'orange', 'orange', 'Apex'));
+        tc.refreshTrackButtonState();
 
         expect(tc.track_button.prop).toHaveBeenCalledWith('disabled', false);
     });
@@ -767,7 +770,9 @@ describe('TracerController constructor', () => {
         tc.frame_number = 1;
         tc.track_button.prop.mockClear();
 
-        tc.object_did_move(new MockMarkerClass(10, 20, 5, 'orange', 'orange', 'Apex'));
+        const marker = new MockMarkerClass(10, 20, 5, 'orange', 'orange', 'Apex');
+        tc.objects.push(marker);
+        tc.object_did_move(marker);
 
         expect(tc.track_button.prop).toHaveBeenCalledWith('disabled', false);
     });
@@ -2012,6 +2017,7 @@ describe('TracerController.track_to_end', () => {
         global.fetch = jest.fn();
         global.alert = jest.fn();
         tc = new TracerController('div#tracer', makeMovieMetadata({ total_frames: 20 }), 'test-api-key');
+        tc.objects.push(new MockMarkerClass(10, 20, 5, 'orange', 'orange', 'Apex'));
         jest.spyOn(tc, 'poll_for_track_end').mockImplementation(() => {});
         // Wipe constructor side-effects so assertions only cover track_to_end()
         jest.clearAllMocks();
@@ -2121,6 +2127,7 @@ describe('TracerController.track_to_end', () => {
         jest.clearAllMocks();
         mockFetchResponse(200, {});
         tc.frame_number = 0;
+        tc.objects.push(new MockMarkerClass(10, 20, 5, 'orange', 'orange', 'Apex'));
         tc.track_to_end();
         const body = JSON.parse(global.fetch.mock.calls[0][1].body);
         expect(body.movie_id).toBe('test-movie-001');

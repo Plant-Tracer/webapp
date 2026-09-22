@@ -323,6 +323,11 @@ def prepare_tracing_request(*, api_key: str, movie_id: str, frame_start: int,
     )
     source_frame_number = int(frame_start)
     frame_end_number = None if frame_end is None else int(frame_end)
+    if source_frame_number < 0:
+        raise ValueError("frame_start must be non-negative")
+    source_frame = ddbo.get_movie_frame(movie_id, source_frame_number, consistent_read=True)
+    if not source_frame or not source_frame.get(odb.TRACKPOINTS):
+        raise ValueError("Cannot trace movie without points on the selected source frame")
     lock = ddbo.acquire_movie_trace_lock(
         movie=movie, started_by_user_id=user_id,
         started_by_user_name=ddbo.get_user(user_id)[USER_NAME],

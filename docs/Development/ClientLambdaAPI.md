@@ -80,9 +80,10 @@ Body:
 { "movie_id": "m...", "frame_start": 12, "frame_end": 200 }
 ```
 
-`frame_start` is the edited source frame. Plant Tracer preserves that frame,
-clears stored trackpoints after it through `frame_end` when supplied, marks the
-movie as `tracing`, and dispatches work. In local mode the work goes to the
+`frame_start` is the edited source frame. Plant Tracer requires saved markers
+on it before queuing, preserves that frame, clears stored trackpoints after it
+through `frame_end` when supplied, marks the movie as `tracing`, and dispatches
+work. In local mode the work goes to the
 in-process queue; in deployed mode a stack-scoped EventBridge rule pushes the
 custom work event to lambda-resize without idle polling.
 

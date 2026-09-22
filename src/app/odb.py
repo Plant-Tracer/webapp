@@ -217,6 +217,7 @@ MOVIE_METADATA_BULK_PROPS = (FPS, WIDTH, HEIGHT, TOTAL_FRAMES, TOTAL_BYTES)
 
 # movie_frames table
 FRAME_NUMBER = 'frame_number'
+TRACKPOINTS = 'trackpoints'
 MOVIE_MARKER_MAP_FRAME_NUMBER = -100
 FRAME_URN = 'frame_urn'
 FIRST_FRAME_URN = 'first_frame_urn'
@@ -1390,9 +1391,10 @@ class DDBO:
 
     ### movie_frame management
 
-    def get_movie_frame(self,movie_id, frame_number):
+    def get_movie_frame(self,movie_id, frame_number, *, consistent_read=False):
         assert int(frame_number) >= 0
-        return self.movie_frames.get_item(Key = {MOVIE_ID:movie_id, FRAME_NUMBER:frame_number}).get('Item')
+        return self.movie_frames.get_item(Key = {MOVIE_ID:movie_id, FRAME_NUMBER:frame_number},
+                                          ConsistentRead=consistent_read).get('Item')
 
     def put_movie_frame(self,framedict):
         assert int(framedict[FRAME_NUMBER]) >= 0
@@ -3186,19 +3188,23 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackp
     logger.debug("put trackpoints frame=%s trackpoints=%s",frame_number,trackpoints)
 
     ddbo = DDBO()
-    ddbo.movie_frames.update_item( Key={MOVIE_ID:movie_id,
-                                        FRAME_NUMBER:frame_number},
-                                   UpdateExpression='SET trackpoints=:val',
-                                   ExpressionAttributeValues={':val':trackpoints})
+    frame_key = {MOVIE_ID:movie_id, FRAME_NUMBER:frame_number}
+    if trackpoints:
+        ddbo.movie_frames.update_item(Key=frame_key, UpdateExpression=f'SET {TRACKPOINTS}=:val',
+                                      ExpressionAttributeValues={':val':trackpoints})
+    else:
+        ddbo.movie_frames.update_item(Key=frame_key, UpdateExpression=f'REMOVE {TRACKPOINTS}')
 
     # update the last frame tracked. This is way, way more expensive than it should be.
     movie = ddbo.get_movie(movie_id, fields=[LAST_FRAME_TRACKED])
     current = movie.get(LAST_FRAME_TRACKED, None)
-    if current is None:
-        lft = frame_number
-    else:
-        lft = max(current, frame_number)
-    movie_metadata = {LAST_FRAME_TRACKED:lft}
+    movie_metadata = {}
+    if trackpoints:
+        movie_metadata[LAST_FRAME_TRACKED] = frame_number if current is None else max(current, frame_number)
+    elif current is not None and int(current) == frame_number:
+        ddbo.movies.update_item(Key={MOVIE_ID: movie_id},
+                                UpdateExpression='REMOVE #last_frame_tracked',
+                                ExpressionAttributeNames={'#last_frame_tracked': LAST_FRAME_TRACKED})
     if needs_retracing:
         movie_metadata[NEEDS_RETRACING] = 1
     set_movie_metadata(movie_id=movie_id, movie_metadata=movie_metadata)
