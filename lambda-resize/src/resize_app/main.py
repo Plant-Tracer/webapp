@@ -26,6 +26,7 @@ from typing import Any, Dict
 from aws_lambda_powertools import Logger
 from aws_lambda_powertools.event_handler import APIGatewayHttpResolver, CORSConfig, Response
 from aws_lambda_powertools.utilities.typing import LambdaContext
+from pydantic import BaseModel
 
 from . import async_work
 from . import movie_glue
@@ -62,6 +63,13 @@ cors_config = CORSConfig(
 )
 
 app = APIGatewayHttpResolver(cors=cors_config)
+
+
+class TraceErrorResponse(BaseModel):
+    """Trace request rejection displayed by the Analyze client."""
+
+    message: str
+    error: bool = True
 
 
 def deploy_metadata(metadata_path: Path | None = None) -> Dict[str, str]:
@@ -243,10 +251,11 @@ def handle_post_actions():
         return movie_glue.queue_tracing(api_key, movie_id, frame_start, frame_end, prepared["job_id"])
     except movie_glue.odb.MovieTracingLocked:
         return Response(status_code=409, content_type="application/json",
-                        body=json.dumps({"error": True, "message": "This movie is already being traced"}))
+                        body=TraceErrorResponse(message="This movie is already being traced").model_dump_json())
     except ValueError as e:
         LOGGER.exception("trace-movie rejected: %s", e)
-        return Response(status_code=403, body=str(e.args))
+        return Response(status_code=403, content_type="application/json",
+                        body=TraceErrorResponse(message=str(e)).model_dump_json())
 
 
 @app.post("/resize-api/v1/download-traced")

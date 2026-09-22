@@ -238,7 +238,8 @@ def test_trace_movie_returns_403_for_validation_error():
         response = lambda_handler(event, DummyContext())
 
     assert response["statusCode"] == 403
-    assert "not allowed" in response["body"]
+    assert response["headers"]["Content-Type"] == "application/json"
+    assert json.loads(response["body"]) == {"error": True, "message": "not allowed"}
 
 
 def test_trace_movie_returns_json_for_active_lock():
