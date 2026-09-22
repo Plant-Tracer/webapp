@@ -3018,6 +3018,7 @@ def last_tracked_movie_frame(*, movie_id):
         query_kwargs = {
             'KeyConditionExpression': Key(MOVIE_ID).eq(movie_id) & Key(FRAME_NUMBER).gte(0),
             'FilterExpression': Attr('trackpoints').exists(),
+            'ConsistentRead': True,
             'ScanIndexForward': False,
             'Limit': 1
         }
@@ -3195,21 +3196,12 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackp
     else:
         ddbo.movie_frames.update_item(Key=frame_key, UpdateExpression=f'REMOVE {TRACKPOINTS}')
 
-    # update the last frame tracked. This is way, way more expensive than it should be.
+    # Any frame replacement invalidates this cache; the next metadata read finds the actual frontier.
+    # The tracing worker writes its own progress after each completed frame.
+    ddbo.movies.update_item(Key={MOVIE_ID: movie_id},
+                            UpdateExpression='REMOVE #last_frame_tracked',
+                            ExpressionAttributeNames={'#last_frame_tracked': LAST_FRAME_TRACKED})
     movie_metadata = {}
-    if trackpoints:
-        current = ddbo.get_movie(movie_id, fields=[LAST_FRAME_TRACKED]).get(LAST_FRAME_TRACKED)
-        movie_metadata[LAST_FRAME_TRACKED] = frame_number if current is None else max(current, frame_number)
-    else:
-        try:
-            ddbo.movies.update_item(
-                Key={MOVIE_ID: movie_id}, UpdateExpression='REMOVE #last_frame_tracked',
-                ConditionExpression='#last_frame_tracked=:frame_number',
-                ExpressionAttributeNames={'#last_frame_tracked': LAST_FRAME_TRACKED},
-                ExpressionAttributeValues={':frame_number': frame_number})
-        except ClientError as exc:
-            if exc.response.get('Error', {}).get('Code') != 'ConditionalCheckFailedException':
-                raise
     if needs_retracing:
         movie_metadata[NEEDS_RETRACING] = 1
     set_movie_metadata(movie_id=movie_id, movie_metadata=movie_metadata)

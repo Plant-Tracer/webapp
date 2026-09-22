@@ -183,7 +183,7 @@ def test_empty_source_preserves_later_points(new_movie_record, tmp_path, queued)
         else:
             movie_glue.run_tracing(movie_id=movie_id, frame_start=1)
     assert ddbo.get_frames(movie_id) == before
-    assert ddbo.get_movie(movie_id)[odb.LAST_FRAME_TRACKED] == 2
+    assert odb.get_movie_metadata(movie_id=movie_id, get_last_frame_tracked=True)[odb.LAST_FRAME_TRACKED] == 2
     assert ddbo.get_active_movie_trace_lock(movie_id) is None
 
 
