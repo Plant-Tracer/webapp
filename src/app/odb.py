@@ -829,6 +829,9 @@ class DDBO:
                                 purpose, analysis_lease_id=None):
         """Obtain one named worker lease, mutually exclusive with editing and recoding."""
         now = int(time.time())
+        analysis_condition = ("#analysis_id=:analysis_id AND #analysis_expires > :now"
+                              if analysis_lease_id else
+                              "attribute_not_exists(#analysis_expires) OR #analysis_expires < :now")
         lock = MovieTraceLock(
             movie_id=movie[MOVIE_ID], job_id=uuid.uuid4().hex, state="queued", purpose=purpose,
             acquired_at=now, heartbeat_at=now, expires_at=now + 15 * 60,
@@ -846,8 +849,7 @@ class DDBO:
                                   "#analysis_id, #analysis_acquired, #analysis_heartbeat, #analysis_expires, "
                                   "#analysis_started_by_id, #analysis_started_by_name"),
                 ConditionExpression=("(attribute_not_exists(#expires) OR #expires < :now) AND "
-                                     "(attribute_not_exists(#analysis_expires) OR #analysis_expires < :now "
-                                     "OR #analysis_id=:analysis_id) AND "
+                                     f"({analysis_condition}) AND "
                                      "(attribute_not_exists(#processing_expires) OR #processing_expires <= :now)"),
                 ExpressionAttributeNames={
                     "#purpose": WORK_PURPOSE, "#job_id": TRACE_JOB_ID, "#state": TRACE_LOCK_STATE,
@@ -867,7 +869,7 @@ class DDBO:
                     ":expires": lock.expires_at, ":started_by_id": lock.started_by_user_id,
                     ":started_by_name": lock.started_by_user_name,
                     ":status": MOVIE_STATE_TRACING if purpose == "trace" else (movie.get(MOVIE_STATUS) or MOVIE_STATE_READY),
-                    ":analysis_id": analysis_lease_id or "",
+                    **({":analysis_id": analysis_lease_id} if analysis_lease_id else {}),
                 },
             )
         except ClientError as exc:
@@ -3207,7 +3209,8 @@ def _commit_marker_map_change(ddbo, marker_map, new_marker_map, *, needs_retraci
         raise
 
 def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackpoint],
-                          needs_retracing:bool=False, require_unlocked:bool=False):
+                          needs_retracing:bool=False, require_unlocked:bool=False,
+                          analysis_lease_id:str|None=None):
     """
     :frame_number: the frame to replace. If the frame has existing trackpoints, they are overwritten
     :param: trackpoints - array of Tractpoints.
@@ -3258,19 +3261,26 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackp
         }
         if trackpoints:
             frame_update['ExpressionAttributeValues'] = {':trackpoints': trackpoints}
+        analysis_condition = ('#analysis_id=:analysis_id AND #analysis_expires > :now'
+                              if analysis_lease_id else
+                              'attribute_not_exists(#analysis_expires) OR #analysis_expires <= :now')
         movie_update = {
             'TableName': ddbo.movies.name, 'Key': {MOVIE_ID: movie_id},
             'UpdateExpression': ('SET #last_activity_at=:now, #render_revision=:revision'
                                  + (', #needs_retracing=:needs_retracing' if needs_retracing else '')
                                  + ' REMOVE #last_frame_tracked'),
             'ConditionExpression': ('attribute_exists(#movie_id) AND '
-                                    '(attribute_not_exists(#trace_expires) OR #trace_expires < :now)'),
+                                    '(attribute_not_exists(#trace_expires) OR #trace_expires < :now) AND '
+                                    f'({analysis_condition})'),
             'ExpressionAttributeNames': {'#movie_id': MOVIE_ID, '#trace_expires': TRACE_LOCK_EXPIRES_AT,
+                                         '#analysis_expires': ANALYSIS_LOCK_EXPIRES_AT,
+                                         **({'#analysis_id': ANALYSIS_LEASE_ID} if analysis_lease_id else {}),
                                          '#last_frame_tracked': LAST_FRAME_TRACKED,
                                          '#last_activity_at': LAST_ACTIVITY_AT,
                                          '#render_revision': RENDER_REVISION,
                                          **({'#needs_retracing': NEEDS_RETRACING} if needs_retracing else {})},
             'ExpressionAttributeValues': {':now': int(time.time()), ':revision': uuid.uuid4().hex,
+                                          **({':analysis_id': analysis_lease_id} if analysis_lease_id else {}),
                                           **({':needs_retracing': 1} if needs_retracing else {})},
         }
         try:
@@ -3282,6 +3292,10 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackp
             if exc.response.get('Error', {}).get('Code') == 'TransactionCanceledException':
                 if ddbo.get_active_movie_trace_lock(movie_id):
                     raise MovieTracingLocked(movie_id) from exc
+                analysis_lock = ddbo.get_active_movie_analysis_lock(movie_id)
+                if (analysis_lease_id and (not analysis_lock or analysis_lock.lease_id != analysis_lease_id)) or (
+                        not analysis_lease_id and analysis_lock):
+                    raise MovieAnalysisLocked(movie_id) from exc
                 raise AtomicRenameConflict(f"marker map for movie {movie_id} changed while saving") from exc
             raise
         return

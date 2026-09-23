@@ -93,6 +93,8 @@ request consumes its Analyze lease, the response also includes
 If publishing the queued work fails, the API releases a lease that has not yet
 been claimed and returns HTTP 503 with the same reacquire flag. A worker that
 already claimed the job retains its lease.
+An HTTP 409 for a request carrying an Analyze lease also includes the flag;
+this covers retries whose first response was lost after consuming that lease.
 Failures before trace-lease acquisition return HTTP 503 without that flag;
 Analyze keeps its current editing lease.
 

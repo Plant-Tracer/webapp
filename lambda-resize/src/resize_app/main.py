@@ -263,7 +263,10 @@ def handle_post_actions():
             raise movie_glue.TraceLeaseConsumed("Tracing work could not be queued") from exc
     except movie_glue.odb.MovieTracingLocked:
         return Response(status_code=409, content_type="application/json",
-                        body=TraceErrorResponse(message="This movie is already being traced").model_dump_json(exclude_none=True))
+                        body=TraceErrorResponse(
+                            message="This movie is already being traced",
+                            lease_reacquire_required=bool(analysis_lease_id),
+                        ).model_dump_json(exclude_none=True))
     except movie_glue.TraceSourceEmptyAfterLease as e:
         return Response(status_code=403, content_type="application/json",
                         body=TraceErrorResponse(message=str(e),

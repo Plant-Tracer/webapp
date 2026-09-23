@@ -787,8 +787,10 @@ another browser owns the active analysis lease. The same rule applies to marker
 rename, trim, and capture-interval writes; the owning browser includes its
 `analysis_lease_id` with those requests.
 The marker-map, frame, and movie updates are committed together only if no
-trace lease is active, so an edit racing a trace request cannot change its
-source frame. A browser with legacy coordinates must reload Analyze so its
+trace lease is active and the supplied Analyze lease is still current. A stale
+Analyze lease returns HTTP 409 with `lease_reacquire_required: true`; the
+browser becomes read-only until Analyze is reopened. An edit racing a trace
+request cannot change its source frame. A browser with legacy coordinates must reload Analyze so its
 annotations are migrated before saving; this returns HTTP 409.
 Concurrent marker-map changes also return HTTP 409 so the browser can reload
 the latest annotations before retrying.

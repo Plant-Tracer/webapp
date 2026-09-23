@@ -1536,6 +1536,13 @@ class TracerController extends MovieController {
             })
             .fail( (res) => {
                 console.error("put-frame-trackpoints failed", res);
+                if (res.responseJSON?.lease_reacquire_required) {
+                    stop_analysis_lease();
+                    this.analysis_lease_id = null;
+                    this.analysis_read_only = true;
+                    this.refreshFrameEditState();
+                    this.set_movie_control_buttons();
+                }
                 alert("error from put-frame-trackpoints:\n"+res.responseText);
             });
         // Preserve invocation order when rapid marker moves save the same frame.
