@@ -1570,6 +1570,9 @@ class TracerController extends MovieController {
         this.set_movie_control_buttons();
         try {
             await Promise.all(Array.from(this.marker_save_requests || []));
+            if (this.frame_number !== retraceStartFrame) {
+                throw new Error('Frame changed while saving markers. Select Trace again.');
+            }
             const saved = await this.put_markers();
             if (saved?.error) throw new Error(saved.message || 'Unable to save markers.');
             if (this.frame_number !== retraceStartFrame) throw new Error('Frame changed while saving markers. Select Trace again.');
