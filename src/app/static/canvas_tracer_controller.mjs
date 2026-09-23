@@ -1524,7 +1524,7 @@ class TracerController extends MovieController {
             trackpoints  : JSON.stringify(markers), // markers as a JSON string because we do POST as a form, not as REST
             ...this.analysisLeaseParams(),
         };
-        const request = $.post(`${API_BASE}api/put-frame-trackpoints`, put_frame_markers_params )
+        const submit = () => $.post(`${API_BASE}api/put-frame-trackpoints`, put_frame_markers_params )
             .done( (data) => {
                 if (data.error) {
                     alert("Error saving annotations: "+data.message);
@@ -1538,12 +1538,14 @@ class TracerController extends MovieController {
                 console.error("put-frame-trackpoints failed", res);
                 alert("error from put-frame-trackpoints:\n"+res.responseText);
             });
-        const pending = Promise.resolve(request);
+        // Preserve invocation order when rapid marker moves save the same frame.
+        const pending = Promise.resolve(this.marker_save_tail ? this.marker_save_tail.then(submit) : submit());
+        this.marker_save_tail = pending.catch(() => {});
         this.marker_save_requests ||= new Set();
         this.marker_save_requests.add(pending);
         const finished = () => this.marker_save_requests.delete(pending);
         pending.then(finished, finished);
-        return request;
+        return pending;
     }
 
     /* track_to_end() is called when the track_button ('track to end') button is clicked.
