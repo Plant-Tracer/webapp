@@ -97,6 +97,8 @@ An HTTP 409 for a request carrying an Analyze lease also includes the flag;
 this covers retries whose first response was lost after consuming that lease.
 Failures before trace-lease acquisition return HTTP 503 without that flag;
 Analyze keeps its current editing lease.
+After tracing completes, Analyze reacquires an editing lease before enabling
+marker edits or Reset Trace again.
 
 ## Local Development
 

@@ -1367,6 +1367,25 @@ class TracerController extends MovieController {
         ));
     }
 
+    reacquire_analysis_lease() {
+        return new Promise((resolve, reject) => {
+            $.post({
+                url: `${API_BASE}api/acquire-movie-analysis-lease`,
+                data: {api_key: this.api_key, movie_id: this.movie_id, course_id: activeCourseId()},
+                timeout: 15000,
+            }).done(data => {
+                if (data.error || !data.lease_id) {
+                    reject(new Error(data.message || 'Could not reacquire the editing lease.'));
+                    return;
+                }
+                this.analysis_lease_id = data.lease_id;
+                this.analysis_read_only = false;
+                start_analysis_lease(this.movie_id, this.api_key, data.lease_id);
+                resolve();
+            }).fail(() => reject(new Error('Could not reacquire the editing lease.')));
+        });
+    }
+
     reset_tracing() {
         if (this.editingLocked() || !this.hasResettableTraceWork()) {
             return;
@@ -1423,21 +1442,7 @@ class TracerController extends MovieController {
             }
             if (result.state !== 'completed') throw new Error(`Reset ${result.state}.`);
             // A reset replaces the editing lease. Reacquire it before allowing changes.
-            await new Promise((resolve, reject) => {
-                $.post({
-                    url: `${API_BASE}api/acquire-movie-analysis-lease`,
-                    data: {api_key: this.api_key, movie_id: this.movie_id, course_id: activeCourseId()},
-                    timeout: 15000,
-                }).done(data => {
-                    if (data.error || !data.lease_id) {
-                        reject(new Error(data.message || 'Could not reacquire the editing lease.'));
-                        return;
-                    }
-                    this.analysis_lease_id = data.lease_id;
-                    start_analysis_lease(this.movie_id, this.api_key, data.lease_id);
-                    resolve();
-                }).fail(() => reject(new Error('Could not reacquire the editing lease.')));
-            });
+            await this.reacquire_analysis_lease();
             for (let i = 0; i < this.frames.length; i++) {
                 this.frames[i].markers = graph_frame_number(this.frames[i], null, i) === firstTrimFrame
                     ? seedMarkers.map(marker => ({...marker})) : [];
@@ -1896,6 +1901,8 @@ class TracerController extends MovieController {
     /** Refresh marker metadata after tracing; the analysis pixels are immutable. */
     movie_tracked(data) {
         this.tracking = false;
+        this.analysis_lease_id = null;
+        this.analysis_read_only = true;
         this.clear_tracking_progress_timeout();
         $(this.div_selector).removeClass('tracing-dimmed');
         this.movie_metadata = {...this.movie_metadata, ...data.metadata};
@@ -1913,6 +1920,12 @@ class TracerController extends MovieController {
         $('#analysis-results').show();
         graph_data(this, this.frames);
         display_results(this, this.frames);
+        this.reacquire_analysis_lease().then(() => {
+            this.set_movie_control_buttons();
+        }).catch(error => {
+            this.set_movie_control_buttons();
+            $('#status-big').text(`Tracing complete. ${error.message} Reopen Analyze to edit.`);
+        });
     }
 
 }

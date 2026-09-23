@@ -265,7 +265,7 @@ def handle_post_actions():
         return Response(status_code=409, content_type="application/json",
                         body=TraceErrorResponse(
                             message="This movie is already being traced",
-                            lease_reacquire_required=bool(analysis_lease_id),
+                            lease_reacquire_required=True if analysis_lease_id else None,
                         ).model_dump_json(exclude_none=True))
     except movie_glue.TraceSourceEmptyAfterLease as e:
         return Response(status_code=403, content_type="application/json",
