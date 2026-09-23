@@ -252,12 +252,15 @@ def handle_post_actions():
         )
         try:
             return movie_glue.queue_tracing(api_key, movie_id, frame_start, frame_end, prepared["job_id"])
-        except Exception:
-            movie_glue.cancel_prepared_trace(
-                movie_id=movie_id, job_id=prepared["job_id"],
-                previous_status=prepared["previous_status"],
-            )
-            raise
+        except (RuntimeError, BotoCoreError, ClientError, ValueError) as exc:
+            try:
+                movie_glue.cancel_prepared_trace(
+                    movie_id=movie_id, job_id=prepared["job_id"],
+                    previous_status=prepared["previous_status"],
+                )
+            except (BotoCoreError, ClientError) as cleanup_exc:
+                raise movie_glue.TraceLeaseConsumed("Trace lease cleanup failed") from cleanup_exc
+            raise movie_glue.TraceLeaseConsumed("Tracing work could not be queued") from exc
     except movie_glue.odb.MovieTracingLocked:
         return Response(status_code=409, content_type="application/json",
                         body=TraceErrorResponse(message="This movie is already being traced").model_dump_json(exclude_none=True))
@@ -269,13 +272,19 @@ def handle_post_actions():
         LOGGER.exception("trace-movie rejected: %s", e)
         return Response(status_code=403, content_type="application/json",
                         body=TraceErrorResponse(message=str(e)).model_dump_json(exclude_none=True))
-    except (RuntimeError, BotoCoreError, ClientError):
-        LOGGER.exception("trace-movie could not queue work: %s", movie_id)
+    except movie_glue.TraceLeaseConsumed:
+        LOGGER.exception("trace-movie failed after consuming an Analyze lease: %s", movie_id)
         return Response(status_code=503, content_type="application/json",
                         body=TraceErrorResponse(
                             message="Tracing could not start. Reopen Analyze before trying again.",
                             lease_reacquire_required=True,
                         ).model_dump_json())
+    except (RuntimeError, BotoCoreError, ClientError):
+        LOGGER.exception("trace-movie failed before acquiring a trace lease: %s", movie_id)
+        return Response(status_code=503, content_type="application/json",
+                        body=TraceErrorResponse(
+                            message="Tracing could not start. Please try again.",
+                        ).model_dump_json(exclude_none=True))
 
 
 @app.post("/resize-api/v1/download-traced")

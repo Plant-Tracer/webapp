@@ -12,7 +12,7 @@ import tempfile
 import zipfile
 
 from aws_lambda_powertools import Logger
-from botocore.exceptions import ClientError
+from botocore.exceptions import BotoCoreError, ClientError
 from pydantic import BaseModel
 
 from .src.app.schema import AnalysisMp4, Trackpoint
@@ -322,6 +322,10 @@ class TraceSourceEmptyAfterLease(ValueError):
     """The requested source became empty after its Analyze lease was consumed."""
 
 
+class TraceLeaseConsumed(RuntimeError):
+    """Trace setup failed after consuming the browser's Analyze lease."""
+
+
 def cancel_prepared_trace(*, movie_id: str, job_id: str, previous_status: str) -> bool:
     """Release a queued trace lease without interrupting a worker that already claimed it."""
     return DDBO().finish_movie_trace(
@@ -360,9 +364,14 @@ def prepare_tracing_request(*, api_key: str, movie_id: str, frame_start: int,
             raise TraceSourceEmptyAfterLease("Cannot trace movie without points on the selected source frame")
         ddbo.put_movie_log(event_type="movie.tracing.started", movie=movie, ipaddr="lambda-resize",
                             event_id=lock.job_id)
-    except Exception:
-        cancel_prepared_trace(movie_id=movie_id, job_id=lock.job_id, previous_status=previous_status)
-        raise
+    except (TraceSourceEmptyAfterLease, BotoCoreError, ClientError, RuntimeError) as exc:
+        try:
+            cancel_prepared_trace(movie_id=movie_id, job_id=lock.job_id, previous_status=previous_status)
+        except (BotoCoreError, ClientError) as cleanup_exc:
+            raise TraceLeaseConsumed("Trace lease cleanup failed") from cleanup_exc
+        if isinstance(exc, TraceSourceEmptyAfterLease):
+            raise
+        raise TraceLeaseConsumed("Trace setup failed after acquiring the lease") from exc
     # Preserve saved points until the worker validates the decoded coordinate height.
     cleared_frames = 0
     LOGGER.info(
