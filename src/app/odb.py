@@ -906,7 +906,8 @@ class DDBO:
             ExpressionAttributeValues={":job_id": job_id, ":now": now, ":expires": now + 15 * 60},
         )
 
-    def finish_movie_trace(self, *, movie_id, job_id, updates, expected_inputs=None):
+    def finish_movie_trace(self, *, movie_id, job_id, updates, expected_inputs=None,
+                           tolerate_lost=False):
         """Publish a terminal state only while this worker owns the lease."""
         now = int(time.time())
         update_names = {f"#{key}": key for key in updates}
@@ -933,12 +934,19 @@ class DDBO:
             else:
                 condition += f" AND {name}={token}"
                 update_values[token] = value
-        self.movies.update_item(
-            Key={MOVIE_ID: movie_id}, UpdateExpression=expression,
-            ConditionExpression=condition,
-            ExpressionAttributeNames=update_names,
-            ExpressionAttributeValues={**update_values, ":job_id": job_id},
-        )
+        try:
+            self.movies.update_item(
+                Key={MOVIE_ID: movie_id}, UpdateExpression=expression,
+                ConditionExpression=condition,
+                ExpressionAttributeNames=update_names,
+                ExpressionAttributeValues={**update_values, ":job_id": job_id},
+            )
+        except ClientError as exc:
+            if (tolerate_lost
+                    and exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException"):
+                return False
+            raise
+        return True
     ### api_key management
 
     def put_api_key_dict(self,api_key_dict):
@@ -3207,6 +3215,8 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackp
     assert int(frame_number) >= 0
     if require_unlocked:
         movie = DDBO().get_movie(movie_id)
+        if not movie_is_available(movie):
+            raise MovieUploadIncomplete(movie_id)
         if movie.get(TRACKPOINT_ORIGIN) != TRACKPOINT_ORIGIN_BOTTOM_LEFT:
             raise MovieCoordinateMigrationRequired("Reopen Analyze to reload annotations before editing.")
     else:

@@ -90,6 +90,9 @@ Rejected source frames return HTTP 403 with JSON `error` and `message` fields
 that Analyze displays to the user. If the source becomes empty after the
 request consumes its Analyze lease, the response also includes
 `lease_reacquire_required: true`; Analyze becomes read-only until reopened.
+If publishing the queued work fails, the API releases a lease that has not yet
+been claimed and returns HTTP 503 with the same reacquire flag. A worker that
+already claimed the job retains its lease.
 
 ## Local Development
 

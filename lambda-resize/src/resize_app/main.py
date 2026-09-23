@@ -26,6 +26,7 @@ from typing import Any, Dict
 from aws_lambda_powertools import Logger
 from aws_lambda_powertools.event_handler import APIGatewayHttpResolver, CORSConfig, Response
 from aws_lambda_powertools.utilities.typing import LambdaContext
+from botocore.exceptions import BotoCoreError, ClientError
 from pydantic import BaseModel
 
 from . import async_work
@@ -249,7 +250,14 @@ def handle_post_actions():
             api_key=api_key, movie_id=movie_id, frame_start=frame_start,
             frame_end=frame_end, analysis_lease_id=analysis_lease_id,
         )
-        return movie_glue.queue_tracing(api_key, movie_id, frame_start, frame_end, prepared["job_id"])
+        try:
+            return movie_glue.queue_tracing(api_key, movie_id, frame_start, frame_end, prepared["job_id"])
+        except Exception:
+            movie_glue.cancel_prepared_trace(
+                movie_id=movie_id, job_id=prepared["job_id"],
+                previous_status=prepared["previous_status"],
+            )
+            raise
     except movie_glue.odb.MovieTracingLocked:
         return Response(status_code=409, content_type="application/json",
                         body=TraceErrorResponse(message="This movie is already being traced").model_dump_json(exclude_none=True))
@@ -261,6 +269,13 @@ def handle_post_actions():
         LOGGER.exception("trace-movie rejected: %s", e)
         return Response(status_code=403, content_type="application/json",
                         body=TraceErrorResponse(message=str(e)).model_dump_json(exclude_none=True))
+    except (RuntimeError, BotoCoreError, ClientError):
+        LOGGER.exception("trace-movie could not queue work: %s", movie_id)
+        return Response(status_code=503, content_type="application/json",
+                        body=TraceErrorResponse(
+                            message="Tracing could not start. Reopen Analyze before trying again.",
+                            lease_reacquire_required=True,
+                        ).model_dump_json())
 
 
 @app.post("/resize-api/v1/download-traced")

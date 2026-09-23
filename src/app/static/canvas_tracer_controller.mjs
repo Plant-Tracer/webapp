@@ -1633,7 +1633,8 @@ class TracerController extends MovieController {
                         return;
                     }
                     let msg = (data && data.message) ? data.message : `Tracing request failed (${status}).`;
-                    const retryable = (status >= 500 || status === 0) && attempt < TRACE_MOVIE_MAX_ATTEMPTS;
+                    const retryable = (status >= 500 || status === 0)
+                        && !data?.lease_reacquire_required && attempt < TRACE_MOVIE_MAX_ATTEMPTS;
                     if (retryable) {
                         console.warn('[trace-movie] attempt', attempt, 'failed:', status, msg, '- retrying in', TRACE_MOVIE_RETRY_DELAY_MS, 'ms');
                         return new Promise((resolve) => setTimeout(resolve, TRACE_MOVIE_RETRY_DELAY_MS)).then(() => tryTrackMovie(attempt + 1));

@@ -322,6 +322,15 @@ class TraceSourceEmptyAfterLease(ValueError):
     """The requested source became empty after its Analyze lease was consumed."""
 
 
+def cancel_prepared_trace(*, movie_id: str, job_id: str, previous_status: str) -> bool:
+    """Release a queued trace lease without interrupting a worker that already claimed it."""
+    return DDBO().finish_movie_trace(
+        movie_id=movie_id, job_id=job_id,
+        updates={MOVIE_STATUS: previous_status},
+        expected_inputs={odb.TRACE_LOCK_STATE: "queued"}, tolerate_lost=True,
+    )
+
+
 def prepare_tracing_request(*, api_key: str, movie_id: str, frame_start: int,
                             frame_end: int|None=None,
                             analysis_lease_id: str|None=None) -> dict:
@@ -345,12 +354,15 @@ def prepare_tracing_request(*, api_key: str, movie_id: str, frame_start: int,
         movie=movie, started_by_user_id=user_id,
         started_by_user_name=ddbo.get_user(user_id)[USER_NAME],
         analysis_lease_id=analysis_lease_id)
-    if not source_frame_has_visible_markers(ddbo, movie_id, source_frame_number):
-        ddbo.finish_movie_trace(
-            movie_id=movie_id, job_id=lock.job_id,
-            updates={MOVIE_STATUS: movie.get(MOVIE_STATUS) or odb.MOVIE_STATE_READY},
-        )
-        raise TraceSourceEmptyAfterLease("Cannot trace movie without points on the selected source frame")
+    previous_status = movie.get(MOVIE_STATUS) or odb.MOVIE_STATE_READY
+    try:
+        if not source_frame_has_visible_markers(ddbo, movie_id, source_frame_number):
+            raise TraceSourceEmptyAfterLease("Cannot trace movie without points on the selected source frame")
+        ddbo.put_movie_log(event_type="movie.tracing.started", movie=movie, ipaddr="lambda-resize",
+                            event_id=lock.job_id)
+    except Exception:
+        cancel_prepared_trace(movie_id=movie_id, job_id=lock.job_id, previous_status=previous_status)
+        raise
     # Preserve saved points until the worker validates the decoded coordinate height.
     cleared_frames = 0
     LOGGER.info(
@@ -360,10 +372,8 @@ def prepare_tracing_request(*, api_key: str, movie_id: str, frame_start: int,
         frame_end_number,
         cleared_frames,
     )
-    ddbo.put_movie_log(event_type="movie.tracing.started", movie=movie, ipaddr="lambda-resize",
-                        event_id=lock.job_id)
     ret = {"movie_id": movie_id, "frame_start": source_frame_number, "cleared_frames": cleared_frames,
-           "job_id": lock.job_id}
+           "job_id": lock.job_id, "previous_status": previous_status}
     if frame_end_number is not None:
         ret["frame_end"] = frame_end_number
     return ret
