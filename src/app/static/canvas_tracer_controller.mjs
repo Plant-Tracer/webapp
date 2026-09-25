@@ -722,11 +722,7 @@ class TracerController extends MovieController {
             this.track_button.prop(DISABLED, true);
             return;
         }
-        if (this.isFullyTraced()) {
-            this.refreshTrackButtonState();
-        } else {
-            this.track_button.prop(DISABLED, false);
-        }
+        this.refreshTrackButtonState();
         this.tracking_status.text('');
     }
 
@@ -858,16 +854,17 @@ class TracerController extends MovieController {
     }
 
     refreshTrackButtonState() {
+        const noSourceMarkers = !this.objects.some(obj => obj.constructor.name == Marker.name);
         if (this.pending_retrace_to_end) {
             this.track_button.val(this.traceToEndLabel());
-            this.track_button.prop(DISABLED, false);
+            this.track_button.prop(DISABLED, noSourceMarkers);
             this.download_button.hide();
             this.refreshRetraceRequiredMessage();
             return;
         }
         if (this.isFullyTraced()) {
             this.track_button.val(RETRACE_MOVIE);
-            this.track_button.prop(DISABLED, !this.trace_inputs_changed);
+            this.track_button.prop(DISABLED, noSourceMarkers || !this.trace_inputs_changed);
             this.download_button.prop('disabled', false);
             this.download_button.show();
             // Re-enable the hidden form inputs so they are included in the POST body.
@@ -879,7 +876,7 @@ class TracerController extends MovieController {
             return;
         }
         this.track_button.val(TRACE_MOVIE);
-        this.track_button.prop(DISABLED, false);
+        this.track_button.prop(DISABLED, noSourceMarkers);
         this.refreshRetraceRequiredMessage();
     }
 
@@ -1370,6 +1367,25 @@ class TracerController extends MovieController {
         ));
     }
 
+    reacquire_analysis_lease() {
+        return new Promise((resolve, reject) => {
+            $.post({
+                url: `${API_BASE}api/acquire-movie-analysis-lease`,
+                data: {api_key: this.api_key, movie_id: this.movie_id, course_id: activeCourseId()},
+                timeout: 15000,
+            }).done(data => {
+                if (data.error || !data.lease_id) {
+                    reject(new Error(data.message || 'Could not reacquire the editing lease.'));
+                    return;
+                }
+                this.analysis_lease_id = data.lease_id;
+                this.analysis_read_only = false;
+                start_analysis_lease(this.movie_id, this.api_key, data.lease_id);
+                resolve();
+            }).fail(() => reject(new Error('Could not reacquire the editing lease.')));
+        });
+    }
+
     reset_tracing() {
         if (this.editingLocked() || !this.hasResettableTraceWork()) {
             return;
@@ -1426,21 +1442,7 @@ class TracerController extends MovieController {
             }
             if (result.state !== 'completed') throw new Error(`Reset ${result.state}.`);
             // A reset replaces the editing lease. Reacquire it before allowing changes.
-            await new Promise((resolve, reject) => {
-                $.post({
-                    url: `${API_BASE}api/acquire-movie-analysis-lease`,
-                    data: {api_key: this.api_key, movie_id: this.movie_id, course_id: activeCourseId()},
-                    timeout: 15000,
-                }).done(data => {
-                    if (data.error || !data.lease_id) {
-                        reject(new Error(data.message || 'Could not reacquire the editing lease.'));
-                        return;
-                    }
-                    this.analysis_lease_id = data.lease_id;
-                    start_analysis_lease(this.movie_id, this.api_key, data.lease_id);
-                    resolve();
-                }).fail(() => reject(new Error('Could not reacquire the editing lease.')));
-            });
+            await this.reacquire_analysis_lease();
             for (let i = 0; i < this.frames.length; i++) {
                 this.frames[i].markers = graph_frame_number(this.frames[i], null, i) === firstTrimFrame
                     ? seedMarkers.map(marker => ({...marker})) : [];
@@ -1527,7 +1529,7 @@ class TracerController extends MovieController {
             trackpoints  : JSON.stringify(markers), // markers as a JSON string because we do POST as a form, not as REST
             ...this.analysisLeaseParams(),
         };
-        const request = $.post(`${API_BASE}api/put-frame-trackpoints`, put_frame_markers_params )
+        const submit = () => $.post(`${API_BASE}api/put-frame-trackpoints`, put_frame_markers_params )
             .done( (data) => {
                 if (data.error) {
                     alert("Error saving annotations: "+data.message);
@@ -1539,14 +1541,23 @@ class TracerController extends MovieController {
             })
             .fail( (res) => {
                 console.error("put-frame-trackpoints failed", res);
+                if (res.responseJSON?.lease_reacquire_required) {
+                    stop_analysis_lease();
+                    this.analysis_lease_id = null;
+                    this.analysis_read_only = true;
+                    this.refreshFrameEditState();
+                    this.set_movie_control_buttons();
+                }
                 alert("error from put-frame-trackpoints:\n"+res.responseText);
             });
-        const pending = Promise.resolve(request);
+        // Preserve invocation order when rapid marker moves save the same frame.
+        const pending = Promise.resolve(this.marker_save_tail ? this.marker_save_tail.then(submit) : submit());
+        this.marker_save_tail = pending.catch(() => {});
         this.marker_save_requests ||= new Set();
         this.marker_save_requests.add(pending);
         const finished = () => this.marker_save_requests.delete(pending);
         pending.then(finished, finished);
-        return request;
+        return pending;
     }
 
     /* track_to_end() is called when the track_button ('track to end') button is clicked.
@@ -1563,21 +1574,28 @@ class TracerController extends MovieController {
         if (this.saving_track_request || !this.isCurrentFrameEditable()) {
             return;
         }
+        if (!this.get_markers().length) {
+            $('#status-big').text('Place markers on the selected frame before tracing.');
+            this.refreshTrackButtonState();
+            return;
+        }
         const retraceStartFrame = this.frame_number;
-        if (this.mp4_player) {
-            this.saving_track_request = true;
-            this.set_movie_control_buttons();
-            try {
-                const saved = await this.put_markers();
-                if (saved?.error) throw new Error(saved.message || 'Unable to save markers.');
-                if (this.frame_number !== retraceStartFrame) throw new Error('Frame changed while saving markers. Select Trace again.');
-            } catch (error) {
-                $('#status-big').text(error.message || 'Unable to save markers; tracing has not started.');
-                return;
-            } finally {
-                this.saving_track_request = false;
-                this.set_movie_control_buttons();
+        this.saving_track_request = true;
+        this.set_movie_control_buttons();
+        try {
+            await Promise.all(Array.from(this.marker_save_requests || []));
+            if (this.frame_number !== retraceStartFrame) {
+                throw new Error('Frame changed while saving markers. Select Trace again.');
             }
+            const saved = await this.put_markers();
+            if (saved?.error) throw new Error(saved.message || 'Unable to save markers.');
+            if (this.frame_number !== retraceStartFrame) throw new Error('Frame changed while saving markers. Select Trace again.');
+        } catch (error) {
+            $('#status-big').text(error.message || 'Unable to save markers; tracing has not started.');
+            return;
+        } finally {
+            this.saving_track_request = false;
+            this.set_movie_control_buttons();
         }
         const traceVerb = retraceStartFrame > 0 ? 'Retracing' : 'Tracing';
         $('#status-big').text(`${traceVerb} from frame ${retraceStartFrame}...`);
@@ -1631,14 +1649,21 @@ class TracerController extends MovieController {
                         self.poll_for_track_end();
                         return;
                     }
-                    const msg = (data && data.message) ? data.message : `Tracing request failed (${status}).`;
-                    const retryable = (status >= 500 || status === 0) && attempt < TRACE_MOVIE_MAX_ATTEMPTS;
+                    let msg = (data && data.message) ? data.message : `Tracing request failed (${status}).`;
+                    const retryable = (status >= 500 || status === 0)
+                        && !data?.lease_reacquire_required && attempt < TRACE_MOVIE_MAX_ATTEMPTS;
                     if (retryable) {
                         console.warn('[trace-movie] attempt', attempt, 'failed:', status, msg, '- retrying in', TRACE_MOVIE_RETRY_DELAY_MS, 'ms');
                         return new Promise((resolve) => setTimeout(resolve, TRACE_MOVIE_RETRY_DELAY_MS)).then(() => tryTrackMovie(attempt + 1));
                     }
                     const failedFrameStart = self.pending_trace_start_frame;
                     self.tracking = false;
+                    if (data?.lease_reacquire_required) {
+                        stop_analysis_lease();
+                        self.analysis_lease_id = null;
+                        self.analysis_read_only = true;
+                        msg += ' Reopen Analyze to reacquire the editing lease.';
+                    }
                     $(self.div_selector).removeClass('tracing-dimmed');
                     self.set_movie_control_buttons();
                     self.enableTrackButtonIfAllowed();
@@ -1876,6 +1901,8 @@ class TracerController extends MovieController {
     /** Refresh marker metadata after tracing; the analysis pixels are immutable. */
     movie_tracked(data) {
         this.tracking = false;
+        this.analysis_lease_id = null;
+        this.analysis_read_only = true;
         this.clear_tracking_progress_timeout();
         $(this.div_selector).removeClass('tracing-dimmed');
         this.movie_metadata = {...this.movie_metadata, ...data.metadata};
@@ -1893,6 +1920,12 @@ class TracerController extends MovieController {
         $('#analysis-results').show();
         graph_data(this, this.frames);
         display_results(this, this.frames);
+        this.reacquire_analysis_lease().then(() => {
+            this.set_movie_control_buttons();
+        }).catch(error => {
+            this.set_movie_control_buttons();
+            $('#status-big').text(`Tracing complete. ${error.message} Reopen Analyze to edit.`);
+        });
     }
 
 }
@@ -1921,7 +1954,7 @@ function trace_movie_one_frame(_movie_id, div_controller, movie_metadata, frame0
             $('#status-big').html(MOVIE_CANNOT_BE_TRACED_DEMO_MESSAGE);
         } else {
             $('#status-big').html(MOVIE_READY_FOR_INITIAL_TRACING_MESSAGE);
-            cc.track_button.prop(DISABLED,false); // enable
+            cc.enableTrackButtonIfAllowed();
         }
     };
 

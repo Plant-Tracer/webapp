@@ -80,11 +80,25 @@ Body:
 { "movie_id": "m...", "frame_start": 12, "frame_end": 200 }
 ```
 
-`frame_start` is the edited source frame. Plant Tracer preserves that frame,
-clears stored trackpoints after it through `frame_end` when supplied, marks the
-movie as `tracing`, and dispatches work. In local mode the work goes to the
+`frame_start` is the edited source frame. Analyze saves its visible markers before
+queuing. Plant Tracer requires those markers, preserves that frame, clears stored
+trackpoints after it through `frame_end` when supplied, marks the movie as
+`tracing`, and dispatches work. In local mode the work goes to the
 in-process queue; in deployed mode a stack-scoped EventBridge rule pushes the
 custom work event to lambda-resize without idle polling.
+Rejected source frames return HTTP 403 with JSON `error` and `message` fields
+that Analyze displays to the user. If the source becomes empty after the
+request consumes its Analyze lease, the response also includes
+`lease_reacquire_required: true`; Analyze becomes read-only until reopened.
+If publishing the queued work fails, the API releases a lease that has not yet
+been claimed and returns HTTP 503 with the same reacquire flag. A worker that
+already claimed the job retains its lease.
+An HTTP 409 for a request carrying an Analyze lease also includes the flag;
+this covers retries whose first response was lost after consuming that lease.
+Failures before trace-lease acquisition return HTTP 503 without that flag;
+Analyze keeps its current editing lease.
+After tracing completes, Analyze reacquires an editing lease before enabling
+marker edits or Reset Trace again.
 
 ## Local Development
 

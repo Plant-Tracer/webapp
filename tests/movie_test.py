@@ -830,6 +830,8 @@ def test_set_movie_fpm_rejects_invalid(client, new_movie):
 def test_active_trace_lease_is_visible_and_rejects_movie_writes(client, new_movie, monkeypatch):
     ddbo = new_movie["ddbo"]
     movie_id = new_movie[MOVIE_ID]
+    ddbo.put_movie_frame({MOVIE_ID: movie_id, odb.FRAME_NUMBER: 0,
+                          odb.TRACKPOINTS: [Trackpoint(x=10, y=20, label='Apex').model_dump()]})
     prepare_tracing_request(
         api_key=new_movie[API_KEY],
         movie_id=movie_id,
@@ -955,6 +957,8 @@ def test_analysis_lease_endpoints_validate_renew_and_release(client, new_movie):
 
 def test_analysis_lease_acquire_reports_read_only_causes(client, new_movie):
     ddbo = new_movie['ddbo']
+    ddbo.put_movie_frame({MOVIE_ID: new_movie[MOVIE_ID], odb.FRAME_NUMBER: 0,
+                          odb.TRACKPOINTS: [Trackpoint(x=10, y=20, label='Apex').model_dump()]})
     admin_id = new_movie['admin_id']
     admin = ddbo.get_user(admin_id)
     original_courses = list(admin[odb.COURSES])
@@ -1000,6 +1004,8 @@ def test_analysis_lease_acquire_reports_read_only_causes(client, new_movie):
 
 
 def test_movie_writes_reject_trace_and_foreign_analysis_leases(client, new_movie):
+    new_movie['ddbo'].put_movie_frame({MOVIE_ID: new_movie[MOVIE_ID], odb.FRAME_NUMBER: 0,
+                                      odb.TRACKPOINTS: [Trackpoint(x=10, y=20, label='Apex').model_dump()]})
     request_data = {
         'api_key': new_movie[API_KEY],
         'movie_id': new_movie[MOVIE_ID],

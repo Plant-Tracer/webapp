@@ -62,6 +62,9 @@ def test_queue_post_upload_publishes_eventbridge_work(monkeypatch):
 def test_prepare_tracing_request_marks_movie_tracing_before_queueing(new_movie):
     ddbo = new_movie["ddbo"]
     movie_id = new_movie[movie_glue.odb.MOVIE_ID]
+    ddbo.put_movie_frame({movie_glue.odb.MOVIE_ID: movie_id,
+                          movie_glue.odb.FRAME_NUMBER: 7,
+                          movie_glue.odb.TRACKPOINTS: [Trackpoint(x=10, y=20, label='Apex').model_dump()]})
     ddbo.update_movie(
         movie_id,
         {movie_glue.odb.LAST_ACTIVITY_AT: 1},
@@ -89,6 +92,9 @@ def test_prepare_tracing_request_marks_movie_tracing_before_queueing(new_movie):
 
 def test_prepare_tracing_request_rejects_second_active_lock(new_movie):
     movie_id = new_movie[movie_glue.odb.MOVIE_ID]
+    new_movie["ddbo"].put_movie_frame({movie_glue.odb.MOVIE_ID: movie_id,
+                                        movie_glue.odb.FRAME_NUMBER: 0,
+                                        movie_glue.odb.TRACKPOINTS: [Trackpoint(x=10, y=20, label='Apex').model_dump()]})
     kwargs = {
         "api_key": new_movie[movie_glue.odb.API_KEY],
         "movie_id": movie_id,
@@ -103,6 +109,9 @@ def test_prepare_tracing_request_rejects_second_active_lock(new_movie):
 def test_prepare_tracing_request_replaces_stale_lock(new_movie):
     ddbo = new_movie["ddbo"]
     movie_id = new_movie[movie_glue.odb.MOVIE_ID]
+    ddbo.put_movie_frame({movie_glue.odb.MOVIE_ID: movie_id,
+                          movie_glue.odb.FRAME_NUMBER: 0,
+                          movie_glue.odb.TRACKPOINTS: [Trackpoint(x=10, y=20, label='Apex').model_dump()]})
     kwargs = {
         "api_key": new_movie[movie_glue.odb.API_KEY],
         "movie_id": movie_id,

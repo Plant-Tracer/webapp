@@ -775,7 +775,10 @@ Write trackpoints for a single frame. Used by the client before requesting re-tr
 { "error": false, "message": "trackpoints recorded: 2 " }
 ```
 
-**Side effect:** sets `needs_retracing=1` on the movie record. This flag indicates that a previously traced MP4 may now be stale. The client uses it to show the retracing warning when `movie_traced_url` is also present.
+**Side effect:** sets `needs_retracing=1`, advances `last_activity_at`, and
+changes `render_revision` on the movie record. These invalidate a previously
+traced MP4; the client uses `needs_retracing` to show the retracing warning
+when `movie_traced_url` is also present.
 
 The tracer UI disables marker editing and reset actions while a trace request is active in that browser session, and when loaded movie metadata has `status="tracing"`. This prevents normal same-session marker edits while Lambda is tracing, so Lambda does not finish by clearing `needs_retracing` for a traced MP4 computed from an earlier marker state.
 
@@ -783,6 +786,14 @@ Returns HTTP 409 when an active trace lease makes the movie read-only, or when
 another browser owns the active analysis lease. The same rule applies to marker
 rename, trim, and capture-interval writes; the owning browser includes its
 `analysis_lease_id` with those requests.
+The marker-map, frame, and movie updates are committed together only if no
+trace lease is active and the supplied Analyze lease is still current. A stale
+Analyze lease returns HTTP 409 with `lease_reacquire_required: true`; the
+browser becomes read-only until Analyze is reopened. An edit racing a trace
+request cannot change its source frame. A browser with legacy coordinates must reload Analyze so its
+annotations are migrated before saving; this returns HTTP 409.
+Concurrent marker-map changes also return HTTP 409 so the browser can reload
+the latest annotations before retrying.
 
 ---
 

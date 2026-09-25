@@ -26,6 +26,8 @@ from typing import Any, Dict
 from aws_lambda_powertools import Logger
 from aws_lambda_powertools.event_handler import APIGatewayHttpResolver, CORSConfig, Response
 from aws_lambda_powertools.utilities.typing import LambdaContext
+from botocore.exceptions import BotoCoreError, ClientError
+from pydantic import BaseModel
 
 from . import async_work
 from . import movie_glue
@@ -62,6 +64,14 @@ cors_config = CORSConfig(
 )
 
 app = APIGatewayHttpResolver(cors=cors_config)
+
+
+class TraceErrorResponse(BaseModel):
+    """Trace request rejection displayed by the Analyze client."""
+
+    message: str
+    error: bool = True
+    lease_reacquire_required: bool | None = None
 
 
 def deploy_metadata(metadata_path: Path | None = None) -> Dict[str, str]:
@@ -240,13 +250,44 @@ def handle_post_actions():
             api_key=api_key, movie_id=movie_id, frame_start=frame_start,
             frame_end=frame_end, analysis_lease_id=analysis_lease_id,
         )
-        return movie_glue.queue_tracing(api_key, movie_id, frame_start, frame_end, prepared["job_id"])
+        try:
+            return movie_glue.queue_tracing(api_key, movie_id, frame_start, frame_end, prepared["job_id"])
+        except (RuntimeError, BotoCoreError, ClientError, ValueError) as exc:
+            try:
+                movie_glue.cancel_prepared_trace(
+                    movie_id=movie_id, job_id=prepared["job_id"],
+                    previous_status=prepared["previous_status"],
+                )
+            except (BotoCoreError, ClientError) as cleanup_exc:
+                raise movie_glue.TraceLeaseConsumed("Trace lease cleanup failed") from cleanup_exc
+            raise movie_glue.TraceLeaseConsumed("Tracing work could not be queued") from exc
     except movie_glue.odb.MovieTracingLocked:
         return Response(status_code=409, content_type="application/json",
-                        body=json.dumps({"error": True, "message": "This movie is already being traced"}))
+                        body=TraceErrorResponse(
+                            message="This movie is already being traced",
+                            lease_reacquire_required=True if analysis_lease_id else None,
+                        ).model_dump_json(exclude_none=True))
+    except movie_glue.TraceSourceEmptyAfterLease as e:
+        return Response(status_code=403, content_type="application/json",
+                        body=TraceErrorResponse(message=str(e),
+                                                lease_reacquire_required=True).model_dump_json())
     except ValueError as e:
         LOGGER.exception("trace-movie rejected: %s", e)
-        return Response(status_code=403, body=str(e.args))
+        return Response(status_code=403, content_type="application/json",
+                        body=TraceErrorResponse(message=str(e)).model_dump_json(exclude_none=True))
+    except movie_glue.TraceLeaseConsumed:
+        LOGGER.exception("trace-movie failed after consuming an Analyze lease: %s", movie_id)
+        return Response(status_code=503, content_type="application/json",
+                        body=TraceErrorResponse(
+                            message="Tracing could not start. Reopen Analyze before trying again.",
+                            lease_reacquire_required=True,
+                        ).model_dump_json())
+    except (RuntimeError, BotoCoreError, ClientError):
+        LOGGER.exception("trace-movie failed before acquiring a trace lease: %s", movie_id)
+        return Response(status_code=503, content_type="application/json",
+                        body=TraceErrorResponse(
+                            message="Tracing could not start. Please try again.",
+                        ).model_dump_json(exclude_none=True))
 
 
 @app.post("/resize-api/v1/download-traced")

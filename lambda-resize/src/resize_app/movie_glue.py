@@ -12,7 +12,7 @@ import tempfile
 import zipfile
 
 from aws_lambda_powertools import Logger
-from botocore.exceptions import ClientError
+from botocore.exceptions import BotoCoreError, ClientError
 from pydantic import BaseModel
 
 from .src.app.schema import AnalysisMp4, Trackpoint
@@ -308,6 +308,33 @@ def complete_uploaded_object(*, movie_id: str, staging_urn: str, event_id: str,
     )
 
 
+def source_frame_has_visible_markers(ddbo: DDBO, movie_id: str, frame_number: int) -> bool:
+    """Check the source frame against the current marker tombstones."""
+    frame = ddbo.get_movie_frame(movie_id, frame_number, consistent_read=True)
+    if not frame or not frame.get(odb.TRACKPOINTS):
+        return False
+    marker_map = odb.get_movie_marker_map(movie_id=movie_id, create=False)
+    return any(not odb.marker_is_deleted(marker_map, point)
+               for point in frame[odb.TRACKPOINTS])
+
+
+class TraceSourceEmptyAfterLease(ValueError):
+    """The requested source became empty after its Analyze lease was consumed."""
+
+
+class TraceLeaseConsumed(RuntimeError):
+    """Trace setup failed after consuming the browser's Analyze lease."""
+
+
+def cancel_prepared_trace(*, movie_id: str, job_id: str, previous_status: str) -> bool:
+    """Release a queued trace lease without interrupting a worker that already claimed it."""
+    return DDBO().finish_movie_trace(
+        movie_id=movie_id, job_id=job_id,
+        updates={MOVIE_STATUS: previous_status},
+        expected_inputs={odb.TRACE_LOCK_STATE: "queued"}, tolerate_lost=True,
+    )
+
+
 def prepare_tracing_request(*, api_key: str, movie_id: str, frame_start: int,
                             frame_end: int|None=None,
                             analysis_lease_id: str|None=None) -> dict:
@@ -323,10 +350,28 @@ def prepare_tracing_request(*, api_key: str, movie_id: str, frame_start: int,
     )
     source_frame_number = int(frame_start)
     frame_end_number = None if frame_end is None else int(frame_end)
+    if source_frame_number < 0:
+        raise ValueError("frame_start must be non-negative")
+    if not source_frame_has_visible_markers(ddbo, movie_id, source_frame_number):
+        raise ValueError("Cannot trace movie without points on the selected source frame")
     lock = ddbo.acquire_movie_trace_lock(
         movie=movie, started_by_user_id=user_id,
         started_by_user_name=ddbo.get_user(user_id)[USER_NAME],
         analysis_lease_id=analysis_lease_id)
+    previous_status = movie.get(MOVIE_STATUS) or odb.MOVIE_STATE_READY
+    try:
+        if not source_frame_has_visible_markers(ddbo, movie_id, source_frame_number):
+            raise TraceSourceEmptyAfterLease("Cannot trace movie without points on the selected source frame")
+        ddbo.put_movie_log(event_type="movie.tracing.started", movie=movie, ipaddr="lambda-resize",
+                            event_id=lock.job_id)
+    except (TraceSourceEmptyAfterLease, BotoCoreError, ClientError, RuntimeError) as exc:
+        try:
+            cancel_prepared_trace(movie_id=movie_id, job_id=lock.job_id, previous_status=previous_status)
+        except (BotoCoreError, ClientError) as cleanup_exc:
+            raise TraceLeaseConsumed("Trace lease cleanup failed") from cleanup_exc
+        if isinstance(exc, TraceSourceEmptyAfterLease):
+            raise
+        raise TraceLeaseConsumed("Trace setup failed after acquiring the lease") from exc
     # Preserve saved points until the worker validates the decoded coordinate height.
     cleared_frames = 0
     LOGGER.info(
@@ -336,10 +381,8 @@ def prepare_tracing_request(*, api_key: str, movie_id: str, frame_start: int,
         frame_end_number,
         cleared_frames,
     )
-    ddbo.put_movie_log(event_type="movie.tracing.started", movie=movie, ipaddr="lambda-resize",
-                        event_id=lock.job_id)
     ret = {"movie_id": movie_id, "frame_start": source_frame_number, "cleared_frames": cleared_frames,
-           "job_id": lock.job_id}
+           "job_id": lock.job_id, "previous_status": previous_status}
     if frame_end_number is not None:
         ret["frame_end"] = frame_end_number
     return ret
@@ -581,8 +624,7 @@ def run_tracing(*, movie_id, frame_start, frame_end=None, job_id=None):
         movie_url = s3_presigned.make_signed_url(urn=analysis.urn if analysis else movie_urn)
         frame_height = analysis.height if analysis else analysis_frame_height_from_movie(
             movie_url=movie_url, rotation=rotation)
-        source_frame = ddbo.get_movie_frame(movie_id, source_frame_number)
-        if not source_frame or not source_frame.get('trackpoints'):
+        if not source_frame_has_visible_markers(ddbo, movie_id, source_frame_number):
             raise ValueError("Cannot trace movie without points on the selected source frame")
         remember_trackpoint_frame_height(movie=movie_record, frame_height=frame_height)
         odb.ensure_bottom_left_trackpoints(movie_id=movie_id, frame_height=frame_height)
@@ -631,12 +673,12 @@ def run_tracing(*, movie_id, frame_start, frame_end=None, job_id=None):
             if (obj.frame_trackpoints and obj.frame_number >= tracing_frame_start
                     and (frame_end_number is None or obj.frame_number <= frame_end_number)):
                 frame_trackpoints = odb.flip_trackpoints_y(obj.frame_trackpoints, frame_height)
+                put_frame_trackpoints(movie_id=movie_id, frame_number=obj.frame_number, trackpoints=frame_trackpoints)
                 ddbo.update_movie(
                     movie_id,
                     {LAST_FRAME_TRACKED: obj.frame_number},
                     touch_activity=False,
                 )
-                put_frame_trackpoints(movie_id=movie_id, frame_number=obj.frame_number, trackpoints=frame_trackpoints)
 
 
         last_render_heartbeat = time.monotonic()

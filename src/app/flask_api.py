@@ -1377,10 +1377,24 @@ def api_put_frame_trackpoints():
         logger.debug("put_frame_analysis. user_id=%s movie_id=%s frame_number=%s",user_id,movie[MOVIE_ID],frame_number)
         for tp in trackpoints:
             logger.debug("%s",tp)
-    odb.put_frame_trackpoints(movie_id=movie_id,
-                              frame_number=frame_number,
-                              trackpoints=trackpoints,
-                              needs_retracing=True)
+    try:
+        odb.put_frame_trackpoints(movie_id=movie_id,
+                                  frame_number=frame_number,
+                                  trackpoints=trackpoints,
+                                  needs_retracing=True,
+                                  require_unlocked=True,
+                                  analysis_lease_id=get(odb.ANALYSIS_LEASE_ID))
+    except odb.MovieTracingLocked:
+        return jsonify({C.API_KEY_ERROR: True,
+                        C.API_KEY_MESSAGE: "This movie is currently being traced and is read-only."}), 409
+    except odb.MovieAnalysisLocked:
+        return jsonify({C.API_KEY_ERROR: True,
+                        C.API_KEY_MESSAGE: "The Analyze editing lease has expired or changed. Reopen Analyze.",
+                        'lease_reacquire_required': True}), 409
+    except odb.MovieCoordinateMigrationRequired as exc:
+        return jsonify({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: str(exc)}), 409
+    except AtomicRenameConflict as exc:
+        return jsonify({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: str(exc)}), 409
 
     return {'error': False, 'message':f'trackpoints recorded: {len(trackpoints)} '}
 

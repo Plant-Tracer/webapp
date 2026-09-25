@@ -725,6 +725,7 @@ describe('TracerController constructor', () => {
             makeMovieMetadata({ total_frames: 3, last_frame_tracked: lastTracked }), 'k');
         tc.frames = Array.from({ length: 3 }, (_, frame_number) => ({ frame_number, markers: [] }));
         tc.frame_number = 0;
+        tc.objects.push(new MockMarkerClass(10, 20, 5, 'orange', 'orange', 'Apex'));
         tc.frame_loading = true;
         tc.refreshFrameEditState();
         expect(tc.track_button.prop).toHaveBeenLastCalledWith('disabled', true);
@@ -750,6 +751,8 @@ describe('TracerController constructor', () => {
             makeMovieMetadata({ total_frames: 5, last_frame_tracked: 4, needs_retracing: 1 }),
             'k'
         );
+        tc.objects.push(new MockMarkerClass(10, 20, 5, 'orange', 'orange', 'Apex'));
+        tc.refreshTrackButtonState();
 
         expect(tc.track_button.prop).toHaveBeenCalledWith('disabled', false);
     });
@@ -767,7 +770,9 @@ describe('TracerController constructor', () => {
         tc.frame_number = 1;
         tc.track_button.prop.mockClear();
 
-        tc.object_did_move(new MockMarkerClass(10, 20, 5, 'orange', 'orange', 'Apex'));
+        const marker = new MockMarkerClass(10, 20, 5, 'orange', 'orange', 'Apex');
+        tc.objects.push(marker);
+        tc.object_did_move(marker);
 
         expect(tc.track_button.prop).toHaveBeenCalledWith('disabled', false);
     });
@@ -1788,8 +1793,9 @@ describe('trace_movie_one_frame', () => {
     });
 
     // E. did_onload_callback — status message and demo mode ───────────────────
-    test('in normal mode: shows ready status and enables track button', () => {
+    test('in normal mode: shows ready status and enables track button with markers', () => {
         const tc = callTmof(null);
+        tc.objects.push(new MockMarkerClass(10, 20, 5, 'orange', 'orange', 'Apex'));
         jest.clearAllMocks();
         tc.did_onload_callback(null);
         const statusIdx = mock$.mock.calls.findIndex(args => args[0] === '#status-big');
@@ -2012,6 +2018,7 @@ describe('TracerController.track_to_end', () => {
         global.fetch = jest.fn();
         global.alert = jest.fn();
         tc = new TracerController('div#tracer', makeMovieMetadata({ total_frames: 20 }), 'test-api-key');
+        tc.objects.push(new MockMarkerClass(10, 20, 5, 'orange', 'orange', 'Apex'));
         jest.spyOn(tc, 'poll_for_track_end').mockImplementation(() => {});
         // Wipe constructor side-effects so assertions only cover track_to_end()
         jest.clearAllMocks();
@@ -2034,61 +2041,61 @@ describe('TracerController.track_to_end', () => {
         global.fetch.mockRejectedValueOnce(new Error(message));
     }
 
-    // A. Synchronous immediate effects ────────────────────────────────────────
-    test('sets #status-big to "Tracing from frame 0..."', () => {
+    // A. Effects after the source markers are saved ───────────────────────────
+    test('sets #status-big to "Tracing from frame 0..."', async () => {
         mockFetchResponse(200, {});
-        tc.track_to_end();
+        await tc.track_to_end();
         const idx = mock$.mock.calls.findIndex(args => args[0] === '#status-big');
         expect(idx).toBeGreaterThanOrEqual(0);
         expect(mock$.mock.results[idx].value.text).toHaveBeenCalledWith('Tracing from frame 0...');
     });
 
-    test('adds tracing-dimmed class to the controller div', () => {
+    test('adds tracing-dimmed class to the controller div', async () => {
         mockFetchResponse(200, {});
-        tc.track_to_end();
+        await tc.track_to_end();
         const idx = mock$.mock.calls.findIndex(args => args[0] === tc.div_selector);
         expect(idx).toBeGreaterThanOrEqual(0);
         expect(mock$.mock.results[idx].value.addClass).toHaveBeenCalledWith('tracing-dimmed');
     });
 
-    test('sets tracking_status text to "Tracing from frame 0..."', () => {
+    test('sets tracking_status text to "Tracing from frame 0..."', async () => {
         mockFetchResponse(200, {});
-        tc.track_to_end();
+        await tc.track_to_end();
         expect(tc.tracking_status.text).toHaveBeenCalledWith('Tracing from frame 0...');
     });
 
-    test('disables the track button immediately', () => {
+    test('disables the track button while tracing starts', async () => {
         mockFetchResponse(200, {});
-        tc.track_to_end();
+        await tc.track_to_end();
         expect(tc.track_button.prop).toHaveBeenCalledWith('disabled', true);
     });
 
-    test('sets this.tracking = true', () => {
+    test('sets this.tracking = true', async () => {
         mockFetchResponse(200, {});
-        tc.track_to_end();
+        await tc.track_to_end();
         expect(tc.tracking).toBe(true);
     });
 
-    test('resets poll_error_count to 0', () => {
+    test('resets poll_error_count to 0', async () => {
         mockFetchResponse(200, {});
         tc.poll_error_count = 99;
-        tc.track_to_end();
+        await tc.track_to_end();
         expect(tc.poll_error_count).toBe(0);
     });
 
     // B. fetch call ────────────────────────────────────────────────────────────
-    test('POSTs to the Lambda resize-api/v1/trace-movie endpoint', () => {
+    test('POSTs to the Lambda resize-api/v1/trace-movie endpoint', async () => {
         mockFetchResponse(200, {});
-        tc.track_to_end();
+        await tc.track_to_end();
         expect(global.fetch).toHaveBeenCalledWith(
             expect.stringContaining('resize-api/v1/trace-movie'),
             expect.objectContaining({ method: 'POST' })
         );
     });
 
-    test('sends the api_key in the x-api-key header', () => {
+    test('sends the api_key in the x-api-key header', async () => {
         mockFetchResponse(200, {});
-        tc.track_to_end();
+        await tc.track_to_end();
         expect(global.fetch).toHaveBeenCalledWith(
             expect.any(String),
             expect.objectContaining({
@@ -2097,17 +2104,17 @@ describe('TracerController.track_to_end', () => {
         );
     });
 
-    test('body includes movie_id, frame_start, and frame_end matching current trim', () => {
+    test('body includes movie_id, frame_start, and frame_end matching current trim', async () => {
         mockFetchResponse(200, {});
         tc.frame_number = 7;
-        tc.track_to_end();
+        await tc.track_to_end();
         const body = JSON.parse(global.fetch.mock.calls[0][1].body);
         expect(body.movie_id).toBe('test-movie-001');
         expect(body.frame_start).toBe(7);
         expect(body.frame_end).toBe(19);
     });
 
-    test('body omits frame_end when backend defaulted initial unknown movie length to zero', () => {
+    test('body omits frame_end when backend defaulted initial unknown movie length to zero', async () => {
         tc = new TracerController(
             'div#tracer',
             makeMovieMetadata({
@@ -2121,7 +2128,8 @@ describe('TracerController.track_to_end', () => {
         jest.clearAllMocks();
         mockFetchResponse(200, {});
         tc.frame_number = 0;
-        tc.track_to_end();
+        tc.objects.push(new MockMarkerClass(10, 20, 5, 'orange', 'orange', 'Apex'));
+        await tc.track_to_end();
         const body = JSON.parse(global.fetch.mock.calls[0][1].body);
         expect(body.movie_id).toBe('test-movie-001');
         expect(body.frame_start).toBe(0);

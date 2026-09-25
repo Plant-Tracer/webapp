@@ -35,6 +35,7 @@ def test_download_renders_trim_once_and_keeps_saved_data(new_movie_record, tmp_p
     ddbo = seed_render(cfg, tmp_path)
     movie_id = cfg[odb.MOVIE_ID]
     before = ddbo.get_movie(movie_id)
+    before_frontier = odb.last_tracked_movie_frame(movie_id=movie_id)
     frames = ddbo.get_frames(movie_id)
     jobs, errors = [], []
     entered, release, finished = threading.Event(), threading.Event(), threading.Event()
@@ -73,8 +74,9 @@ def test_download_renders_trim_once_and_keeps_saved_data(new_movie_record, tmp_p
         assert len(jobs) == 1
         after = ddbo.get_movie(movie_id)
         assert ddbo.get_frames(movie_id) == frames
-        for prop in (odb.NEEDS_RETRACING, odb.LAST_FRAME_TRACKED, odb.TOTAL_FRAMES, odb.MOVIE_DATA_URN, odb.MOVIE_STATUS):
+        for prop in (odb.NEEDS_RETRACING, odb.TOTAL_FRAMES, odb.MOVIE_DATA_URN, odb.MOVIE_STATUS):
             assert after[prop] == before[prop]
+        assert odb.last_tracked_movie_frame(movie_id=movie_id) == before_frontier
         assert not ddbo.get_active_movie_trace_lock(movie_id)
         assert after[odb.TRACED_RENDER_KEY] == render_key(after)
         movie_bytes = odb_movie_data.read_object(after[odb.MOVIE_TRACED_URN])

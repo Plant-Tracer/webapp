@@ -78,6 +78,10 @@ class MovieTracingLocked(ValueError):
     """The movie has an active tracing lease."""
 
 
+class MovieCoordinateMigrationRequired(ValueError):
+    """The browser must reload coordinates before writing annotations."""
+
+
 class MovieAnalysisLocked(ValueError):
     """The movie has an active analysis lease."""
 
@@ -217,6 +221,7 @@ MOVIE_METADATA_BULK_PROPS = (FPS, WIDTH, HEIGHT, TOTAL_FRAMES, TOTAL_BYTES)
 
 # movie_frames table
 FRAME_NUMBER = 'frame_number'
+TRACKPOINTS = 'trackpoints'
 MOVIE_MARKER_MAP_FRAME_NUMBER = -100
 FRAME_URN = 'frame_urn'
 FIRST_FRAME_URN = 'first_frame_urn'
@@ -824,6 +829,9 @@ class DDBO:
                                 purpose, analysis_lease_id=None):
         """Obtain one named worker lease, mutually exclusive with editing and recoding."""
         now = int(time.time())
+        analysis_condition = ("#analysis_id=:analysis_id AND #analysis_expires > :now"
+                              if analysis_lease_id else
+                              "attribute_not_exists(#analysis_expires) OR #analysis_expires < :now")
         lock = MovieTraceLock(
             movie_id=movie[MOVIE_ID], job_id=uuid.uuid4().hex, state="queued", purpose=purpose,
             acquired_at=now, heartbeat_at=now, expires_at=now + 15 * 60,
@@ -841,8 +849,7 @@ class DDBO:
                                   "#analysis_id, #analysis_acquired, #analysis_heartbeat, #analysis_expires, "
                                   "#analysis_started_by_id, #analysis_started_by_name"),
                 ConditionExpression=("(attribute_not_exists(#expires) OR #expires < :now) AND "
-                                     "(attribute_not_exists(#analysis_expires) OR #analysis_expires < :now "
-                                     "OR #analysis_id=:analysis_id) AND "
+                                     f"({analysis_condition}) AND "
                                      "(attribute_not_exists(#processing_expires) OR #processing_expires <= :now)"),
                 ExpressionAttributeNames={
                     "#purpose": WORK_PURPOSE, "#job_id": TRACE_JOB_ID, "#state": TRACE_LOCK_STATE,
@@ -862,7 +869,7 @@ class DDBO:
                     ":expires": lock.expires_at, ":started_by_id": lock.started_by_user_id,
                     ":started_by_name": lock.started_by_user_name,
                     ":status": MOVIE_STATE_TRACING if purpose == "trace" else (movie.get(MOVIE_STATUS) or MOVIE_STATE_READY),
-                    ":analysis_id": analysis_lease_id or "",
+                    **({":analysis_id": analysis_lease_id} if analysis_lease_id else {}),
                 },
             )
         except ClientError as exc:
@@ -901,7 +908,8 @@ class DDBO:
             ExpressionAttributeValues={":job_id": job_id, ":now": now, ":expires": now + 15 * 60},
         )
 
-    def finish_movie_trace(self, *, movie_id, job_id, updates, expected_inputs=None):
+    def finish_movie_trace(self, *, movie_id, job_id, updates, expected_inputs=None,
+                           tolerate_lost=False):
         """Publish a terminal state only while this worker owns the lease."""
         now = int(time.time())
         update_names = {f"#{key}": key for key in updates}
@@ -928,12 +936,19 @@ class DDBO:
             else:
                 condition += f" AND {name}={token}"
                 update_values[token] = value
-        self.movies.update_item(
-            Key={MOVIE_ID: movie_id}, UpdateExpression=expression,
-            ConditionExpression=condition,
-            ExpressionAttributeNames=update_names,
-            ExpressionAttributeValues={**update_values, ":job_id": job_id},
-        )
+        try:
+            self.movies.update_item(
+                Key={MOVIE_ID: movie_id}, UpdateExpression=expression,
+                ConditionExpression=condition,
+                ExpressionAttributeNames=update_names,
+                ExpressionAttributeValues={**update_values, ":job_id": job_id},
+            )
+        except ClientError as exc:
+            if (tolerate_lost
+                    and exc.response.get("Error", {}).get("Code") == "ConditionalCheckFailedException"):
+                return False
+            raise
+        return True
     ### api_key management
 
     def put_api_key_dict(self,api_key_dict):
@@ -1390,9 +1405,10 @@ class DDBO:
 
     ### movie_frame management
 
-    def get_movie_frame(self,movie_id, frame_number):
+    def get_movie_frame(self,movie_id, frame_number, *, consistent_read=False):
         assert int(frame_number) >= 0
-        return self.movie_frames.get_item(Key = {MOVIE_ID:movie_id, FRAME_NUMBER:frame_number}).get('Item')
+        return self.movie_frames.get_item(Key = {MOVIE_ID:movie_id, FRAME_NUMBER:frame_number},
+                                          ConsistentRead=consistent_read).get('Item')
 
     def put_movie_frame(self,framedict):
         assert int(framedict[FRAME_NUMBER]) >= 0
@@ -2959,11 +2975,20 @@ def marker_label_for_trackpoint(marker_map: dict, trackpoint: dict) -> str:
     return trackpoint.get('label')
 
 
-def ensure_trackpoint_marker_ids(*, movie_id: str, trackpoints: list[dict]) -> list[dict]:
+def ensure_trackpoint_marker_ids(*, movie_id: str, trackpoints: list[dict], persist=True):
     """Ensure stored trackpoints carry stable marker ids and update the movie marker map."""
     assert is_movie_id(movie_id)
     ddbo = DDBO()
-    marker_map = get_movie_marker_map(movie_id=movie_id, create=True)
+    if persist:
+        marker_map = get_movie_marker_map(movie_id=movie_id, create=True)
+        marker_map_present = True
+    else:
+        marker_map = ddbo.movie_frames.get_item(
+            Key=movie_marker_map_key(movie_id), ConsistentRead=True,
+        ).get('Item')
+        marker_map_present = marker_map is not None
+        if marker_map is None:
+            marker_map = _marker_map_from_frames(movie_id=movie_id, frames=ddbo.get_frames(movie_id))
     old_marker_map = copy.deepcopy(marker_map)
     markers = copy.deepcopy(marker_map.get(MARKERS, {}))
     marker_labels = copy.deepcopy(marker_map.get(MARKER_LABELS, {}))
@@ -2988,7 +3013,7 @@ def ensure_trackpoint_marker_ids(*, movie_id: str, trackpoints: list[dict]) -> l
         stored_trackpoint[MARKER_ID] = marker_id
         stored_trackpoints.append(stored_trackpoint)
 
-    if changed:
+    if changed and persist:
         new_marker_map = {
             MOVIE_ID: marker_map[MOVIE_ID],
             FRAME_NUMBER: MOVIE_MARKER_MAP_FRAME_NUMBER,
@@ -3003,6 +3028,12 @@ def ensure_trackpoint_marker_ids(*, movie_id: str, trackpoints: list[dict]) -> l
             if exc.response.get('Error', {}).get('Code') == 'ConditionalCheckFailedException':
                 raise AtomicRenameConflict(f"marker map for movie {movie_id} changed while updating") from exc
             raise
+    if not persist:
+        return stored_trackpoints, marker_map, {
+            MOVIE_ID: movie_id, FRAME_NUMBER: MOVIE_MARKER_MAP_FRAME_NUMBER,
+            ORIG_MOVIE: movie_id, MARKERS: markers,
+            MARKER_LABELS: marker_labels, MARKER_ALIASES: marker_aliases,
+        }, marker_map_present
     return stored_trackpoints
 
 
@@ -3016,6 +3047,7 @@ def last_tracked_movie_frame(*, movie_id):
         query_kwargs = {
             'KeyConditionExpression': Key(MOVIE_ID).eq(movie_id) & Key(FRAME_NUMBER).gte(0),
             'FilterExpression': Attr('trackpoints').exists(),
+            'ConsistentRead': True,
             'ScanIndexForward': False,
             'Limit': 1
         }
@@ -3026,7 +3058,7 @@ def last_tracked_movie_frame(*, movie_id):
         response = movie_frames.query(**query_kwargs)
         items = response.get('Items', [])
         if items:
-            return items[0][FRAME_NUMBER]
+            return int(items[0][FRAME_NUMBER])
 
         last_evaluated_key = response.get('LastEvaluatedKey')
         if not last_evaluated_key:
@@ -3143,8 +3175,11 @@ def _commit_marker_map_change(ddbo, marker_map, new_marker_map, *, needs_retraci
         '#movie_id': MOVIE_ID,
         '#revision': RENDER_REVISION,
         '#last_activity_at': LAST_ACTIVITY_AT,
+        '#trace_expires': TRACE_LOCK_EXPIRES_AT,
     }
-    movie_expression_values = {':last_activity_at': int(time.time()), ':revision': uuid.uuid4().hex}
+    now = int(time.time())
+    movie_expression_values = {':last_activity_at': now, ':revision': uuid.uuid4().hex,
+                               ':now': now}
     if needs_retracing:
         movie_update_expression += ', #needs_retracing = :needs_retracing'
         movie_expression_names['#needs_retracing'] = NEEDS_RETRACING
@@ -3154,7 +3189,8 @@ def _commit_marker_map_change(ddbo, marker_map, new_marker_map, *, needs_retraci
             'TableName': ddbo.movies.name,
             'Key': {MOVIE_ID: movie_id},
             'UpdateExpression': movie_update_expression,
-            'ConditionExpression': 'attribute_exists(#movie_id)',
+            'ConditionExpression': ('attribute_exists(#movie_id) AND '
+                                    '(attribute_not_exists(#trace_expires) OR #trace_expires < :now)'),
             'ExpressionAttributeNames': movie_expression_names,
             'ExpressionAttributeValues': movie_expression_values,
         },
@@ -3173,32 +3209,108 @@ def _commit_marker_map_change(ddbo, marker_map, new_marker_map, *, needs_retraci
         raise
 
 def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackpoint],
-                          needs_retracing:bool=False):
+                          needs_retracing:bool=False, require_unlocked:bool=False,
+                          analysis_lease_id:str|None=None):
     """
     :frame_number: the frame to replace. If the frame has existing trackpoints, they are overwritten
     :param: trackpoints - array of Tractpoints.
     """
     assert int(frame_number) >= 0
-    ensure_bottom_left_trackpoints(movie_id=movie_id)
+    if require_unlocked:
+        movie = DDBO().get_movie(movie_id)
+        if not movie_is_available(movie):
+            raise MovieUploadIncomplete(movie_id)
+        if movie.get(TRACKPOINT_ORIGIN) != TRACKPOINT_ORIGIN_BOTTOM_LEFT:
+            raise MovieCoordinateMigrationRequired("Reopen Analyze to reload annotations before editing.")
+    else:
+        ensure_bottom_left_trackpoints(movie_id=movie_id)
     # Remove numpy from trackpoints
     trackpoints = [ tp.model_dump(exclude_none=True, exclude_defaults=True) for tp in trackpoints ]
-    trackpoints = ensure_trackpoint_marker_ids(movie_id=movie_id, trackpoints=trackpoints)
+    if require_unlocked:
+        trackpoints, marker_map, new_marker_map, marker_map_present = ensure_trackpoint_marker_ids(
+            movie_id=movie_id, trackpoints=trackpoints, persist=False)
+    else:
+        trackpoints = ensure_trackpoint_marker_ids(movie_id=movie_id, trackpoints=trackpoints)
     logger.debug("put trackpoints frame=%s trackpoints=%s",frame_number,trackpoints)
 
     ddbo = DDBO()
-    ddbo.movie_frames.update_item( Key={MOVIE_ID:movie_id,
-                                        FRAME_NUMBER:frame_number},
-                                   UpdateExpression='SET trackpoints=:val',
-                                   ExpressionAttributeValues={':val':trackpoints})
-
-    # update the last frame tracked. This is way, way more expensive than it should be.
-    movie = ddbo.get_movie(movie_id, fields=[LAST_FRAME_TRACKED])
-    current = movie.get(LAST_FRAME_TRACKED, None)
-    if current is None:
-        lft = frame_number
+    frame_key = {MOVIE_ID:movie_id, FRAME_NUMBER:frame_number}
+    if require_unlocked:
+        alias_condition = ('#marker_aliases=:old_aliases' if MARKER_ALIASES in marker_map
+                           else 'attribute_not_exists(#marker_aliases)')
+        map_item = {
+            'TableName': ddbo.movie_frames.name,
+            'Item': new_marker_map,
+            'ConditionExpression': ('#markers=:old_markers AND #marker_labels=:old_labels '
+                                    f'AND {alias_condition}' if marker_map_present
+                                    else 'attribute_not_exists(#movie_id)'),
+            'ExpressionAttributeNames': ({'#markers': MARKERS, '#marker_labels': MARKER_LABELS,
+                                          '#marker_aliases': MARKER_ALIASES} if marker_map_present
+                                         else {'#movie_id': MOVIE_ID}),
+        }
+        if marker_map_present:
+            map_item['ExpressionAttributeValues'] = {
+                ':old_markers': marker_map.get(MARKERS, {}),
+                ':old_labels': marker_map.get(MARKER_LABELS, {}),
+                **({':old_aliases': marker_map[MARKER_ALIASES]} if MARKER_ALIASES in marker_map else {}),
+            }
+        frame_update = {
+            'TableName': ddbo.movie_frames.name, 'Key': frame_key,
+            'UpdateExpression': 'SET #trackpoints=:trackpoints' if trackpoints else 'REMOVE #trackpoints',
+            'ExpressionAttributeNames': {'#trackpoints': TRACKPOINTS},
+        }
+        if trackpoints:
+            frame_update['ExpressionAttributeValues'] = {':trackpoints': trackpoints}
+        analysis_condition = ('#analysis_id=:analysis_id AND #analysis_expires > :now'
+                              if analysis_lease_id else
+                              'attribute_not_exists(#analysis_expires) OR #analysis_expires <= :now')
+        movie_update = {
+            'TableName': ddbo.movies.name, 'Key': {MOVIE_ID: movie_id},
+            'UpdateExpression': ('SET #last_activity_at=:now, #render_revision=:revision'
+                                 + (', #needs_retracing=:needs_retracing' if needs_retracing else '')
+                                 + ' REMOVE #last_frame_tracked'),
+            'ConditionExpression': ('attribute_exists(#movie_id) AND '
+                                    '(attribute_not_exists(#trace_expires) OR #trace_expires < :now) AND '
+                                    f'({analysis_condition})'),
+            'ExpressionAttributeNames': {'#movie_id': MOVIE_ID, '#trace_expires': TRACE_LOCK_EXPIRES_AT,
+                                         '#analysis_expires': ANALYSIS_LOCK_EXPIRES_AT,
+                                         **({'#analysis_id': ANALYSIS_LEASE_ID} if analysis_lease_id else {}),
+                                         '#last_frame_tracked': LAST_FRAME_TRACKED,
+                                         '#last_activity_at': LAST_ACTIVITY_AT,
+                                         '#render_revision': RENDER_REVISION,
+                                         **({'#needs_retracing': NEEDS_RETRACING} if needs_retracing else {})},
+            'ExpressionAttributeValues': {':now': int(time.time()), ':revision': uuid.uuid4().hex,
+                                          **({':analysis_id': analysis_lease_id} if analysis_lease_id else {}),
+                                          **({':needs_retracing': 1} if needs_retracing else {})},
+        }
+        try:
+            ddbo.dynamodb.meta.client.transact_write_items(
+                TransactItems=[{'Put': map_item}, {'Update': frame_update}, {'Update': movie_update}],
+                ClientRequestToken=uuid.uuid4().hex,
+            )
+        except ClientError as exc:
+            if exc.response.get('Error', {}).get('Code') == 'TransactionCanceledException':
+                if ddbo.get_active_movie_trace_lock(movie_id):
+                    raise MovieTracingLocked(movie_id) from exc
+                analysis_lock = ddbo.get_active_movie_analysis_lock(movie_id)
+                if (analysis_lease_id and (not analysis_lock or analysis_lock.lease_id != analysis_lease_id)) or (
+                        not analysis_lease_id and analysis_lock):
+                    raise MovieAnalysisLocked(movie_id) from exc
+                raise AtomicRenameConflict(f"marker map for movie {movie_id} changed while saving") from exc
+            raise
+        return
+    if trackpoints:
+        ddbo.movie_frames.update_item(Key=frame_key, UpdateExpression=f'SET {TRACKPOINTS}=:val',
+                                      ExpressionAttributeValues={':val':trackpoints})
     else:
-        lft = max(current, frame_number)
-    movie_metadata = {LAST_FRAME_TRACKED:lft}
+        ddbo.movie_frames.update_item(Key=frame_key, UpdateExpression=f'REMOVE {TRACKPOINTS}')
+
+    # Any frame replacement invalidates this cache; the next metadata read finds the actual frontier.
+    # The tracing worker writes its own progress after each completed frame.
+    ddbo.movies.update_item(Key={MOVIE_ID: movie_id},
+                            UpdateExpression='REMOVE #last_frame_tracked',
+                            ExpressionAttributeNames={'#last_frame_tracked': LAST_FRAME_TRACKED})
+    movie_metadata = {}
     if needs_retracing:
         movie_metadata[NEEDS_RETRACING] = 1
     set_movie_metadata(movie_id=movie_id, movie_metadata=movie_metadata)
