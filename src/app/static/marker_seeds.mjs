@@ -16,7 +16,8 @@ export class MarkerSeedIndex {
             this.preceding = new Int32Array(this.frames.length);
             let previous = -1;
             for (let index = 0; index < this.frames.length; index++) {
-                if (this.frames[index]?.markers?.length) previous = index;
+                const frame = this.frames[index];
+                if (frame?.marker_seed_boundary || frame?.markers?.length) previous = index;
                 this.preceding[index] = previous;
             }
         }

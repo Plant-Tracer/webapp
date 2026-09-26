@@ -65,7 +65,12 @@ An unannotated, untraced frame displays a copy of the latest preceding marker
 positions. These display seeds are separate from stored frame annotations;
 navigation does not create trackpoints, paths, graph points, or export rows.
 Existing destination annotations take precedence, and gaps in traced history
-remain empty. Ready movies may contain manually placed seeds without having
+remain empty. Explicitly clearing a frame's markers creates a local seed
+boundary, so that frame and subsequent empty frames cannot revive older markers.
+Reloaded metadata entries with an explicit empty marker list retain that boundary;
+the current trackpoint-only API omits frames without stored points and therefore
+cannot distinguish a saved empty list from a never-annotated frame after reload.
+Ready movies may contain manually placed seeds without having
 been traced. Trim controls require multiple loaded frames; a legacy one-frame
 view cannot enable trimming solely from its last-tracked-frame metadata.
 

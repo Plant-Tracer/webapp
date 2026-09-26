@@ -502,10 +502,11 @@ class TracerController extends MovieController {
             return;
         }
         const targetFrame = this.frameForNumber(newStart);
-        if (!targetFrame || (targetFrame.markers && targetFrame.markers.length)) {
+        if (!targetFrame || targetFrame.marker_seed_boundary || targetFrame.markers?.length) {
             return;
         }
         targetFrame.markers = this.cloneMarkersForFrame(oldStart);
+        targetFrame.marker_seed_boundary = true;
         this.invalidateMarkerSeeds();
     }
 
@@ -578,8 +579,10 @@ class TracerController extends MovieController {
         if (!frame) {
             return;
         }
-        const presenceChanged = Boolean(frame.markers?.length) !== Boolean(markers.length);
+        const presenceChanged = Boolean(frame.markers?.length) !== Boolean(markers.length)
+            || !frame.marker_seed_boundary;
         frame.markers = markers.map(marker => ({...marker}));
+        frame.marker_seed_boundary = true;
         if (presenceChanged) this.invalidateMarkerSeeds();
         this.refreshResetTracingButtonState();
     }
@@ -1361,7 +1364,10 @@ class TracerController extends MovieController {
             });
             if (!deleted) return false;
             for (const frame of this.frames || []) {
-                if (frame) frame.markers = (frame.markers || []).filter(point => point.label !== label);
+                if (frame) {
+                    if (frame.markers?.length) frame.marker_seed_boundary = true;
+                    frame.markers = (frame.markers || []).filter(point => point.label !== label);
+                }
             }
             this.invalidateMarkerSeeds();
             this.clear_selection();
@@ -1467,6 +1473,7 @@ class TracerController extends MovieController {
             for (let i = 0; i < this.frames.length; i++) {
                 this.frames[i].markers = graph_frame_number(this.frames[i], null, i) === firstTrimFrame
                     ? seedMarkers.map(marker => ({...marker})) : [];
+                this.frames[i].marker_seed_boundary = i === firstTrimFrame;
             }
             this.movie_metadata.status = 'ready';
             this.invalidateMarkerSeeds();
@@ -1930,6 +1937,7 @@ class TracerController extends MovieController {
         this.movie_metadata = {...this.movie_metadata, ...data.metadata};
         for (let i = 0; i < this.frames.length; i++) {
             this.frames[i].markers = data.frames?.[i]?.markers || [];
+            this.frames[i].marker_seed_boundary = Object.hasOwn(data.frames || {}, i);
         }
         this.invalidateMarkerSeeds();
         this.last_tracked_frame = data.metadata.last_frame_tracked;
@@ -2047,8 +2055,9 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_url,
     cc.resize(player.width, player.height);
     const frames = Array.from({length: player.frameCount}, (_, index) => ({
         frame_number: index, markers: metadata_frames?.[index]?.markers || [],
+        marker_seed_boundary: Object.hasOwn(metadata_frames || {}, index),
     }));
-    if (!frames[0].markers.length && !show_results) {
+    if (!frames[0].markers.length && !frames[0].marker_seed_boundary && !show_results) {
         frames[0].markers = create_default_markers().map(marker => cc.canvas_marker_to_trackpoint({...marker, name: marker.label}));
     }
     cc.frame_number = options.initialFrame ?? cc.trim_start_frame;

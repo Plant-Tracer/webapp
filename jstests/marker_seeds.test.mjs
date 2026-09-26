@@ -61,3 +61,16 @@ test('sequential navigation reads annotations a linear number of times', () => {
     }
     expect(reads).toBeLessThanOrEqual(4 * frames.length);
 });
+
+test('explicit empty annotations stop carrying until a later annotation supplies new seeds', () => {
+    const frames = [{markers: [point('Apex', 10)]}, {markers: []}, {}, {}];
+    const index = new MarkerSeedIndex(frames);
+    expect(index.forFrame(3)).toEqual([point('Apex', 10, 3)]);
+    frames[1].marker_seed_boundary = true;
+    index.invalidate();
+    expect(index.forFrame(1)).toEqual([]);
+    expect(index.forFrame(3)).toEqual([]);
+    frames[2].markers = [point('Apex', 30, 2)];
+    index.invalidate();
+    expect(index.forFrame(3)).toEqual([point('Apex', 30, 3)]);
+});

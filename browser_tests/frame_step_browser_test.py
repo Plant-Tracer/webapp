@@ -189,6 +189,45 @@ def test_analyzer_carries_untraced_markers_without_creating_results(chrome_drive
         c.goto_frame(1).then(() => done(true));
     """)
     assert chrome_driver.execute_script('return window.playerController.get_markers();') == []
+    # Explicitly clearing annotations stops seed propagation across that frame.
+    chrome_driver.execute_async_script("""
+        const done = arguments[arguments.length - 1], c = window.playerController;
+        c.movie_metadata.status = 'ready';
+        c.updateCurrentFrameMarkers([], 2);
+        c.goto_frame(2).then(() => done(true));
+    """)
+    assert chrome_driver.execute_script('return window.playerController.get_markers();') == []
+    chrome_driver.execute_async_script("""
+        const done = arguments[arguments.length - 1], c = window.playerController;
+        c.goto_frame(3).then(() => done(true));
+    """)
+    assert chrome_driver.execute_script('return window.playerController.get_markers();') == []
+    # Reload can preserve empty boundaries when supplied as explicit frame entries.
+    chrome_driver.execute_async_script("""
+        const done = arguments[arguments.length - 1];
+        import('/src/app/static/canvas_tracer_controller.mjs').then(async module => {
+            window.playerController = await module.trace_movie_frames('div#tracer', {
+                movie_id:'probe', total_frames:4, frame_height_px:64, width:64, height:64,
+                uploaded_at:1, trackpoint_origin:'bottom-left', analysis_read_only:true,
+                status:'ready', last_frame_tracked:0
+            }, new URLSearchParams(location.search).get('src'), {
+                0:{markers:[{label:'Apex', x:12, y:17}]}, 2:{markers:[]}
+            }, '', false, {initialFrame:3});
+            window.emptyBoundaryReloadPreserved = window.playerController.get_markers().length === 0;
+            window.playerController = await module.trace_movie_frames('div#tracer', {
+                movie_id:'probe', total_frames:4, frame_height_px:64, width:64, height:64,
+                uploaded_at:1, trackpoint_origin:'bottom-left', analysis_read_only:true,
+                status:'ready', last_frame_tracked:-1
+            }, new URLSearchParams(location.search).get('src'), {0:{markers:[]}}, '', false);
+            window.emptyFirstFramePreserved = window.playerController.get_markers().length === 0;
+            await window.playerController.goto_frame(3);
+            done(true);
+        }).catch(error => done(error.message));
+    """)
+    assert chrome_driver.execute_script('return window.playerController.frame_number;') == 3
+    assert chrome_driver.execute_script(
+        'return window.emptyBoundaryReloadPreserved && window.emptyFirstFramePreserved;')
+    assert chrome_driver.execute_script('return window.playerController.get_markers();') == []
     # A tracking frontier alone does not make a one-frame player trimmable.
     chrome_driver.execute_script("""
         const c = window.playerController;
