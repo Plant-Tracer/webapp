@@ -986,6 +986,8 @@ Set one inclusive trim bound for a movie. Exactly one of `trim_start_frame` or
 
 Moving the start backward copies stored markers from the old start only when
 the destination has neither saved points nor an explicit empty annotation.
+An explicitly empty source is copied as a durable empty boundary too, so
+reopening Analyze cannot revive markers from an earlier frame at the new start.
 The browser waits for pending marker saves before requesting this copy.
 The copy reads source and destination consistently, preserving the latest save.
 

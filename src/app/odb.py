@@ -2383,9 +2383,9 @@ def _copy_frame_trackpoints_if_missing(*, movie_id: str, from_frame: int, to_fra
     if target and (TRACKPOINTS in target or target.get(EMPTY_MARKER_ANNOTATION)):
         return False
     source = ddbo.get_movie_frame(movie_id, from_frame, consistent_read=True)
-    if not source or not source.get('trackpoints'):
+    if not source or (TRACKPOINTS not in source and not source.get(EMPTY_MARKER_ANNOTATION)):
         return False
-    trackpoints = [Trackpoint(**trackpoint) for trackpoint in source['trackpoints']]
+    trackpoints = [Trackpoint(**trackpoint) for trackpoint in source.get(TRACKPOINTS, [])]
     put_frame_trackpoints(movie_id=movie_id, frame_number=to_frame, trackpoints=trackpoints)
     return True
 
@@ -2845,11 +2845,13 @@ def get_movie_annotations(*, movie_id: str, frame_start: int, frame_end: int) ->
 
 
 def get_movie_trackpoints(*, movie_id, frame_start=None, frame_count=None, frame_end=None):
-    """Return public trackpoint dictionaries; frame_end is inclusive."""
+    """Return public points for frame_count frames, or through inclusive frame_end."""
     if frame_start is None:
         frame_start = 0
     if frame_end is None:
-        frame_end = frame_start + (frame_count if frame_count is not None else 1e10)
+        if frame_count == 0:
+            return []
+        frame_end = frame_start + (frame_count - 1 if frame_count is not None else 1e10)
     return get_movie_annotations(movie_id=movie_id, frame_start=frame_start,
                                  frame_end=frame_end).trackpoints
 

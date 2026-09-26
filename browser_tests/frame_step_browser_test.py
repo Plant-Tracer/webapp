@@ -228,7 +228,7 @@ def test_analyzer_carries_untraced_markers_without_creating_results(chrome_drive
         c.goto_frame(3).then(() => done(true));
     """)
     assert chrome_driver.execute_script('return window.playerController.get_markers();') == []
-    # Moving the cleared start backward keeps an empty seed instead of reviving frame 0.
+    # Moving the cleared start backward mirrors the persisted empty annotation copy.
     chrome_driver.execute_async_script("""
         const done = arguments[arguments.length - 1], c = window.playerController;
         c.applyLocalTrimStartSeed(1, 2);
@@ -236,7 +236,9 @@ def test_analyzer_carries_untraced_markers_without_creating_results(chrome_drive
     """)
     assert chrome_driver.execute_script('return window.playerController.get_markers();') == []
     assert chrome_driver.execute_script(
-        'return window.playerController.frames[1].trim_seed_markers;') == []
+        'return window.playerController.frames[1].markers;') == []
+    assert chrome_driver.execute_script(
+        'return window.playerController.frames[1].marker_seed_boundary;')
     assert not chrome_driver.find_element(By.CSS_SELECTOR, '#tracer .track_button').is_enabled()
     # Reload can preserve empty boundaries when supplied as explicit frame entries.
     chrome_driver.execute_async_script("""
@@ -247,9 +249,11 @@ def test_analyzer_carries_untraced_markers_without_creating_results(chrome_drive
                 uploaded_at:1, trackpoint_origin:'bottom-left', analysis_read_only:true,
                 status:'ready', last_frame_tracked:0
             }, new URLSearchParams(location.search).get('src'), {
-                0:{markers:[{label:'Apex', x:12, y:17}]}, 2:{markers:[]}
-            }, '', false, {initialFrame:3});
+                0:{markers:[{label:'Apex', x:12, y:17}]}, 1:{markers:[]}, 2:{markers:[]}
+            }, '', false, {initialFrame:1});
             window.emptyBoundaryReloadPreserved = window.playerController.get_markers().length === 0;
+            await window.playerController.goto_frame(3);
+            window.emptyBoundaryReloadPreserved &&= window.playerController.get_markers().length === 0;
             window.playerController = await module.trace_movie_frames('div#tracer', {
                 movie_id:'probe', total_frames:4, frame_height_px:64, width:64, height:64,
                 uploaded_at:1, trackpoint_origin:'bottom-left', analysis_read_only:true,

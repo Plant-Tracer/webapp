@@ -502,7 +502,8 @@ class TracerController extends MovieController {
         }
         const seeds = this.markersForDisplay(oldStart)
             .map(marker => ({...marker, frame_number: newStart}));
-        if (this.frameForNumber(oldStart)?.markers?.length) {
+        const sourceFrame = this.frameForNumber(oldStart);
+        if (sourceFrame?.marker_seed_boundary || sourceFrame?.markers?.length) {
             // The trim API copies stored annotations from the old start too.
             targetFrame.markers = seeds;
             targetFrame.marker_seed_boundary = true;

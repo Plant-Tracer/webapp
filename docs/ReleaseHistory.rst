@@ -92,6 +92,8 @@ Unreleased Summary
       legacy explicitly empty trackpoint lists.
       Preserve fully deleted annotation boundaries on reload and block trimming
       until failed annotation saves are retried successfully or Analyze is reopened.
+      Retain an empty old trim start at its new destination through reload and
+      read exactly the requested count of annotation frames.
 
     * Prevent tracing from a frame with no markers. Reject empty source frames
       before queueing, keep empty marker saves from advancing the tracked frame,

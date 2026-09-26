@@ -807,6 +807,26 @@ def test_empty_marker_annotations_survive_api_reload_and_trim(client, new_movie,
                              trackpoints=[Trackpoint(x=30, y=22, label='apex')])
     assert odb.get_movie_annotations(movie_id=movie_id, frame_start=0, frame_end=2).empty_frames == []
 
+def test_empty_trim_source_is_copied_for_reload(client, new_movie):
+    movie_id = new_movie[MOVIE_ID]
+    params = {API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id}
+    odb.ensure_bottom_left_trackpoints(movie_id=movie_id)
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={
+        odb.TOTAL_FRAMES: 4, odb.TRIM_START_FRAME: 2, odb.TRIM_END_FRAME: 3})
+    odb.put_frame_trackpoints(movie_id=movie_id, frame_number=0,
+                             trackpoints=[Trackpoint(x=10, y=20, label='Apex')])
+    assert not client.post('/api/put-frame-trackpoints', data={
+        **params, odb.FRAME_NUMBER: 2, odb.TRACKPOINTS: '[]'}).get_json()['error']
+    assert not client.post('/api/set-movie-trim', data={
+        **params, odb.TRIM_START_FRAME: 1}).get_json()['error']
+    frames = client.post('/api/get-movie-metadata', data={
+        **params, 'frame_start': 0, 'frame_count': 4}).get_json()['frames']
+    assert frames['1']['markers'] == []
+    assert frames['2']['markers'] == []
+    assert frames['0']['markers'][0]['x'] == 10
+    assert odb.last_tracked_movie_frame(movie_id=movie_id) == 0
+
+
 def test_deleted_annotation_remains_empty_on_reload(client, new_movie):
     movie_id = new_movie[MOVIE_ID]
     params = {API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id}

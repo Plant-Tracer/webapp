@@ -1198,8 +1198,9 @@ describe('TracerController trim behavior', () => {
         tc.frames = [{markers: [{x: 10, y: 20, label: 'Apex'}]}, {},
             {markers: [], marker_seed_boundary: true}, {}];
         tc.applyLocalTrimStartSeed(1, 2);
-        expect(tc.frames[1].trim_seed_markers).toEqual([]);
-        expect(tc.frames[1].markers).toBeUndefined();
+        expect(tc.frames[1].trim_seed_markers).toBeUndefined();
+        expect(tc.frames[1].markers).toEqual([]);
+        expect(tc.frames[1].marker_seed_boundary).toBe(true);
         expect(tc.markersForDisplay(1)).toEqual([]);
         expect(tc.markersForDisplay(3)).toEqual([]);
     });
