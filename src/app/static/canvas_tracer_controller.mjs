@@ -705,6 +705,10 @@ class TracerController extends MovieController {
                 .then(() => this.set_trim_bound(prop, frameNumber))
                 .catch(error => alert(`Unable to trim after annotation save failure: ${error.message}`));
         }
+        if (this.failed_marker_saves?.size) {
+            alert('Annotations could not be saved. Retry the edits or reopen Analyze before trimming.');
+            return;
+        }
         const oldStart = this.trim_start_frame;
         const currentBound = prop === TRIM_START_FRAME ? this.trim_start_frame : this.trim_end_frame;
         if (frameNumber === currentBound) {
@@ -1573,14 +1577,17 @@ class TracerController extends MovieController {
             trackpoints  : JSON.stringify(markers), // markers as a JSON string because we do POST as a form, not as REST
             ...this.analysisLeaseParams(),
         };
-        const submit = () => $.post(`${API_BASE}api/put-frame-trackpoints`, put_frame_markers_params )
+        const submit = () => new Promise((resolve, reject) => {
+            $.post(`${API_BASE}api/put-frame-trackpoints`, put_frame_markers_params )
             .done( (data) => {
                 if (data.error) {
                     alert("Error saving annotations: "+data.message);
+                    reject(new Error(data.message));
                     return;
                 }
                 this.markTracedMovieNeedsRetracing();
                 this.refreshVisibleGraphs();
+                resolve(data);
             })
             .fail( (res) => {
                 console.error("put-frame-trackpoints failed", res);
@@ -1592,9 +1599,19 @@ class TracerController extends MovieController {
                     this.set_movie_control_buttons();
                 }
                 alert("error from put-frame-trackpoints:\n"+res.responseText);
+                reject(new Error(res.responseJSON?.message || res.responseText || 'Annotation save failed'));
             });
+        });
         // Preserve invocation order when rapid marker moves save the same frame.
-        const pending = Promise.resolve(this.marker_save_tail ? this.marker_save_tail.then(submit) : submit());
+        this.failed_marker_saves ||= new Set();
+        const pending = Promise.resolve(this.marker_save_tail ? this.marker_save_tail.then(submit) : submit())
+            .then(data => {
+                this.failed_marker_saves.delete(frameNumber);
+                return data;
+            }, error => {
+                this.failed_marker_saves.add(frameNumber);
+                throw error;
+            });
         this.marker_save_tail = pending.catch(() => {});
         this.marker_save_requests ||= new Set();
         this.marker_save_requests.add(pending);

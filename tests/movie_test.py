@@ -807,6 +807,24 @@ def test_empty_marker_annotations_survive_api_reload_and_trim(client, new_movie,
                              trackpoints=[Trackpoint(x=30, y=22, label='apex')])
     assert odb.get_movie_annotations(movie_id=movie_id, frame_start=0, frame_end=2).empty_frames == []
 
+def test_deleted_annotation_remains_empty_on_reload(client, new_movie):
+    movie_id = new_movie[MOVIE_ID]
+    params = {API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id}
+    odb.ensure_bottom_left_trackpoints(movie_id=movie_id)
+    odb.put_frame_trackpoints(movie_id=movie_id, frame_number=0, trackpoints=[
+        Trackpoint(x=10, y=20, label='Apex'), Trackpoint(x=5, y=5, label='Ruler')])
+    odb.put_frame_trackpoints(movie_id=movie_id, frame_number=2,
+                             trackpoints=[Trackpoint(x=30, y=20, label='Apex')])
+    response = client.post('/api/delete-marker', data={**params, 'label': 'Apex'})
+    assert response.status_code == 200
+    assert not response.get_json()['error']
+    frames = client.post('/api/get-movie-metadata', data={
+        **params, 'frame_start': 0, 'frame_count': 4}).get_json()['frames']
+    assert [point['label'] for point in frames['0']['markers']] == ['Ruler']
+    assert frames['2']['markers'] == []
+    assert '1' not in frames and '3' not in frames
+
+
 def test_set_movie_trim_returns_validation_error(client, new_movie):
     api_key = new_movie[API_KEY]
     movie_id = new_movie[MOVIE_ID]

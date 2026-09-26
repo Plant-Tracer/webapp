@@ -90,6 +90,8 @@ Unreleased Summary
       wait for marker saves before copying a moved trim start.
       Read points and empty boundaries together per metadata page and preserve
       legacy explicitly empty trackpoint lists.
+      Preserve fully deleted annotation boundaries on reload and block trimming
+      until failed annotation saves are retried successfully or Analyze is reopened.
 
     * Prevent tracing from a frame with no markers. Reject empty source frames
       before queueing, keep empty marker saves from advancing the tracked frame,

@@ -97,6 +97,10 @@ new start, and the browser reflects that saved copy. Edits, reset, trace refresh
 deletion, and renaming also update or clear unsaved trim seeds.
 Trim requests wait for pending marker saves before copying the old start, while
 retaining the frame selected when the trim control was pressed.
+Failed saves keep trimming blocked after the request settles, until those frames
+are saved successfully or Analyze is reopened. Logical API errors also count as
+save failures. Metadata retains a frame boundary when all its stored markers
+have been deleted, preventing an earlier annotation from reappearing on reload.
 
 Movie List Flow
 ---------------

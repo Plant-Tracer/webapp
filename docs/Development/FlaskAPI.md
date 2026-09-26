@@ -646,6 +646,8 @@ Nonempty saves and reset operations remove that boundary.
 Trackpoints and empty boundaries are read together in one DynamoDB range traversal
 per metadata page, bounded by `frame_start` through `frame_start + frame_count - 1`.
 Legacy records with an explicitly present `trackpoints: []` also remain empty.
+Frames whose stored points are all deleted markers return the same explicit empty
+entry, preserving their annotation boundary across reload.
 
 `metadata.frame_height_px` is the positive pixel height of the resized, rotated
 analysis coordinate space used by the trackpoints, or `null` when unknown.

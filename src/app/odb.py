@@ -2827,9 +2827,7 @@ def get_movie_annotations(*, movie_id: str, frame_start: int, frame_end: int) ->
     ret = MovieAnnotations(trackpoints=[], empty_frames=[])
     for frame in iter_movie_frames_in_range( DDBO().movie_frames, movie_id,
                                              frame_start, frame_end ):
-        if (frame.get(EMPTY_MARKER_ANNOTATION)
-                or (TRACKPOINTS in frame and not frame[TRACKPOINTS])):
-            ret.empty_frames.append(int(frame[FRAME_NUMBER]))
+        frame_points = []
         for tp in frame.get(TRACKPOINTS,[]):
             if marker_is_deleted(marker_map, tp):
                 continue
@@ -2839,7 +2837,10 @@ def get_movie_annotations(*, movie_id: str, frame_start: int, frame_end: int) ->
             trackpoint['x'] = int(tp['x'])
             trackpoint['y'] = int(tp['y'])
             trackpoint['label'] = marker_label_for_trackpoint(marker_map, tp)
-            ret.trackpoints.append(trackpoint)
+            frame_points.append(trackpoint)
+        ret.trackpoints.extend(frame_points)
+        if frame.get(EMPTY_MARKER_ANNOTATION) or (TRACKPOINTS in frame and not frame_points):
+            ret.empty_frames.append(int(frame[FRAME_NUMBER]))
     return ret
 
 

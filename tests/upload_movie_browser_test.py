@@ -191,6 +191,49 @@ def test_upload_movie_end_to_end(chrome_driver, live_server, new_course):
     """)
     # Delay actual HTTP replies so navigation happens while the save is in flight.
     chrome_driver.execute_cdp_cmd('Network.enable', {})
+    # A real failed HTTP save must continue blocking trim after its request settles.
+    chrome_driver.execute_script("""
+        window.testSaveAlerts = [];
+        window.testOriginalAlert = window.alert;
+        window.alert = message => window.testSaveAlerts.push(message);
+        window.testFailedSaveReturned = false;
+        window.testFailedTrimSubmitted = false;
+        $.ajaxPrefilter((settings, _original, xhr) => {
+            const path = new URL(settings.url, location.href).pathname;
+            if (path === '/api/put-frame-trackpoints') {
+                xhr.fail(() => { window.testFailedSaveReturned = true; });
+            }
+            if (path === '/api/set-movie-trim') window.testFailedTrimSubmitted = true;
+        });
+    """)
+    chrome_driver.execute_cdp_cmd('Network.emulateNetworkConditions', {
+        'offline': True, 'latency': 0, 'downloadThroughput': -1, 'uploadThroughput': -1})
+    ActionChains(chrome_driver).move_to_element_with_offset(
+        canvas, int(50 - canvas.size['width'] / 2), int(50 - canvas.size['height'] / 2)
+    ).click_and_hold().move_by_offset(1, 0).move_by_offset(-1, 0).release().perform()
+    wait.until(lambda browser: browser.execute_script('return window.testFailedSaveReturned;'))
+    chrome_driver.execute_cdp_cmd('Network.emulateNetworkConditions', {
+        'offline': False, 'latency': 0, 'downloadThroughput': -1, 'uploadThroughput': -1})
+    chrome_driver.find_element(By.CSS_SELECTOR, '#tracer .next_frame').click()
+    wait.until(lambda browser: browser.find_element(By.CSS_SELECTOR, '#tracer .frame_number_field')
+               .get_attribute('value') == '2')
+    chrome_driver.find_element(By.CSS_SELECTOR, '#tracer .trim_set_start_button').click()
+    assert not chrome_driver.execute_script('return window.testFailedTrimSubmitted;')
+    assert odb.get_movie(movie_id=movie_id)[odb.TRIM_START_FRAME] == 1
+    assert not odb.get_movie_trackpoints(movie_id=movie_id, frame_start=1, frame_end=1)
+    assert any('Retry the edits' in message for message in chrome_driver.execute_script(
+        'return window.testSaveAlerts;'))
+    chrome_driver.find_element(By.CSS_SELECTOR, '#tracer .prev_frame').click()
+    wait.until(lambda browser: browser.find_element(By.CSS_SELECTOR, '#tracer .frame_number_field')
+               .get_attribute('value') == '1')
+    ActionChains(chrome_driver).move_to_element_with_offset(
+        canvas, int(50 - canvas.size['width'] / 2), int(50 - canvas.size['height'] / 2)
+    ).click_and_hold().move_by_offset(1, 0).move_by_offset(-1, 0).release().perform()
+    wait.until(lambda browser: browser.execute_script('return window.testMarkerSaveReturned;'))
+    chrome_driver.execute_script("""
+        window.alert = window.testOriginalAlert;
+        window.testMarkerSaveReturned = false;
+    """)
     chrome_driver.execute_cdp_cmd('Network.emulateNetworkConditions', {
         'offline': False, 'latency': 1500, 'downloadThroughput': -1, 'uploadThroughput': -1})
     ActionChains(chrome_driver).move_to_element_with_offset(

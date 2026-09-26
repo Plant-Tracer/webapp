@@ -2034,6 +2034,9 @@ describe('TracerController.track_to_end', () => {
         jest.spyOn(tc, 'poll_for_track_end').mockImplementation(() => {});
         // Wipe constructor side-effects so assertions only cover track_to_end()
         jest.clearAllMocks();
+        mockPost.mockReturnValue({
+            done: callback => { callback({error: false}); return {fail: jest.fn()}; },
+        });
     });
 
     afterEach(() => {
@@ -3107,6 +3110,29 @@ describe('TracerController.put_markers', () => {
         });
         tc.put_markers();
         expect(global.alert).toHaveBeenCalledWith(expect.stringContaining('Network error'));
+    });
+
+    test.each(['http', 'logical'])('a settled %s save failure blocks trim until that frame is saved', async failure => {
+        const error = {responseText: 'Save failed'};
+        mockPost.mockReturnValueOnce(failure === 'http' ? {
+            done: jest.fn().mockReturnThis(),
+            fail: callback => callback(error),
+        } : {
+            done: callback => { callback({error: true, message: 'Save failed'}); return {fail: jest.fn()}; },
+        });
+        await expect(tc.put_markers()).rejects.toThrow('Save failed');
+        expect(tc.marker_save_requests.size).toBe(0);
+        expect(tc.failed_marker_saves.has(0)).toBe(true);
+        tc.set_trim_bound('trim_start_frame', 1);
+        expect(mockPost).toHaveBeenCalledTimes(1);
+        expect(global.alert).toHaveBeenCalledWith(expect.stringContaining('Retry the edits'));
+        mockPost.mockReturnValueOnce({
+            done: callback => { callback({error: false}); return {fail: jest.fn()}; },
+        });
+        await tc.put_markers();
+        expect(tc.failed_marker_saves.size).toBe(0);
+        tc.set_trim_bound('trim_start_frame', 1);
+        expect(mockPost.mock.calls.at(-1)[0]).toContain('set-movie-trim');
     });
 });
 
