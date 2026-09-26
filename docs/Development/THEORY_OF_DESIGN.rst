@@ -89,6 +89,9 @@ resolved seeds, including carried positions, and records the new frame index.
 Existing destination annotations and explicit empty boundaries take precedence.
 Unsaved trim seeds live in ``trim_seed_markers``, separate from ``markers``, so
 saved frame ranges, graphs, and paths remain unchanged until an edit or trace.
+An empty trim seed is intentional: moving an explicitly cleared start backward
+must not revive an older annotation. Its presence therefore remains a seed
+boundary even with no points.
 When the old start has stored annotations, the trim API persists a copy at the
 new start, and the browser reflects that saved copy. Edits, reset, trace refresh,
 deletion, and renaming also update or clear unsaved trim seeds.

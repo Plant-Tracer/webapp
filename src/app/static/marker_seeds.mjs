@@ -17,6 +17,7 @@ export class MarkerSeedIndex {
             let previous = -1;
             for (let index = 0; index < this.frames.length; index++) {
                 const frame = this.frames[index];
+                // An empty trim seed preserves a cleared old start when moving it backward.
                 if (frame?.marker_seed_boundary || frame?.markers?.length || frame?.trim_seed_markers) previous = index;
                 this.preceding[index] = previous;
             }

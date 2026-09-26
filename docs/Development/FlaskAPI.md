@@ -643,6 +643,9 @@ Explicitly cleared frames are returned as `frames[frame_number].markers: []`,
 distinct from absent, never-annotated frames. An empty marker save persists an
 `empty_marker_annotation` boundary without advancing the tracked frontier.
 Nonempty saves and reset operations remove that boundary.
+Trackpoints and empty boundaries are read together in one DynamoDB range traversal
+per metadata page, bounded by `frame_start` through `frame_start + frame_count - 1`.
+Legacy records with an explicitly present `trackpoints: []` also remain empty.
 
 `metadata.frame_height_px` is the positive pixel height of the resized, rotated
 analysis coordinate space used by the trackpoints, or `null` when unknown.

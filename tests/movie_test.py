@@ -769,7 +769,7 @@ def test_set_movie_trim_requires_exactly_one_bound(client, new_movie):
     assert resp.get_json()['message'] == "set exactly one trim frame"
 
 
-def test_empty_marker_annotations_survive_api_reload_and_trim(client, new_movie):
+def test_empty_marker_annotations_survive_api_reload_and_trim(client, new_movie, monkeypatch):
     movie_id = new_movie[MOVIE_ID]
     params = {API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id}
     odb.ensure_bottom_left_trackpoints(movie_id=movie_id)
@@ -783,13 +783,29 @@ def test_empty_marker_annotations_survive_api_reload_and_trim(client, new_movie)
     assert not response.get_json()['error']
     assert client.post('/api/set-movie-trim', data={
         **params, odb.TRIM_START_FRAME: 1}).status_code == 200
+    odb.DDBO().movie_frames.put_item(Item={MOVIE_ID: movie_id, odb.FRAME_NUMBER: 3,
+                                          odb.TRACKPOINTS: []})
+    # Count range traversals while forwarding every read to real DynamoDB Local.
+    ranges = []
+    read_frames = odb.iter_movie_frames_in_range
+    def counted_frames(table, movie, first, last):
+        ranges.append((first, last))
+        yield from read_frames(table, movie, first, last)
+    monkeypatch.setattr(odb, 'iter_movie_frames_in_range', counted_frames)
     frames = client.post('/api/get-movie-metadata', data={
         **params, 'frame_start': 0, 'frame_count': 4}).get_json()['frames']
+    assert ranges == [(0, 3)]
     assert frames['1']['markers'] == []
     assert frames['2']['markers'][0]['x'] == 12
+    assert frames['3']['markers'] == []
+    ranges.clear()
+    page = client.post('/api/get-movie-metadata', data={
+        **params, 'frame_start': 1, 'frame_count': 1}).get_json()['frames']
+    assert ranges == [(1, 1)]
+    assert page == {'1': {'markers': []}}
     odb.put_frame_trackpoints(movie_id=movie_id, frame_number=1,
                              trackpoints=[Trackpoint(x=30, y=22, label='apex')])
-    assert odb.empty_marker_annotation_frames(movie_id=movie_id, frame_start=0, frame_count=4) == []
+    assert odb.get_movie_annotations(movie_id=movie_id, frame_start=0, frame_end=2).empty_frames == []
 
 def test_set_movie_trim_returns_validation_error(client, new_movie):
     api_key = new_movie[API_KEY]

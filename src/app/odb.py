@@ -2380,7 +2380,7 @@ def _copy_frame_trackpoints_if_missing(*, movie_id: str, from_frame: int, to_fra
     assert is_movie_id(movie_id)
     ddbo = DDBO()
     target = ddbo.get_movie_frame(movie_id, to_frame, consistent_read=True)
-    if target and (target.get(TRACKPOINTS) or target.get(EMPTY_MARKER_ANNOTATION)):
+    if target and (TRACKPOINTS in target or target.get(EMPTY_MARKER_ANNOTATION)):
         return False
     source = ddbo.get_movie_frame(movie_id, from_frame, consistent_read=True)
     if not source or not source.get('trackpoints'):
@@ -2811,25 +2811,26 @@ def iter_movie_frames_in_range(table, movie_id, f1, f2):
         if not last_evaluated_key:
             break
 
-def get_movie_trackpoints(*, movie_id, frame_start=None, frame_count=None, frame_end=None):
-    """Returns a list of trackpoint dictionaries where each dictonary represents a trackpoint.
-    :param: frame_start, frame_count, frame_end - optional. frame_end is inclusive.
-    """
+class MovieAnnotations(BaseModel):
+    """Public trackpoint values and explicit empty boundaries from one frame scan."""
+
+    trackpoints: list[dict]
+    empty_frames: list[int]
+
+
+def get_movie_annotations(*, movie_id: str, frame_start: int, frame_end: int) -> MovieAnnotations:
+    """Read trackpoints and empty boundaries together; frame_end is inclusive."""
 
     ensure_bottom_left_trackpoints(movie_id=movie_id)
 
-    if frame_start is None:
-        frame_start = 0
-    if frame_end is None:
-        if frame_count is None:
-            frame_count = 1e10
-        frame_end = frame_start + frame_count
-
     marker_map = get_movie_marker_map(movie_id=movie_id, create=False)
-    ret = []
+    ret = MovieAnnotations(trackpoints=[], empty_frames=[])
     for frame in iter_movie_frames_in_range( DDBO().movie_frames, movie_id,
                                              frame_start, frame_end ):
-        for tp in frame.get('trackpoints',[]):
+        if (frame.get(EMPTY_MARKER_ANNOTATION)
+                or (TRACKPOINTS in frame and not frame[TRACKPOINTS])):
+            ret.empty_frames.append(int(frame[FRAME_NUMBER]))
+        for tp in frame.get(TRACKPOINTS,[]):
             if marker_is_deleted(marker_map, tp):
                 continue
             trackpoint = {key: value for key, value in tp.items()
@@ -2838,8 +2839,18 @@ def get_movie_trackpoints(*, movie_id, frame_start=None, frame_count=None, frame
             trackpoint['x'] = int(tp['x'])
             trackpoint['y'] = int(tp['y'])
             trackpoint['label'] = marker_label_for_trackpoint(marker_map, tp)
-            ret.append(trackpoint)
+            ret.trackpoints.append(trackpoint)
     return ret
+
+
+def get_movie_trackpoints(*, movie_id, frame_start=None, frame_count=None, frame_end=None):
+    """Return public trackpoint dictionaries; frame_end is inclusive."""
+    if frame_start is None:
+        frame_start = 0
+    if frame_end is None:
+        frame_end = frame_start + (frame_count if frame_count is not None else 1e10)
+    return get_movie_annotations(movie_id=movie_id, frame_start=frame_start,
+                                 frame_end=frame_end).trackpoints
 
 def get_movie_frame_metadata(*, movie_id, frame_start, frame_count):
     """Returns a set of dictionaries for each frame in the movie. Each dictionary contains movie_id, frame_number, frame_urn
@@ -2853,16 +2864,6 @@ def get_movie_frame_metadata(*, movie_id, frame_start, frame_count):
              FRAME_URN:frame[FRAME_URN]}
             for frame in
             iter_movie_frames_in_range( DDBO().movie_frames, movie_id, frame_start, frame_start+frame_count ) ]
-
-
-def empty_marker_annotation_frames(*, movie_id: str, frame_start: int, frame_count: int) -> list[int]:
-    """Return explicitly cleared frames in the requested metadata page."""
-    assert is_movie_id(movie_id)
-    if frame_count == 0:
-        return []
-    return [int(frame[FRAME_NUMBER]) for frame in iter_movie_frames_in_range(
-        DDBO().movie_frames, movie_id, frame_start, frame_start + frame_count - 1)
-            if frame.get(EMPTY_MARKER_ANNOTATION)]
 
 
 def movie_marker_map_key(movie_id: str) -> dict:

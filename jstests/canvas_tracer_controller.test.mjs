@@ -1193,6 +1193,17 @@ describe('TracerController trim behavior', () => {
         expect(tc.frame_number).toBe(0);
     });
 
+    test('moving trim start backward preserves an explicitly empty source seed', () => {
+        const tc = new TracerController('div#tc', makeMovieMetadata({status: 'ready'}), 'k');
+        tc.frames = [{markers: [{x: 10, y: 20, label: 'Apex'}]}, {},
+            {markers: [], marker_seed_boundary: true}, {}];
+        tc.applyLocalTrimStartSeed(1, 2);
+        expect(tc.frames[1].trim_seed_markers).toEqual([]);
+        expect(tc.frames[1].markers).toBeUndefined();
+        expect(tc.markersForDisplay(1)).toEqual([]);
+        expect(tc.markersForDisplay(3)).toEqual([]);
+    });
+
     test('set_trim_bound does not post or redraw graph when bound is unchanged', () => {
         const analysisResults = makeEl();
         analysisResults.is.mockReturnValue(true);

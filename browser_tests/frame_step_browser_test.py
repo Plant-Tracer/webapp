@@ -228,6 +228,16 @@ def test_analyzer_carries_untraced_markers_without_creating_results(chrome_drive
         c.goto_frame(3).then(() => done(true));
     """)
     assert chrome_driver.execute_script('return window.playerController.get_markers();') == []
+    # Moving the cleared start backward keeps an empty seed instead of reviving frame 0.
+    chrome_driver.execute_async_script("""
+        const done = arguments[arguments.length - 1], c = window.playerController;
+        c.applyLocalTrimStartSeed(1, 2);
+        c.goto_frame(1).then(() => done(true));
+    """)
+    assert chrome_driver.execute_script('return window.playerController.get_markers();') == []
+    assert chrome_driver.execute_script(
+        'return window.playerController.frames[1].trim_seed_markers;') == []
+    assert not chrome_driver.find_element(By.CSS_SELECTOR, '#tracer .track_button').is_enabled()
     # Reload can preserve empty boundaries when supplied as explicit frame entries.
     chrome_driver.execute_async_script("""
         const done = arguments[arguments.length - 1];

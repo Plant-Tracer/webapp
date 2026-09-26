@@ -88,3 +88,19 @@ test('trim seeds supply editable positions without becoming stored annotations',
     index.invalidate();
     expect(index.forFrame(2)).toEqual([]);
 });
+
+test('deleting the last trim seed cannot revive a marker omitted from that seed', () => {
+    const frames = [{markers: [point('Apex', 10), point('Ruler 0mm', 5)]},
+        {trim_seed_markers: [point('Apex', 30, 1)]}, {}, {}];
+    const index = new MarkerSeedIndex(frames);
+    expect(index.forFrame(3)).toEqual([point('Apex', 30, 3)]);
+    frames[0].markers = frames[0].markers.filter(marker => marker.label !== 'Apex');
+    frames[1].trim_seed_markers = frames[1].trim_seed_markers.filter(marker => marker.label !== 'Apex');
+    index.invalidate();
+    expect(index.forFrame(0)).toEqual([point('Ruler 0mm', 5)]);
+    expect(index.forFrame(1)).toEqual([]);
+    expect(index.forFrame(3)).toEqual([]);
+    frames[2].markers = [point('Apex', 30, 2)];
+    index.invalidate();
+    expect(index.forFrame(3)).toEqual([point('Apex', 30, 3)]);
+});

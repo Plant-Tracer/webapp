@@ -88,6 +88,8 @@ Unreleased Summary
       need manual review (fixes #1241).
       Preserve explicitly cleared annotations through reload and trimming, and
       wait for marker saves before copying a moved trim start.
+      Read points and empty boundaries together per metadata page and preserve
+      legacy explicitly empty trackpoint lists.
 
     * Prevent tracing from a frame with no markers. Reject empty source frames
       before queueing, keep empty marker saves from advancing the tracked frame,
