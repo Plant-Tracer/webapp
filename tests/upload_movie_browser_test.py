@@ -160,6 +160,21 @@ def test_upload_movie_end_to_end(chrome_driver, live_server, new_course):
     wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .trim_set_start_button'))).click()
     wait.until(lambda _browser: odb.get_movie(movie_id=movie_id).get(odb.TRIM_START_FRAME) == 1)
     wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .track_button')))
+    position_selector = '#tracer .marker_table_body tr td:nth-child(4)'
+    carried_positions = [cell.text for cell in chrome_driver.find_elements(By.CSS_SELECTOR, position_selector)]
+    assert len(carried_positions) == 3
+    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .next_frame'))).click()
+    wait.until(lambda browser: browser.find_element(By.CSS_SELECTOR, '#tracer .frame_number_field')
+               .get_attribute('value') == '2')
+    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .trim_set_start_button'))).click()
+    wait.until(lambda _browser: odb.get_movie(movie_id=movie_id).get(odb.TRIM_START_FRAME) == 2)
+    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .prev_frame'))).click()
+    wait.until(lambda browser: browser.find_element(By.CSS_SELECTOR, '#tracer .frame_number_field')
+               .get_attribute('value') == '1')
+    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .trim_set_start_button'))).click()
+    wait.until(lambda _browser: odb.get_movie(movie_id=movie_id).get(odb.TRIM_START_FRAME) == 1)
+    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .track_button')))
+    assert [cell.text for cell in chrome_driver.find_elements(By.CSS_SELECTOR, position_selector)] == carried_positions
     # Move a carried marker using the real canvas, then reopen its saved position.
     canvas = chrome_driver.find_element(By.ID, 'canvas-id')
     chrome_driver.execute_script("arguments[0].scrollIntoView({block:'start'});", canvas)

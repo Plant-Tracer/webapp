@@ -155,6 +155,22 @@ def test_analyzer_carries_untraced_markers_without_creating_results(chrome_drive
                 && c.last_tracked_frame === -1
                 && !c.objects.some(obj => obj.constructor.name === 'Line');
         """)
+    # Moving the trim start backward copies carried seeds with destination indices.
+    chrome_driver.execute_async_script("""
+        const done = arguments[arguments.length - 1], c = window.playerController;
+        c.applyLocalTrimStartSeed(1, 2);
+        c.goto_frame(1).then(() => done(true));
+    """)
+    assert len(chrome_driver.execute_script('return window.playerController.get_markers();')) == 3
+    assert chrome_driver.find_element(By.CSS_SELECTOR, '#tracer .track_button').is_enabled()
+    assert chrome_driver.execute_script(
+        'return window.playerController.frames[1].markers.every(marker => marker.frame_number === 1);')
+    chrome_driver.execute_script("""
+        const c = window.playerController;
+        c.frames[1].markers = [];
+        c.frames[1].marker_seed_boundary = false;
+        c.invalidateMarkerSeeds();
+    """)
     # A saved explicit edit takes precedence; later empty frames inherit that edit.
     chrome_driver.execute_async_script("""
         const done = arguments[arguments.length - 1], c = window.playerController;

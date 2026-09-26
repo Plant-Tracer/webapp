@@ -479,11 +479,6 @@ class TracerController extends MovieController {
         return this.frames[frameNumber] || null;
     }
 
-    cloneMarkersForFrame(frameNumber) {
-        const frame = this.frameForNumber(frameNumber);
-        return frame && frame.markers ? frame.markers.map(marker => ({...marker})) : [];
-    }
-
     markersForDisplay(frameNumber) {
         // Ready movies include manually placed seeds, not a completed trace.
         const frontier = this.movie_metadata.status === 'ready' ? -1 : this.last_tracked_frame;
@@ -505,7 +500,8 @@ class TracerController extends MovieController {
         if (!targetFrame || targetFrame.marker_seed_boundary || targetFrame.markers?.length) {
             return;
         }
-        targetFrame.markers = this.cloneMarkersForFrame(oldStart);
+        targetFrame.markers = this.markersForDisplay(oldStart)
+            .map(marker => ({...marker, frame_number: newStart}));
         targetFrame.marker_seed_boundary = true;
         this.invalidateMarkerSeeds();
     }

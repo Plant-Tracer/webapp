@@ -83,6 +83,9 @@ seeding an earlier trim start invalidates the index. Position and name changes
 use live annotation objects; replacing the loaded frame array creates a new
 index. Explicit edits update local frame data before asynchronous saves return,
 so navigation sees the latest placement and older responses cannot revert it.
+Moving the trim start backward to an unannotated frame copies the old start's
+resolved seeds, including carried positions, and records the new frame index.
+Existing destination annotations and explicit empty boundaries take precedence.
 
 Movie List Flow
 ---------------

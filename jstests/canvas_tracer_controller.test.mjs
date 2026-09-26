@@ -1187,7 +1187,8 @@ describe('TracerController trim behavior', () => {
         );
         expect(tc.trim_start_frame).toBe(0);
         expect(tc.trim_start_frame_missing).toBe(false);
-        expect(tc.frames[0].markers).toEqual([{ x: 22, y: 33, label: 'Apex', frame_number: 2 }]);
+        expect(tc.frames[0].markers).toEqual([{ x: 22, y: 33, label: 'Apex', frame_number: 0 }]);
+        expect(tc.frames[2].markers).toEqual([{ x: 22, y: 33, label: 'Apex', frame_number: 2 }]);
         expect(global.requestAnimationFrame).toHaveBeenCalled();
         expect(tc.frame_number).toBe(0);
     });
