@@ -93,6 +93,7 @@ function start_analysis_lease(movieId, apiKey, leaseId) {
 var cell_id_counter = 0;
 
 import { $, begin_inline_text_edit } from "./utils.js";
+import { frameMarkerSeeds } from "./marker_seeds.mjs";
 import {
     TRACING_PROGRESS_TIMEOUT_MESSAGE,
     MARKER_NAME_IN_USE_MESSAGE,
@@ -428,7 +429,7 @@ class TracerController extends MovieController {
     }
 
     hasTraceableFrameData() {
-        return this.frames && this.frames.length > 1 && this.last_tracked_frame >= 1;
+        return this.frames && this.frames.length > 1;
     }
 
     isFrameInTrim(frame) {
@@ -480,6 +481,12 @@ class TracerController extends MovieController {
     cloneMarkersForFrame(frameNumber) {
         const frame = this.frameForNumber(frameNumber);
         return frame && frame.markers ? frame.markers.map(marker => ({...marker})) : [];
+    }
+
+    markersForDisplay(frameNumber) {
+        // Ready movies include manually placed seeds, not a completed trace.
+        const frontier = this.movie_metadata.status === 'ready' ? -1 : this.last_tracked_frame;
+        return frameMarkerSeeds(this.frames || [], frameNumber, frontier);
     }
 
     applyLocalTrimStartSeed(newStart, oldStart) {
@@ -570,6 +577,7 @@ class TracerController extends MovieController {
         return (this.frames || []).map((frame, frameIndex) => {
             const frameNumber = graph_frame_number(frame, null, frameIndex);
             if (Number(frameNumber) !== Number(this.frame_number)
+                || !frame?.markers?.length
                 || !(this.objects || []).some(obj => obj.constructor.name == Marker.name)) {
                 return frame;
             }
@@ -766,6 +774,7 @@ class TracerController extends MovieController {
     reset_comparison_markers_for_frame(frame, frameIndex) {
         const frameNumber = graph_frame_number(frame, null, frameIndex);
         if (Number(frameNumber) === Number(this.frame_number)
+            && frame?.markers?.length
             && (this.objects || []).some(obj => obj.constructor.name == Marker.name)) {
             return this.current_frame_canvas_trackpoints();
         }
@@ -1521,6 +1530,9 @@ class TracerController extends MovieController {
         }
         const frameNumber = this.frame_number;
         const markers = this.get_markers();
+        // Navigation must use the latest explicit edit while its save is in flight.
+        // Older responses must not replace a newer local edit on the same frame.
+        this.updateCurrentFrameMarkers(markers, frameNumber);
         const put_frame_markers_params = {
             api_key      : this.api_key,
             course_id    : activeCourseId(),
@@ -1535,7 +1547,6 @@ class TracerController extends MovieController {
                     alert("Error saving annotations: "+data.message);
                     return;
                 }
-                this.updateCurrentFrameMarkers(markers, frameNumber);
                 this.markTracedMovieNeedsRetracing();
                 this.refreshVisibleGraphs();
             })
@@ -1783,11 +1794,9 @@ class TracerController extends MovieController {
             }
         }
 
-        // Add the markers for this frame if this frame has markers
-        if (this.frames[frame].markers) {
-            for (let tp of this.frames[frame].markers) {
-                this.add_object(this.marker_from_trackpoint(tp));
-            }
+        // Carry positions into untraced frames without manufacturing saved paths/results.
+        for (const tp of this.markersForDisplay(frame)) {
+            this.add_object(this.marker_from_trackpoint(tp));
         }
         this.create_marker_table();
     }

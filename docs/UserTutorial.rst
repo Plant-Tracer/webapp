@@ -57,8 +57,8 @@ Tracking the Uploaded Movie
 .. image:: tutorial_images/track_uploaded_movie.png
    :alt: Post-upload confirmation page showing the movie's first frame and a Next Steps section with Analyze and Track the uploaded movie links
 
-- On the Analyze page, position the markers (described below), then click **Trace movie** to begin tracking. Trace is available only on a frame with markers; return to the marked frame if you stepped to an empty one.
-- After the first trace, you can optionally trim the movie to a specific frame range. Use the **Trim start** and **Trim end** controls to set the first and last frame Plant Tracer will analyze. Trimming lets you exclude frames before the plant starts moving or after tracking becomes unreliable without re-uploading the movie. When you reopen a trimmed movie, Plant Tracer starts on the first included frame.
+- On the Analyze page, position the markers (described below), then click **Trace movie** to begin tracking. When you step or jump into an untraced frame, the latest preceding marker positions are carried forward unchanged so you can adjust them and begin tracing there.
+- Before or after tracing, you can optionally trim the movie to a specific frame range. Use the **Trim start** and **Trim end** controls to set the first and last frame Plant Tracer will analyze. Trimming lets you exclude frames before the plant starts moving or after tracking becomes unreliable without re-uploading the movie. When you reopen a trimmed movie, Plant Tracer starts on the first included frame.
 - Plant Tracer places three markers on newly uploaded movies automatically. They initially appear on the left side of the movie frame. These also appear in the Marker Table to the right (or beneath) the video frame.
 - Plant Tracer will attempt to track the motion of whatever part of the image a marker is placed over, frame by frame.
 - It is the user's job to position the markers appropriately. To move a marker, click on it, and drag it to the desired location.
@@ -191,6 +191,14 @@ administrator with the displayed reason.
 Place or move markers on the desired frame, then choose Trace. The current markers
 are saved before tracking starts. After tracking completes, the same player shows
 the resulting markers and lets you step backward and forward to inspect them.
+Before tracing, stepping or jumping to an unannotated frame carries the latest
+preceding marker positions forward without moving them. Existing annotations on
+the destination frame take precedence. Carried positions are starting points;
+navigation alone does not add points to graphs, exports, or saved paths. Moving
+a marker or choosing Trace saves the displayed positions on that frame. Gaps in
+an existing trace stay empty, so a lost marker is not silently restored.
+Trimmed frames remain shaded and inactive. Changing the trim does not delete
+saved markers; the carried positions are available on included untraced frames.
 Use a current Chrome or Edge browser on Windows or macOS with WebCodecs support.
 Returning to Analyze with the browser's Back button reloads the
 player and reacquires the editing lease; saved annotations are preserved.
@@ -206,7 +214,9 @@ Reading movie traces
 
 Frame counting starts at 0, which is also time zero. The marker table's Frames
 column gives each marker's first and last saved frame within the selected trim. A marker with no saved
-position on the displayed frame remains in the table with location ``n/a``.
+position on the displayed frame remains in the table with location ``n/a``, except
+when a starting position is carried into an untraced frame. The Frames column
+continues to describe saved positions rather than these carried starting points.
 Deleting a marker removes its row and all of its saved traces throughout the
 movie, including outside the trim range. You can delete it from an ``n/a`` row;
 protected ruler markers cannot be deleted. Retrace to update a previously

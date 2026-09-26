@@ -8,7 +8,9 @@ import uuid
 import hashlib
 
 import pytest
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
@@ -152,9 +154,55 @@ def test_upload_movie_end_to_end(chrome_driver, live_server, new_course):
     next_button.click()
     wait.until(lambda browser: browser.find_element(By.CSS_SELECTOR, '#tracer .frame_number_field')
                .get_attribute('value') == '1')
-    chrome_driver.find_element(By.CSS_SELECTOR, '#tracer .prev_frame').click()
+    # Navigation supplies seeds without persisting synthetic trackpoints.
+    assert not odb.get_movie_trackpoints(movie_id=movie_id, frame_start=1, frame_count=1)
+    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .show_trim_controls'))).click()
+    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .trim_set_start_button'))).click()
+    wait.until(lambda _browser: odb.get_movie(movie_id=movie_id).get(odb.TRIM_START_FRAME) == 1)
+    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .track_button')))
+    # Move a carried marker using the real canvas, then reopen its saved position.
+    canvas = chrome_driver.find_element(By.ID, 'canvas-id')
+    chrome_driver.execute_script("arguments[0].scrollIntoView({block:'start'});", canvas)
+    chrome_driver.execute_script("""
+        window.testMarkerSaveReturned = false;
+        $.ajaxPrefilter((settings, _original, xhr) => {
+            if (new URL(settings.url, location.href).pathname === '/api/put-frame-trackpoints') {
+                xhr.done(() => { window.testMarkerSaveReturned = true; });
+            }
+        });
+    """)
+    # Delay actual HTTP replies so navigation happens while the save is in flight.
+    chrome_driver.execute_cdp_cmd('Network.enable', {})
+    chrome_driver.execute_cdp_cmd('Network.emulateNetworkConditions', {
+        'offline': False, 'latency': 1500, 'downloadThroughput': -1, 'uploadThroughput': -1})
+    ActionChains(chrome_driver).move_to_element_with_offset(
+        canvas, int(50 - canvas.size['width'] / 2), int(50 - canvas.size['height'] / 2)
+    ).click_and_hold().move_by_offset(20, 10).release().perform()
+    chrome_driver.find_element(By.CSS_SELECTOR, '#tracer .next_frame').click()
     wait.until(lambda browser: browser.find_element(By.CSS_SELECTOR, '#tracer .frame_number_field')
-               .get_attribute('value') == '0')
+               .get_attribute('value') == '2')
+    location = chrome_driver.find_element(By.XPATH,
+        "//tbody[contains(@class,'marker_table_body')]/tr[td[2]//span[normalize-space()='Apex']]/td[4]")
+    assert location.text == '(70,580)'
+    assert not chrome_driver.execute_script('return window.testMarkerSaveReturned;')
+    wait.until(lambda browser: browser.execute_script('return window.testMarkerSaveReturned;'))
+    chrome_driver.execute_cdp_cmd('Network.emulateNetworkConditions', {
+        'offline': False, 'latency': 0, 'downloadThroughput': -1, 'uploadThroughput': -1})
+    wait.until(lambda _browser: any(point['label'] == 'Apex' and point['x'] == 70
+                                   for point in odb.get_movie_trackpoints(
+                                       movie_id=movie_id, frame_start=1, frame_count=1)))
+    chrome_driver.get(f'{live_server}/analyze?movie_id={movie_id}')
+    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .last_button'))).click()
+    last_index = int(movie[odb.TOTAL_FRAMES]) - 1
+    wait.until(lambda browser: browser.find_element(By.CSS_SELECTOR, '#tracer .frame_number_field')
+               .get_attribute('value') == str(last_index))
+    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .track_button')))
+    assert len(odb.get_movie_trackpoints(movie_id=movie_id)) == 3
+    frame_field = chrome_driver.find_element(By.CSS_SELECTOR, '#tracer .frame_number_field')
+    frame_field.clear()
+    frame_field.send_keys('1', Keys.TAB)
+    wait.until(lambda browser: browser.find_element(By.CSS_SELECTOR, '#tracer .frame_number_field')
+               .get_attribute('value') == '1')
     # Observe the application's actual API replies, not direct DynamoDB reads.
     chrome_driver.execute_script("""
         window.testTraceProgress = null;
@@ -186,9 +234,13 @@ def test_upload_movie_end_to_end(chrome_driver, live_server, new_course):
         status, last_frame = wait.until(tracing_advanced, 'No API tracing progress for 30 seconds')
         if status == odb.MOVIE_STATE_TRACING_COMPLETED:
             break
-    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .next_frame'))).click()
+    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .prev_frame'))).click()
     wait.until(lambda browser: browser.find_element(By.CSS_SELECTOR, '#tracer .frame_number_field')
-               .get_attribute('value') == '1')
+               .get_attribute('value') == '0')
+    assert {point['label'] for point in odb.get_movie_trackpoints(
+        movie_id=movie_id, frame_start=1, frame_count=1)} == {'Apex', 'Ruler 0mm', 'Ruler 10mm'}
+    assert any(point['label'] == 'Apex' and point['x'] == 70
+               for point in odb.get_movie_trackpoints(movie_id=movie_id, frame_start=1, frame_count=1))
     assert not odb.get_movie(movie_id=movie_id).get(odb.MOVIE_ZIPFILE_URN)
     assert not chrome_driver.execute_script(
         "return performance.getEntriesByType('resource').some(r => /zip|unzip/.test(r.name));")
@@ -205,10 +257,10 @@ def test_upload_movie_end_to_end(chrome_driver, live_server, new_course):
     assert after_reset[odb.MOVIE_DATA_URN] == source_urn
     assert after_reset[odb.ANALYSIS_MP4]['urn'] == analysis_urn
     assert after_reset[odb.NEEDS_RETRACING] == 1
-    assert after_reset[odb.LAST_FRAME_TRACKED] == 0
+    assert after_reset[odb.LAST_FRAME_TRACKED] == 1
     assert after_reset.get(odb.ANALYSIS_LEASE_ID)
     points = odb.get_movie_trackpoints(movie_id=movie_id)
-    assert {point[odb.FRAME_NUMBER] for point in points} == {0}
+    assert {point[odb.FRAME_NUMBER] for point in points} == {1}
     assert {point['label'] for point in points} == {'Apex', 'Ruler 0mm', 'Ruler 10mm'}
     assert chrome_driver.execute_script("""
         return performance.getEntriesByType('resource').filter(entry => {

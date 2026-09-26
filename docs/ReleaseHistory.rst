@@ -78,6 +78,13 @@ Release Notes
 Unreleased Summary
 ******************
 
+    * Carry the latest marker positions into untraced frames when stepping or
+      seeking in Analyze. Use them as editable trace seeds without creating
+      saved paths or graph/export points through navigation. Preserve existing
+      annotations, trace gaps, and trim bounds. Enable trim controls before the
+      first trace once movie frames are loaded. Analyzer navigation screenshots
+      need manual review (fixes #1241).
+
     * Prevent tracing from a frame with no markers. Reject empty source frames
       before queueing, keep empty marker saves from advancing the tracked frame,
       and show the rejection in Analyze. A failed attempt no longer leaves the
