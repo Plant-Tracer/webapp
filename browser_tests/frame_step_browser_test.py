@@ -158,17 +158,27 @@ def test_analyzer_carries_untraced_markers_without_creating_results(chrome_drive
     # Moving the trim start backward copies carried seeds with destination indices.
     chrome_driver.execute_async_script("""
         const done = arguments[arguments.length - 1], c = window.playerController;
+        c.movie_metadata.status = 'tracing completed';
+        c.last_tracked_frame = 0;
         c.applyLocalTrimStartSeed(1, 2);
         c.goto_frame(1).then(() => done(true));
     """)
     assert len(chrome_driver.execute_script('return window.playerController.get_markers();')) == 3
     assert chrome_driver.find_element(By.CSS_SELECTOR, '#tracer .track_button').is_enabled()
     assert chrome_driver.execute_script(
-        'return window.playerController.frames[1].markers.every(marker => marker.frame_number === 1);')
+        'return window.playerController.frames[1].trim_seed_markers.every(marker => marker.frame_number === 1);')
+    assert chrome_driver.execute_script("""
+        const c = window.playerController;
+        return c.frames[1].markers.length === 0 && c.frames_for_graph()[1].markers.length === 0
+            && !c.objects.some(obj => obj.constructor.name === 'Line');
+    """)
     chrome_driver.execute_script("""
         const c = window.playerController;
+        c.movie_metadata.status = 'ready';
+        c.last_tracked_frame = -1;
         c.frames[1].markers = [];
         c.frames[1].marker_seed_boundary = false;
+        delete c.frames[1].trim_seed_markers;
         c.invalidateMarkerSeeds();
     """)
     # A saved explicit edit takes precedence; later empty frames inherit that edit.

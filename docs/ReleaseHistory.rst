@@ -82,7 +82,9 @@ Unreleased Summary
       seeking in Analyze. Use them as editable trace seeds without creating
       saved paths or graph/export points through navigation. Preserve existing
       annotations, trace gaps, and trim bounds. Enable trim controls before the
-      first trace once movie frames are loaded. Analyzer navigation screenshots
+      first trace and keep unsaved trim seeds separate from results. Let Selenium
+      select a matching driver for desktop browser CI instead of an old PATH copy.
+      Analyzer navigation screenshots
       need manual review (fixes #1241).
 
     * Prevent tracing from a frame with no markers. Reject empty source frames

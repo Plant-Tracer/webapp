@@ -86,6 +86,11 @@ so navigation sees the latest placement and older responses cannot revert it.
 Moving the trim start backward to an unannotated frame copies the old start's
 resolved seeds, including carried positions, and records the new frame index.
 Existing destination annotations and explicit empty boundaries take precedence.
+Unsaved trim seeds live in ``trim_seed_markers``, separate from ``markers``, so
+saved frame ranges, graphs, and paths remain unchanged until an edit or trace.
+When the old start has stored annotations, the trim API persists a copy at the
+new start, and the browser reflects that saved copy. Edits, reset, trace refresh,
+deletion, and renaming also update or clear unsaved trim seeds.
 
 Movie List Flow
 ---------------

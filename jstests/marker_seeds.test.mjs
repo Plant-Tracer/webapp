@@ -74,3 +74,17 @@ test('explicit empty annotations stop carrying until a later annotation supplies
     index.invalidate();
     expect(index.forFrame(3)).toEqual([point('Apex', 30, 3)]);
 });
+
+test('trim seeds supply editable positions without becoming stored annotations', () => {
+    const frames = [{markers: [point('Apex', 10)]},
+        {markers: [], trim_seed_markers: [point('Apex', 30, 1)]}, {}];
+    const index = new MarkerSeedIndex(frames);
+    expect(index.forFrame(1)).toEqual([point('Apex', 30, 1)]);
+    expect(index.forFrame(2)).toEqual([point('Apex', 30, 2)]);
+    expect(frames[1].markers).toEqual([]);
+    frames[1].markers = [];
+    frames[1].marker_seed_boundary = true;
+    delete frames[1].trim_seed_markers;
+    index.invalidate();
+    expect(index.forFrame(2)).toEqual([]);
+});

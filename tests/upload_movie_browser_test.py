@@ -175,6 +175,9 @@ def test_upload_movie_end_to_end(chrome_driver, live_server, new_course):
     wait.until(lambda _browser: odb.get_movie(movie_id=movie_id).get(odb.TRIM_START_FRAME) == 1)
     wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .track_button')))
     assert [cell.text for cell in chrome_driver.find_elements(By.CSS_SELECTOR, position_selector)] == carried_positions
+    assert [cell.text for cell in chrome_driver.find_elements(
+        By.CSS_SELECTOR, '#tracer .marker_table_body tr td:nth-child(3)')] == ['n/a'] * 3
+    assert not odb.get_movie_trackpoints(movie_id=movie_id, frame_start=1, frame_count=2)
     # Move a carried marker using the real canvas, then reopen its saved position.
     canvas = chrome_driver.find_element(By.ID, 'canvas-id')
     chrome_driver.execute_script("arguments[0].scrollIntoView({block:'start'});", canvas)

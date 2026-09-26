@@ -17,15 +17,18 @@ export class MarkerSeedIndex {
             let previous = -1;
             for (let index = 0; index < this.frames.length; index++) {
                 const frame = this.frames[index];
-                if (frame?.marker_seed_boundary || frame?.markers?.length) previous = index;
+                if (frame?.marker_seed_boundary || frame?.markers?.length || frame?.trim_seed_markers) previous = index;
                 this.preceding[index] = previous;
             }
         }
         const source = this.preceding[frameNumber];
         // Keep gaps in an existing trace, including an empty tracing frontier.
-        if (source < 0 || (!target.markers?.length
+        if (source < 0 || (!target.markers?.length && !target.trim_seed_markers
             && (frameNumber <= tracedThrough || source < tracedThrough))) return [];
-        return (this.frames[source].markers || [])
+        const frame = this.frames[source];
+        const markers = frame.marker_seed_boundary || frame.markers?.length
+            ? frame.markers : frame.trim_seed_markers || frame.markers;
+        return (markers || [])
             .map(marker => ({...marker, frame_number: frameNumber}));
     }
 }

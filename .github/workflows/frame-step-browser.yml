@@ -27,6 +27,8 @@ jobs:
           if [ "${{ runner.os }}" = "Windows" ]; then choco install -y make; fi
           uv sync --locked
       - name: Verify frame stepping
+        env:
+          SE_SKIP_DRIVER_IN_PATH: 'true'
         run: |
           make frame-step-browser-test
           make analysis-mp4-browser-test
