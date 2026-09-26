@@ -1148,6 +1148,9 @@ def api_get_movie_metadata():
             if C.API_KEY_MARKERS not in frame:
                 frame[C.API_KEY_MARKERS] = []
             frame[C.API_KEY_MARKERS].append(tpt)
+        for frame_number in odb.empty_marker_annotation_frames(
+                movie_id=movie_id, frame_start=frame_start, frame_count=frame_count):
+            ret[C.API_KEY_FRAMES].setdefault(str(frame_number), {C.API_KEY_MARKERS: []})
 
     logger.debug("get_movie_metadata returns keys %s and %d frames total length %d bytes",
                  list(ret.keys()),len(ret.get('frames',[])),len(ret))

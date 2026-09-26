@@ -769,6 +769,28 @@ def test_set_movie_trim_requires_exactly_one_bound(client, new_movie):
     assert resp.get_json()['message'] == "set exactly one trim frame"
 
 
+def test_empty_marker_annotations_survive_api_reload_and_trim(client, new_movie):
+    movie_id = new_movie[MOVIE_ID]
+    params = {API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id}
+    odb.ensure_bottom_left_trackpoints(movie_id=movie_id)
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={
+        odb.TOTAL_FRAMES: 4, odb.TRIM_START_FRAME: 2, odb.TRIM_END_FRAME: 3})
+    odb.put_frame_trackpoints(movie_id=movie_id, frame_number=2,
+                             trackpoints=[Trackpoint(x=12, y=22, label='apex')])
+    response = client.post('/api/put-frame-trackpoints', data={
+        **params, odb.FRAME_NUMBER: 1, odb.TRACKPOINTS: '[]'})
+    assert response.status_code == 200
+    assert not response.get_json()['error']
+    assert client.post('/api/set-movie-trim', data={
+        **params, odb.TRIM_START_FRAME: 1}).status_code == 200
+    frames = client.post('/api/get-movie-metadata', data={
+        **params, 'frame_start': 0, 'frame_count': 4}).get_json()['frames']
+    assert frames['1']['markers'] == []
+    assert frames['2']['markers'][0]['x'] == 12
+    odb.put_frame_trackpoints(movie_id=movie_id, frame_number=1,
+                             trackpoints=[Trackpoint(x=30, y=22, label='apex')])
+    assert odb.empty_marker_annotation_frames(movie_id=movie_id, frame_start=0, frame_count=4) == []
+
 def test_set_movie_trim_returns_validation_error(client, new_movie):
     api_key = new_movie[API_KEY]
     movie_id = new_movie[MOVIE_ID]

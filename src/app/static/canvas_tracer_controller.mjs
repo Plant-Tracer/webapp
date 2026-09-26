@@ -695,13 +695,17 @@ class TracerController extends MovieController {
         return Math.min(this.trim_end_frame, this.getMaxViewableFrame());
     }
 
-    set_trim_bound(prop) {
+    set_trim_bound(prop, frameNumber = this.trimBoundFrameNumber()) {
         if (demo_mode) {
             $('#demo-popup').fadeIn(300);
             return;
         }
+        if (this.marker_save_requests?.size) {
+            return Promise.all(Array.from(this.marker_save_requests))
+                .then(() => this.set_trim_bound(prop, frameNumber))
+                .catch(error => alert(`Unable to trim after annotation save failure: ${error.message}`));
+        }
         const oldStart = this.trim_start_frame;
-        const frameNumber = this.trimBoundFrameNumber();
         const currentBound = prop === TRIM_START_FRAME ? this.trim_start_frame : this.trim_end_frame;
         if (frameNumber === currentBound) {
             return;

@@ -68,8 +68,9 @@ Existing destination annotations take precedence, and gaps in traced history
 remain empty. Explicitly clearing a frame's markers creates a local seed
 boundary, so that frame and subsequent empty frames cannot revive older markers.
 Reloaded metadata entries with an explicit empty marker list retain that boundary;
-the current trackpoint-only API omits frames without stored points and therefore
-cannot distinguish a saved empty list from a never-annotated frame after reload.
+the database records ``empty_marker_annotation`` when a frame is explicitly
+cleared. Metadata includes an empty entry for that frame, and trim copying
+respects it. Writing nonempty points or resetting tracing removes that boundary.
 Ready movies may contain manually placed seeds without having
 been traced. Trim controls require multiple loaded frames; a legacy one-frame
 view cannot enable trimming solely from its last-tracked-frame metadata.
@@ -91,6 +92,8 @@ saved frame ranges, graphs, and paths remain unchanged until an edit or trace.
 When the old start has stored annotations, the trim API persists a copy at the
 new start, and the browser reflects that saved copy. Edits, reset, trace refresh,
 deletion, and renaming also update or clear unsaved trim seeds.
+Trim requests wait for pending marker saves before copying the old start, while
+retaining the frame selected when the trim control was pressed.
 
 Movie List Flow
 ---------------

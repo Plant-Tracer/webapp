@@ -727,6 +727,20 @@ def test_set_movie_trim_start_copies_old_start_markers(local_ddb):
     assert not odb.get_movie_trackpoints(movie_id=movie_id, frame_start=1, frame_end=1)
 
 
+def test_trim_preserves_cleared_destination_and_reset_clears_boundary(local_ddb):
+    movie_id = create_trim_test_movie(local_ddb, total_frames=5, trim_start_frame=2, trim_end_frame=4)
+    odb.put_frame_trackpoints(movie_id=movie_id, frame_number=2,
+                             trackpoints=[Trackpoint(x=12, y=22, label='apex')])
+    odb.put_frame_trackpoints(movie_id=movie_id, frame_number=1, trackpoints=[])
+    assert odb.empty_marker_annotation_frames(movie_id=movie_id, frame_start=0, frame_count=2) == [1]
+    assert odb.empty_marker_annotation_frames(movie_id=movie_id, frame_start=2, frame_count=2) == []
+    odb.set_movie_trim_frame(movie_id=movie_id, prop=odb.TRIM_START_FRAME, frame_number=1)
+    assert not odb.get_movie_trackpoints(movie_id=movie_id, frame_start=1, frame_end=1)
+    assert odb.last_tracked_movie_frame(movie_id=movie_id) == 2
+    odb.clear_movie_tracking(movie_id)
+    assert odb.empty_marker_annotation_frames(movie_id=movie_id, frame_start=0, frame_count=5) == []
+
+
 def test_set_movie_trim_start_does_not_overwrite_existing_target_markers(local_ddb):
     movie_id = create_trim_test_movie(local_ddb, total_frames=5, trim_start_frame=2, trim_end_frame=4)
     odb.put_frame_trackpoints(

@@ -222,6 +222,7 @@ MOVIE_METADATA_BULK_PROPS = (FPS, WIDTH, HEIGHT, TOTAL_FRAMES, TOTAL_BYTES)
 # movie_frames table
 FRAME_NUMBER = 'frame_number'
 TRACKPOINTS = 'trackpoints'
+EMPTY_MARKER_ANNOTATION = 'empty_marker_annotation'
 MOVIE_MARKER_MAP_FRAME_NUMBER = -100
 FRAME_URN = 'frame_urn'
 FIRST_FRAME_URN = 'first_frame_urn'
@@ -2378,10 +2379,10 @@ def _copy_frame_trackpoints_if_missing(*, movie_id: str, from_frame: int, to_fra
     """Copy markers from one frame to another only when the target has no markers."""
     assert is_movie_id(movie_id)
     ddbo = DDBO()
-    target = ddbo.get_movie_frame(movie_id, to_frame)
-    if target and target.get('trackpoints'):
+    target = ddbo.get_movie_frame(movie_id, to_frame, consistent_read=True)
+    if target and (target.get(TRACKPOINTS) or target.get(EMPTY_MARKER_ANNOTATION)):
         return False
-    source = ddbo.get_movie_frame(movie_id, from_frame)
+    source = ddbo.get_movie_frame(movie_id, from_frame, consistent_read=True)
     if not source or not source.get('trackpoints'):
         return False
     trackpoints = [Trackpoint(**trackpoint) for trackpoint in source['trackpoints']]
@@ -2854,6 +2855,16 @@ def get_movie_frame_metadata(*, movie_id, frame_start, frame_count):
             iter_movie_frames_in_range( DDBO().movie_frames, movie_id, frame_start, frame_start+frame_count ) ]
 
 
+def empty_marker_annotation_frames(*, movie_id: str, frame_start: int, frame_count: int) -> list[int]:
+    """Return explicitly cleared frames in the requested metadata page."""
+    assert is_movie_id(movie_id)
+    if frame_count == 0:
+        return []
+    return [int(frame[FRAME_NUMBER]) for frame in iter_movie_frames_in_range(
+        DDBO().movie_frames, movie_id, frame_start, frame_start + frame_count - 1)
+            if frame.get(EMPTY_MARKER_ANNOTATION)]
+
+
 def movie_marker_map_key(movie_id: str) -> dict:
     """Return the movie_frames-table key for a movie's marker-map metadata item."""
     assert is_movie_id(movie_id)
@@ -3256,11 +3267,11 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackp
             }
         frame_update = {
             'TableName': ddbo.movie_frames.name, 'Key': frame_key,
-            'UpdateExpression': 'SET #trackpoints=:trackpoints' if trackpoints else 'REMOVE #trackpoints',
-            'ExpressionAttributeNames': {'#trackpoints': TRACKPOINTS},
+            'UpdateExpression': ('SET #trackpoints=:trackpoints REMOVE #empty' if trackpoints
+                                 else 'SET #empty=:empty REMOVE #trackpoints'),
+            'ExpressionAttributeNames': {'#trackpoints': TRACKPOINTS, '#empty': EMPTY_MARKER_ANNOTATION},
+            'ExpressionAttributeValues': ({':trackpoints': trackpoints} if trackpoints else {':empty': True}),
         }
-        if trackpoints:
-            frame_update['ExpressionAttributeValues'] = {':trackpoints': trackpoints}
         analysis_condition = ('#analysis_id=:analysis_id AND #analysis_expires > :now'
                               if analysis_lease_id else
                               'attribute_not_exists(#analysis_expires) OR #analysis_expires <= :now')
@@ -3300,10 +3311,13 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackp
             raise
         return
     if trackpoints:
-        ddbo.movie_frames.update_item(Key=frame_key, UpdateExpression=f'SET {TRACKPOINTS}=:val',
+        ddbo.movie_frames.update_item(Key=frame_key,
+                                      UpdateExpression=f'SET {TRACKPOINTS}=:val REMOVE {EMPTY_MARKER_ANNOTATION}',
                                       ExpressionAttributeValues={':val':trackpoints})
     else:
-        ddbo.movie_frames.update_item(Key=frame_key, UpdateExpression=f'REMOVE {TRACKPOINTS}')
+        ddbo.movie_frames.update_item(
+            Key=frame_key, UpdateExpression=f'SET {EMPTY_MARKER_ANNOTATION}=:empty REMOVE {TRACKPOINTS}',
+            ExpressionAttributeValues={':empty': True})
 
     # Any frame replacement invalidates this cache; the next metadata read finds the actual frontier.
     # The tracing worker writes its own progress after each completed frame.
@@ -3324,7 +3338,7 @@ def clear_movie_tracking_after_frame(*, movie_id, frame_number:int, frame_end:in
     end of the movie when no end is provided)
     are invalidated and must be recomputed.
 
-    Returns the count of frame records whose ``trackpoints`` attribute was removed.
+    Returns the count of frame records whose annotations or empty boundaries were removed.
     """
     assert is_movie_id(movie_id)
     assert frame_number >= 0
@@ -3334,13 +3348,14 @@ def clear_movie_tracking_after_frame(*, movie_id, frame_number:int, frame_end:in
     deleted = 0
     for frame in ddbo.get_frames(movie_id):
         fn = frame.get(FRAME_NUMBER)
-        if fn is None or int(fn) <= frame_number or 'trackpoints' not in frame:
+        if fn is None or int(fn) <= frame_number or not (
+                TRACKPOINTS in frame or frame.get(EMPTY_MARKER_ANNOTATION)):
             continue
         if frame_end is not None and int(fn) > frame_end:
             continue
         ddbo.movie_frames.update_item(
             Key={MOVIE_ID: movie_id, FRAME_NUMBER: fn},
-            UpdateExpression='REMOVE trackpoints',
+            UpdateExpression=f'REMOVE {TRACKPOINTS}, {EMPTY_MARKER_ANNOTATION}',
         )
         deleted += 1
 
@@ -3351,7 +3366,7 @@ def clear_movie_tracking_after_frame(*, movie_id, frame_number:int, frame_end:in
 
 def clear_movie_tracking(movie_id):
     """Remove all trackpoints and last_frame_tracked for a movie (e.g. after rotation).
-    Frames keep frame_number/urn; only trackpoints attribute is removed per frame.
+    Frames keep frame_number/urn; trackpoints and explicit empty boundaries are removed.
     """
     assert is_movie_id(movie_id)
     ddbo = DDBO()
@@ -3361,7 +3376,7 @@ def clear_movie_tracking(movie_id):
             continue
         ddbo.movie_frames.update_item(
             Key={MOVIE_ID: movie_id, FRAME_NUMBER: fn},
-            UpdateExpression='REMOVE trackpoints',
+            UpdateExpression=f'REMOVE {TRACKPOINTS}, {EMPTY_MARKER_ANNOTATION}',
         )
     # Clear stored last_frame_tracked on the movie so next get_movie_metadata computes correctly.
     ddbo.movies.update_item(

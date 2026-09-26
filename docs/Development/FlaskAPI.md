@@ -639,6 +639,11 @@ show `tracing_failure_summary` immediately.
 
 Get metadata and optionally per-frame trackpoints for a specific movie.
 
+Explicitly cleared frames are returned as `frames[frame_number].markers: []`,
+distinct from absent, never-annotated frames. An empty marker save persists an
+`empty_marker_annotation` boundary without advancing the tracked frontier.
+Nonempty saves and reset operations remove that boundary.
+
 `metadata.frame_height_px` is the positive pixel height of the resized, rotated
 analysis coordinate space used by the trackpoints, or `null` when unknown.
 `metadata.trackpoint_origin` identifies the coordinate origin. These fields are
@@ -973,6 +978,11 @@ Set `research_use` (and optionally `credit_by_name`) for a movie. Only the movie
 
 Set one inclusive trim bound for a movie. Exactly one of `trim_start_frame` or
 `trim_end_frame` must be provided per call.
+
+Moving the start backward copies stored markers from the old start only when
+the destination has neither saved points nor an explicit empty annotation.
+The browser waits for pending marker saves before requesting this copy.
+The copy reads source and destination consistently, preserving the latest save.
 
 **Parameters**
 

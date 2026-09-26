@@ -46,6 +46,11 @@ def _start_job(cfg, *, start=1, end=203, seed=4):
 
 def test_reset_range_resumes_and_preserves_frame_data(new_movie_record):
     ddbo = _seed_movie(new_movie_record)
+    for frame_number in (4, 82):
+        ddbo.movie_frames.update_item(
+            Key={odb.MOVIE_ID: new_movie_record[odb.MOVIE_ID], odb.FRAME_NUMBER: frame_number},
+            UpdateExpression=f'SET {odb.EMPTY_MARKER_ANNOTATION}=:empty REMOVE {odb.TRACKPOINTS}',
+            ExpressionAttributeValues={':empty': True})
     job = _start_job(new_movie_record)
     original = ddbo.get_movie(job.movie_id)
     reset_tracing.reset_batch(ddbo, job, original)
@@ -63,6 +68,7 @@ def test_reset_range_resumes_and_preserves_frame_data(new_movie_record):
     assert movie[odb.LAST_FRAME_TRACKED] == 204
     frames = {int(frame[odb.FRAME_NUMBER]): frame for frame in ddbo.get_frames(job.movie_id)}
     for number in range(205):
+        assert not frames[number].get(odb.EMPTY_MARKER_ANNOTATION)
         assert frames[number][odb.FRAME_URN] == f"s3://{os.environ[C.PLANTTRACER_S3_BUCKET]}/{job.movie_id}/frame-{number}"
         if number in (0, 204):
             assert frames[number][reset_tracing.TRACKPOINTS][0]['label'] == 'Old'

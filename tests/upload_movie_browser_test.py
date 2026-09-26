@@ -209,13 +209,50 @@ def test_upload_movie_end_to_end(chrome_driver, live_server, new_course):
     wait.until(lambda _browser: any(point['label'] == 'Apex' and point['x'] == 70
                                    for point in odb.get_movie_trackpoints(
                                        movie_id=movie_id, frame_start=1, frame_count=1)))
+    # Trim copying must wait for an actual delayed save on the old start.
+    frame_field = chrome_driver.find_element(By.CSS_SELECTOR, '#tracer .frame_number_field')
+    frame_field.clear()
+    frame_field.send_keys('3', Keys.TAB)
+    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .trim_set_start_button'))).click()
+    wait.until(lambda _browser: odb.get_movie(movie_id=movie_id).get(odb.TRIM_START_FRAME) == 3)
+    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .track_button')))
+    chrome_driver.execute_script("""
+        window.testMarkerSaveReturned = false;
+        window.trimRacedMarkerSave = false;
+        $.ajaxPrefilter(settings => {
+            if (new URL(settings.url, location.href).pathname === '/api/set-movie-trim'
+                && !window.testMarkerSaveReturned) window.trimRacedMarkerSave = true;
+        });
+    """)
+    chrome_driver.execute_cdp_cmd('Network.emulateNetworkConditions', {
+        'offline': False, 'latency': 1500, 'downloadThroughput': -1, 'uploadThroughput': -1})
+    ActionChains(chrome_driver).move_to_element_with_offset(
+        canvas, int(70 - canvas.size['width'] / 2), int(60 - canvas.size['height'] / 2)
+    ).click_and_hold().move_by_offset(10, 5).release().perform()
+    chrome_driver.find_element(By.CSS_SELECTOR, '#tracer .prev_frame').click()
+    wait.until(lambda browser: browser.find_element(By.CSS_SELECTOR, '#tracer .frame_number_field')
+               .get_attribute('value') == '2')
+    assert not chrome_driver.execute_script('return window.testMarkerSaveReturned;')
+    chrome_driver.find_element(By.CSS_SELECTOR, '#tracer .trim_set_start_button').click()
+    wait.until(lambda _browser: odb.get_movie(movie_id=movie_id).get(odb.TRIM_START_FRAME) == 2)
+    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .track_button')))
+    assert not chrome_driver.execute_script('return window.trimRacedMarkerSave;')
+    assert any(point['label'] == 'Apex' and point['x'] == 80 and point['y'] == 575
+               for point in odb.get_movie_trackpoints(movie_id=movie_id, frame_start=2, frame_end=2))
+    chrome_driver.execute_cdp_cmd('Network.emulateNetworkConditions', {
+        'offline': False, 'latency': 0, 'downloadThroughput': -1, 'uploadThroughput': -1})
+    chrome_driver.find_element(By.CSS_SELECTOR, '#tracer .prev_frame').click()
+    wait.until(lambda browser: browser.find_element(By.CSS_SELECTOR, '#tracer .frame_number_field')
+               .get_attribute('value') == '1')
+    wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .trim_set_start_button'))).click()
+    wait.until(lambda _browser: odb.get_movie(movie_id=movie_id).get(odb.TRIM_START_FRAME) == 1)
     chrome_driver.get(f'{live_server}/analyze?movie_id={movie_id}')
     wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .last_button'))).click()
     last_index = int(movie[odb.TOTAL_FRAMES]) - 1
     wait.until(lambda browser: browser.find_element(By.CSS_SELECTOR, '#tracer .frame_number_field')
                .get_attribute('value') == str(last_index))
     wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .track_button')))
-    assert len(odb.get_movie_trackpoints(movie_id=movie_id)) == 3
+    assert len(odb.get_movie_trackpoints(movie_id=movie_id)) == 9
     frame_field = chrome_driver.find_element(By.CSS_SELECTOR, '#tracer .frame_number_field')
     frame_field.clear()
     frame_field.send_keys('1', Keys.TAB)

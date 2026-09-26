@@ -140,7 +140,7 @@ def reset_batch(ddbo, job, movie):
     response = ddbo.movie_frames.query(
         KeyConditionExpression=Key(odb.MOVIE_ID).eq(job.movie_id)
         & Key(odb.FRAME_NUMBER).between(cursor, job.frame_end),
-        FilterExpression=Attr(TRACKPOINTS).exists(),
+        FilterExpression=Attr(TRACKPOINTS).exists() | Attr(odb.EMPTY_MARKER_ANNOTATION).exists(),
         ProjectionExpression=odb.FRAME_NUMBER, Limit=PAGE_SIZE, ConsistentRead=True)
     next_frame = (int(response[LAST_KEY][odb.FRAME_NUMBER]) + 1
                   if response.get(LAST_KEY) else job.frame_end + 1)
@@ -148,7 +148,8 @@ def reset_batch(ddbo, job, movie):
     updates = [DynamoUpdate(
         table=ddbo.movie_frames.name,
         key={odb.MOVIE_ID: job.movie_id, odb.FRAME_NUMBER: item[odb.FRAME_NUMBER]},
-        expression="REMOVE #points", names={"#points": TRACKPOINTS}).transaction()
+        expression="REMOVE #points, #empty",
+        names={"#points": TRACKPOINTS, "#empty": odb.EMPTY_MARKER_ANNOTATION}).transaction()
         for item in response.get(ITEMS, []) if item[odb.FRAME_NUMBER] != job.seed_frame]
     now = int(time.time())
     checkpoint = DynamoUpdate(
@@ -179,7 +180,8 @@ def reset_batch(ddbo, job, movie):
         updates.append(DynamoUpdate(
             table=ddbo.movie_frames.name,
             key={odb.MOVIE_ID: job.movie_id, odb.FRAME_NUMBER: job.seed_frame},
-            expression="SET #points=:points", names={"#points": TRACKPOINTS},
+            expression="SET #points=:points REMOVE #empty",
+            names={"#points": TRACKPOINTS, "#empty": odb.EMPTY_MARKER_ANNOTATION},
             values={":points": points}).transaction())
         checkpoint.expression = "SET #next=:next, #state=:complete, #status=:ready, #last=:last REMOVE #job, #expires, #heartbeat"
         checkpoint.names.update({"#state": RESET_STATE, "#status": odb.MOVIE_STATUS,

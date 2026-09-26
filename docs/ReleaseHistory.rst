@@ -86,6 +86,8 @@ Unreleased Summary
       select a matching driver for desktop browser CI instead of an old PATH copy.
       Analyzer navigation screenshots
       need manual review (fixes #1241).
+      Preserve explicitly cleared annotations through reload and trimming, and
+      wait for marker saves before copying a moved trim start.
 
     * Prevent tracing from a frame with no markers. Reject empty source frames
       before queueing, keep empty marker saves from advancing the tracked frame,
