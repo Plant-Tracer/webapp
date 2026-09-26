@@ -98,6 +98,9 @@ new start, and the browser reflects that saved copy. Edits, reset, trace refresh
 deletion, and renaming also update or clear unsaved trim seeds.
 Explicitly empty stored starts are copied as durable empty annotations too,
 preserving the new start through reload without advancing the tracking frontier.
+Copies filter marker-map tombstones before saving, including legacy points with
+only a label. If every source marker was deleted, the destination stays explicitly
+empty rather than assigning deleted legacy points new identities.
 Trim requests wait for pending marker saves before copying the old start, while
 retaining the frame selected when the trim control was pressed.
 Failed saves keep trimming blocked after the request settles, until those frames

@@ -845,6 +845,41 @@ def test_deleted_annotation_remains_empty_on_reload(client, new_movie):
     assert '1' not in frames and '3' not in frames
 
 
+@pytest.mark.parametrize('legacy', [False, True])
+@pytest.mark.parametrize('keep_marker', [False, True])
+def test_trim_copy_does_not_revive_deleted_markers(client, new_movie, legacy, keep_marker):
+    movie_id = new_movie[MOVIE_ID]
+    params = {API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id}
+    odb.ensure_bottom_left_trackpoints(movie_id=movie_id)
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={
+        odb.TOTAL_FRAMES: 4, odb.TRIM_START_FRAME: 2, odb.TRIM_END_FRAME: 3})
+    points = [Trackpoint(x=10, y=20, label='Apex')]
+    if keep_marker:
+        points.append(Trackpoint(x=30, y=40, label='Keep', color='blue'))
+    odb.put_frame_trackpoints(movie_id=movie_id, frame_number=2, trackpoints=points)
+    table = odb.DDBO().movie_frames
+    key = {MOVIE_ID: movie_id, odb.FRAME_NUMBER: 2}
+    source = table.get_item(Key=key, ConsistentRead=True)['Item']
+    if legacy:
+        for point in source[odb.TRACKPOINTS]:
+            point.pop(odb.MARKER_ID, None)
+        table.put_item(Item=source)
+    odb.rename_movie_marker(movie_id=movie_id, old_label='Apex', new_label='Tip')
+    assert not client.post('/api/delete-marker', data={**params, 'label': 'Tip'}).get_json()['error']
+    assert not client.post('/api/set-movie-trim', data={
+        **params, odb.TRIM_START_FRAME: 1}).get_json()['error']
+    frames = client.post('/api/get-movie-metadata', data={
+        **params, 'frame_start': 0, 'frame_count': 4}).get_json()['frames']
+    expected = [{'x': 30, 'y': 40, 'label': 'Keep', 'color': 'blue', 'frame_number': 1}]
+    assert frames['1']['markers'] == (expected if keep_marker else [])
+    assert table.get_item(Key=key, ConsistentRead=True)['Item'] == source
+    target = table.get_item(Key={MOVIE_ID: movie_id, odb.FRAME_NUMBER: 1},
+                            ConsistentRead=True)['Item']
+    if not keep_marker:
+        assert target[odb.EMPTY_MARKER_ANNOTATION]
+        assert odb.TRACKPOINTS not in target
+
+
 def test_set_movie_trim_returns_validation_error(client, new_movie):
     api_key = new_movie[API_KEY]
     movie_id = new_movie[MOVIE_ID]

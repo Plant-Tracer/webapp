@@ -990,6 +990,9 @@ An explicitly empty source is copied as a durable empty boundary too, so
 reopening Analyze cannot revive markers from an earlier frame at the new start.
 The browser waits for pending marker saves before requesting this copy.
 The copy reads source and destination consistently, preserving the latest save.
+Deleted markers are filtered through the marker map before copying, including
+legacy points without marker IDs. A source containing only deleted markers
+produces an explicit empty destination boundary.
 
 **Parameters**
 

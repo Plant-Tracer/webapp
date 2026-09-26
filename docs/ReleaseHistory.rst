@@ -95,6 +95,7 @@ Unreleased Summary
       Retain an empty old trim start at its new destination through reload and
       read exactly the requested count of annotation frames.
       Exclude legacy empty trackpoint lists from the derived tracking frontier.
+      Filter deleted legacy markers before copying a moved trim start.
 
     * Prevent tracing from a frame with no markers. Reject empty source frames
       before queueing, keep empty marker saves from advancing the tracked frame,

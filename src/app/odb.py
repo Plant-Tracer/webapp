@@ -2385,7 +2385,9 @@ def _copy_frame_trackpoints_if_missing(*, movie_id: str, from_frame: int, to_fra
     source = ddbo.get_movie_frame(movie_id, from_frame, consistent_read=True)
     if not source or (TRACKPOINTS not in source and not source.get(EMPTY_MARKER_ANNOTATION)):
         return False
-    trackpoints = [Trackpoint(**trackpoint) for trackpoint in source.get(TRACKPOINTS, [])]
+    marker_map = get_movie_marker_map(movie_id=movie_id, create=False)
+    trackpoints = [Trackpoint(**trackpoint) for trackpoint in source.get(TRACKPOINTS, [])
+                  if not marker_is_deleted(marker_map, trackpoint)]
     put_frame_trackpoints(movie_id=movie_id, frame_number=to_frame, trackpoints=trackpoints)
     return True
 
