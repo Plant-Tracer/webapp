@@ -189,3 +189,11 @@ def test_analyzer_carries_untraced_markers_without_creating_results(chrome_drive
         c.goto_frame(1).then(() => done(true));
     """)
     assert chrome_driver.execute_script('return window.playerController.get_markers();') == []
+    # A tracking frontier alone does not make a one-frame player trimmable.
+    chrome_driver.execute_script("""
+        const c = window.playerController;
+        c.frames = c.frames.slice(0, 1);
+        c.last_tracked_frame = 3;
+        c.refreshTrimControls();
+    """)
+    assert not chrome_driver.find_element(By.CSS_SELECTOR, '#tracer .show_trim_controls').is_enabled()

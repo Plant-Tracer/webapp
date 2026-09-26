@@ -51,12 +51,33 @@ Analyze Flow
 ------------
 
 1. Analyze page loads movie metadata from Flask.
-2. Frame 0 comes from lambda-resize.
-3. User places or edits markers.
-4. Browser saves trackpoints through Flask.
+2. Browser downloads the untraced MP4 and decodes exact frames with WebCodecs.
+3. User browses frames, chooses trim bounds, and places or edits markers.
+4. Browser saves explicit edits and the selected trace seeds through Flask.
 5. Browser asks lambda-resize to retrace from the edited frame.
 6. Browser polls Flask metadata until tracking completes.
 7. Browser displays tracked frames, graphs, and CSV download controls.
+
+Navigation marker seeds
+~~~~~~~~~~~~~~~~~~~~~~~
+
+An unannotated, untraced frame displays a copy of the latest preceding marker
+positions. These display seeds are separate from stored frame annotations;
+navigation does not create trackpoints, paths, graph points, or export rows.
+Existing destination annotations take precedence, and gaps in traced history
+remain empty. Ready movies may contain manually placed seeds without having
+been traced. Trim controls require multiple loaded frames; a legacy one-frame
+view cannot enable trimming solely from its last-tracked-frame metadata.
+
+``MarkerSeedIndex`` builds a nearest-preceding-annotation index in one forward
+pass, then resolves each frame in constant lookup time plus the marker-copy
+cost. Navigation through an unchanged movie therefore needs O(F) indexing work
+for F frames, rather than repeated backward scans. Adding or clearing a frame's
+annotations, deleting a marker, resetting tracing, replacing trace results, or
+seeding an earlier trim start invalidates the index. Position and name changes
+use live annotation objects; replacing the loaded frame array creates a new
+index. Explicit edits update local frame data before asynchronous saves return,
+so navigation sees the latest placement and older responses cannot revert it.
 
 Movie List Flow
 ---------------
