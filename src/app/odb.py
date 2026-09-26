@@ -3053,7 +3053,7 @@ def ensure_trackpoint_marker_ids(*, movie_id: str, trackpoints: list[dict], pers
 
 
 def last_tracked_movie_frame(*, movie_id):
-    """Return the last tracked frame_number of the movie"""
+    """Return the last frame with stored points, excluding empty seed boundaries."""
 
     assert is_movie_id(movie_id)
     movie_frames=DDBO().movie_frames
@@ -3061,7 +3061,7 @@ def last_tracked_movie_frame(*, movie_id):
     while True:
         query_kwargs = {
             'KeyConditionExpression': Key(MOVIE_ID).eq(movie_id) & Key(FRAME_NUMBER).gte(0),
-            'FilterExpression': Attr('trackpoints').exists(),
+            'FilterExpression': Attr(TRACKPOINTS).size().gt(0),
             'ConsistentRead': True,
             'ScanIndexForward': False,
             'Limit': 1

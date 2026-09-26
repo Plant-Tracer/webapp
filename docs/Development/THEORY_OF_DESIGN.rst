@@ -71,6 +71,8 @@ Reloaded metadata entries with an explicit empty marker list retain that boundar
 the database records ``empty_marker_annotation`` when a frame is explicitly
 cleared. Metadata includes an empty entry for that frame, and trim copying
 respects it. Writing nonempty points or resetting tracing removes that boundary.
+Derived tracking frontiers exclude both these boundaries and legacy records with
+an explicitly present empty trackpoint list; only nonempty stored points count.
 Ready movies may contain manually placed seeds without having
 been traced. Trim controls require multiple loaded frames; a legacy one-frame
 view cannot enable trimming solely from its last-tracked-frame metadata.
