@@ -5,6 +5,11 @@ REST endpoints served by the Plant Tracer Flask application are mounted under
 are defined in `src/app/admin_api.py`. This document covers authentication,
 the standard response envelope, and every endpoint.
 
+The root-level `/ver` endpoint returns plain text with the application and
+Python versions, stack name, UTC deployment timestamp, and DynamoDB table prefix.
+Local runs report `Stack deployed at: unknown` unless
+`PLANTTRACER_DEPLOYED_AT` is set.
+
 For the Lambda (frame/video processing) endpoints, see [ClientLambdaAPI.md](ClientLambdaAPI.md).
 
 ---

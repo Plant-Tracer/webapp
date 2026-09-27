@@ -26,6 +26,7 @@ from .constants import (
     __version__, GET, GET_POST, C, log_level, logger,
     stack_name, STACK_NAME,
 )
+from .deployment_metadata import deployed_at
 from .auth import AuthError
 from .apikey import cookie_name, page_dict
 from .odb import (InvalidAPI_Key, InvalidUser_Email,
@@ -417,6 +418,7 @@ def func_ver():
                                              __version__=__version__,
                                              sys_version=sys.version,
                                              stack_name=stack_name(),
+                                             deployed_at=deployed_at(),
                                              dynamodb_table_prefix=os.environ.get(C.DYNAMODB_TABLE_PREFIX, "")))
     response.headers['Content-Type'] = 'text/plain'
     return response

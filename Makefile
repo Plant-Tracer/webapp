@@ -767,10 +767,17 @@ stamp-sam-deploy-metadata: sam-version-check
 		echo "Run make sam-build before deploying."; \
 		exit 1; \
 	fi
-	@DEPLOYED_AT=$$(date -u +"%Y-%m-%dT%H:%M:%SZ"); \
-	METADATA_FILE="$(SAM_BUILD_DIR)/LambdaResizeFunction/resize_app/deploy_metadata.json"; \
-	printf '{\n  "deployed_at": "%s",\n  "app_version": "%s"\n}\n' "$$DEPLOYED_AT" "$(APP_VERSION)" > "$$METADATA_FILE"; \
-	echo "Stamped $$METADATA_FILE with deployed_at=$$DEPLOYED_AT app_version=$(APP_VERSION)."
+	@set -e; DEPLOYED_AT=$$(date -u +"%Y-%m-%dT%H:%M:%SZ"); \
+	RESIZE_METADATA_FILE="$(SAM_BUILD_DIR)/LambdaResizeFunction/resize_app/deploy_metadata.json"; \
+	WEB_METADATA_DIR="$(SAM_BUILD_DIR)/LambdaWebFunction/app"; \
+	if [ ! -d "$$WEB_METADATA_DIR" ]; then \
+		echo "Refusing to stamp deploy metadata: $$WEB_METADATA_DIR is missing."; \
+		echo "Run make sam-build before deploying."; \
+		exit 1; \
+	fi; \
+	printf '{\n  "deployed_at": "%s",\n  "app_version": "%s"\n}\n' "$$DEPLOYED_AT" "$(APP_VERSION)" > "$$RESIZE_METADATA_FILE"; \
+	printf '{\n  "deployed_at": "%s"\n}\n' "$$DEPLOYED_AT" > "$$WEB_METADATA_DIR/deploy_metadata.json"; \
+	echo "Stamped deploy metadata with deployed_at=$$DEPLOYED_AT app_version=$(APP_VERSION)."
 
 sam-build: $(REQ)
 	@# Refuse to build if there are local changes, unless HEAD is an exact tag
