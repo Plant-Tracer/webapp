@@ -378,6 +378,16 @@ Use one visible, ignored SAM config file per stack. For example:
    STACK=alice-test make sam-deploy
    STACK_NAME=slg-dev make sam-deploy
 
+For a new stack, run ``sam-deploy-guided`` first. Normal ``sam-deploy`` checks
+the saved configuration before synchronizing it: it requires an artifact
+bucket (``resolve_s3=true`` or ``s3_bucket``) and the runtime movie bucket
+(``ImageBucketName``). Missing or incomplete configurations fail with a guided
+deployment command, without creating or modifying the configuration file.
+Guided deployment can bootstrap the file and collect the remaining settings.
+An explicit ``PLANTTRACER_S3_BUCKET`` supplies the ``ImageBucketName`` override,
+including the initial value shown by the guided prompt. Without that variable,
+the saved movie bucket is preserved.
+
 ``STACK`` and ``STACK_NAME`` must be uppercase. GNU Make variables are
 case-sensitive, so ``stack=prod`` is not the same variable and is rejected by
 the SAM config guard. If both supported variables are supplied,

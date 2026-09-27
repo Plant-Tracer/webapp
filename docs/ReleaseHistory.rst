@@ -100,6 +100,10 @@ Unreleased Summary
       Exclude legacy empty trackpoint lists from the derived tracking frontier.
       Filter deleted legacy markers before copying a moved trim start.
 
+    * SAM deployment rejects uninitialized per-stack configurations before changing
+      them and directs operators to guided deployment. An explicitly supplied
+      ``PLANTTRACER_S3_BUCKET`` sets the guided ``ImageBucketName`` value (issue #1253).
+
     * Prevent tracing from a frame with no markers. Reject empty source frames
       before queueing, keep empty marker saves from advancing the tracked frame,
       and show the rejection in Analyze. A failed attempt no longer leaves the
