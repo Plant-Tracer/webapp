@@ -8,7 +8,7 @@ from pathlib import Path
 
 import cv2
 
-from resize_app import camera_capture
+from resize_app import async_work, camera_capture
 from resize_app.src.app.odb import DDBO as ResizeDDBO
 
 from app import mp4_metadata_lib, odb
@@ -16,10 +16,8 @@ from app.constants import storage_deployment_id
 from app.s3_presigned import frame_object_key, make_urn, movie_object_key, parse_s3_urn, s3_client
 
 
-def test_stop_assembles_uploaded_frames_and_processes_movie(
-    new_movie_record, local_s3, request, monkeypatch,
-):
-    """STOP converts complete, ordered MinIO frames into a ready source movie."""
+def _prepare_camera_movie(new_movie_record, local_s3, request, monkeypatch):
+    """Store ordered camera frames for a local finalization test."""
     monkeypatch.delenv("TRACING_QUEUE_MODE", raising=False)
     monkeypatch.delenv("TRACKING_QUEUE_MODE", raising=False)
     movie_id = new_movie_record[odb.MOVIE_ID]
@@ -77,6 +75,16 @@ def test_stop_assembles_uploaded_frames_and_processes_movie(
             Body=frame_bytes.tobytes(),
             ContentType="image/jpeg",
         )
+    return ddbo, movie_id, source_urn, bucket, client
+
+
+def test_stop_assembles_uploaded_frames_and_processes_movie(
+    new_movie_record, local_s3, request, monkeypatch,
+):
+    """STOP converts complete, ordered MinIO frames into a ready source movie."""
+    ddbo, movie_id, source_urn, bucket, client = _prepare_camera_movie(
+        new_movie_record, local_s3, request, monkeypatch,
+    )
 
     result = camera_capture.finish(api_key=new_movie_record[odb.API_KEY], movie_id=movie_id)
 
@@ -91,3 +99,20 @@ def test_stop_assembles_uploaded_frames_and_processes_movie(
         client.download_file(bucket, key, source_file.name)
         assert mp4_metadata_lib.get_fpm(source_file.name) == "4"
         assert mp4_metadata_lib.get_comment(source_file.name) == mp4_metadata_lib.RESEARCH_PROHIBITED
+
+
+def test_expired_camera_job_reclaims_processing_lease(new_movie_record, local_s3, request, monkeypatch):
+    """An expired EventBridge delivery claims a fresh lease and completes the movie."""
+    ddbo, movie_id, _source_urn, _bucket, _client = _prepare_camera_movie(
+        new_movie_record, local_s3, request, monkeypatch,
+    )
+    old_attempt = ddbo.claim_movie_processing(movie_id)
+    ddbo.update_movie(movie_id, {odb.PROCESSING_EXPIRES_AT: 0})
+
+    camera_capture.process(async_work.CameraMovieJob(movie_id=movie_id, attempt=old_attempt))
+
+    movie = ddbo.get_movie(movie_id)
+    assert movie[odb.MOVIE_STATUS] == odb.MOVIE_STATE_READY
+    assert movie[odb.TOTAL_FRAMES] == 3
+    assert movie[odb.ANALYSIS_MP4]
+    assert not movie.get(odb.PROCESSING_ATTEMPT)

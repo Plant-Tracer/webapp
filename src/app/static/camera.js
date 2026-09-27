@@ -173,7 +173,7 @@ async function finishRecording() {
     if (!response.ok) throw new Error((await response.text()) || `Could not finish movie (${response.status}).`);
     setStatus('STOP received. Processing the time-lapse movie…');
     await waitForProcessing();
-    analyzeLink.href = `/analyze?movie_id=${encodeURIComponent(movieId)}&course_id=${encodeURIComponent(courseId || '')}`;
+    analyzeLink.href = `analyze?movie_id=${encodeURIComponent(movieId)}&course_id=${encodeURIComponent(courseId || '')}`;
     analyzeLink.hidden = false;
     setStatus(`Movie ${movieId} is ready for analysis.`);
   } catch (error) {

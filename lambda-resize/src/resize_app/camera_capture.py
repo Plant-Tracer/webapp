@@ -134,12 +134,21 @@ def process(job: async_work.CameraMovieJob) -> None:
     """Encode a claimed camera recording, then use standard MP4 processing."""
     ddbo = odb.DDBO()
     movie = ddbo.get_movie(job.movie_id)
-    if (movie.get(odb.PROCESSING_ATTEMPT) != job.attempt
-            or int(movie.get(odb.PROCESSING_EXPIRES_AT) or 0) <= int(time.time())):
-        LOGGER.info("Ignoring stale camera movie job movie_id=%s", job.movie_id)
-        return
     if not movie.get(odb.CAMERA_CAPTURE):
         raise ValueError("movie is not a camera recording")
+    if movie.get(odb.RESIZED_AT) and movie.get(odb.ANALYSIS_MP4):
+        return
+    if movie.get(odb.MOVIE_STATUS) == odb.MOVIE_STATE_PROCESSING_FAILED:
+        LOGGER.info("Ignoring stale camera movie job movie_id=%s", job.movie_id)
+        return
+    expires_at = int(movie.get(odb.PROCESSING_EXPIRES_AT) or 0)
+    if expires_at <= int(time.time()):
+        attempt = ddbo.claim_movie_processing(job.movie_id)
+        if attempt is None:
+            return
+        job = async_work.CameraMovieJob(movie_id=job.movie_id, attempt=attempt)
+    elif movie.get(odb.PROCESSING_ATTEMPT) != job.attempt:
+        raise odb.MovieProcessingLocked(job.movie_id)
     try:
         bucket, frame_keys = _frame_objects(movie=movie)
         with tempfile.TemporaryDirectory() as output_dir:
