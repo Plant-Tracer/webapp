@@ -78,6 +78,9 @@ Release Notes
 Unreleased Summary
 ******************
 
+    * Operations: show the UTC stack deployment time on ``/ver`` for deployed
+      lambda-web stacks
+
     * Carry the latest marker positions into untraced frames when stepping or
       seeking in Analyze. Use them as editable trace seeds without creating
       saved paths or graph/export points through navigation. Preserve existing
