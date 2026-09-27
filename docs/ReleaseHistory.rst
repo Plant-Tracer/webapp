@@ -78,6 +78,25 @@ Release Notes
 Unreleased Summary
 ******************
 
+    * Carry the latest marker positions into untraced frames when stepping or
+      seeking in Analyze. Use them as editable trace seeds without creating
+      saved paths or graph/export points through navigation. Preserve existing
+      annotations, trace gaps, and trim bounds. Enable trim controls before the
+      first trace and keep unsaved trim seeds separate from results. Let Selenium
+      select a matching driver for desktop browser CI instead of an old PATH copy.
+      Analyzer navigation screenshots
+      need manual review (fixes #1241).
+      Preserve explicitly cleared annotations through reload and trimming, and
+      wait for marker saves before copying a moved trim start.
+      Read points and empty boundaries together per metadata page and preserve
+      legacy explicitly empty trackpoint lists.
+      Preserve fully deleted annotation boundaries on reload and block trimming
+      until failed annotation saves are retried successfully or Analyze is reopened.
+      Retain an empty old trim start at its new destination through reload and
+      read exactly the requested count of annotation frames.
+      Exclude legacy empty trackpoint lists from the derived tracking frontier.
+      Filter deleted legacy markers before copying a moved trim start.
+
     * Prevent tracing from a frame with no markers. Reject empty source frames
       before queueing, keep empty marker saves from advancing the tracked frame,
       and show the rejection in Analyze. A failed attempt no longer leaves the

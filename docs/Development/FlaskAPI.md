@@ -639,6 +639,16 @@ show `tracing_failure_summary` immediately.
 
 Get metadata and optionally per-frame trackpoints for a specific movie.
 
+Explicitly cleared frames are returned as `frames[frame_number].markers: []`,
+distinct from absent, never-annotated frames. An empty marker save persists an
+`empty_marker_annotation` boundary without advancing the tracked frontier.
+Nonempty saves and reset operations remove that boundary.
+Trackpoints and empty boundaries are read together in one DynamoDB range traversal
+per metadata page, bounded by `frame_start` through `frame_start + frame_count - 1`.
+Legacy records with an explicitly present `trackpoints: []` also remain empty.
+Frames whose stored points are all deleted markers return the same explicit empty
+entry, preserving their annotation boundary across reload.
+
 `metadata.frame_height_px` is the positive pixel height of the resized, rotated
 analysis coordinate space used by the trackpoints, or `null` when unknown.
 `metadata.trackpoint_origin` identifies the coordinate origin. These fields are
@@ -973,6 +983,16 @@ Set `research_use` (and optionally `credit_by_name`) for a movie. Only the movie
 
 Set one inclusive trim bound for a movie. Exactly one of `trim_start_frame` or
 `trim_end_frame` must be provided per call.
+
+Moving the start backward copies stored markers from the old start only when
+the destination has neither saved points nor an explicit empty annotation.
+An explicitly empty source is copied as a durable empty boundary too, so
+reopening Analyze cannot revive markers from an earlier frame at the new start.
+The browser waits for pending marker saves before requesting this copy.
+The copy reads source and destination consistently, preserving the latest save.
+Deleted markers are filtered through the marker map before copying, including
+legacy points without marker IDs. A source containing only deleted markers
+produces an explicit empty destination boundary.
 
 **Parameters**
 

@@ -117,3 +117,162 @@ def test_production_analyzer_steps_b_frames_and_preserves_coordinates(chrome_dri
         "const c=window.playerController; const p={x:12,y:17,label:'Apex'};"
         "return c.canvas_marker_to_trackpoint({...c.trackpoint_to_canvas(p),name:'Apex'});")
     assert (point['x'], point['y']) == (12, 17)
+
+
+@pytest.mark.selenium
+def test_analyzer_carries_untraced_markers_without_creating_results(chrome_driver, frame_step_server):
+    """Exercise real navigation, canvas markers, editability, and trim rendering."""
+    encoded = base64.b64encode(MOVIE_PATH.read_bytes()).decode('ascii')
+    source = quote(f'data:video/mp4;base64,{encoded}', safe='')
+    chrome_driver.get(f'{frame_step_server}/browser_tests/player_harness.html?src={source}')
+    assert wait_for_decoded_frames(chrome_driver).startswith('Decoded 4 frames')
+    assert chrome_driver.find_element(By.CSS_SELECTOR, '#tracer .show_trim_controls').is_enabled()
+    chrome_driver.execute_async_script("""
+        const done = arguments[arguments.length - 1], c = window.playerController;
+        c.movie_metadata.status = 'ready';
+        c.analysis_read_only = false;
+        c.frames[0].markers = [
+            {label:'Apex', x:12, y:17, color:'#ff0000'},
+            {label:'Ruler 0mm', x:5, y:5, undeletable:true},
+            {label:'Ruler 10mm', x:5, y:25, undeletable:true}
+        ];
+        c.goto_frame(0).then(() => done(true));
+    """)
+    for control, frame in [('next-frame-button', 1), ('last-frame-button', 3),
+                           ('previous-frame-button', 2)]:
+        chrome_driver.find_element(By.ID, control).click()
+        WebDriverWait(chrome_driver, 10).until(
+            lambda browser, expected=frame: browser.execute_script(
+                'return window.playerController.frame_number') == expected)
+        points = chrome_driver.execute_script('return window.playerController.get_markers();')
+        assert [(point['label'], point['x'], point['y']) for point in points] == [
+            ('Apex', 12, 17), ('Ruler 0mm', 5, 5), ('Ruler 10mm', 5, 25)]
+        assert chrome_driver.find_element(By.CSS_SELECTOR, '#tracer .track_button').is_enabled()
+        assert chrome_driver.execute_script("""
+            const c = window.playerController;
+            return c.frames.slice(1).every(frame => frame.markers.length === 0)
+                && c.frames_for_graph().slice(1).every(frame => frame.markers.length === 0)
+                && c.last_tracked_frame === -1
+                && !c.objects.some(obj => obj.constructor.name === 'Line');
+        """)
+    # Moving the trim start backward copies carried seeds with destination indices.
+    chrome_driver.execute_async_script("""
+        const done = arguments[arguments.length - 1], c = window.playerController;
+        c.movie_metadata.status = 'tracing completed';
+        c.last_tracked_frame = 0;
+        c.applyLocalTrimStartSeed(1, 2);
+        c.goto_frame(1).then(() => done(true));
+    """)
+    assert len(chrome_driver.execute_script('return window.playerController.get_markers();')) == 3
+    assert chrome_driver.find_element(By.CSS_SELECTOR, '#tracer .track_button').is_enabled()
+    assert chrome_driver.execute_script(
+        'return window.playerController.frames[1].trim_seed_markers.every(marker => marker.frame_number === 1);')
+    assert chrome_driver.execute_script("""
+        const c = window.playerController;
+        return c.frames[1].markers.length === 0 && c.frames_for_graph()[1].markers.length === 0
+            && !c.objects.some(obj => obj.constructor.name === 'Line');
+    """)
+    chrome_driver.execute_script("""
+        const c = window.playerController;
+        c.movie_metadata.status = 'ready';
+        c.last_tracked_frame = -1;
+        c.frames[1].markers = [];
+        c.frames[1].marker_seed_boundary = false;
+        delete c.frames[1].trim_seed_markers;
+        c.invalidateMarkerSeeds();
+    """)
+    # A saved explicit edit takes precedence; later empty frames inherit that edit.
+    chrome_driver.execute_async_script("""
+        const done = arguments[arguments.length - 1], c = window.playerController;
+        c.updateCurrentFrameMarkers([{label:'Apex', x:30, y:17}], 2);
+        c.last_tracked_frame = 2; // Metadata can include a manual seed before tracing.
+        c.movie_metadata.trim_start_frame = 1;
+        c.movie_metadata.trim_end_frame = 2;
+        c.trim_start_frame_missing = false;
+        c.trim_end_frame_missing = false;
+        c.ensure_trim_defaults();
+        c.goto_frame(0).then(() => done(true));
+    """)
+    assert chrome_driver.execute_script('return window.playerController.get_markers();') == []
+    assert not chrome_driver.find_element(By.CSS_SELECTOR, '#tracer .track_button').is_enabled()
+    chrome_driver.execute_async_script("""
+        const done = arguments[arguments.length - 1], c = window.playerController;
+        c.goto_frame(1).then(() => done(true));
+    """)
+    assert len(chrome_driver.execute_script('return window.playerController.get_markers();')) == 3
+    chrome_driver.execute_async_script("""
+        const done = arguments[arguments.length - 1], c = window.playerController;
+        c.movie_metadata.trim_end_frame = 3;
+        c.ensure_trim_defaults();
+        c.goto_frame(3).then(() => done(true));
+    """)
+    assert chrome_driver.execute_script('return window.playerController.get_markers()[0].x;') == 30
+    # Known gaps in traced results must remain missing rather than becoming seeds.
+    chrome_driver.execute_async_script("""
+        const done = arguments[arguments.length - 1], c = window.playerController;
+        c.movie_metadata.status = 'tracing completed';
+        c.last_tracked_frame = 2;
+        c.goto_frame(1).then(() => done(true));
+    """)
+    assert chrome_driver.execute_script('return window.playerController.get_markers();') == []
+    # Explicitly clearing annotations stops seed propagation across that frame.
+    chrome_driver.execute_async_script("""
+        const done = arguments[arguments.length - 1], c = window.playerController;
+        c.movie_metadata.status = 'ready';
+        c.updateCurrentFrameMarkers([], 2);
+        c.goto_frame(2).then(() => done(true));
+    """)
+    assert chrome_driver.execute_script('return window.playerController.get_markers();') == []
+    chrome_driver.execute_async_script("""
+        const done = arguments[arguments.length - 1], c = window.playerController;
+        c.goto_frame(3).then(() => done(true));
+    """)
+    assert chrome_driver.execute_script('return window.playerController.get_markers();') == []
+    # Moving the cleared start backward mirrors the persisted empty annotation copy.
+    chrome_driver.execute_async_script("""
+        const done = arguments[arguments.length - 1], c = window.playerController;
+        c.applyLocalTrimStartSeed(1, 2);
+        c.goto_frame(1).then(() => done(true));
+    """)
+    assert chrome_driver.execute_script('return window.playerController.get_markers();') == []
+    assert chrome_driver.execute_script(
+        'return window.playerController.frames[1].markers;') == []
+    assert chrome_driver.execute_script(
+        'return window.playerController.frames[1].marker_seed_boundary;')
+    assert not chrome_driver.find_element(By.CSS_SELECTOR, '#tracer .track_button').is_enabled()
+    # Reload can preserve empty boundaries when supplied as explicit frame entries.
+    chrome_driver.execute_async_script("""
+        const done = arguments[arguments.length - 1];
+        import('/src/app/static/canvas_tracer_controller.mjs').then(async module => {
+            window.playerController = await module.trace_movie_frames('div#tracer', {
+                movie_id:'probe', total_frames:4, frame_height_px:64, width:64, height:64,
+                uploaded_at:1, trackpoint_origin:'bottom-left', analysis_read_only:true,
+                status:'ready', last_frame_tracked:0
+            }, new URLSearchParams(location.search).get('src'), {
+                0:{markers:[{label:'Apex', x:12, y:17}]}, 1:{markers:[]}, 2:{markers:[]}
+            }, '', false, {initialFrame:1});
+            window.emptyBoundaryReloadPreserved = window.playerController.get_markers().length === 0;
+            await window.playerController.goto_frame(3);
+            window.emptyBoundaryReloadPreserved &&= window.playerController.get_markers().length === 0;
+            window.playerController = await module.trace_movie_frames('div#tracer', {
+                movie_id:'probe', total_frames:4, frame_height_px:64, width:64, height:64,
+                uploaded_at:1, trackpoint_origin:'bottom-left', analysis_read_only:true,
+                status:'ready', last_frame_tracked:-1
+            }, new URLSearchParams(location.search).get('src'), {0:{markers:[]}}, '', false);
+            window.emptyFirstFramePreserved = window.playerController.get_markers().length === 0;
+            await window.playerController.goto_frame(3);
+            done(true);
+        }).catch(error => done(error.message));
+    """)
+    assert chrome_driver.execute_script('return window.playerController.frame_number;') == 3
+    assert chrome_driver.execute_script(
+        'return window.emptyBoundaryReloadPreserved && window.emptyFirstFramePreserved;')
+    assert chrome_driver.execute_script('return window.playerController.get_markers();') == []
+    # A tracking frontier alone does not make a one-frame player trimmable.
+    chrome_driver.execute_script("""
+        const c = window.playerController;
+        c.frames = c.frames.slice(0, 1);
+        c.last_tracked_frame = 3;
+        c.refreshTrimControls();
+    """)
+    assert not chrome_driver.find_element(By.CSS_SELECTOR, '#tracer .show_trim_controls').is_enabled()

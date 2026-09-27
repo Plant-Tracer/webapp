@@ -8,8 +8,12 @@
 <select class="zoom"><option value="100">100%</option></select>
 <input class="prev_frame frame_movement" id="previous-frame-button" type="button" value="Previous">
 <input class="next_frame frame_movement" id="next-frame-button" type="button" value="Next">
+<input class="last_button frame_movement" id="last-frame-button" type="button" value="Last">
 <input class="frame_number_field" value="0"><input class="marker_name_input" value="">
 <input class="track_button" type="button"><table class="marker_table"></table>
+<input class="show_trim_controls" type="checkbox"><span class="trim_status"></span>
+<span class="trim_controls"><input class="trim_set_start_button" type="button" value="Set start">
+<input class="trim_set_end_button" type="button" value="Set end"></span>
 </div>
 <script type="module">
 import {trace_movie_frames} from '/src/app/static/canvas_tracer_controller.mjs';

@@ -51,12 +51,62 @@ Analyze Flow
 ------------
 
 1. Analyze page loads movie metadata from Flask.
-2. Frame 0 comes from lambda-resize.
-3. User places or edits markers.
-4. Browser saves trackpoints through Flask.
+2. Browser downloads the untraced MP4 and decodes exact frames with WebCodecs.
+3. User browses frames, chooses trim bounds, and places or edits markers.
+4. Browser saves explicit edits and the selected trace seeds through Flask.
 5. Browser asks lambda-resize to retrace from the edited frame.
 6. Browser polls Flask metadata until tracking completes.
 7. Browser displays tracked frames, graphs, and CSV download controls.
+
+Navigation marker seeds
+~~~~~~~~~~~~~~~~~~~~~~~
+
+An unannotated, untraced frame displays a copy of the latest preceding marker
+positions. These display seeds are separate from stored frame annotations;
+navigation does not create trackpoints, paths, graph points, or export rows.
+Existing destination annotations take precedence, and gaps in traced history
+remain empty. Explicitly clearing a frame's markers creates a local seed
+boundary, so that frame and subsequent empty frames cannot revive older markers.
+Reloaded metadata entries with an explicit empty marker list retain that boundary;
+the database records ``empty_marker_annotation`` when a frame is explicitly
+cleared. Metadata includes an empty entry for that frame, and trim copying
+respects it. Writing nonempty points or resetting tracing removes that boundary.
+Derived tracking frontiers exclude both these boundaries and legacy records with
+an explicitly present empty trackpoint list; only nonempty stored points count.
+Ready movies may contain manually placed seeds without having
+been traced. Trim controls require multiple loaded frames; a legacy one-frame
+view cannot enable trimming solely from its last-tracked-frame metadata.
+
+``MarkerSeedIndex`` builds a nearest-preceding-annotation index in one forward
+pass, then resolves each frame in constant lookup time plus the marker-copy
+cost. Navigation through an unchanged movie therefore needs O(F) indexing work
+for F frames, rather than repeated backward scans. Adding or clearing a frame's
+annotations, deleting a marker, resetting tracing, replacing trace results, or
+seeding an earlier trim start invalidates the index. Position and name changes
+use live annotation objects; replacing the loaded frame array creates a new
+index. Explicit edits update local frame data before asynchronous saves return,
+so navigation sees the latest placement and older responses cannot revert it.
+Moving the trim start backward to an unannotated frame copies the old start's
+resolved seeds, including carried positions, and records the new frame index.
+Existing destination annotations and explicit empty boundaries take precedence.
+Unsaved trim seeds live in ``trim_seed_markers``, separate from ``markers``, so
+saved frame ranges, graphs, and paths remain unchanged until an edit or trace.
+An unsaved trim seed remains a boundary after its last marker is deleted, so
+older markers omitted from that seed cannot reappear.
+When the old start has stored annotations, the trim API persists a copy at the
+new start, and the browser reflects that saved copy. Edits, reset, trace refresh,
+deletion, and renaming also update or clear unsaved trim seeds.
+Explicitly empty stored starts are copied as durable empty annotations too,
+preserving the new start through reload without advancing the tracking frontier.
+Copies filter marker-map tombstones before saving, including legacy points with
+only a label. If every source marker was deleted, the destination stays explicitly
+empty rather than assigning deleted legacy points new identities.
+Trim requests wait for pending marker saves before copying the old start, while
+retaining the frame selected when the trim control was pressed.
+Failed saves keep trimming blocked after the request settles, until those frames
+are saved successfully or Analyze is reopened. Logical API errors also count as
+save failures. Metadata retains a frame boundary when all its stored markers
+have been deleted, preventing an earlier annotation from reappearing on reload.
 
 Movie List Flow
 ---------------

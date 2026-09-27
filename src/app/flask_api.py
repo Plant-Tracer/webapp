@@ -1139,15 +1139,17 @@ def api_get_movie_metadata():
         #
         # Get the trackpoints and then group by frame_number for the response
         ret[C.API_KEY_FRAMES] = defaultdict(dict)
-        tpts = odb.get_movie_trackpoints(movie_id=movie_id,
-                                         frame_start=frame_start,
-                                         frame_count=frame_count)
-        for tpt in tpts:
+        annotations = odb.get_movie_annotations(movie_id=movie_id,
+                                                frame_start=frame_start,
+                                                frame_end=frame_start + frame_count - 1)
+        for tpt in annotations.trackpoints:
             frame_key = str(tpt['frame_number'])
             frame = ret[C.API_KEY_FRAMES][frame_key]
             if C.API_KEY_MARKERS not in frame:
                 frame[C.API_KEY_MARKERS] = []
             frame[C.API_KEY_MARKERS].append(tpt)
+        for frame_number in annotations.empty_frames:
+            ret[C.API_KEY_FRAMES].setdefault(str(frame_number), {C.API_KEY_MARKERS: []})
 
     logger.debug("get_movie_metadata returns keys %s and %d frames total length %d bytes",
                  list(ret.keys()),len(ret.get('frames',[])),len(ret))

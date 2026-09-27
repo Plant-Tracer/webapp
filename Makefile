@@ -148,6 +148,10 @@ coverage:
 	$(MAKE) AWS_REGION=local pytest-coverage
 	$(MAKE) AWS_REGION=local jscoverage
 
+.PHONY: docs-html
+docs-html: .venv/pyvenv.cfg
+	uv run sphinx-build -W --keep-going -b html docs docs/_build/html
+
 tags:
 	etags src/app/*.py tests/*.py tests/fixtures/*.py src/app/static/*.js lambda-web/src/lambda_web/*.py lambda-resize/src/resize_app/*.py
 

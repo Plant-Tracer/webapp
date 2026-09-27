@@ -1187,9 +1187,22 @@ describe('TracerController trim behavior', () => {
         );
         expect(tc.trim_start_frame).toBe(0);
         expect(tc.trim_start_frame_missing).toBe(false);
-        expect(tc.frames[0].markers).toEqual([{ x: 22, y: 33, label: 'Apex', frame_number: 2 }]);
+        expect(tc.frames[0].markers).toEqual([{ x: 22, y: 33, label: 'Apex', frame_number: 0 }]);
+        expect(tc.frames[2].markers).toEqual([{ x: 22, y: 33, label: 'Apex', frame_number: 2 }]);
         expect(global.requestAnimationFrame).toHaveBeenCalled();
         expect(tc.frame_number).toBe(0);
+    });
+
+    test('moving trim start backward preserves an explicitly empty source seed', () => {
+        const tc = new TracerController('div#tc', makeMovieMetadata({status: 'ready'}), 'k');
+        tc.frames = [{markers: [{x: 10, y: 20, label: 'Apex'}]}, {},
+            {markers: [], marker_seed_boundary: true}, {}];
+        tc.applyLocalTrimStartSeed(1, 2);
+        expect(tc.frames[1].trim_seed_markers).toBeUndefined();
+        expect(tc.frames[1].markers).toEqual([]);
+        expect(tc.frames[1].marker_seed_boundary).toBe(true);
+        expect(tc.markersForDisplay(1)).toEqual([]);
+        expect(tc.markersForDisplay(3)).toEqual([]);
     });
 
     test('set_trim_bound does not post or redraw graph when bound is unchanged', () => {
@@ -2022,6 +2035,9 @@ describe('TracerController.track_to_end', () => {
         jest.spyOn(tc, 'poll_for_track_end').mockImplementation(() => {});
         // Wipe constructor side-effects so assertions only cover track_to_end()
         jest.clearAllMocks();
+        mockPost.mockReturnValue({
+            done: callback => { callback({error: false}); return {fail: jest.fn()}; },
+        });
     });
 
     afterEach(() => {
@@ -3095,6 +3111,29 @@ describe('TracerController.put_markers', () => {
         });
         tc.put_markers();
         expect(global.alert).toHaveBeenCalledWith(expect.stringContaining('Network error'));
+    });
+
+    test.each(['http', 'logical'])('a settled %s save failure blocks trim until that frame is saved', async failure => {
+        const error = {responseText: 'Save failed'};
+        mockPost.mockReturnValueOnce(failure === 'http' ? {
+            done: jest.fn().mockReturnThis(),
+            fail: callback => callback(error),
+        } : {
+            done: callback => { callback({error: true, message: 'Save failed'}); return {fail: jest.fn()}; },
+        });
+        await expect(tc.put_markers()).rejects.toThrow('Save failed');
+        expect(tc.marker_save_requests.size).toBe(0);
+        expect(tc.failed_marker_saves.has(0)).toBe(true);
+        tc.set_trim_bound('trim_start_frame', 1);
+        expect(mockPost).toHaveBeenCalledTimes(1);
+        expect(global.alert).toHaveBeenCalledWith(expect.stringContaining('Retry the edits'));
+        mockPost.mockReturnValueOnce({
+            done: callback => { callback({error: false}); return {fail: jest.fn()}; },
+        });
+        await tc.put_markers();
+        expect(tc.failed_marker_saves.size).toBe(0);
+        tc.set_trim_bound('trim_start_frame', 1);
+        expect(mockPost.mock.calls.at(-1)[0]).toContain('set-movie-trim');
     });
 });
 

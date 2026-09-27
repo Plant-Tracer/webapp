@@ -727,6 +727,54 @@ def test_set_movie_trim_start_copies_old_start_markers(local_ddb):
     assert not odb.get_movie_trackpoints(movie_id=movie_id, frame_start=1, frame_end=1)
 
 
+@pytest.mark.parametrize('legacy_empty', [False, True])
+def test_trim_preserves_cleared_destination_and_reset_clears_boundary(local_ddb, legacy_empty):
+    movie_id = create_trim_test_movie(local_ddb, total_frames=5, trim_start_frame=2, trim_end_frame=4)
+    odb.put_frame_trackpoints(movie_id=movie_id, frame_number=2,
+                             trackpoints=[Trackpoint(x=12, y=22, label='apex')])
+    if legacy_empty:
+        odb.DDBO().movie_frames.put_item(Item={MOVIE_ID: movie_id, odb.FRAME_NUMBER: 1,
+                                              odb.TRACKPOINTS: []})
+    else:
+        odb.put_frame_trackpoints(movie_id=movie_id, frame_number=1, trackpoints=[])
+    assert odb.get_movie_annotations(movie_id=movie_id, frame_start=0, frame_end=1).empty_frames == [1]
+    assert odb.get_movie_annotations(movie_id=movie_id, frame_start=2, frame_end=3).empty_frames == []
+    odb.set_movie_trim_frame(movie_id=movie_id, prop=odb.TRIM_START_FRAME, frame_number=1)
+    assert not odb.get_movie_trackpoints(movie_id=movie_id, frame_start=1, frame_end=1)
+    assert odb.last_tracked_movie_frame(movie_id=movie_id) == 2
+    odb.clear_movie_tracking(movie_id)
+    assert odb.get_movie_annotations(movie_id=movie_id, frame_start=0, frame_end=4).empty_frames == []
+
+
+def test_empty_annotations_do_not_advance_derived_frontier(local_ddb):
+    movie_id = create_trim_test_movie(local_ddb, total_frames=5)
+    table = odb.DDBO().movie_frames
+    odb.put_frame_trackpoints(movie_id=movie_id, frame_number=0,
+                             trackpoints=[Trackpoint(x=10, y=20, label='Apex')])
+    odb.put_frame_trackpoints(movie_id=movie_id, frame_number=3, trackpoints=[])
+    table.put_item(Item={MOVIE_ID: movie_id, odb.FRAME_NUMBER: 4, odb.TRACKPOINTS: []})
+    assert odb.last_tracked_movie_frame(movie_id=movie_id) == 0
+    assert odb.get_movie_metadata(movie_id=movie_id, get_last_frame_tracked=True)[LAST_FRAME_TRACKED] == 0
+    assert odb.get_movie_annotations(movie_id=movie_id, frame_start=0, frame_end=4).empty_frames == [3, 4]
+    table.delete_item(Key={MOVIE_ID: movie_id, odb.FRAME_NUMBER: 0})
+    assert odb.last_tracked_movie_frame(movie_id=movie_id) is None
+    assert odb.get_movie_metadata(movie_id=movie_id, get_last_frame_tracked=True)[LAST_FRAME_TRACKED] is None
+
+
+def test_trackpoint_frame_count_is_exact(local_ddb):
+    movie_id = create_trim_test_movie(local_ddb, total_frames=3)
+    for frame in range(3):
+        odb.put_frame_trackpoints(movie_id=movie_id, frame_number=frame,
+                                 trackpoints=[Trackpoint(x=10 + frame, y=20, label='Apex')])
+    assert odb.get_movie_trackpoints(movie_id=movie_id, frame_start=1, frame_count=0) == []
+    assert [point[odb.FRAME_NUMBER] for point in odb.get_movie_trackpoints(
+        movie_id=movie_id, frame_start=1, frame_count=1)] == [1]
+    assert [point[odb.FRAME_NUMBER] for point in odb.get_movie_trackpoints(
+        movie_id=movie_id, frame_start=1, frame_count=2)] == [1, 2]
+    assert [point[odb.FRAME_NUMBER] for point in odb.get_movie_trackpoints(
+        movie_id=movie_id, frame_start=1, frame_end=1)] == [1]
+
+
 def test_set_movie_trim_start_does_not_overwrite_existing_target_markers(local_ddb):
     movie_id = create_trim_test_movie(local_ddb, total_frames=5, trim_start_frame=2, trim_end_frame=4)
     odb.put_frame_trackpoints(

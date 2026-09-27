@@ -769,6 +769,117 @@ def test_set_movie_trim_requires_exactly_one_bound(client, new_movie):
     assert resp.get_json()['message'] == "set exactly one trim frame"
 
 
+def test_empty_marker_annotations_survive_api_reload_and_trim(client, new_movie, monkeypatch):
+    movie_id = new_movie[MOVIE_ID]
+    params = {API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id}
+    odb.ensure_bottom_left_trackpoints(movie_id=movie_id)
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={
+        odb.TOTAL_FRAMES: 4, odb.TRIM_START_FRAME: 2, odb.TRIM_END_FRAME: 3})
+    odb.put_frame_trackpoints(movie_id=movie_id, frame_number=2,
+                             trackpoints=[Trackpoint(x=12, y=22, label='apex')])
+    response = client.post('/api/put-frame-trackpoints', data={
+        **params, odb.FRAME_NUMBER: 1, odb.TRACKPOINTS: '[]'})
+    assert response.status_code == 200
+    assert not response.get_json()['error']
+    assert client.post('/api/set-movie-trim', data={
+        **params, odb.TRIM_START_FRAME: 1}).status_code == 200
+    odb.DDBO().movie_frames.put_item(Item={MOVIE_ID: movie_id, odb.FRAME_NUMBER: 3,
+                                          odb.TRACKPOINTS: []})
+    # Count range traversals while forwarding every read to real DynamoDB Local.
+    ranges = []
+    read_frames = odb.iter_movie_frames_in_range
+    def counted_frames(table, movie, first, last):
+        ranges.append((first, last))
+        yield from read_frames(table, movie, first, last)
+    monkeypatch.setattr(odb, 'iter_movie_frames_in_range', counted_frames)
+    frames = client.post('/api/get-movie-metadata', data={
+        **params, 'frame_start': 0, 'frame_count': 4}).get_json()['frames']
+    assert ranges == [(0, 3)]
+    assert frames['1']['markers'] == []
+    assert frames['2']['markers'][0]['x'] == 12
+    assert frames['3']['markers'] == []
+    ranges.clear()
+    page = client.post('/api/get-movie-metadata', data={
+        **params, 'frame_start': 1, 'frame_count': 1}).get_json()['frames']
+    assert ranges == [(1, 1)]
+    assert page == {'1': {'markers': []}}
+    odb.put_frame_trackpoints(movie_id=movie_id, frame_number=1,
+                             trackpoints=[Trackpoint(x=30, y=22, label='apex')])
+    assert odb.get_movie_annotations(movie_id=movie_id, frame_start=0, frame_end=2).empty_frames == []
+
+def test_empty_trim_source_is_copied_for_reload(client, new_movie):
+    movie_id = new_movie[MOVIE_ID]
+    params = {API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id}
+    odb.ensure_bottom_left_trackpoints(movie_id=movie_id)
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={
+        odb.TOTAL_FRAMES: 4, odb.TRIM_START_FRAME: 2, odb.TRIM_END_FRAME: 3})
+    odb.put_frame_trackpoints(movie_id=movie_id, frame_number=0,
+                             trackpoints=[Trackpoint(x=10, y=20, label='Apex')])
+    assert not client.post('/api/put-frame-trackpoints', data={
+        **params, odb.FRAME_NUMBER: 2, odb.TRACKPOINTS: '[]'}).get_json()['error']
+    assert not client.post('/api/set-movie-trim', data={
+        **params, odb.TRIM_START_FRAME: 1}).get_json()['error']
+    frames = client.post('/api/get-movie-metadata', data={
+        **params, 'frame_start': 0, 'frame_count': 4}).get_json()['frames']
+    assert frames['1']['markers'] == []
+    assert frames['2']['markers'] == []
+    assert frames['0']['markers'][0]['x'] == 10
+    assert odb.last_tracked_movie_frame(movie_id=movie_id) == 0
+
+
+def test_deleted_annotation_remains_empty_on_reload(client, new_movie):
+    movie_id = new_movie[MOVIE_ID]
+    params = {API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id}
+    odb.ensure_bottom_left_trackpoints(movie_id=movie_id)
+    odb.put_frame_trackpoints(movie_id=movie_id, frame_number=0, trackpoints=[
+        Trackpoint(x=10, y=20, label='Apex'), Trackpoint(x=5, y=5, label='Ruler')])
+    odb.put_frame_trackpoints(movie_id=movie_id, frame_number=2,
+                             trackpoints=[Trackpoint(x=30, y=20, label='Apex')])
+    response = client.post('/api/delete-marker', data={**params, 'label': 'Apex'})
+    assert response.status_code == 200
+    assert not response.get_json()['error']
+    frames = client.post('/api/get-movie-metadata', data={
+        **params, 'frame_start': 0, 'frame_count': 4}).get_json()['frames']
+    assert [point['label'] for point in frames['0']['markers']] == ['Ruler']
+    assert frames['2']['markers'] == []
+    assert '1' not in frames and '3' not in frames
+
+
+@pytest.mark.parametrize('legacy', [False, True])
+@pytest.mark.parametrize('keep_marker', [False, True])
+def test_trim_copy_does_not_revive_deleted_markers(client, new_movie, legacy, keep_marker):
+    movie_id = new_movie[MOVIE_ID]
+    params = {API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id}
+    odb.ensure_bottom_left_trackpoints(movie_id=movie_id)
+    odb.set_movie_metadata(movie_id=movie_id, movie_metadata={
+        odb.TOTAL_FRAMES: 4, odb.TRIM_START_FRAME: 2, odb.TRIM_END_FRAME: 3})
+    points = [Trackpoint(x=10, y=20, label='Apex')]
+    if keep_marker:
+        points.append(Trackpoint(x=30, y=40, label='Keep', color='blue'))
+    odb.put_frame_trackpoints(movie_id=movie_id, frame_number=2, trackpoints=points)
+    table = odb.DDBO().movie_frames
+    key = {MOVIE_ID: movie_id, odb.FRAME_NUMBER: 2}
+    source = table.get_item(Key=key, ConsistentRead=True)['Item']
+    if legacy:
+        for point in source[odb.TRACKPOINTS]:
+            point.pop(odb.MARKER_ID, None)
+        table.put_item(Item=source)
+    odb.rename_movie_marker(movie_id=movie_id, old_label='Apex', new_label='Tip')
+    assert not client.post('/api/delete-marker', data={**params, 'label': 'Tip'}).get_json()['error']
+    assert not client.post('/api/set-movie-trim', data={
+        **params, odb.TRIM_START_FRAME: 1}).get_json()['error']
+    frames = client.post('/api/get-movie-metadata', data={
+        **params, 'frame_start': 0, 'frame_count': 4}).get_json()['frames']
+    expected = [{'x': 30, 'y': 40, 'label': 'Keep', 'color': 'blue', 'frame_number': 1}]
+    assert frames['1']['markers'] == (expected if keep_marker else [])
+    assert table.get_item(Key=key, ConsistentRead=True)['Item'] == source
+    target = table.get_item(Key={MOVIE_ID: movie_id, odb.FRAME_NUMBER: 1},
+                            ConsistentRead=True)['Item']
+    if not keep_marker:
+        assert target[odb.EMPTY_MARKER_ANNOTATION]
+        assert odb.TRACKPOINTS not in target
+
+
 def test_set_movie_trim_returns_validation_error(client, new_movie):
     api_key = new_movie[API_KEY]
     movie_id = new_movie[MOVIE_ID]

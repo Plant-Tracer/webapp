@@ -17,7 +17,7 @@ const RETRACE_MOVIE = 'Retrace movie';
 const RETRACE_TO_END_OF_MOVIE = 'Retrace to end of movie';
 const RESET_TRACING_CONFIRM_MESSAGE = 'Are you sure you want to delete all of the work and reset to the first frame?';
 const TRACE_TO_END_OF_MOVIE = 'Trace to end of movie';
-const TRACE_MOVIE_TRIM_DISABLED_TITLE = `${TRACE_MOVIE} to enable trimming.`;
+const TRACE_MOVIE_TRIM_DISABLED_TITLE = 'Trimming requires at least two loaded movie frames.';
 const TRACING_COMPLETE_LOADING_MOVIE_MESSAGE = 'Tracing complete. Loading movie...';
 const TRACING_STARTING_MESSAGE = 'Tracing starting...';
 
