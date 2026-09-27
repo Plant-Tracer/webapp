@@ -94,8 +94,9 @@ the conversation continues or context is compacted.
 6. Continue through CI failures and re-review. Use the repository's interval
    when specified, otherwise ten-minute checks. If continuing across turns
    requires scheduling, use an available task-scoped heartbeat, avoid duplicate
-   monitors and stay quiet on unchanged state. After human-review handoff,
-   switch the monitor to post-merge cleanup as described below. Do not
+   monitors, and follow the review reminders and two-hour polling limit below.
+   After human-review handoff, switch the monitor to post-merge cleanup within
+   the same polling window. Do not
    claim monitoring is active unless it was actually created. If scheduling or
    another external prerequisite is unavailable, report the exact next step.
 7. When current-head review is clear and required CI and local checks pass,
@@ -163,8 +164,9 @@ findings, ready state, human reviewer/assignee, and every item in the task ledge
 Never claim a queued action, attempted click, earlier-head result, or proposed
 automation is completed work.
 
-If waiting is the only remaining action, establish and verify the quiet
-heartbeat before ending the turn, with the PR, head, pending items, next check,
+If waiting is the only remaining action and the polling window has time left,
+establish and verify the heartbeat before ending the turn, with the PR, head,
+pending items, next check, original polling start and deadline, reminder policy,
 and completion conditions in its prompt. A scheduled continuation is still
 pending work, not success. If no continuation mechanism is available or the
 next step requires user authority or login, report the concrete blocker and
@@ -176,6 +178,32 @@ decision; never merge merely to trigger cleanup.
 Ready-for-review completes only the review phase. Post-merge cleanup remains
 pending for retained checkouts and branch refs until the human merges and the
 cleanup checks below finish, or a specific preservation blocker is reported. Keep those outcomes distinct.
+
+## Review reminders and two-hour polling limit
+
+On every review-status check while review is pending, print a short reminder
+with a clickable Markdown link to the exact PR needing review, even when its
+state is unchanged. Identify whether Copilot review must be requested, Copilot
+review is pending, or human review is pending; do not claim an unverified request
+succeeded. Keep the PR link in waiting and stopped final replies as well.
+
+At the first automatic check, record the UTC polling start and a deadline two
+hours later in the task ledger and heartbeat prompt. Use elapsed wall-clock time,
+including time between checks. Reuse that deadline across turns, retries, new
+commits, re-reviews and the transition to post-merge checking; none of these
+starts a new window. Before each scheduled check, compare the current time with
+the deadline. Do not schedule a check beyond it. At or after the deadline, stop
+automatic checking and pause or cancel the task's polling automation. Verify that
+it is stopped, record outstanding review or cleanup work, and print the PR link
+with a concise notice that manual restart is required. Do not mark incomplete
+work complete, infer review clearance, or automatically create another monitor.
+This time limit takes precedence over instructions to keep checking until review
+or cleanup completes.
+
+Only an explicit manual restart or resume of this workflow starts a fresh
+two-hour polling window. Recheck live PR state on restart and record the new start
+and deadline. Ordinary heartbeat messages and unrelated user messages do not
+restart a stopped window.
 
 ## Checkout cleanup at handoff
 
@@ -207,9 +235,11 @@ applies when the checkout was already removed at handoff.
 
 ## Post-merge checkout cleanup
 
-After handoff, retain a quiet ten-minute task heartbeat (or update the existing
-one) to detect the human's merge and finish local cleanup. If scheduling is
-unavailable, report that cleanup is pending and must be resumed after merge.
+After handoff, retain a ten-minute task heartbeat (or update the existing one)
+to detect the human's merge and finish local cleanup, subject to the original
+two-hour polling deadline above. Print the PR link while human review is pending.
+If scheduling is unavailable or the deadline has elapsed, report that cleanup is
+pending and must be resumed manually after merge.
 Do not claim that a ready, closed, or superseded PR was merged.
 
 Once GitHub confirms the PR is merged, fetch and prune `origin`. Before removing
