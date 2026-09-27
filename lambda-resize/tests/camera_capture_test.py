@@ -2,20 +2,26 @@
 
 # pylint: disable=no-member  # cv2 exposes C extension members pylint cannot see
 
-from concurrent.futures import ThreadPoolExecutor
 import os
 import tempfile
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Barrier
 
 import cv2
-
 from resize_app import async_work, camera_capture
 from resize_app.src.app.odb import DDBO as ResizeDDBO
 
 from app import mp4_metadata_lib, odb
 from app.constants import storage_deployment_id
-from app.s3_presigned import frame_object_key, make_urn, movie_object_key, parse_s3_urn, s3_client
+from app.s3_presigned import (
+    frame_object_key,
+    make_urn,
+    movie_object_key,
+    parse_s3_urn,
+    s3_client,
+)
 
 
 def _prepare_camera_movie(new_movie_record, local_s3, request, monkeypatch):
@@ -37,6 +43,9 @@ def _prepare_camera_movie(new_movie_record, local_s3, request, monkeypatch):
         odb.MOVIE_DATA_URN: source_urn,
         odb.CAMERA_CAPTURE: True,
         odb.FPM: "4",
+        odb.WIDTH: None,
+        odb.HEIGHT: None,
+        odb.FRAME_HEIGHT_PX: None,
     })
 
     bucket = os.environ[odb.C.PLANTTRACER_S3_BUCKET]
@@ -118,6 +127,53 @@ def test_expired_camera_job_reclaims_processing_lease(new_movie_record, local_s3
     assert movie[odb.TOTAL_FRAMES] == 3
     assert movie[odb.ANALYSIS_MP4]
     assert not movie.get(odb.PROCESSING_ATTEMPT)
+
+
+def test_camera_job_retry_recovers_after_incomplete_frame_upload(
+    new_movie_record, local_s3, request, monkeypatch,
+):
+    """A retry can finish a camera movie after a transient frame-read failure."""
+    ddbo, movie_id, _source_urn, bucket, client = _prepare_camera_movie(
+        new_movie_record, local_s3, request, monkeypatch,
+    )
+    movie = ddbo.get_movie(movie_id)
+    attempt = ddbo.claim_movie_processing(movie_id)
+    job = async_work.CameraMovieJob(movie_id=movie_id, attempt=attempt)
+    missing_key = frame_object_key(
+        deployment_id=storage_deployment_id(),
+        course_id=movie[odb.COURSE_ID],
+        movie_id=movie_id,
+        frame_number=1,
+    )
+    missing_frame = cv2.imread(str(Path("tests/data") / "frame_0002.jpg"))
+    missing_frame = cv2.resize(missing_frame, (640, 480))
+    encoded, frame_bytes = cv2.imencode(".jpg", missing_frame)
+    assert encoded
+    client.delete_object(Bucket=bucket, Key=missing_key)
+
+    try:
+        camera_capture.process(job)
+    except ValueError as exc:
+        assert str(exc) == "Camera frame uploads are incomplete"
+    else:
+        raise AssertionError("incomplete camera frame sequence must fail")
+
+    failed_movie = ddbo.get_movie(movie_id)
+    assert failed_movie[odb.MOVIE_STATUS] == odb.MOVIE_STATE_PROCESSING_FAILED
+    assert failed_movie[odb.PROCESSING_ATTEMPT] == attempt
+    assert failed_movie[odb.PROCESSING_EXPIRES_AT] > int(time.time())
+
+    client.put_object(
+        Bucket=bucket,
+        Key=missing_key,
+        Body=frame_bytes.tobytes(),
+        ContentType="image/jpeg",
+    )
+    camera_capture.process(job)
+
+    movie = ddbo.get_movie(movie_id)
+    assert movie[odb.MOVIE_STATUS] == odb.MOVIE_STATE_READY
+    assert movie[odb.ANALYSIS_MP4]
 
 
 def test_concurrent_stop_claim_returns_conflict(new_movie_record, local_s3, request, monkeypatch):

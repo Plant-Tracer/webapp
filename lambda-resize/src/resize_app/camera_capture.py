@@ -3,8 +3,8 @@
 # pylint: disable=no-member  # cv2 exposes C extension members pylint cannot see
 
 import os
-import time
 import tempfile
+import time
 from pathlib import Path
 
 import cv2
@@ -12,7 +12,7 @@ import numpy as np
 from aws_lambda_powertools import Logger
 
 from . import async_work, local_queue, movie_glue
-from .src.app import odb, mp4_metadata_lib, s3_presigned
+from .src.app import mp4_metadata_lib, odb, s3_presigned
 from .src.app.constants import storage_deployment_id
 from .video_writer import H264Writer
 
@@ -141,9 +141,6 @@ def process(job: async_work.CameraMovieJob) -> None:
         raise ValueError("movie is not a camera recording")
     if movie.get(odb.RESIZED_AT) and movie.get(odb.ANALYSIS_MP4):
         return
-    if movie.get(odb.MOVIE_STATUS) == odb.MOVIE_STATE_PROCESSING_FAILED:
-        LOGGER.info("Ignoring stale camera movie job movie_id=%s", job.movie_id)
-        return
     expires_at = int(movie.get(odb.PROCESSING_EXPIRES_AT) or 0)
     if expires_at <= int(time.time()):
         attempt = ddbo.claim_movie_processing(job.movie_id)
@@ -176,9 +173,6 @@ def process(job: async_work.CameraMovieJob) -> None:
                     odb.MOVIE_STATUS: odb.MOVIE_STATE_PROCESSING_FAILED,
                     odb.PROCESSING_FAILED_AT: int(time.time()),
                     odb.PROCESSING_FAILURE_SUMMARY: f"{type(exc).__name__}: {exc}"[:500],
-                    odb.WORK_PURPOSE: None,
-                    odb.PROCESSING_ATTEMPT: None,
-                    odb.PROCESSING_EXPIRES_AT: None,
                 },
                 expected_processing_attempt=job.attempt,
             )
