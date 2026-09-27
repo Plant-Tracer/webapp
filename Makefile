@@ -52,6 +52,7 @@ LOCAL_LAMBDA_WAIT_SECONDS ?= 30
 # alias because it is also the CloudFormation/SAM term shown during deployment.
 STACK_NAME_INPUT := $(if $(filter environment command line,$(origin STACK_NAME)),$(strip $(STACK_NAME)),)
 DYNAMODB_TABLE_PREFIX_INPUT := $(if $(filter environment command line,$(origin DYNAMODB_TABLE_PREFIX)),$(strip $(DYNAMODB_TABLE_PREFIX)),)
+IMAGE_BUCKET_INPUT := $(if $(filter environment command line,$(origin PLANTTRACER_S3_BUCKET)),$(strip $(PLANTTRACER_S3_BUCKET)),)
 ifneq ($(STACK_NAME_INPUT),)
 override STACK := $(STACK_NAME_INPUT)
 else
@@ -734,7 +735,8 @@ sam-config-sync: sam-config-path-safety-check
 		PREFIX="$(DYNAMODB_TABLE_PREFIX_INPUT)"; \
 		if [ -z "$$PREFIX" ]; then PREFIX="$(EFFECTIVE_STACK_NAME)-"; fi; \
 		uv run python etc/sam_config_writer.py --samconfig "$(SAM_CONFIG)" \
-			--stack-name "$(EFFECTIVE_STACK_NAME)" --dynamodb-table-prefix "$$PREFIX"; \
+			--stack-name "$(EFFECTIVE_STACK_NAME)" --dynamodb-table-prefix "$$PREFIX" \
+			--image-bucket-name "$(IMAGE_BUCKET_INPUT)"; \
 	fi
 
 sam-config-path-check: sam-config-sync
@@ -752,12 +754,13 @@ sam-config-path-check: sam-config-sync
 		fi; \
 	fi
 
-sam-config-check: sam-config-path-check
-	@if [ ! -f "$(SAM_CONFIG)" ]; then \
-		echo "Refusing to use SAM: $(SAM_CONFIG) does not exist."; \
-		echo "Run STACK=<name> or STACK_NAME=<name> with make sam-deploy-guided to create it, or pass SAM_CONFIG=<path>."; \
+sam-config-check: sam-config-path-safety-check
+	@uv run sam-config-tool --samconfig "$(SAM_CONFIG)" deploy-ready || { \
+		echo "Refusing to use incomplete SAM deployment configuration: $(SAM_CONFIG)."; \
+		echo 'Run make sam-deploy-guided STACK="$(EFFECTIVE_STACK_NAME)" SAM_CONFIG="$(SAM_CONFIG)"$(if $(DYNAMODB_TABLE_PREFIX_INPUT), DYNAMODB_TABLE_PREFIX="$(DYNAMODB_TABLE_PREFIX_INPUT)",)$(if $(IMAGE_BUCKET_INPUT), PLANTTRACER_S3_BUCKET="$(IMAGE_BUCKET_INPUT)",) to initialize it.'; \
 		exit 1; \
-	fi
+	}
+	$(MAKE) sam-config-path-check
 
 sam-config-guided-bootstrap: sam-config-path-check
 
@@ -943,7 +946,7 @@ ifeq ($(AWS_REGION),local)
 endif
 	$(MAKE) sam-version-check
 	$(MAKE) sam-config-guided-bootstrap
-	@if [ -n "$(SAM_CONFIG_STACK_NAME)" ] && [ -n "$(SAM_CONFIG_DYNAMODB_TABLE_PREFIX)" ]; then \
+	@if uv run sam-config-tool --samconfig "$(SAM_CONFIG)" deploy-ready >/dev/null 2>&1; then \
 		$(MAKE) sam-deploy-version-check; \
 	fi
 	$(MAKE) stamp-sam-deploy-metadata

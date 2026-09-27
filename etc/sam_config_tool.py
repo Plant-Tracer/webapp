@@ -13,8 +13,12 @@ from pathlib import Path
 import tomllib
 
 DEPLOY = "deploy"
+DEFAULT_ENVIRONMENT = "default"
+IMAGE_BUCKET_NAME = "ImageBucketName"
 PARAMETERS = "parameters"
 PARAMETER_OVERRIDES = "parameter_overrides"
+RESOLVE_S3 = "resolve_s3"
+S3_BUCKET = "s3_bucket"
 STACK_NAME = "stack_name"
 
 
@@ -76,6 +80,21 @@ def parameter_override(config_path: str, name: str) -> str:
     if name not in overrides:
         raise ValueError(f"{name} not found in {PARAMETER_OVERRIDES}")
     return overrides[name]
+
+
+def check_deploy_config(config_path: str) -> None:
+    """Require saved bucket settings before non-guided deployment mutates config."""
+    default = load_toml(config_path).get(DEFAULT_ENVIRONMENT)
+    params = _find_deploy_parameters({DEFAULT_ENVIRONMENT: default})
+    if params is None:
+        raise ValueError(f"No [default.deploy.parameters] section in {config_path}")
+    bucket = params.get(S3_BUCKET)
+    if params.get(RESOLVE_S3) is not True and not (isinstance(bucket, str) and bucket.strip()):
+        raise ValueError(f"Deployment artifact bucket is missing: set {RESOLVE_S3}=true or {S3_BUCKET}")
+    raw_overrides = params.get(PARAMETER_OVERRIDES)
+    overrides = _parse_parameter_overrides(raw_overrides) if isinstance(raw_overrides, str) else {}
+    if not overrides.get(IMAGE_BUCKET_NAME, "").strip():
+        raise ValueError(f"Runtime movie bucket is missing: set {IMAGE_BUCKET_NAME} in {PARAMETER_OVERRIDES}")
 
 
 def load_sam_config(config_path: str) -> tuple[str, str, str, str]:
@@ -206,6 +225,7 @@ def main() -> None:
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
     subparsers.add_parser("stack-name", help="print configured stack_name")
+    subparsers.add_parser("deploy-ready", help="check saved bucket settings for non-guided deployment")
     parameter_parser = subparsers.add_parser(
         "parameter-override",
         help="print one value from parameter_overrides",
@@ -219,6 +239,8 @@ def main() -> None:
     try:
         if args.command == "stack-name":
             print(stack_name(args.samconfig))
+        elif args.command == "deploy-ready":
+            check_deploy_config(args.samconfig)
         elif args.command == "parameter-override":
             print(parameter_override(args.samconfig, args.name))
         elif args.command == "ssh-clean":
