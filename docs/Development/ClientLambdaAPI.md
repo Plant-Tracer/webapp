@@ -79,7 +79,8 @@ Content-Type: application/json
 
 The caller must have edit access to a camera movie still in ``uploading``
 state. The service verifies that uploaded frame numbers are contiguous from
-zero, claims the movie's processing lease, and queues camera assembly. The
+zero, claims the movie's processing lease, and queues camera assembly. A
+concurrent STOP that loses the lease claim returns HTTP 409. The
 worker encodes the frames into the durable source MOV/MP4 object, writes capture
 and research attribution metadata, records frame and byte counts, and invokes
 normal post-upload processing. Missing frames or an invalid movie return HTTP

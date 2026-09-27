@@ -61,7 +61,10 @@ def finish(*, api_key: str, movie_id: str) -> dict:
     if movie.get(odb.MOVIE_STATUS) != odb.MOVIE_STATE_UPLOADING:
         raise ValueError("camera recording is no longer accepting frames")
     _frame_objects(movie=movie)
-    attempt = ddbo.claim_movie_processing(movie_id)
+    try:
+        attempt = ddbo.claim_movie_processing(movie_id)
+    except odb.MovieProcessingLocked as exc:
+        raise ValueError("camera movie is already being processed") from exc
     if attempt is None:
         raise ValueError("camera movie is already processed")
     job = async_work.CameraMovieJob(movie_id=movie_id, attempt=attempt)

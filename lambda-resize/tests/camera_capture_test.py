@@ -2,9 +2,11 @@
 
 # pylint: disable=no-member  # cv2 exposes C extension members pylint cannot see
 
+from concurrent.futures import ThreadPoolExecutor
 import os
 import tempfile
 from pathlib import Path
+from threading import Barrier
 
 import cv2
 
@@ -116,3 +118,33 @@ def test_expired_camera_job_reclaims_processing_lease(new_movie_record, local_s3
     assert movie[odb.TOTAL_FRAMES] == 3
     assert movie[odb.ANALYSIS_MP4]
     assert not movie.get(odb.PROCESSING_ATTEMPT)
+
+
+def test_concurrent_stop_claim_returns_conflict(new_movie_record, local_s3, request, monkeypatch):
+    """Two STOP requests with an uploading snapshot produce one success and one conflict."""
+    ddbo, movie_id, _source_urn, _bucket, _client = _prepare_camera_movie(
+        new_movie_record, local_s3, request, monkeypatch,
+    )
+    validate_movie_access = camera_capture.movie_glue.validate_movie_access
+    both_validated = Barrier(2)
+
+    def synchronized_validate_movie_access(*, api_key, movie_id, require_edit=False):
+        result = validate_movie_access(api_key=api_key, movie_id=movie_id, require_edit=require_edit)
+        both_validated.wait(timeout=10)
+        return result
+
+    monkeypatch.setattr(
+        camera_capture.movie_glue, "validate_movie_access", synchronized_validate_movie_access,
+    )
+
+    def stop_recording():
+        try:
+            return camera_capture.finish(api_key=new_movie_record[odb.API_KEY], movie_id=movie_id)
+        except ValueError as exc:
+            return exc
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda _index: stop_recording(), range(2)))
+
+    assert sum(isinstance(result, ValueError) for result in results) == 1
+    assert ddbo.get_movie(movie_id)[odb.MOVIE_STATUS] == odb.MOVIE_STATE_READY
