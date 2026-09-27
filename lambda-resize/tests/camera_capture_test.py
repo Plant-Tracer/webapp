@@ -2,6 +2,7 @@
 
 # pylint: disable=no-member  # cv2 exposes C extension members pylint cannot see
 
+import json
 import os
 import tempfile
 import time
@@ -11,6 +12,7 @@ from threading import Barrier
 
 import cv2
 from resize_app import async_work, camera_capture
+from resize_app.main import lambda_handler
 from resize_app.src.app.odb import DDBO as ResizeDDBO
 
 from app import mp4_metadata_lib, odb
@@ -22,6 +24,36 @@ from app.s3_presigned import (
     parse_s3_urn,
     s3_client,
 )
+
+
+class DummyContext:
+    """Minimal Lambda context for API Gateway handler integration tests."""
+
+    function_name = "test-finish-camera"
+    memory_limit_in_mb = 128
+    invoked_function_arn = "arn:aws:lambda:us-east-1:123456789012:function:test-finish-camera"
+    aws_request_id = "test-request-id"
+
+
+def _finish_camera_event(*, api_key=None, body=None):
+    """Build an API Gateway v2 request for the camera STOP endpoint."""
+    return {
+        "version": "2.0",
+        "routeKey": "POST /resize-api/v1/finish-camera",
+        "rawPath": "/resize-api/v1/finish-camera",
+        "rawQueryString": "",
+        "headers": {"x-api-key": api_key} if api_key else {},
+        "requestContext": {
+            "stage": "$default",
+            "http": {
+                "method": "POST",
+                "path": "/resize-api/v1/finish-camera",
+                "sourceIp": "127.0.0.1",
+            },
+        },
+        "body": "" if body is None else json.dumps(body),
+        "isBase64Encoded": False,
+    }
 
 
 def _prepare_camera_movie(new_movie_record, local_s3, request, monkeypatch):
@@ -97,10 +129,21 @@ def test_stop_assembles_uploaded_frames_and_processes_movie(
         new_movie_record, local_s3, request, monkeypatch,
     )
 
-    result = camera_capture.finish(api_key=new_movie_record[odb.API_KEY], movie_id=movie_id)
+    response = lambda_handler(
+        _finish_camera_event(
+            api_key=new_movie_record[odb.API_KEY],
+            body={"movie_id": movie_id},
+        ),
+        DummyContext(),
+    )
 
     movie = ddbo.get_movie(movie_id)
-    assert result == {"movie_id": movie_id, "status": odb.MOVIE_STATE_PROCESSING}
+    assert response["statusCode"] == 200
+    assert json.loads(response["body"]) == {
+        "error": False,
+        "movie_id": movie_id,
+        "status": odb.MOVIE_STATE_PROCESSING,
+    }
     assert movie[odb.MOVIE_STATUS] == odb.MOVIE_STATE_READY
     assert movie[odb.TOTAL_FRAMES] == 3
     assert movie[odb.ANALYSIS_MP4]
@@ -110,6 +153,20 @@ def test_stop_assembles_uploaded_frames_and_processes_movie(
         client.download_file(bucket, key, source_file.name)
         assert mp4_metadata_lib.get_fpm(source_file.name) == "4"
         assert mp4_metadata_lib.get_comment(source_file.name) == mp4_metadata_lib.RESEARCH_PROHIBITED
+
+
+def test_finish_camera_rejects_missing_api_key():
+    """The Lambda endpoint requires its API key before validating the request body."""
+    response = lambda_handler(_finish_camera_event(body={"movie_id": "m123"}), DummyContext())
+
+    assert response["statusCode"] == 401
+
+
+def test_finish_camera_rejects_missing_movie_id():
+    """The Lambda endpoint rejects an empty STOP request before movie lookup."""
+    response = lambda_handler(_finish_camera_event(api_key="key"), DummyContext())
+
+    assert response["statusCode"] == 400
 
 
 def test_expired_camera_job_reclaims_processing_lease(new_movie_record, local_s3, request, monkeypatch):
