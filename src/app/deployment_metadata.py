@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class DeployMetadata(BaseModel):
     """Metadata stamped into the packaged Lambda application."""
 
-    deployed_at: str = UNKNOWN_DEPLOYED_AT
+    deployed_at: str = ""
 
 
 def deployed_at(metadata_path: Path | None = None) -> str:

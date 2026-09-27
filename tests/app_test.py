@@ -7,6 +7,7 @@ import subprocess
 import uuid
 
 import html5validate
+import pytest
 
 from app.paths import STATIC_DIR
 from app import flask_api
@@ -48,6 +49,16 @@ def test_deployed_at_defaults_to_unknown(tmp_path, monkeypatch):
     monkeypatch.delenv("PLANTTRACER_DEPLOYED_AT", raising=False)
 
     assert deployed_at(tmp_path / "missing.json") == "unknown"
+
+
+@pytest.mark.parametrize("metadata", ['{}', '{"deployed_at": " "}', 'invalid json'])
+def test_deployed_at_preserves_environment_fallback(tmp_path, monkeypatch, metadata):
+    deployed = "2026-09-26T22:50:00Z"
+    monkeypatch.setenv("PLANTTRACER_DEPLOYED_AT", deployed)
+    metadata_path = tmp_path / "deploy_metadata.json"
+    metadata_path.write_text(metadata, encoding="utf-8")
+
+    assert deployed_at(metadata_path) == deployed
 
 
 def test_root_clears_invalid_api_key_cookie(client):
