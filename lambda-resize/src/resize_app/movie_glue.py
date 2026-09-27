@@ -5,66 +5,66 @@ Routines for providing access to the movies for the lambda
 
 import hashlib
 import os
-import time
-from typing import NamedTuple
-from pathlib import Path
 import tempfile
+import time
 import zipfile
+from pathlib import Path
+from typing import NamedTuple
 
 from aws_lambda_powertools import Logger
 from botocore.exceptions import BotoCoreError, ClientError
 from pydantic import BaseModel
 
-from .src.app.schema import AnalysisMp4, Trackpoint
-from .src.app.constants import C
-from .src.app.odb import (
-    get_movie_trackpoints,
-    put_frame_trackpoints,
-    clear_movie_tracking_after_frame,
-    LAST_FRAME_TRACKED,
+from . import async_work, local_queue, mpeg_jpeg_zip, tracer
+from .analysis_mp4 import (
+    ANALYSIS_ENCODER_VERSION,
+    AnalysisMp4Options,
+    encode_analysis_mp4,
 )
-from .src.app.odb_movie_data import copy_object_to_path, read_object, write_object_from_path
-from .src.app import mp4_metadata_lib
+from .src.app import mp4_metadata_lib, odb, s3_presigned
+from .src.app.constants import C
 from .src.app.movie_render import render_key
-from .src.app import s3_presigned
-from .src.app import odb
 from .src.app.odb import (
     DDBO,
     ENABLED,
+    FPS,
+    HEIGHT,
+    LAST_FRAME_TRACKED,
     MOVIE_DATA_URN,
     MOVIE_ID,
     MOVIE_ROTATION,
-    remember_trackpoint_frame_height,
+    MOVIE_STATE_PROCESSING,
+    MOVIE_STATE_READY,
+    MOVIE_STATE_TRACING_COMPLETED,
+    MOVIE_STATE_TRACING_FAILED,
+    MOVIE_STATE_UPLOADING,
+    MOVIE_STATUS,
     MOVIE_TRACED_URN,
     MOVIE_ZIPFILE_URN,
     NEEDS_RETRACING,
-    MOVIE_STATUS,
-    MOVIE_STATE_READY,
-    MOVIE_STATE_PROCESSING,
-    MOVIE_STATE_UPLOADING,
-    MOVIE_STATE_TRACING_COMPLETED,
-    MOVIE_STATE_TRACING_FAILED,
-    TOTAL_BYTES,
-    TOTAL_FRAMES,
-    UPLOADED_AT,
-    UPLOAD_BYTES_EXPECTED,
-    UPLOAD_STAGING_URN,
-    UPLOAD_EVENT_ID,
     RESIZE_QUEUED_AT,
     RESIZE_STARTED_AT,
     RESIZED_AT,
-    WIDTH,
-    HEIGHT,
-    FPS,
+    TOTAL_BYTES,
+    TOTAL_FRAMES,
+    UPLOAD_BYTES_EXPECTED,
+    UPLOAD_EVENT_ID,
+    UPLOAD_STAGING_URN,
+    UPLOADED_AT,
     USER_ID,
     USER_NAME,
+    WIDTH,
+    clear_movie_tracking_after_frame,
+    get_movie_trackpoints,
+    put_frame_trackpoints,
+    remember_trackpoint_frame_height,
 )
-
-from .analysis_mp4 import ANALYSIS_ENCODER_VERSION, AnalysisMp4Options, encode_analysis_mp4
-from . import async_work
-from . import local_queue
-from . import mpeg_jpeg_zip
-from . import tracer
+from .src.app.odb_movie_data import (
+    copy_object_to_path,
+    read_object,
+    write_object_from_path,
+)
+from .src.app.schema import AnalysisMp4, Trackpoint
 
 LOG_ID_STATUS_PING = "lambda-status-ping"
 LOGGER = Logger(service="planttracer")
@@ -89,6 +89,10 @@ class UploadCompletion(BaseModel):
     total_bytes: int
 
 
+class MovieAccessError(ValueError):
+    """An API credential or movie-access validation failure."""
+
+
 S3_BUCKET = "Bucket"
 S3_KEY = "Key"
 S3_COPY_SOURCE = "CopySource"
@@ -97,31 +101,31 @@ S3_CONTENT_LENGTH = "ContentLength"
 
 def validate_movie_access(*, api_key=None, movie_id=None, require_edit=False):
     if not api_key:
-        raise ValueError("api_key required")
+        raise MovieAccessError("api_key required")
     if not odb.is_movie_id(movie_id):
-        raise ValueError("movie_id is not valid")
+        raise MovieAccessError("movie_id is not valid")
     ddbo = DDBO()
     api_key_dict = ddbo.get_api_key_dict(api_key)
     if api_key_dict is None:
-        raise ValueError("api_key is not valid")
+        raise MovieAccessError("api_key is not valid")
     if not api_key_dict.get(ENABLED, True):
-        raise ValueError("api_key is not enabled")
+        raise MovieAccessError("api_key is not enabled")
     user_id = api_key_dict.get(USER_ID)
     if not user_id:
-        raise ValueError("user_id is required")
+        raise MovieAccessError("user_id is required")
     try:
         user = ddbo.get_user(user_id)
         if not user.get(ENABLED, True):
-            raise ValueError("user is not enabled")
+            raise MovieAccessError("user is not enabled")
     except odb.InvalidUser_Id as e:
-        raise ValueError("user_id is invalid") from e
+        raise MovieAccessError("user_id is invalid") from e
     try:
         access_check = odb.can_edit_movie if require_edit else odb.can_access_movie
         movie = access_check(user_id=user_id, movie_id=movie_id)
     except odb.UnauthorizedUser as e:
-        raise ValueError(f"user {user_id} is not authorized to access movie {movie_id}") from e
+        raise MovieAccessError(f"user {user_id} is not authorized to access movie {movie_id}") from e
     except odb.InvalidMovie_Id as e:
-        raise ValueError("movie_id is invalid") from e
+        raise MovieAccessError("movie_id is invalid") from e
     return ddbo, user_id, movie
 
 def async_queue_mode() -> str:
@@ -524,7 +528,9 @@ def process_uploaded_movie(*, movie_id: str, processing_attempt=None, completed_
                 result = encode_analysis_mp4(
                     source_path=Path(movie_file.name), output_path=output_path,
                     options=AnalysisMp4Options(rotation=movie_rotation(movie), max_width=640, max_height=640,
-                                               frame_height=saved_coordinate_height(movie) if processing_attempt else None),
+                                               frame_height=(saved_coordinate_height(movie)
+                                                             if processing_attempt and not movie.get(odb.CAMERA_CAPTURE)
+                                                             else None)),
                     comment=mp4_metadata_lib.build_comment(
                         movie.get('research_use', 0) or 0, movie.get('credit_by_name', 0) or 0,
                         movie.get('attribution_name')),
@@ -712,7 +718,7 @@ def run_tracing(*, movie_id, frame_start, frame_end=None, job_id=None):
                                             comment = research_comment )
 
         # Publish only the traced MP4; playback uses the immutable analysis derivative.
-        total_frames = int(movie_record.get(TOTAL_FRAMES) or max((tp.frame_number for tp in trackpoints)) + 1)
+        total_frames = int(movie_record.get(TOTAL_FRAMES) or max(tp.frame_number for tp in trackpoints) + 1)
 
         # Best-effort snapshot of the capture interval into the traced MP4. DynamoDB remains
         # authoritative; later edits update only the DB (see docs/Development/MOVIE_METADATA.rst).
