@@ -767,7 +767,7 @@ stamp-sam-deploy-metadata: sam-version-check
 		echo "Run make sam-build before deploying."; \
 		exit 1; \
 	fi
-	@DEPLOYED_AT=$$(date -u +"%Y-%m-%dT%H:%M:%SZ"); \
+	@set -e; DEPLOYED_AT=$$(date -u +"%Y-%m-%dT%H:%M:%SZ"); \
 	RESIZE_METADATA_FILE="$(SAM_BUILD_DIR)/LambdaResizeFunction/resize_app/deploy_metadata.json"; \
 	WEB_METADATA_DIR="$(SAM_BUILD_DIR)/LambdaWebFunction/app"; \
 	if [ ! -d "$$WEB_METADATA_DIR" ]; then \

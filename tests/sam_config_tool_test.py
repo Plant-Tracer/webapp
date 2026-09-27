@@ -5,11 +5,42 @@ import subprocess
 import tomllib
 from pathlib import Path
 
+import pytest
+
+from app.deployment_metadata import DeployMetadata
 from etc import sam_config_tool, sam_config_writer
 
 STACK_ENVIRONMENT_VARIABLE = "STACK"
 STACK_NAME_ENVIRONMENT_VARIABLE = "STACK_NAME"
 DYNAMODB_PREFIX_ENVIRONMENT_VARIABLE = "DYNAMODB_TABLE_PREFIX"
+
+
+@pytest.mark.parametrize("failed_artifact", [None, "resize", "web"])
+def test_make_deploy_metadata_stamp(tmp_path: Path, failed_artifact: str | None) -> None:
+    resize_dir = tmp_path / "LambdaResizeFunction" / "resize_app"
+    web_dir = tmp_path / "LambdaWebFunction" / "app"
+    resize_dir.mkdir(parents=True)
+    web_dir.mkdir(parents=True)
+    if failed_artifact is not None:
+        failed_dir = resize_dir if failed_artifact == "resize" else web_dir
+        (failed_dir / "deploy_metadata.json").mkdir()
+
+    result = subprocess.run(
+        ["make", "stamp-sam-deploy-metadata", f"SAM_BUILD_DIR={tmp_path}"],
+        capture_output=True, text=True, check=False,
+    )
+
+    if failed_artifact is not None:
+        assert result.returncode != 0
+        assert "Stamped deploy metadata" not in result.stdout
+    else:
+        assert result.returncode == 0, result.stderr
+        resize = DeployMetadata.model_validate_json(
+            (resize_dir / "deploy_metadata.json").read_text(encoding="utf-8"))
+        web = DeployMetadata.model_validate_json(
+            (web_dir / "deploy_metadata.json").read_text(encoding="utf-8"))
+        assert resize.deployed_at == web.deployed_at
+        assert resize.deployed_at.endswith("Z")
 
 
 def _write_config(path: Path, stack_name: str, prefix: str = "prod-") -> None:
