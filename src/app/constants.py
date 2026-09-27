@@ -174,6 +174,7 @@ class C:
     S3_FRAME_OBJECT_KEY_TEMPLATE = (
         "movies/{deployment_id}/{course_id}/{movie_id}/{frame_number:06d}.jpg"
     )
+    CAMERA_FRAME_MAX_BYTES = 2 * 1024 * 1024
     S3_UPLOAD_STAGING_OBJECT_KEY_TEMPLATE = (
         "uploads/{deployment_id}/{course_id}/{movie_id}.mov"
     )

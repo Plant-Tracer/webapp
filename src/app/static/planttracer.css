@@ -130,6 +130,28 @@ div.mtable td.check {
 
 /* Upload page. */
 
+.camera-page {
+  max-width: 48rem;
+  margin: 1rem auto;
+  padding: 0 1rem;
+}
+
+#camera-preview {
+  display: block;
+  width: 100%;
+  max-height: 70vh;
+  background: #000;
+  object-fit: contain;
+}
+
+#camera-stop {
+  min-width: 7rem;
+  min-height: 3rem;
+  color: #fff;
+  background: #b42318;
+  font-weight: 700;
+}
+
 .upload-contributor-notice {
   margin: 0.4em 0 0.2em 1em;
 }

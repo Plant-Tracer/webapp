@@ -555,6 +555,26 @@ Both routes are equivalent. Return users and courses visible to the caller.
 
 ### Movies
 
+#### `POST /api/camera/new-movie`
+
+Create a fresh ``uploading`` movie row for a browser camera capture. This route
+requires a non-demo authenticated user and accepts ``title``, ``description``,
+and optional ``course_id`` form fields. It sets the capture interval to four
+frames per minute (one frame every 15 seconds), marks the row as a camera
+capture, assigns a new ``movie_id``, and records the durable source movie URN.
+It returns ``movie_id``; the browser uses that ID for every frame upload and
+the STOP request. Calling this endpoint again creates an independent movie.
+
+#### `POST /api/camera/frame-upload`
+
+Return a short-lived presigned S3 POST for one JPEG frame. Required form fields
+are ``movie_id`` and ``frame_number`` (zero-based, below ``MAX_FRAMES``). The
+caller must own or have edit permission for a camera movie that is still in
+``uploading`` state. The policy restricts the object to the movie's numbered
+frame key, ``image/jpeg``, and at most 2 MiB. The response contains the
+``presigned_post`` URL and fields. The browser uploads each captured frame
+directly to S3; capture timing does not wait for these uploads.
+
 #### `POST /api/new-movie`
 
 Create a movie record and obtain a presigned S3 POST URL for uploading the

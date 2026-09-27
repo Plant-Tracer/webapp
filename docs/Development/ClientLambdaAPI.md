@@ -32,6 +32,7 @@ asset plan for external static hosting.
 |-----------|--------|------|------|---------|
 | Ping | GET | `/resize-api/v1/ping` | none | Health check; returns `{ "error": false, "status": "ok", ... }` with `app_version`, `deployed_at`, and selected stack parameters. |
 | Complete upload (local adapter) | POST | `/resize-api/v1/process-upload` | `x-api-key` header | Completes a MinIO staging upload through the same service used by the AWS EventBridge handler. |
+| Finish camera capture | POST | `/resize-api/v1/finish-camera` | `x-api-key` header | After STOP and all frame uploads finish, assembles ordered JPEG frames into the durable source MP4 and starts normal movie processing. |
 | First frame | GET | `/resize-api/v1/first-frame?api_key=...&movie_id=...` | query `api_key` | Returns JPEG frame 0 with saved rotation applied and scaled to the analysis size. |
 | Movie data | GET | `/resize-api/v1/movie-data?api_key=...&movie_id=...&format=json` | query `api_key` | Returns signed playback/download URLs as JSON. |
 | Movie data redirect | GET | `/resize-api/v1/movie-data?api_key=...&movie_id=...` | query `api_key` | 302 redirect to signed movie URL. |
@@ -62,6 +63,28 @@ superauditors cannot complete or otherwise mutate movies; superadmins can.
 The EventBridge invocation is not a public HTTP endpoint. Its Pydantic envelope
 validation additionally checks the event source/type, bucket, deployment
 prefix, course/movie identifiers, and corresponding DynamoDB row.
+
+## Finish Camera Capture Request
+
+`POST /resize-api/v1/finish-camera`
+
+```text
+x-api-key: <api_key>
+Content-Type: application/json
+```
+
+```json
+{ "movie_id": "m..." }
+```
+
+The caller must have edit access to a camera movie still in ``uploading``
+state. The service verifies that uploaded frame numbers are contiguous from
+zero, claims the movie's processing lease, and queues camera assembly. The
+worker encodes the frames into the durable source MOV/MP4 object, writes capture
+and research attribution metadata, records frame and byte counts, and invokes
+normal post-upload processing. Missing frames or an invalid movie return HTTP
+409. Local development processes immediately unless local async queue mode is
+enabled; deployed stacks publish the job to EventBridge.
 
 ## Trace Movie Request
 

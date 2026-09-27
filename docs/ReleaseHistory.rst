@@ -78,6 +78,10 @@ Release Notes
 Unreleased Summary
 ******************
 
+    * Add an iOS browser camera flow that captures one photo every 15 seconds,
+      uploads frames independently of the capture schedule, and assembles and
+      processes a time-lapse movie when the user presses STOP (refs #1245).
+
     * Operations: show the UTC stack deployment time on ``/ver`` for deployed
       lambda-web stacks
 

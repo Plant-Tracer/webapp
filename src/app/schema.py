@@ -179,6 +179,7 @@ class Movie(BaseModel):
     last_activity_at: int | None = None
     upload_bytes_expected: Annotated[int | None, Field(ge=1)] = None
     upload_staging_urn: str | None = None
+    camera_capture: bool | None = None
     upload_event_id: str | None = None
     resize_queued_at: int | None = None
     resize_started_at: int | None = None

@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+
+{% block body %}
+<main class="camera-page">
+  <h1>Time-lapse camera</h1>
+  <p>The camera takes one photo every 15 seconds. Keep this page open while recording.</p>
+  <video id="camera-preview" autoplay muted playsinline aria-label="Live camera preview"></video>
+  <p id="camera-status" role="status" aria-live="polite">Opening the camera…</p>
+  <button id="camera-stop" type="button" disabled>STOP</button>
+  <button id="camera-retry" type="button" hidden>Retry camera access</button>
+  <p><a id="camera-analyze" hidden>Analyze this movie</a></p>
+</main>
+<script type="module" src="{{ url_for('static', filename='camera.js') }}"></script>
+{% endblock %}

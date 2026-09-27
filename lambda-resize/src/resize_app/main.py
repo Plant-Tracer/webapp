@@ -30,6 +30,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 from pydantic import BaseModel
 
 from . import async_work
+from . import camera_capture
 from . import movie_glue
 from . import mpeg_jpeg_zip
 from . import lambda_tracing_handler
@@ -182,6 +183,24 @@ def api_process_upload():
         LOGGER.exception("process-upload rejected: %s", exc)
         return Response(status_code=403, body=str(exc))
     return {"error": False, **result.model_dump()}
+
+
+@app.post("/resize-api/v1/finish-camera")
+def api_finish_camera():
+    """Queue camera frame assembly and normal movie processing after STOP."""
+    api_key = next((value for name, value in app.current_event.headers.items()
+                    if name.lower() == "x-api-key"), None)
+    if not api_key:
+        return Response(status_code=401, body="x-api-key header must be provided")
+    body = app.current_event.json_body
+    if not body or not body.get("movie_id"):
+        return Response(status_code=400, body="movie_id must be provided")
+    try:
+        result = camera_capture.finish(api_key=api_key, movie_id=body["movie_id"])
+    except ValueError as exc:
+        LOGGER.exception("finish-camera rejected: %s", exc)
+        return Response(status_code=409, body=str(exc))
+    return {"error": False, **result}
 
 
 @app.get("/resize-api/v1/first-frame")
