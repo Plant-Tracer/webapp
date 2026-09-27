@@ -89,6 +89,10 @@ class UploadCompletion(BaseModel):
     total_bytes: int
 
 
+class MovieAccessError(ValueError):
+    """An API credential or movie-access validation failure."""
+
+
 S3_BUCKET = "Bucket"
 S3_KEY = "Key"
 S3_COPY_SOURCE = "CopySource"
@@ -97,31 +101,31 @@ S3_CONTENT_LENGTH = "ContentLength"
 
 def validate_movie_access(*, api_key=None, movie_id=None, require_edit=False):
     if not api_key:
-        raise ValueError("api_key required")
+        raise MovieAccessError("api_key required")
     if not odb.is_movie_id(movie_id):
-        raise ValueError("movie_id is not valid")
+        raise MovieAccessError("movie_id is not valid")
     ddbo = DDBO()
     api_key_dict = ddbo.get_api_key_dict(api_key)
     if api_key_dict is None:
-        raise ValueError("api_key is not valid")
+        raise MovieAccessError("api_key is not valid")
     if not api_key_dict.get(ENABLED, True):
-        raise ValueError("api_key is not enabled")
+        raise MovieAccessError("api_key is not enabled")
     user_id = api_key_dict.get(USER_ID)
     if not user_id:
-        raise ValueError("user_id is required")
+        raise MovieAccessError("user_id is required")
     try:
         user = ddbo.get_user(user_id)
         if not user.get(ENABLED, True):
-            raise ValueError("user is not enabled")
+            raise MovieAccessError("user is not enabled")
     except odb.InvalidUser_Id as e:
-        raise ValueError("user_id is invalid") from e
+        raise MovieAccessError("user_id is invalid") from e
     try:
         access_check = odb.can_edit_movie if require_edit else odb.can_access_movie
         movie = access_check(user_id=user_id, movie_id=movie_id)
     except odb.UnauthorizedUser as e:
-        raise ValueError(f"user {user_id} is not authorized to access movie {movie_id}") from e
+        raise MovieAccessError(f"user {user_id} is not authorized to access movie {movie_id}") from e
     except odb.InvalidMovie_Id as e:
-        raise ValueError("movie_id is invalid") from e
+        raise MovieAccessError("movie_id is invalid") from e
     return ddbo, user_id, movie
 
 def async_queue_mode() -> str:

@@ -49,6 +49,38 @@ def _frame_objects(*, movie):
     return bucket, [key for _number, key in objects]
 
 
+def _delete_camera_frames(*, movie):
+    """Delete transient camera JPEGs in idempotent S3 batches."""
+    frame_urn = s3_presigned.make_urn(
+        object_name=s3_presigned.frame_object_key(
+            deployment_id=storage_deployment_id(),
+            course_id=movie[odb.COURSE_ID],
+            movie_id=movie[odb.MOVIE_ID],
+            frame_number=CAMERA_FRAME_PREFIX_NUMBER,
+        ),
+    )
+    bucket, first_key = s3_presigned.parse_s3_urn(urn=frame_urn)
+    prefix = first_key.rsplit("/", 1)[0] + "/"
+    client = s3_presigned.s3_client()
+    paginator = client.get_paginator("list_objects_v2")
+    batch = []
+    for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+        for item in page.get("Contents", []):
+            batch.append({"Key": item["Key"]})
+            if len(batch) == 1000:
+                _delete_s3_batch(client=client, bucket=bucket, batch=batch)
+                batch = []
+    if batch:
+        _delete_s3_batch(client=client, bucket=bucket, batch=batch)
+
+
+def _delete_s3_batch(*, client, bucket, batch):
+    """Delete one S3 object batch and surface partial failures for retry."""
+    result = client.delete_objects(Bucket=bucket, Delete={"Objects": batch})
+    if result.get("Errors"):
+        raise RuntimeError("Camera frame cleanup did not delete every object")
+
+
 def finish(*, api_key: str, movie_id: str) -> dict:
     """Claim and queue camera finalization after validating its uploaded frames."""
     ddbo, _user_id, movie = movie_glue.validate_movie_access(
@@ -140,6 +172,7 @@ def process(job: async_work.CameraMovieJob) -> None:
     if not movie.get(odb.CAMERA_CAPTURE):
         raise ValueError("movie is not a camera recording")
     if movie.get(odb.RESIZED_AT) and movie.get(odb.ANALYSIS_MP4):
+        _delete_camera_frames(movie=movie)
         return
     expires_at = int(movie.get(odb.PROCESSING_EXPIRES_AT) or 0)
     if expires_at <= int(time.time()):
@@ -165,6 +198,7 @@ def process(job: async_work.CameraMovieJob) -> None:
                 expected_processing_attempt=job.attempt,
             )
         movie_glue.process_uploaded_movie(movie_id=job.movie_id, processing_attempt=job.attempt)
+        _delete_camera_frames(movie=movie)
     except Exception as exc:
         try:
             ddbo.update_movie(

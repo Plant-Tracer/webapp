@@ -83,9 +83,12 @@ zero, claims the movie's processing lease, and queues camera assembly. A
 concurrent STOP that loses the lease claim returns HTTP 409. The
 worker encodes the frames into the durable source MOV/MP4 object, writes capture
 and research attribution metadata, records frame and byte counts, and invokes
-normal post-upload processing. Missing frames or an invalid movie return HTTP
-409. Local development processes immediately unless local async queue mode is
-enabled; deployed stacks publish the job to EventBridge.
+normal post-upload processing. After processing succeeds, it removes the
+temporary camera JPEGs; retries repeat this cleanup safely. Invalid credentials
+or missing movie access return HTTP 403, while missing frames or a movie that is
+not accepting STOP return HTTP 409. Local development processes immediately
+unless local async queue mode is enabled; deployed stacks publish the job to
+EventBridge.
 
 ## Trace Movie Request
 

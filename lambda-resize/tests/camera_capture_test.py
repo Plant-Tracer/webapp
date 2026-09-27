@@ -148,6 +148,16 @@ def test_stop_assembles_uploaded_frames_and_processes_movie(
     assert movie[odb.TOTAL_FRAMES] == 3
     assert movie[odb.ANALYSIS_MP4]
 
+    frame_prefix = frame_object_key(
+        deployment_id=storage_deployment_id(),
+        course_id=movie[odb.COURSE_ID],
+        movie_id=movie_id,
+        frame_number=0,
+    ).rsplit("/", 1)[0] + "/"
+    assert not client.list_objects_v2(Bucket=bucket, Prefix=frame_prefix).get("Contents")
+    camera_capture.process(async_work.CameraMovieJob(movie_id=movie_id, attempt="duplicate"))
+    assert not client.list_objects_v2(Bucket=bucket, Prefix=frame_prefix).get("Contents")
+
     bucket, key = parse_s3_urn(urn=source_urn)
     with tempfile.NamedTemporaryFile(suffix=".mov") as source_file:
         client.download_file(bucket, key, source_file.name)
@@ -167,6 +177,40 @@ def test_finish_camera_rejects_missing_movie_id():
     response = lambda_handler(_finish_camera_event(api_key="key"), DummyContext())
 
     assert response["statusCode"] == 400
+
+
+def test_finish_camera_returns_forbidden_for_invalid_api_key(
+    new_movie_record, local_s3, request, monkeypatch,
+):
+    """Invalid credentials keep the Lambda endpoint's authorization status."""
+    _ddbo, movie_id, _source_urn, _bucket, _client = _prepare_camera_movie(
+        new_movie_record, local_s3, request, monkeypatch,
+    )
+    response = lambda_handler(
+        _finish_camera_event(api_key="invalid-key", body={"movie_id": movie_id}),
+        DummyContext(),
+    )
+
+    assert response["statusCode"] == 403
+
+
+def test_finish_camera_returns_conflict_for_stopped_movie(
+    new_movie_record, local_s3, request, monkeypatch,
+):
+    """A valid caller receives 409 when the movie no longer accepts STOP."""
+    ddbo, movie_id, _source_urn, _bucket, _client = _prepare_camera_movie(
+        new_movie_record, local_s3, request, monkeypatch,
+    )
+    ddbo.update_movie(movie_id, {odb.MOVIE_STATUS: odb.MOVIE_STATE_READY})
+    response = lambda_handler(
+        _finish_camera_event(
+            api_key=new_movie_record[odb.API_KEY],
+            body={"movie_id": movie_id},
+        ),
+        DummyContext(),
+    )
+
+    assert response["statusCode"] == 409
 
 
 def test_expired_camera_job_reclaims_processing_lease(new_movie_record, local_s3, request, monkeypatch):

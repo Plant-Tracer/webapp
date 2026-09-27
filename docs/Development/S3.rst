@@ -180,7 +180,9 @@ by this workflow.
 The browser camera uploads one JPEG per scheduled capture directly to the
 numbered frame keys. STOP waits for pending uploads before camera finalization;
 lambda-resize requires a contiguous sequence and writes the source MP4 to the
-durable original-movie key before using normal post-upload processing.
+durable original-movie key before using normal post-upload processing. Once
+processing succeeds, lambda-resize deletes the temporary camera JPEG prefix;
+retries repeat the cleanup safely.
 
 The ZIP key retains the original movie extension for compatibility even though
 the object contains ZIP bytes. Derived-artifact helpers preserve the original

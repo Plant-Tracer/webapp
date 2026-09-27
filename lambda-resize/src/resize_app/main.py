@@ -197,6 +197,9 @@ def api_finish_camera():
         return Response(status_code=400, body="movie_id must be provided")
     try:
         result = camera_capture.finish(api_key=api_key, movie_id=body["movie_id"])
+    except movie_glue.MovieAccessError as exc:
+        LOGGER.exception("finish-camera access rejected")
+        return Response(status_code=403, body=str(exc))
     except ValueError as exc:
         LOGGER.exception("finish-camera rejected: %s", exc)
         return Response(status_code=409, body=str(exc))
