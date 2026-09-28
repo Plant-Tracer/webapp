@@ -148,6 +148,8 @@ receive HTTP 400.
         "total_bytes": 12500000,
         "fpm": "60",
         "has_traced_movie": true,
+        "has_zipfile": false,
+        "has_analysis_mp4": true,
         "description": "Daily bean measurement",
         "fps": "30",
         "width": 640,
@@ -177,8 +179,11 @@ API continues to use the ``published`` field: ``1`` is published and ``0`` is hi
 The admin summary reports the same states as ``published``, ``hidden``, or
 ``deleted``.
 `state` reports that visibility/deletion state; `status` reports processing state.
-The summary deliberately omits object URNs and API keys. The default table view
-stays compact: its `Verbose details` control reveals stable IDs, named course
+The summary deliberately omits object URNs and API keys. The admin table
+appends ``[zipfile]`` to the title when a ZIP reference exists but no analysis
+MP4 descriptor is recorded, or ``[pending]`` when an uploaded movie lacks both.
+These flags reflect recorded metadata, not live S3 object checks. The default
+table view stays compact: its `Verbose details` control reveals stable IDs, named course
 administrators, and movie metadata including description, dimensions, trimming,
 rotation, retrace state, and research attribution. ``GET /api/admin/movies/<movie_id>/storage-health``
 loads the verbose-only per-object storage health and pending-upload age on demand.
