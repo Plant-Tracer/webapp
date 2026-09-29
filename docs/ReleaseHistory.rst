@@ -78,6 +78,9 @@ Release Notes
 Unreleased Summary
 ******************
 
+    * Show ``[zipfile]`` or ``[pending]`` beside admin movie names when an
+      uploaded movie has no recorded analysis MP4 (refs #1177).
+
     * Add an iOS browser camera flow that captures one photo every 15 seconds,
       uploads frames independently of the capture schedule, assembles and
       processes a time-lapse movie when the user presses STOP, and removes
