@@ -3129,7 +3129,7 @@ def delete_movie_marker(*, movie_id: str, label: str):
     marker_id = marker_map[MARKER_LABELS].get(label)
     if marker_id is None:
         return
-    if label.lower() == "apex" or label.lower().startswith("ruler "):
+    if label.lower() == "apex" or get_ruler_size(label) is not None:
         raise ValueError("This marker cannot be deleted")
     for frame in frames:
         for point in frame.get('trackpoints', []):

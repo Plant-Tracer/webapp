@@ -1152,7 +1152,7 @@ def test_movie_writes_reject_trace_and_foreign_analysis_leases(client, new_movie
         )
 
 
-@pytest.mark.parametrize('label', ['Apex', 'Ruler 0mm', 'Ruler 10mm'])
+@pytest.mark.parametrize('label', ['Apex', 'Ruler 0mm', 'Ruler 10mm', 'Ruler0mm', 'Ruler10mm', 'Ruler  20mm'])
 def test_legacy_default_markers_cannot_be_deleted(client, new_movie, label):
     """Default labels remain protected even before their undeletable flag was persisted."""
     movie_id = new_movie[MOVIE_ID]
