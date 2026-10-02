@@ -202,8 +202,10 @@ Before tracing, stepping or jumping to an unannotated frame carries the latest
 preceding marker positions forward without moving them. Existing annotations on
 the destination frame take precedence. Carried positions are starting points;
 navigation alone does not add points to graphs, exports, or saved paths. Moving
-a marker or choosing Trace saves the displayed positions on that frame. Gaps in
-an existing trace stay empty, so a lost marker is not silently restored.
+a marker or choosing Trace saves the displayed positions on that frame. Each
+marker carries its latest position across gaps independently, including gaps
+among other markers' computed positions. These displayed copies are not new
+measurements. An explicit empty annotation stops preceding carried positions.
 Trimmed frames remain shaded and inactive. Changing the trim does not delete
 saved markers; the carried positions are available on included untraced frames.
 Use a current Chrome or Edge browser on Windows or macOS with WebCodecs support.

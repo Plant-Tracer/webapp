@@ -1153,12 +1153,16 @@ def test_movie_writes_reject_trace_and_foreign_analysis_leases(client, new_movie
 
 
 @pytest.mark.parametrize('label', ['Apex', 'Ruler 0mm', 'Ruler 10mm', 'Ruler0mm', 'Ruler10mm', 'Ruler  20mm'])
-def test_legacy_default_markers_cannot_be_deleted(client, new_movie, label):
-    """Default labels remain protected even before their undeletable flag was persisted."""
+@pytest.mark.parametrize('rename', [False, True])
+def test_legacy_default_markers_cannot_be_deleted(client, new_movie, label, rename):
+    """Legacy default identities stay protected even after a rename without saved flags."""
     movie_id = new_movie[MOVIE_ID]
     odb.ensure_bottom_left_trackpoints(movie_id=movie_id)
     odb.put_frame_trackpoints(movie_id=movie_id, frame_number=0,
                              trackpoints=[Trackpoint(x=10, y=20, label=label)])
+    if rename:
+        odb.rename_movie_marker(movie_id=movie_id, old_label=label, new_label='Leaf')
+        label = 'Leaf'
     response = client.post('/api/delete-marker', data={
         API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id, 'label': label})
     assert response.status_code == 400
