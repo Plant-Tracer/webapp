@@ -233,7 +233,8 @@ def cv2_trace_frame(*, gray_frame_prev:np.ndarray, gray_frame:np.ndarray, trackp
         # Don't return empty! Return the previous trackpoints but update their frame_number
         trackpoints_out = [trackpoint_with_updates(pt, frame_number=frame_number) for pt in trackpoints]
     logger.info("cv2_trace_frame output_trackpoints=%s", trackpoints_out)
-    return trackpoints_out
+    return [trackpoint_with_updates(point, is_manual=False, is_traced=True)
+            for point in trackpoints_out]
 
 
 def cv2_label_frame(*,
@@ -392,6 +393,12 @@ def trace_movie_v2(*, movie_url,  # pylint: disable=too-many-arguments
                     trackpoints = trackpoints_prev,
                     frame_number=frame_number,
                 )
+                # Manual anchors introduce new markers or correct this frame only;
+                # subsequent optical flow starts from these exact coordinates.
+                anchors = {point.label: point for point in points_by_frame.get(frame_number, [])
+                           if point.is_manual}
+                trackpoints_this = [anchors.pop(point.label, point) for point in trackpoints_this]
+                trackpoints_this.extend(anchors.values())
                 trackpoints_output.extend(trackpoints_this) # add to the output
             else:
                 trackpoints_this = points_by_frame.get(frame_number, [])

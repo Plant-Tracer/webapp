@@ -224,6 +224,9 @@ MOVIE_METADATA_BULK_PROPS = (FPS, WIDTH, HEIGHT, TOTAL_FRAMES, TOTAL_BYTES)
 FRAME_NUMBER = 'frame_number'
 TRACKPOINTS = 'trackpoints'
 EMPTY_MARKER_ANNOTATION = 'empty_marker_annotation'
+IS_MANUAL = "is_manual"
+IS_TRACED = "is_traced"
+
 MOVIE_MARKER_MAP_FRAME_NUMBER = -100
 FRAME_URN = 'frame_urn'
 FIRST_FRAME_URN = 'first_frame_urn'
@@ -2376,23 +2379,6 @@ def movie_is_available(movie: dict) -> bool:
     return bool(movie.get(UPLOADED_AT) or movie.get(DATE_UPLOADED))
 
 
-def _copy_frame_trackpoints_if_missing(*, movie_id: str, from_frame: int, to_frame: int):
-    """Copy markers from one frame to another only when the target has no markers."""
-    assert is_movie_id(movie_id)
-    ddbo = DDBO()
-    target = ddbo.get_movie_frame(movie_id, to_frame, consistent_read=True)
-    if target and (TRACKPOINTS in target or target.get(EMPTY_MARKER_ANNOTATION)):
-        return False
-    source = ddbo.get_movie_frame(movie_id, from_frame, consistent_read=True)
-    if not source or (TRACKPOINTS not in source and not source.get(EMPTY_MARKER_ANNOTATION)):
-        return False
-    marker_map = get_movie_marker_map(movie_id=movie_id, create=False)
-    trackpoints = [Trackpoint(**trackpoint) for trackpoint in source.get(TRACKPOINTS, [])
-                  if not marker_is_deleted(marker_map, trackpoint)]
-    put_frame_trackpoints(movie_id=movie_id, frame_number=to_frame, trackpoints=trackpoints)
-    return True
-
-
 def set_movie_trim_frame(*, movie_id: str, prop: str, frame_number: int) -> dict:
     """Set one trim bound after validation and return metadata with defaults."""
     assert is_movie_id(movie_id)
@@ -2410,8 +2396,6 @@ def set_movie_trim_frame(*, movie_id: str, prop: str, frame_number: int) -> dict
     if new_end is None:
         new_end = total_frames - 1
     validate_trim_bounds(trim_start_frame=new_start, trim_end_frame=new_end, total_frames=total_frames)
-    if prop == TRIM_START_FRAME and new_start < old_start:
-        _copy_frame_trackpoints_if_missing(movie_id=movie_id, from_frame=old_start, to_frame=new_start)
     ddbo.update_movie(movie_id, {prop: frame_number})
     return movie_metadata_with_trim_defaults(get_movie_metadata(movie_id=movie_id, get_last_frame_tracked=True))
 
@@ -3145,6 +3129,8 @@ def delete_movie_marker(*, movie_id: str, label: str):
     marker_id = marker_map[MARKER_LABELS].get(label)
     if marker_id is None:
         return
+    if label.lower() == "apex" or label.lower().startswith("ruler "):
+        raise ValueError("This marker cannot be deleted")
     for frame in frames:
         for point in frame.get('trackpoints', []):
             point_id = point.get(MARKER_ID) or marker_map[MARKER_ALIASES].get(point.get('label'))
@@ -3338,7 +3324,7 @@ def put_frame_trackpoints(*, movie_id, frame_number:int, trackpoints:list[Trackp
 
 
 def clear_movie_tracking_after_frame(*, movie_id, frame_number:int, frame_end:int|None=None):
-    """Remove trackpoints for frames strictly after ``frame_number``.
+    """Remove computed trackpoints after ``frame_number``, preserving manual anchors.
 
     This is used when the user edits frame ``N`` and requests a retrace: frame ``N``
     remains the source of truth, while frames ``N+1`` through ``frame_end`` (or the
@@ -3360,10 +3346,18 @@ def clear_movie_tracking_after_frame(*, movie_id, frame_number:int, frame_end:in
             continue
         if frame_end is not None and int(fn) > frame_end:
             continue
-        ddbo.movie_frames.update_item(
-            Key={MOVIE_ID: movie_id, FRAME_NUMBER: fn},
-            UpdateExpression=f'REMOVE {TRACKPOINTS}, {EMPTY_MARKER_ANNOTATION}',
-        )
+        anchors = [point for point in frame.get(TRACKPOINTS, []) if point.get(IS_MANUAL)]
+        if anchors:
+            ddbo.movie_frames.update_item(
+                Key={MOVIE_ID: movie_id, FRAME_NUMBER: fn},
+                UpdateExpression=f'SET {TRACKPOINTS}=:points REMOVE {EMPTY_MARKER_ANNOTATION}',
+                ExpressionAttributeValues={':points': anchors},
+            )
+        else:
+            ddbo.movie_frames.update_item(
+                Key={MOVIE_ID: movie_id, FRAME_NUMBER: fn},
+                UpdateExpression=f'REMOVE {TRACKPOINTS}, {EMPTY_MARKER_ANNOTATION}',
+            )
         deleted += 1
 
     # Preserve the edited frame as the new frontier for any subsequent retrace.

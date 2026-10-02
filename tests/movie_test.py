@@ -807,7 +807,7 @@ def test_empty_marker_annotations_survive_api_reload_and_trim(client, new_movie,
                              trackpoints=[Trackpoint(x=30, y=22, label='apex')])
     assert odb.get_movie_annotations(movie_id=movie_id, frame_start=0, frame_end=2).empty_frames == []
 
-def test_empty_trim_source_is_copied_for_reload(client, new_movie):
+def test_trim_does_not_move_empty_boundaries_on_reload(client, new_movie):
     movie_id = new_movie[MOVIE_ID]
     params = {API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id}
     odb.ensure_bottom_left_trackpoints(movie_id=movie_id)
@@ -821,7 +821,7 @@ def test_empty_trim_source_is_copied_for_reload(client, new_movie):
         **params, odb.TRIM_START_FRAME: 1}).get_json()['error']
     frames = client.post('/api/get-movie-metadata', data={
         **params, 'frame_start': 0, 'frame_count': 4}).get_json()['frames']
-    assert frames['1']['markers'] == []
+    assert '1' not in frames
     assert frames['2']['markers'] == []
     assert frames['0']['markers'][0]['x'] == 10
     assert odb.last_tracked_movie_frame(movie_id=movie_id) == 0
@@ -832,10 +832,10 @@ def test_deleted_annotation_remains_empty_on_reload(client, new_movie):
     params = {API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id}
     odb.ensure_bottom_left_trackpoints(movie_id=movie_id)
     odb.put_frame_trackpoints(movie_id=movie_id, frame_number=0, trackpoints=[
-        Trackpoint(x=10, y=20, label='Apex'), Trackpoint(x=5, y=5, label='Ruler')])
+        Trackpoint(x=10, y=20, label='Leaf'), Trackpoint(x=5, y=5, label='Ruler')])
     odb.put_frame_trackpoints(movie_id=movie_id, frame_number=2,
-                             trackpoints=[Trackpoint(x=30, y=20, label='Apex')])
-    response = client.post('/api/delete-marker', data={**params, 'label': 'Apex'})
+                             trackpoints=[Trackpoint(x=30, y=20, label='Leaf')])
+    response = client.post('/api/delete-marker', data={**params, 'label': 'Leaf'})
     assert response.status_code == 200
     assert not response.get_json()['error']
     frames = client.post('/api/get-movie-metadata', data={
@@ -847,7 +847,7 @@ def test_deleted_annotation_remains_empty_on_reload(client, new_movie):
 
 @pytest.mark.parametrize('legacy', [False, True])
 @pytest.mark.parametrize('keep_marker', [False, True])
-def test_trim_copy_does_not_revive_deleted_markers(client, new_movie, legacy, keep_marker):
+def test_trim_does_not_revive_deleted_markers(client, new_movie, legacy, keep_marker):
     movie_id = new_movie[MOVIE_ID]
     params = {API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id}
     odb.ensure_bottom_left_trackpoints(movie_id=movie_id)
@@ -870,14 +870,10 @@ def test_trim_copy_does_not_revive_deleted_markers(client, new_movie, legacy, ke
         **params, odb.TRIM_START_FRAME: 1}).get_json()['error']
     frames = client.post('/api/get-movie-metadata', data={
         **params, 'frame_start': 0, 'frame_count': 4}).get_json()['frames']
-    expected = [{'x': 30, 'y': 40, 'label': 'Keep', 'color': 'blue', 'frame_number': 1}]
-    assert frames['1']['markers'] == (expected if keep_marker else [])
+    assert '1' not in frames
+    assert [point['label'] for point in frames['2']['markers']] == (['Keep'] if keep_marker else [])
     assert table.get_item(Key=key, ConsistentRead=True)['Item'] == source
-    target = table.get_item(Key={MOVIE_ID: movie_id, odb.FRAME_NUMBER: 1},
-                            ConsistentRead=True)['Item']
-    if not keep_marker:
-        assert target[odb.EMPTY_MARKER_ANNOTATION]
-        assert odb.TRACKPOINTS not in target
+    assert 'Item' not in table.get_item(Key={MOVIE_ID: movie_id, odb.FRAME_NUMBER: 1}, ConsistentRead=True)
 
 
 def test_set_movie_trim_returns_validation_error(client, new_movie):
@@ -1154,3 +1150,17 @@ def test_movie_writes_reject_trace_and_foreign_analysis_leases(client, new_movie
         assert response.get_json()['message'] == (
             "This movie is currently being traced and is read-only."
         )
+
+
+@pytest.mark.parametrize('label', ['Apex', 'Ruler 0mm', 'Ruler 10mm'])
+def test_legacy_default_markers_cannot_be_deleted(client, new_movie, label):
+    """Default labels remain protected even before their undeletable flag was persisted."""
+    movie_id = new_movie[MOVIE_ID]
+    odb.ensure_bottom_left_trackpoints(movie_id=movie_id)
+    odb.put_frame_trackpoints(movie_id=movie_id, frame_number=0,
+                             trackpoints=[Trackpoint(x=10, y=20, label=label)])
+    response = client.post('/api/delete-marker', data={
+        API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id, 'label': label})
+    assert response.status_code == 400
+    assert response.get_json()['error']
+    assert odb.get_movie_trackpoints(movie_id=movie_id)[0]['label'] == label

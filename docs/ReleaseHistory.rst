@@ -78,6 +78,11 @@ Release Notes
 Unreleased Summary
 ******************
 
+    * Version 0.9.9.22: preserve frame-zero markers, carry new markers forward
+      independently, retain manual placements through tracing, and start an
+      initial trace at the trim start regardless of the viewed frame (fixes #1256).
+      Protect Apex and ruler markers and preserve earlier frames during reset.
+
     * Show ``[zipfile]`` or ``[pending]`` beside admin movie names when an
       uploaded movie has no recorded analysis MP4 (refs #1177).
 

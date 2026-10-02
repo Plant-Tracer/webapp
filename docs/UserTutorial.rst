@@ -257,3 +257,13 @@ When you have set the capture interval, the label also shows elapsed capture sec
 from the original frame 0. The red analysis-player label uses the same zero-based
 frame index. Older analysis movies are recoded when opened; old downloads need
 to be generated again to receive the new labels.
+
+Marker placement across frames
+------------------------------
+
+New markers appear from their creation frame onward. Moving an untraced marker
+changes its subsequent displayed positions; moving a traced marker corrects only
+that frame until you explicitly retrace. The first Trace Movie covers the selected
+trim range even if you are viewing its end. Later manual placements are preserved
+during retracing. See :doc:`Development/MarkerLifecycle` for examples, reset
+behavior, and the distinction between displayed seeds and measured positions.

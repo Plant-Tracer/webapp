@@ -81,9 +81,9 @@ the last frame button twice) and then clicking `Set end`.
 Applying a trim does not change stored trackpoints outside the inclusive trim range.
 However, graphs and CSV export only expose trackpoints in the trimmed range.
 
-When moving `trim_start_frame` earlier and the new start frame has no markers,
-copy the old start frame's marker set to the new start frame as an editable
-seed; do not synthesize intermediate frames.
+Moving `trim_start_frame` earlier preserves every marker's birth frame and saved
+positions. It does not copy later markers backward (issue #1256). See
+[Marker lifecycle](MarkerLifecycle.rst) for the current placement and tracing rules.
 
 Frames outside the trim range may still be displayed by direct navigation, but
 they are not part of the active analysis:
@@ -161,7 +161,7 @@ current trackpoints.
 - Add a trim update endpoint for `Set start` and `Set end` that validates
   cross-field constraints before persisting the requested bound.
 - Preserve stored trackpoints outside the trim range.
-- Implement the required seed behavior when moving `trim_start_frame` earlier.
+- Preserve marker birth frames when moving `trim_start_frame` earlier.
 - Update the Analyze page template with trim controls.
 - Update the JavaScript controller to initialize default trim values if missing.
 - Update movie navigation, playback, out-of-range overlay, and interaction
@@ -171,5 +171,5 @@ current trackpoints.
 - Update the tracer endpoint, queue payload, local worker, and tracing function
   to accept an optional end frame.
 - Add focused tests for metadata defaults, validation, out-of-range trackpoint
-  preservation, seed-marker copy, navigation behavior, graph filtering, CSV
+  preservation, marker birth boundaries, navigation behavior, graph filtering, CSV
   filtering, and tracer end-frame handling.

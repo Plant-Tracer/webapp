@@ -252,7 +252,7 @@ def test_upload_movie_end_to_end(chrome_driver, live_server, new_course):
     wait.until(lambda _browser: any(point['label'] == 'Apex' and point['x'] == 70
                                    for point in odb.get_movie_trackpoints(
                                        movie_id=movie_id, frame_start=1, frame_count=1)))
-    # Trim copying must wait for an actual delayed save on the old start.
+    # Trim changes must wait for an actual delayed save without moving its birth.
     frame_field = chrome_driver.find_element(By.CSS_SELECTOR, '#tracer .frame_number_field')
     frame_field.clear()
     frame_field.send_keys('3', Keys.TAB)
@@ -280,8 +280,9 @@ def test_upload_movie_end_to_end(chrome_driver, live_server, new_course):
     wait.until(lambda _browser: odb.get_movie(movie_id=movie_id).get(odb.TRIM_START_FRAME) == 2)
     wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .track_button')))
     assert not chrome_driver.execute_script('return window.trimRacedMarkerSave;')
+    assert not odb.get_movie_trackpoints(movie_id=movie_id, frame_start=2, frame_end=2)
     assert any(point['label'] == 'Apex' and point['x'] == 80 and point['y'] == 575
-               for point in odb.get_movie_trackpoints(movie_id=movie_id, frame_start=2, frame_end=2))
+               for point in odb.get_movie_trackpoints(movie_id=movie_id, frame_start=3, frame_end=3))
     chrome_driver.execute_cdp_cmd('Network.emulateNetworkConditions', {
         'offline': False, 'latency': 0, 'downloadThroughput': -1, 'uploadThroughput': -1})
     chrome_driver.find_element(By.CSS_SELECTOR, '#tracer .prev_frame').click()
@@ -296,6 +297,8 @@ def test_upload_movie_end_to_end(chrome_driver, live_server, new_course):
                .get_attribute('value') == str(last_index))
     wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#tracer .track_button')))
     assert len(odb.get_movie_trackpoints(movie_id=movie_id)) == 9
+    assert {point['label'] for point in odb.get_movie_trackpoints(
+        movie_id=movie_id, frame_start=0, frame_count=1)} == {'Apex', 'Ruler 0mm', 'Ruler 10mm'}
     frame_field = chrome_driver.find_element(By.CSS_SELECTOR, '#tracer .frame_number_field')
     frame_field.clear()
     frame_field.send_keys('1', Keys.TAB)
@@ -358,7 +361,7 @@ def test_upload_movie_end_to_end(chrome_driver, live_server, new_course):
     assert after_reset[odb.LAST_FRAME_TRACKED] == 1
     assert after_reset.get(odb.ANALYSIS_LEASE_ID)
     points = odb.get_movie_trackpoints(movie_id=movie_id)
-    assert {point[odb.FRAME_NUMBER] for point in points} == {1}
+    assert {point[odb.FRAME_NUMBER] for point in points} == {0, 1}
     assert {point['label'] for point in points} == {'Apex', 'Ruler 0mm', 'Ruler 10mm'}
     assert chrome_driver.execute_script("""
         return performance.getEntriesByType('resource').filter(entry => {
