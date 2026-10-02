@@ -25,6 +25,7 @@ from .odb import (
     MAX_ENROLLMENT,
     MOVIE_ID,
     MOVIE_DATA_URN,
+    ANALYSIS_MP4,
     MOVIE_STATUS,
     MOVIE_TRACED_URN,
     MOVIE_ZIPFILE_URN,
@@ -244,6 +245,8 @@ class AdminMovieSummary(BaseModel):
     total_bytes: int | None = None
     fpm: str | None = None
     has_traced_movie: bool = False
+    has_zipfile: bool = False
+    has_analysis_mp4: bool = False
     description: str = ""
     fps: str | None = None
     width: int | None = None
@@ -522,6 +525,8 @@ def movie_summary(movie) -> AdminMovieSummary:
         total_bytes=movie.get(TOTAL_BYTES),
         fpm=movie.get(FPM),
         has_traced_movie=bool(movie.get(MOVIE_TRACED_URN)),
+        has_zipfile=bool(movie.get(MOVIE_ZIPFILE_URN)),
+        has_analysis_mp4=bool(movie.get(ANALYSIS_MP4)),
         description=movie.get(DESCRIPTION) or "",
         fps=movie.get(FPS),
         width=movie.get(WIDTH),

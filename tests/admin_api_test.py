@@ -985,6 +985,8 @@ def test_admin_summary_includes_enrollment_memberships_and_movies(client, new_mo
         assert movie["total_bytes"] > 0
         assert movie["description"] == "Description"
         assert movie["needs_retracing"] is False
+        assert movie["has_zipfile"] is False
+        assert movie["has_analysis_mp4"] is False
         assert "original_object_state" not in movie
         assert movie["research_use"] == 1
         assert movie["credit_by_name"] == 1

@@ -58,6 +58,7 @@ from .odb import (
 )
 from .s3_presigned import (
     movie_object_key,
+    frame_object_key,
     upload_staging_object_key,
     make_urn,
     make_signed_url,
@@ -851,6 +852,69 @@ MIME_MAP = {'.jpg':'image/jpeg',
 ##
 # Movie APIs. All of these need to only be POST to avoid an api_key from being written into the logfile
 ##
+
+@api_bp.route('/camera/new-movie', methods=POST)
+def api_camera_new_movie():
+    """Create an uploading movie record for an authenticated camera capture."""
+    user_id = get_user_id(allow_demo=False)
+    user = odb.get_user(user_id)
+    context = course_context.resolve_course_context(
+        user=user,
+        requested_course_id=request.form.get(COURSE_ID),
+        mode=course_context.CourseContextMode.MUTATION,
+    )
+    title = (request.form.get('title') or '').strip()
+    description = (request.form.get('description') or '').strip()
+    if not title or not description:
+        return jsonify({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: 'title and description are required'}), 400
+
+    fpm = '4'  # one frame every 15 seconds
+    movie_id = odb.create_new_movie(
+        user_id=user_id,
+        course_id=context.effective_course_id,
+        title=title[:256],
+        description=description[:1024],
+        fpm=fpm,
+    )
+    movie_urn = make_urn(object_name=movie_object_key(
+        deployment_id=storage_deployment_id(),
+        course_id=context.effective_course_id,
+        movie_id=movie_id,
+    ))
+    DDBO().update_movie(movie_id, {
+        MOVIE_DATA_URN: movie_urn,
+        odb.CAMERA_CAPTURE: True,
+    }, touch_activity=False)
+    return jsonify({C.API_KEY_ERROR: False, MOVIE_ID: movie_id})
+
+
+@api_bp.route('/camera/frame-upload', methods=POST)
+def api_camera_frame_upload():
+    """Return a short-lived signed POST for one frame of the caller's movie."""
+    user_id = get_user_id(allow_demo=False)
+    movie_id = get_movie_id()
+    frame_number = get_int('frame_number')
+    if frame_number is None or not 0 <= frame_number < C.MAX_FRAMES:
+        return jsonify({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: 'invalid frame_number'}), 400
+    movie = odb.can_edit_movie(user_id=user_id, movie_id=movie_id)
+    if not movie.get(odb.CAMERA_CAPTURE) or movie.get(MOVIE_STATUS) != odb.MOVIE_STATE_UPLOADING:
+        return jsonify({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: 'camera recording is not accepting frames'}), 409
+    frame_urn = make_urn(object_name=frame_object_key(
+        deployment_id=storage_deployment_id(),
+        course_id=movie[COURSE_ID],
+        movie_id=movie_id,
+        frame_number=frame_number,
+    ))
+    return jsonify({
+        C.API_KEY_ERROR: False,
+        'presigned_post': make_presigned_post(
+            urn=frame_urn,
+            maxsize=C.CAMERA_FRAME_MAX_BYTES,
+            mime_type='image/jpeg',
+            fpm=movie.get(odb.FPM) or '4',
+            expires=300,
+        ),
+    })
 
 @api_bp.route('/new-movie', methods=POST)
 def api_new_movie():

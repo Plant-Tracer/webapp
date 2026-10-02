@@ -11,6 +11,7 @@ import tomlkit
 DEFAULT_ENVIRONMENT = "default"
 DEPLOY = "deploy"
 DYNAMODB_TABLE_PREFIX = "DynamoDBTablePrefix"
+IMAGE_BUCKET_NAME = "ImageBucketName"
 PARAMETERS = "parameters"
 PARAMETER_OVERRIDES = "parameter_overrides"
 STACK_NAME = "stack_name"
@@ -41,7 +42,8 @@ def _set_parameter_override(params, name: str, value: str) -> bool:
 
 
 def bootstrap_config(config_path: str, requested_stack_name: str | None,
-                     requested_dynamodb_prefix: str | None = None) -> bool:
+                     requested_dynamodb_prefix: str | None = None,
+                     requested_image_bucket: str | None = None) -> bool:
     """Create or update a SAM config and return whether the file changed."""
     path = Path(config_path)
     if path.exists():
@@ -51,7 +53,7 @@ def bootstrap_config(config_path: str, requested_stack_name: str | None,
         document.add("version", 0.1)
 
     changed = False
-    if requested_stack_name or requested_dynamodb_prefix:
+    if requested_stack_name or requested_dynamodb_prefix or requested_image_bucket:
         environment = document.get(DEFAULT_ENVIRONMENT)
         if environment is None:
             environment = tomlkit.table()
@@ -76,6 +78,9 @@ def bootstrap_config(config_path: str, requested_stack_name: str | None,
         changed = _set_parameter_override(
             params, DYNAMODB_TABLE_PREFIX, normalized_prefix) or changed
 
+    if requested_image_bucket:
+        changed = _set_parameter_override(params, IMAGE_BUCKET_NAME, requested_image_bucket) or changed
+
     if not path.exists() or changed:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(tomlkit.dumps(document), encoding="utf-8")
@@ -89,10 +94,11 @@ def main() -> None:
     parser.add_argument("--samconfig", default="samconfig.toml", metavar="FILE")
     parser.add_argument("--stack-name")
     parser.add_argument("--dynamodb-table-prefix")
+    parser.add_argument("--image-bucket-name")
     args = parser.parse_args()
 
     changed = bootstrap_config(
-        args.samconfig, args.stack_name, args.dynamodb_table_prefix)
+        args.samconfig, args.stack_name, args.dynamodb_table_prefix, args.image_bucket_name)
     action = "Updated" if changed else "Verified"
     print(f"{action} {args.samconfig}")
 

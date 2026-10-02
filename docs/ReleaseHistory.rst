@@ -78,6 +78,14 @@ Release Notes
 Unreleased Summary
 ******************
 
+    * Show ``[zipfile]`` or ``[pending]`` beside admin movie names when an
+      uploaded movie has no recorded analysis MP4 (refs #1177).
+
+    * Add an iOS browser camera flow that captures one photo every 15 seconds,
+      uploads frames independently of the capture schedule, assembles and
+      processes a time-lapse movie when the user presses STOP, and removes
+      temporary frames after processing succeeds (refs #1245).
+
     * Operations: show the UTC stack deployment time on ``/ver`` for deployed
       lambda-web stacks
 
@@ -99,6 +107,10 @@ Unreleased Summary
       read exactly the requested count of annotation frames.
       Exclude legacy empty trackpoint lists from the derived tracking frontier.
       Filter deleted legacy markers before copying a moved trim start.
+
+    * SAM deployment rejects uninitialized per-stack configurations before changing
+      them and directs operators to guided deployment. An explicitly supplied
+      ``PLANTTRACER_S3_BUCKET`` sets the guided ``ImageBucketName`` value (issue #1253).
 
     * Prevent tracing from a frame with no markers. Reject empty source frames
       before queueing, keep empty marker saves from advancing the tracked frame,

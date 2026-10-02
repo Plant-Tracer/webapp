@@ -13,6 +13,7 @@ from etc import sam_config_tool, sam_config_writer
 STACK_ENVIRONMENT_VARIABLE = "STACK"
 STACK_NAME_ENVIRONMENT_VARIABLE = "STACK_NAME"
 DYNAMODB_PREFIX_ENVIRONMENT_VARIABLE = "DYNAMODB_TABLE_PREFIX"
+IMAGE_BUCKET_ENVIRONMENT_VARIABLE = "PLANTTRACER_S3_BUCKET"
 
 
 @pytest.mark.parametrize("failed_artifact", [None, "resize", "web"])
@@ -60,6 +61,7 @@ def _make_environment() -> dict[str, str]:
         STACK_ENVIRONMENT_VARIABLE,
         STACK_NAME_ENVIRONMENT_VARIABLE,
         DYNAMODB_PREFIX_ENVIRONMENT_VARIABLE,
+        IMAGE_BUCKET_ENVIRONMENT_VARIABLE,
     ):
         environment.pop(name, None)
     return environment
@@ -245,6 +247,7 @@ def test_guided_bootstrap_allows_missing_dynamodb_override(tmp_path: Path) -> No
             "sam-config-guided-bootstrap",
             "STACK_NAME=new-stack",
             "DYNAMODB_TABLE_PREFIX=test",
+            "PLANTTRACER_S3_BUCKET=planttracer-prod",
             f"SAM_CONFIG={config_path}",
         ],
         cwd=Path(__file__).parents[1],
@@ -256,3 +259,53 @@ def test_guided_bootstrap_allows_missing_dynamodb_override(tmp_path: Path) -> No
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert sam_config_tool.stack_name(str(config_path)) == "new-stack"
+    assert sam_config_tool.parameter_override(str(config_path), "ImageBucketName") == "planttracer-prod"
+
+
+@pytest.mark.parametrize("saved_config,accepted", [
+    (None, False),
+    ('stack_name = "new-stack"\n', False),
+    ('resolve_s3 = true\n', False),
+    ('resolve_s3 = false\nparameter_overrides = \'ImageBucketName="movies"\'\n', False),
+    ('resolve_s3 = true\nparameter_overrides = \'ImageBucketName="movies"\'\n', True),
+    ('s3_bucket = "artifacts"\nparameter_overrides = \'ImageBucketName="movies"\'\n', True),
+])
+def test_make_config_check_requires_initialized_buckets_without_bootstrapping(
+    tmp_path: Path, saved_config: str | None, accepted: bool,
+) -> None:
+    """Normal preflight rejects missing settings before creating or changing files."""
+    config_path = tmp_path / "new-stack.toml"
+    if saved_config is not None:
+        config_path.write_text("version = 0.1\n[default.deploy.parameters]\n" + saved_config)
+    original = config_path.read_bytes() if config_path.exists() else None
+    result = subprocess.run(
+        ["make", "--no-print-directory", "sam-config-check", "STACK=new-stack",
+         "PLANTTRACER_S3_BUCKET=planttracer-prod", f"SAM_CONFIG={config_path}"],
+        cwd=Path(__file__).parents[1], env=_make_environment(),
+        capture_output=True, text=True, check=False,
+    )
+    assert (result.returncode == 0) is accepted, result.stdout + result.stderr
+    if accepted:
+        assert sam_config_tool.parameter_override(str(config_path), "ImageBucketName") == "planttracer-prod"
+    else:
+        assert "sam-deploy-guided" in result.stdout
+        assert (config_path.read_bytes() if config_path.exists() else None) == original
+
+
+def test_bootstrap_preserves_saved_movie_bucket_without_explicit_override(tmp_path: Path) -> None:
+    """Changing the target/prefix does not discard the operator's saved bucket."""
+    config_path = tmp_path / "saved.toml"
+    sam_config_writer.bootstrap_config(str(config_path), "old-stack", "old", "saved-movies")
+    sam_config_writer.bootstrap_config(str(config_path), "new-stack", "new")
+    assert sam_config_tool.parameter_override(str(config_path), "ImageBucketName") == "saved-movies"
+
+
+def test_deploy_check_uses_default_environment(tmp_path: Path) -> None:
+    """Settings for another SAM environment cannot satisfy the default deployment."""
+    config_path = tmp_path / "alternate.toml"
+    config_path.write_text(
+        "version = 0.1\n[other.deploy.parameters]\nresolve_s3 = true\n"
+        "parameter_overrides = 'ImageBucketName=movies'\n",
+    )
+    with pytest.raises(ValueError, match=r"default\.deploy\.parameters"):
+        sam_config_tool.check_deploy_config(str(config_path))

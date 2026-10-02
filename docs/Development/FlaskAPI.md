@@ -148,6 +148,8 @@ receive HTTP 400.
         "total_bytes": 12500000,
         "fpm": "60",
         "has_traced_movie": true,
+        "has_zipfile": false,
+        "has_analysis_mp4": true,
         "description": "Daily bean measurement",
         "fps": "30",
         "width": 640,
@@ -177,8 +179,11 @@ API continues to use the ``published`` field: ``1`` is published and ``0`` is hi
 The admin summary reports the same states as ``published``, ``hidden``, or
 ``deleted``.
 `state` reports that visibility/deletion state; `status` reports processing state.
-The summary deliberately omits object URNs and API keys. The default table view
-stays compact: its `Verbose details` control reveals stable IDs, named course
+The summary deliberately omits object URNs and API keys. The admin table
+appends ``[zipfile]`` to the title when a ZIP reference exists but no analysis
+MP4 descriptor is recorded, or ``[pending]`` when an uploaded movie lacks both.
+These flags reflect recorded metadata, not live S3 object checks. The default
+table view stays compact: its `Verbose details` control reveals stable IDs, named course
 administrators, and movie metadata including description, dimensions, trimming,
 rotation, retrace state, and research attribution. ``GET /api/admin/movies/<movie_id>/storage-health``
 loads the verbose-only per-object storage health and pending-upload age on demand.
@@ -554,6 +559,26 @@ Both routes are equivalent. Return users and courses visible to the caller.
 ---
 
 ### Movies
+
+#### `POST /api/camera/new-movie`
+
+Create a fresh ``uploading`` movie row for a browser camera capture. This route
+requires a non-demo authenticated user and accepts ``title``, ``description``,
+and optional ``course_id`` form fields. It sets the capture interval to four
+frames per minute (one frame every 15 seconds), marks the row as a camera
+capture, assigns a new ``movie_id``, and records the durable source movie URN.
+It returns ``movie_id``; the browser uses that ID for every frame upload and
+the STOP request. Calling this endpoint again creates an independent movie.
+
+#### `POST /api/camera/frame-upload`
+
+Return a short-lived presigned S3 POST for one JPEG frame. Required form fields
+are ``movie_id`` and ``frame_number`` (zero-based, below ``MAX_FRAMES``). The
+caller must own or have edit permission for a camera movie that is still in
+``uploading`` state. The policy restricts the object to the movie's numbered
+frame key, ``image/jpeg``, and at most 2 MiB. The response contains the
+``presigned_post`` URL and fields. The browser uploads each captured frame
+directly to S3; capture timing does not wait for these uploads.
 
 #### `POST /api/new-movie`
 

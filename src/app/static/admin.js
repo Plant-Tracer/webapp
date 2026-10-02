@@ -530,13 +530,21 @@ function movieTitleCell(movie) {
   const cell = document.createElement("td");
   cell.className = "admin-movie-title";
   cell.title = movie.title;
+  let title = movie.title;
+  if (!movie.has_analysis_mp4) {
+    if (movie.has_zipfile) {
+      title += " [zipfile]";
+    } else if (epochSeconds(movie.uploaded_at)) {
+      title += " [pending]";
+    }
+  }
   if (state.viewerRole === "superadmin" && epochSeconds(movie.uploaded_at)) {
     const link = document.createElement("a");
     link.href = `/analyze?movie_id=${encodeURIComponent(movie.movie_id)}`;
-    link.textContent = movie.title;
+    link.textContent = title;
     cell.append(link);
   } else {
-    cell.textContent = movie.title;
+    cell.textContent = title;
   }
   return cell;
 }

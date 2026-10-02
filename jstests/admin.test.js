@@ -194,6 +194,28 @@ describe('admin summary rendering', () => {
     expect(courseLink.target).toBe('_blank');
   });
 
+  test('labels missing analysis MP4s without changing movie names or upload state', async () => {
+    const adminPayload = payload();
+    const movie = adminPayload.movies.items[0];
+    adminPayload.movies.items = [
+      { ...movie, movie_id: 'zip', title: 'Legacy', has_zipfile: true, has_analysis_mp4: false },
+      { ...movie, movie_id: 'pending', title: 'Uploaded', has_zipfile: false, has_analysis_mp4: false },
+      { ...movie, movie_id: 'recoded', title: 'Recoded', has_zipfile: true, has_analysis_mp4: true },
+      { ...movie, movie_id: 'new', title: 'New', uploaded_at: null,
+        has_zipfile: false, has_analysis_mp4: false },
+    ];
+    fetch.mockResponseOnce(JSON.stringify(adminPayload));
+
+    await loadAdminSummary();
+
+    const titles = [...document.querySelectorAll('#admin-movie-rows .admin-movie-title')];
+    expect(titles.map((cell) => cell.textContent)).toEqual([
+      'Legacy [zipfile]', 'New', 'Recoded', 'Uploaded [pending]',
+    ]);
+    expect(titles.map((cell) => cell.title)).toEqual(['Legacy', 'New', 'Recoded', 'Uploaded']);
+    expect(document.querySelectorAll('#admin-movie-rows .admin-upload-pending')).toHaveLength(1);
+  });
+
   test('renders each course administrator on a separate line', async () => {
     const adminPayload = payload();
     adminPayload.users.items.push({

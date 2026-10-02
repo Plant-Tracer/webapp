@@ -170,8 +170,9 @@ def test_persisted_pydantic_models_round_trip_through_dynamodb_local(local_ddb):
             movie_zipfile_urn="s3://test/movie.zip", first_frame_urn="s3://test/frame.jpg",
             processing_state="complete", zip_frame_processing={"current": 1, "total": 1},
             last_frame_tracked=119, needs_retracing=1, version=2,
-            research_use=1, credit_by_name=1,
-            attribution_name="Alyssa P. Hacker", rotation=90,
+                research_use=1, credit_by_name=1,
+                attribution_name="Alyssa P. Hacker", rotation=90,
+                camera_capture=True,
         ),
     )
     trackpoints = (
