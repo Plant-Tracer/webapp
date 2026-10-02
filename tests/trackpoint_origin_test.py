@@ -182,17 +182,17 @@ def test_delete_marker_api_removes_marker_from_reloaded_exports(client, new_movi
     movie_id = new_movie[MOVIE_ID]
     for frame in (0, 1):
         odb.put_frame_trackpoints(movie_id=movie_id, frame_number=frame, trackpoints=[
-            Trackpoint(x=10, y=20, label='Apex'),
+            Trackpoint(x=10, y=20, label='Leaf'),
             Trackpoint(x=30, y=40, label='Keep'),
         ])
     params = {API_KEY: new_movie[API_KEY], MOVIE_ID: movie_id}
-    response = client.post('/api/delete-marker', data={**params, 'label': 'Apex'})
+    response = client.post('/api/delete-marker', data={**params, 'label': 'Leaf'})
     assert response.status_code == 200
     assert response.get_json() == {'error': False}
     exported = client.post('/api/get-movie-trackpoints', data={**params, 'format': 'json'}).get_json()
     assert {point['label'] for point in exported['trackpoint_dicts']} == {'Keep'}
     csv = client.post('/api/get-movie-trackpoints', data=params).get_data(as_text=True)
-    assert 'Apex' not in csv
+    assert 'Leaf' not in csv
     assert 'Keep' in csv
 
 

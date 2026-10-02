@@ -3,6 +3,7 @@
  * @jest-environment jsdom
  */
 
+import { TRACE_MOVIE } from '../src/app/static/ui_constants.js';
 import { jest } from '@jest/globals';
 
 // canvas_tracer_controller.js is a .js file transpiled by babel to CJS, so its
@@ -391,7 +392,7 @@ describe('create_default_markers', () => {
 
     test('default ruler markers are undeletable', () => {
         const markers = create_default_markers();
-        expect(markers[0].undeletable).toBeUndefined();
+        expect(markers[0].undeletable).toBe(true);
         expect(markers[0]).toMatchObject({ label: 'Apex', color: 'orange' });
         expect(markers[1]).toMatchObject({ label: 'Ruler 0mm', color: 'red', undeletable: true });
         expect(markers[2]).toMatchObject({ label: 'Ruler 10mm', color: 'red', undeletable: true });
@@ -1148,7 +1149,7 @@ describe('TracerController trim behavior', () => {
         expect(trimEndButton.prop).toHaveBeenCalledWith('disabled', false);
     });
 
-    test('set_trim_bound persists start, seeds new local start, and refreshes visible graph', () => {
+    test('set_trim_bound persists start without moving marker births and refreshes visible graph', () => {
         document.body.innerHTML = '<canvas id="apex-xChart"></canvas><canvas id="apex-yChart"></canvas>';
         const analysisResults = makeEl();
         analysisResults.is.mockReturnValue(true);
@@ -1187,22 +1188,10 @@ describe('TracerController trim behavior', () => {
         );
         expect(tc.trim_start_frame).toBe(0);
         expect(tc.trim_start_frame_missing).toBe(false);
-        expect(tc.frames[0].markers).toEqual([{ x: 22, y: 33, label: 'Apex', frame_number: 0 }]);
+        expect(tc.frames[0].markers).toEqual([]);
         expect(tc.frames[2].markers).toEqual([{ x: 22, y: 33, label: 'Apex', frame_number: 2 }]);
         expect(global.requestAnimationFrame).toHaveBeenCalled();
         expect(tc.frame_number).toBe(0);
-    });
-
-    test('moving trim start backward preserves an explicitly empty source seed', () => {
-        const tc = new TracerController('div#tc', makeMovieMetadata({status: 'ready'}), 'k');
-        tc.frames = [{markers: [{x: 10, y: 20, label: 'Apex'}]}, {},
-            {markers: [], marker_seed_boundary: true}, {}];
-        tc.applyLocalTrimStartSeed(1, 2);
-        expect(tc.frames[1].trim_seed_markers).toBeUndefined();
-        expect(tc.frames[1].markers).toEqual([]);
-        expect(tc.frames[1].marker_seed_boundary).toBe(true);
-        expect(tc.markersForDisplay(1)).toEqual([]);
-        expect(tc.markersForDisplay(3)).toEqual([]);
     });
 
     test('set_trim_bound does not post or redraw graph when bound is unchanged', () => {
@@ -1783,9 +1772,9 @@ describe('trace_movie_one_frame', () => {
         tc.did_onload_callback({ img: { naturalWidth: 640, naturalHeight: 480 } });
 
         expect(tc.frames[0].markers).toEqual([
-            { x: 50, y: 430, label: 'Apex', color: 'orange', frame_number: 0 },
-            { x: 50, y: 380, label: 'Ruler 0mm', color: 'red', frame_number: 0, undeletable: true },
-            { x: 50, y: 330, label: 'Ruler 10mm', color: 'red', frame_number: 0, undeletable: true },
+            { x: 50, y: 430, label: 'Apex', color: 'orange', frame_number: 0, undeletable: true, is_manual: true, is_traced: false },
+            { x: 50, y: 380, label: 'Ruler 0mm', color: 'red', frame_number: 0, undeletable: true, is_manual: true, is_traced: false },
+            { x: 50, y: 330, label: 'Ruler 10mm', color: 'red', frame_number: 0, undeletable: true, is_manual: true, is_traced: false },
         ]);
     });
 
@@ -1799,9 +1788,9 @@ describe('trace_movie_one_frame', () => {
         tc.did_onload_callback({ img: { naturalWidth: 640, naturalHeight: 480 } });
 
         expect(tc.frames[0].markers).toEqual([
-            { x: 50, y: 430, label: 'Apex', color: 'orange', frame_number: 0 },
-            { x: 50, y: 380, label: 'Ruler 0mm', color: 'red', frame_number: 0, undeletable: true },
-            { x: 50, y: 330, label: 'Ruler 10mm', color: 'red', frame_number: 0, undeletable: true },
+            { x: 50, y: 430, label: 'Apex', color: 'orange', frame_number: 0, undeletable: true, is_manual: true, is_traced: false },
+            { x: 50, y: 380, label: 'Ruler 0mm', color: 'red', frame_number: 0, undeletable: true, is_manual: true, is_traced: false },
+            { x: 50, y: 330, label: 'Ruler 10mm', color: 'red', frame_number: 0, undeletable: true, is_manual: true, is_traced: false },
         ]);
     });
 
@@ -1833,7 +1822,13 @@ describe('trace_movie_one_frame', () => {
 
 // ── trace_movie_frames ────────────────────────────────────────────────────────
 describe('trace_movie_frames', () => {
-    beforeEach(() => { mockFrameCount = 4; jest.clearAllMocks(); });
+    beforeEach(() => {
+        mockFrameCount = 4;
+        jest.clearAllMocks();
+        mockPost.mockReturnValue({done: callback => {
+            callback({error: false}); return {fail: jest.fn()};
+        }});
+    });
     test('loads every MP4 frame before tracking and keeps server coordinates', async () => {
         const point = {x: 13, y: 29, label: 'Apex'};
         const controller = await trace_movie_frames('div#tracer',
@@ -2128,6 +2123,31 @@ describe('TracerController.track_to_end', () => {
         expect(body.movie_id).toBe('test-movie-001');
         expect(body.frame_start).toBe(7);
         expect(body.frame_end).toBe(19);
+    });
+
+    test('reopening a ready movie with a last-frame manual annotation still enables initial tracing', () => {
+        tc.movie_metadata.status = 'ready';
+        tc.last_tracked_frame = 19;
+        tc.trace_inputs_changed = false;
+        tc.refreshTrackButtonState();
+        expect(tc.isFullyTraced()).toBe(false);
+        expect(tc.hasFutureTrackedFrames()).toBe(false);
+        expect(tc.track_button.val).toHaveBeenLastCalledWith(TRACE_MOVIE);
+        expect(tc.track_button.prop).toHaveBeenLastCalledWith('disabled', false);
+    });
+
+    test('a first trace after navigating to Set End saves frame zero and starts at trim start', async () => {
+        mockFetchResponse(200, {});
+        tc.movie_metadata.status = 'ready';
+        tc.frames = Array.from({length: 20}, (_, n) => ({frame_number: n, markers: []}));
+        tc.frames[0].markers = defaultMarkersForFrame(0);
+        tc.frame_number = 19;
+        await tc.track_to_end();
+        const writes = mockPost.mock.calls.filter(call => String(call[0]).includes('put-frame-trackpoints'));
+        expect(writes.map(call => call[1].frame_number)).toEqual([0, 19, 0]);
+        expect(JSON.parse(writes[0][1].trackpoints).map(p => p.label)).toEqual(['Apex', 'Ruler 0mm', 'Ruler 10mm']);
+        expect(JSON.parse(global.fetch.mock.calls[0][1].body)).toMatchObject({frame_start: 0, frame_end: 19});
+        expect(tc.frame_number).toBe(19);
     });
 
     test('body omits frame_end when backend defaulted initial unknown movie length to zero', async () => {
@@ -2834,24 +2854,25 @@ describe('TracerController.reset_tracing', () => {
         expect(resetButton.prop).toHaveBeenLastCalledWith('disabled', false);
     });
 
-    test('clears all markers, seeds defaults on the first trimmed frame, and goes there', async () => {
+    test('preserves earlier frames and resets from the first trimmed frame', async () => {
         mockSuccessfulFramePosts();
 
         await tc.reset_tracing();
 
         expect(tc.frames.map(frame => frame.markers)).toEqual([
-            [],
+            [{ x: 10, y: 20, label: 'Apex', color: 'orange' },
+             { x: 1, y: 2, label: 'Ruler 0mm', color: 'red', undeletable: true }],
             [
-                { x: 50, y: 50, label: 'Apex', color: 'orange', frame_number: 1 },
-                { x: 50, y: 100, label: 'Ruler 0mm', color: 'red', frame_number: 1, undeletable: true },
-                { x: 50, y: 150, label: 'Ruler 10mm', color: 'red', frame_number: 1, undeletable: true },
+                { x: 50, y: 50, label: 'Apex', color: 'orange', frame_number: 1, undeletable: true, is_manual: true, is_traced: false },
+                { x: 50, y: 100, label: 'Ruler 0mm', color: 'red', frame_number: 1, undeletable: true, is_manual: true, is_traced: false },
+                { x: 50, y: 150, label: 'Ruler 10mm', color: 'red', frame_number: 1, undeletable: true, is_manual: true, is_traced: false },
             ],
             [],
         ]);
         expect(global.fetch).toHaveBeenCalledTimes(1);
         expect(global.fetch.mock.calls[0][0]).toContain('resize-api/v1/reset-tracing');
         expect(JSON.parse(global.fetch.mock.calls[0][1].body)).toMatchObject({
-            frame_start: 0, frame_end: 2, seed_frame: 1,
+            frame_start: 1, frame_end: 2, seed_frame: 1,
             trackpoints: tc.frames[1].markers,
         });
         expect(mockPost).toHaveBeenCalledTimes(1);
@@ -2918,7 +2939,7 @@ describe('TracerController.reset_tracing', () => {
         await jest.advanceTimersByTimeAsync(2000);
         await promise;
         expect(global.fetch.mock.calls.filter(([, options]) => options.method === 'POST')).toHaveLength(1);
-        expect(JSON.parse(global.fetch.mock.calls[0][1].body)).toMatchObject({frame_start: 0, frame_end: 49999});
+        expect(JSON.parse(global.fetch.mock.calls[0][1].body)).toMatchObject({frame_start: 1, frame_end: 49999});
         expect(global.fetch).toHaveBeenCalledTimes(2);
         expect(tc.frames[49999].markers).toEqual([]);
         expect(tc.last_tracked_frame).toBe(1);
@@ -2971,6 +2992,24 @@ describe('TracerController.put_markers', () => {
         expect(mockPost).not.toHaveBeenCalled();
     });
 
+    test('adding a marker saves its birth immediately and survives navigation', async () => {
+        tc.frames = Array.from({length: 4}, (_, n) => ({frame_number: n, markers: []}));
+        tc.frame_number = 2;
+        mockPost.mockReturnValue({done: callback => {
+            callback({error: false}); return {fail: jest.fn()};
+        }});
+        tc.add_marker(40, 60, 'Leaf');
+        await tc.marker_save_tail;
+        expect(mockPost.mock.calls[0][1].frame_number).toBe(2);
+        expect(JSON.parse(mockPost.mock.calls[0][1].trackpoints)[0]).toMatchObject({
+            label: 'Leaf', x: 40, y: 60, is_manual: true});
+        tc.goto_frame(1);
+        expect(tc.markersForDisplay(1)).toEqual([]);
+        tc.goto_frame(3);
+        expect(tc.markersForDisplay(3)[0]).toMatchObject({label: 'Leaf', x: 40, y: 60});
+        expect(tc.frames[3].markers).toEqual([]);
+    });
+
     test('not demo_mode: POSTs to put-frame-trackpoints with api_key and movie_id', () => {
         tc.put_markers();
         expect(mockPost).toHaveBeenCalledWith(
@@ -2979,12 +3018,37 @@ describe('TracerController.put_markers', () => {
         );
     });
 
+    test.each([undefined, null])('saving another marker preserves legacy positions with %s provenance', async (flag) => {
+        tc.frames = [
+            {frame_number: 0, markers: [{label: 'Apex', x: 10, y: 20}]},
+            {frame_number: 1, markers: [{label: 'Apex', x: 30, y: 40, is_manual: flag, is_traced: flag}]},
+        ];
+        tc.frame_number = 1;
+        tc.objects.push(new MockMarkerClass(30, 40, 5, 'red', 'red', 'Apex'));
+        mockPost.mockReturnValue({done: callback => {
+            callback({error: false}); return {fail: jest.fn()};
+        }});
+        tc.add_marker(60, 70, 'Leaf');
+        await tc.marker_save_tail;
+        const saved = JSON.parse(mockPost.mock.calls[0][1].trackpoints);
+        expect(saved.find(point => point.label === 'Apex').is_traced).toBe(flag);
+        expect(saved.find(point => point.label === 'Leaf')).toMatchObject({is_manual: true, is_traced: false});
+        // Simulate replacing in-memory annotations with the saved API payload.
+        tc.frames[1].markers = saved;
+        tc.invalidateMarkerSeeds();
+        expect(tc.markersForDisplay(0)).toEqual([expect.objectContaining({label: 'Apex', x: 10, y: 20})]);
+        expect(tc.markersForDisplay(1)).toEqual(expect.arrayContaining([
+            expect.objectContaining({label: 'Apex', x: 30, y: 40}),
+            expect.objectContaining({label: 'Leaf', x: 60, y: 70}),
+        ]));
+    });
+
     test('not demo_mode: trackpoints param is JSON of current markers', () => {
         tc.objects.push(new MockMarkerClass(10, 20, 5, 'red', 'red', 'Apex'));
         tc.put_markers();
         const params = mockPost.mock.calls[0][1];
         const tp = JSON.parse(params.trackpoints);
-        expect(tp).toEqual([{ x: 10, y: 20, label: 'Apex', color: 'orange', frame_number: 0 }]);
+        expect(tp).toEqual([{ x: 10, y: 20, label: 'Apex', color: 'orange', frame_number: 0, is_manual: true, is_traced: false }]);
     });
 
     test('done callback: alerts when server returns error', () => {
@@ -3044,7 +3108,7 @@ describe('TracerController.put_markers', () => {
 
         tc.put_markers();
 
-        expect(tc.frames[1].markers).toEqual([{ x: 42, y: 55, label: 'Apex', color: 'orange', frame_number: 1 }]);
+        expect(tc.frames[1].markers).toEqual([{ x: 42, y: 55, label: 'Apex', color: 'orange', frame_number: 1, is_manual: true, is_traced: false }]);
         expect(global.requestAnimationFrame).toHaveBeenCalled();
         const xConfig = ChartSpy.mock.calls[0][1];
         const yConfig = ChartSpy.mock.calls[1][1];

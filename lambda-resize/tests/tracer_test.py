@@ -136,10 +136,10 @@ def test_cv2_trace_frame_carries_every_marker_cv2_drops(monkeypatch):
     )
 
     assert result == [
-        Trackpoint(x=2, y=3, label="Apex", frame_number=5, color="orange"),
-        Trackpoint(x=31, y=41, label="Ruler 10mm", frame_number=5, color="red", undeletable=True),
-        Trackpoint(x=10, y=20, label="Ruler 0mm", frame_number=5, color="red", undeletable=True),
-        Trackpoint(x=50, y=60, label="Tip", frame_number=5, color="blue"),
+        Trackpoint(x=2, y=3, label="Apex", frame_number=5, is_manual=False, is_traced=True, color="orange"),
+        Trackpoint(x=31, y=41, label="Ruler 10mm", frame_number=5, is_manual=False, is_traced=True, color="red", undeletable=True),
+        Trackpoint(x=10, y=20, label="Ruler 0mm", frame_number=5, is_manual=False, is_traced=True, color="red", undeletable=True),
+        Trackpoint(x=50, y=60, label="Tip", frame_number=5, is_manual=False, is_traced=True, color="blue"),
     ]
 
 
@@ -166,8 +166,8 @@ def test_cv2_trace_frame_preserves_all_markers_when_cv2_errors(monkeypatch):
     )
 
     assert result == [
-        Trackpoint(x=1, y=2, label="Apex", frame_number=5, color="orange"),
-        Trackpoint(x=10, y=20, label="Ruler 0mm", frame_number=5, color="red", undeletable=True),
+        Trackpoint(x=1, y=2, label="Apex", frame_number=5, is_manual=False, is_traced=True, color="orange"),
+        Trackpoint(x=10, y=20, label="Ruler 0mm", frame_number=5, is_manual=False, is_traced=True, color="red", undeletable=True),
     ]
 
 
@@ -318,3 +318,25 @@ def test_download_label_uses_capture_time_and_original_zero_based_frame(tmp_path
     glyphs = np.all(reference[:35, -140:] > 200, axis=2)
     assert glyphs.sum() > 100
     assert np.mean(region[glyphs]) > 175
+
+
+def test_trace_honors_later_birth_and_manual_correction():
+    """Real optical flow starts a new marker at its birth and honors later manual anchors."""
+    points = tracer.trace_movie_v2(
+        movie_url=TEST_MOVIE, frame_start=1, frame_end=5,
+        trackpoints=[
+            Trackpoint(x=370, y=298, label="Apex", frame_number=0, is_manual=True),
+            Trackpoint(x=300, y=260, label="Leaf", frame_number=3, is_manual=True),
+            Trackpoint(x=350, y=280, label="Apex", frame_number=4, is_manual=True),
+        ])
+    by_frame = {number: {point.label: point for point in points if point.frame_number == number}
+                for number in range(6)}
+    assert all("Leaf" not in by_frame[number] for number in range(3))
+    assert all("Leaf" in by_frame[number] for number in range(3, 6))
+    assert by_frame[3]["Leaf"].x == 300
+    assert by_frame[3]["Leaf"].is_manual
+    assert by_frame[4]["Apex"].x == 350
+    assert by_frame[4]["Apex"].is_manual
+    assert by_frame[5]["Apex"].is_traced and not by_frame[5]["Apex"].is_manual
+    assert abs(by_frame[5]["Apex"].x - 350) < 10
+    assert by_frame[4]["Leaf"].is_traced and not by_frame[4]["Leaf"].is_manual

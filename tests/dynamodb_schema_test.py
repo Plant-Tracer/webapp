@@ -179,7 +179,8 @@ def test_persisted_pydantic_models_round_trip_through_dynamodb_local(local_ddb):
         Trackpoint(x="10.1", y="20.2", label="Nullable marker"),
         Trackpoint(
             x="30.3", y="40.4", label="Populated marker", marker_id="marker-1",
-            color="orange", undeletable=True, frame_number=1, status=1, err="0.5",
+            color="orange", undeletable=True, frame_number=1, is_manual=True,
+            is_traced=False, status=1, err="0.5",
         ),
     )
     frames = (

@@ -119,7 +119,7 @@ import { gravitropism_results, circumnutation_results } from "./analysis_results
 
 // Default marker positions used only when a new movie is first loaded for analysis
 // and frame 0 has no markers yet (no frames traced). See create_default_markers().
-const DEFAULT_MARKERS = [{'x':50,'y':50,'label':'Apex', 'color': APEX_MARKER_COLOR},
+const DEFAULT_MARKERS = [{'x':50,'y':50,'label':'Apex', 'color': APEX_MARKER_COLOR, 'undeletable': true},
                          {'x':50,'y':100,'label':'Ruler 0mm', 'color': RULER_MARKER_COLOR, 'undeletable': true},
                          {'x':50,'y':150,'label':'Ruler 10mm', 'color': RULER_MARKER_COLOR, 'undeletable': true}
                         ];
@@ -151,14 +151,13 @@ class TrimInactiveOverlay extends CanvasItem {
 /**
  * Returns a copy of the default markers and logs to console.
  * ONLY call this when loading a new movie for analysis and frame 0 has no markers yet.
- * Decision to call is made in trace_movie_one_frame: we use server markers for frame 0
- * if present; otherwise we call create_default_markers() once for the initial frame 0.
- * Never use this in trace_movie_frames (zip load): there we use existing markers only;
- * if frame 0 has no markers there, use [] so we don't overwrite user positions with defaults.
+ * Both loaders preserve server annotations and explicit empty boundaries.
+ * The MP4 loader saves new defaults at frame zero before completing initialization.
+ * Reset tracing also uses this template at the selected trim start.
  */
 function create_default_markers() {
     console.log('[canvas_tracer_controller] Creating default markers (first-time analysis load; frame 0 has no markers yet).');
-    return DEFAULT_MARKERS.map(m => ({...m}));
+    return DEFAULT_MARKERS.map(m => ({...m, is_manual: true, is_traced: false}));
 }
 
 
@@ -480,38 +479,14 @@ class TracerController extends MovieController {
     }
 
     markersForDisplay(frameNumber) {
-        // Ready movies include manually placed seeds, not a completed trace.
-        const frontier = this.movie_metadata.status === 'ready' ? -1 : this.last_tracked_frame;
         if (!this.marker_seeds || this.marker_seeds.frames !== this.frames) {
             this.marker_seeds = new MarkerSeedIndex(this.frames || []);
         }
-        return this.marker_seeds.forFrame(frameNumber, frontier);
+        return this.marker_seeds.forFrame(frameNumber);
     }
 
     invalidateMarkerSeeds() {
         this.marker_seeds?.invalidate();
-    }
-
-    applyLocalTrimStartSeed(newStart, oldStart) {
-        if (newStart >= oldStart) {
-            return;
-        }
-        const targetFrame = this.frameForNumber(newStart);
-        if (!targetFrame || targetFrame.marker_seed_boundary || targetFrame.markers?.length) {
-            return;
-        }
-        const seeds = this.markersForDisplay(oldStart)
-            .map(marker => ({...marker, frame_number: newStart}));
-        const sourceFrame = this.frameForNumber(oldStart);
-        if (sourceFrame?.marker_seed_boundary || sourceFrame?.markers?.length) {
-            // The trim API copies stored annotations from the old start too.
-            targetFrame.markers = seeds;
-            targetFrame.marker_seed_boundary = true;
-            delete targetFrame.trim_seed_markers;
-        } else {
-            targetFrame.trim_seed_markers = seeds;
-        }
-        this.invalidateMarkerSeeds();
     }
 
     marker_color_from_existing_data(label) {
@@ -583,12 +558,10 @@ class TracerController extends MovieController {
         if (!frame) {
             return;
         }
-        const presenceChanged = Boolean(frame.markers?.length) !== Boolean(markers.length)
-            || !frame.marker_seed_boundary;
         frame.markers = markers.map(marker => ({...marker}));
         delete frame.trim_seed_markers;
         frame.marker_seed_boundary = true;
-        if (presenceChanged) this.invalidateMarkerSeeds();
+        this.invalidateMarkerSeeds();
         this.refreshResetTracingButtonState();
     }
 
@@ -710,7 +683,6 @@ class TracerController extends MovieController {
             alert('Annotations could not be saved. Retry the edits or reopen Analyze before trimming.');
             return;
         }
-        const oldStart = this.trim_start_frame;
         const currentBound = prop === TRIM_START_FRAME ? this.trim_start_frame : this.trim_end_frame;
         if (frameNumber === currentBound) {
             return;
@@ -736,9 +708,6 @@ class TracerController extends MovieController {
                     this.trim_end_frame_missing = false;
                 }
                 this.ensure_trim_defaults();
-                if (prop === TRIM_START_FRAME) {
-                    this.applyLocalTrimStartSeed(frameNumber, oldStart);
-                }
                 this.refreshTrimControls();
                 this.goto_frame(frameNumber);
                 this.refreshVisibleGraphs();
@@ -763,12 +732,12 @@ class TracerController extends MovieController {
 
     isFullyTraced() {
         const targetEnd = this.traceEndFrame();
-        return this.total_frames > 0 && this.last_tracked_frame >= 0 &&
+        return this.movie_metadata.status !== 'ready' && this.total_frames > 0 && this.last_tracked_frame >= 0 &&
             this.last_tracked_frame >= targetEnd;
     }
 
     hasFutureTrackedFrames() {
-        return this.last_tracked_frame != null && this.last_tracked_frame > this.frame_number
+        return this.movie_metadata.status !== 'ready' && this.last_tracked_frame != null && this.last_tracked_frame > this.frame_number
             && this.frame_number < this.traceEndFrame();
     }
 
@@ -812,7 +781,7 @@ class TracerController extends MovieController {
         if (!this.frames || this.frames.length === 0) {
             return false;
         }
-        for (let frameIndex = 0; frameIndex < this.frames.length; frameIndex++) {
+        for (let frameIndex = this.trim_start_frame; frameIndex < this.frames.length; frameIndex++) {
             const frame = this.frames[frameIndex];
             const frameNumber = graph_frame_number(frame, null, frameIndex);
             const markers = this.reset_comparison_markers_for_frame(frame, frameIndex);
@@ -996,6 +965,8 @@ class TracerController extends MovieController {
         this.refreshFrameEditState(); // keep the inflection-point button in sync
         // Finally enable the track-to-end button
         this.track_button.prop(DISABLED,false);
+        // A newly added marker must survive immediate navigation and reload.
+        this.put_markers()?.catch(() => {});
     }
 
     uses_bottom_left_trackpoints() {
@@ -1058,13 +1029,16 @@ class TracerController extends MovieController {
         const marker = new Marker(canvasPoint.x, canvasPoint.y, 10, color, color, trackpoint.label);
         marker.trackpoint_metadata = {...trackpoint, color: color};
         marker.color = color;
-        marker.undeletable = trackpoint.undeletable === true;
+        marker.undeletable = trackpoint.undeletable === true
+            || is_apex_marker_label(trackpoint.label) || is_ruler_marker_label(trackpoint.label);
         return marker;
     }
 
     canvas_marker_to_trackpoint(marker, frameNumber = this.frame_number) {
         const frameHeight = this.analysis_frame_height();
         const trackpoint = {...(marker.trackpoint_metadata || {})};
+        if (marker.is_manual === true) trackpoint.is_manual = true;
+        if (marker.is_traced === false) trackpoint.is_traced = false;
         trackpoint.x = Number(marker.x);
         trackpoint.y = Number(marker.y);
         trackpoint.label = marker.name || marker.label;
@@ -1466,7 +1440,7 @@ class TracerController extends MovieController {
                 method: 'POST',
                 body: JSON.stringify({
                     movie_id: this.movie_id,
-                    frame_start: 0,
+                    frame_start: firstTrimFrame,
                     frame_end: this.total_frames - 1,
                     seed_frame: firstTrimFrame,
                     trackpoints: seedMarkers,
@@ -1486,7 +1460,7 @@ class TracerController extends MovieController {
             if (result.state !== 'completed') throw new Error(`Reset ${result.state}.`);
             // A reset replaces the editing lease. Reacquire it before allowing changes.
             await this.reacquire_analysis_lease();
-            for (let i = 0; i < this.frames.length; i++) {
+            for (let i = firstTrimFrame; i < this.frames.length; i++) {
                 this.frames[i].markers = graph_frame_number(this.frames[i], null, i) === firstTrimFrame
                     ? seedMarkers.map(marker => ({...marker})) : [];
                 this.frames[i].marker_seed_boundary = i === firstTrimFrame;
@@ -1557,7 +1531,7 @@ class TracerController extends MovieController {
 
     // Send the list of current markers to the server.
     // In demo mode, just print a message.
-    put_markers() {
+    put_markers(frameNumber = this.frame_number, suppliedMarkers = null) {
         if (!this.isCurrentFrameEditable()) {
             return;
         }
@@ -1565,8 +1539,19 @@ class TracerController extends MovieController {
             $('#demo-popup').fadeIn(300);
             return;
         }
-        const frameNumber = this.frame_number;
-        const markers = this.get_markers();
+        if (frameNumber !== 0 && this.frames?.[0]?.markers?.length
+            && this.frames[0].markers.every(marker => marker.is_manual === true)
+            && !this.frames[0].marker_seed_boundary) {
+            this.put_markers(0, this.frames[0].markers)?.catch(() => {});
+        }
+        const previous = this.markersForDisplay(frameNumber);
+        const markers = (suppliedMarkers || this.get_markers()).map(marker => {
+            const prior = previous.find(point => point.label === marker.label);
+            const changed = !prior || prior.x !== marker.x || prior.y !== marker.y;
+            // Keep legacy provenance absent on unchanged saved positions.
+            return {...marker, is_manual: changed ? true : prior.is_manual,
+                is_traced: changed ? false : prior.is_traced};
+        });
         // Navigation must use the latest explicit edit while its save is in flight.
         // Older responses must not replace a newer local edit on the same frame.
         this.updateCurrentFrameMarkers(markers, frameNumber);
@@ -1640,17 +1625,26 @@ class TracerController extends MovieController {
             this.refreshTrackButtonState();
             return;
         }
-        const retraceStartFrame = this.frame_number;
+        const selectedFrame = this.frame_number;
+        // Initial tracing covers the chosen range, regardless of the viewed frame.
+        const retraceStartFrame = this.movie_metadata.status === 'ready'
+            ? this.trim_start_frame : selectedFrame;
         this.saving_track_request = true;
         this.set_movie_control_buttons();
         try {
             await Promise.all(Array.from(this.marker_save_requests || []));
-            if (this.frame_number !== retraceStartFrame) {
+            if (this.frame_number !== selectedFrame) {
                 throw new Error('Frame changed while saving markers. Select Trace again.');
             }
+            if (this.failed_marker_saves?.size) throw new Error('Retry failed annotation saves before tracing.');
             const saved = await this.put_markers();
+            if (retraceStartFrame !== selectedFrame) {
+                const seeds = this.markersForDisplay(retraceStartFrame);
+                if (!seeds.length) throw new Error('Place markers at the trim start before tracing.');
+                await this.put_markers(retraceStartFrame, seeds);
+            }
             if (saved?.error) throw new Error(saved.message || 'Unable to save markers.');
-            if (this.frame_number !== retraceStartFrame) throw new Error('Frame changed while saving markers. Select Trace again.');
+            if (this.frame_number !== selectedFrame) throw new Error('Frame changed while saving markers. Select Trace again.');
         } catch (error) {
             $('#status-big').text(error.message || 'Unable to save markers; tracing has not started.');
             return;
@@ -1675,7 +1669,7 @@ class TracerController extends MovieController {
         const requestBody = {
             course_id: activeCourseId(),
             movie_id: this.movie_id,
-            frame_start: this.frame_number,
+            frame_start: retraceStartFrame,
             ...this.analysisLeaseParams(),
         };
         const frameEnd = this.traceEndFrameForRequest();
@@ -2088,12 +2082,20 @@ async function trace_movie_frames(div_controller, movie_metadata, movie_url,
         frame_number: index, markers: metadata_frames?.[index]?.markers || [],
         marker_seed_boundary: Object.hasOwn(metadata_frames || {}, index),
     }));
-    if (!frames[0].markers.length && !frames[0].marker_seed_boundary && !show_results) {
-        frames[0].markers = create_default_markers().map(marker => cc.canvas_marker_to_trackpoint({...marker, name: marker.label}));
+    const needsDefaults = !frames[0].markers.length && !frames[0].marker_seed_boundary && !show_results;
+    if (needsDefaults) {
+        frames[0].markers = create_default_markers().map(marker => ({
+            ...cc.canvas_marker_to_trackpoint({...marker, name: marker.label}, 0),
+            is_manual: true, is_traced: false,
+        }));
     }
     cc.frame_number = options.initialFrame ?? cc.trim_start_frame;
     cc.load_movie(frames);
     await cc.goto_frame(cc.frame_number);
+    if (needsDefaults && !cc.editingLocked() && !demo_mode) {
+        // Persist the birth anchor before the user can trim, edit, or trace later frames.
+        await cc.put_markers(0, frames[0].markers);
+    }
     cc.enableTrackButtonIfAllowed();
     $(window).off('pageshow.mp4-player').on('pageshow.mp4-player', event => {
         if (event.originalEvent?.persisted) window.location.reload();

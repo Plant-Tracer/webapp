@@ -202,8 +202,10 @@ Before tracing, stepping or jumping to an unannotated frame carries the latest
 preceding marker positions forward without moving them. Existing annotations on
 the destination frame take precedence. Carried positions are starting points;
 navigation alone does not add points to graphs, exports, or saved paths. Moving
-a marker or choosing Trace saves the displayed positions on that frame. Gaps in
-an existing trace stay empty, so a lost marker is not silently restored.
+a marker or choosing Trace saves the displayed positions on that frame. Each
+marker carries its latest position across gaps independently, including gaps
+among other markers' computed positions. These displayed copies are not new
+measurements. An explicit empty annotation stops preceding carried positions.
 Trimmed frames remain shaded and inactive. Changing the trim does not delete
 saved markers; the carried positions are available on included untraced frames.
 Use a current Chrome or Edge browser on Windows or macOS with WebCodecs support.
@@ -257,3 +259,13 @@ When you have set the capture interval, the label also shows elapsed capture sec
 from the original frame 0. The red analysis-player label uses the same zero-based
 frame index. Older analysis movies are recoded when opened; old downloads need
 to be generated again to receive the new labels.
+
+Marker placement across frames
+------------------------------
+
+New markers appear from their creation frame onward. Moving an untraced marker
+changes its subsequent displayed positions; moving a traced marker corrects only
+that frame until you explicitly retrace. The first Trace Movie covers the selected
+trim range even if you are viewing its end. Later manual placements are preserved
+during retracing. See :doc:`Development/MarkerLifecycle` for examples, reset
+behavior, and the distinction between displayed seeds and measured positions.

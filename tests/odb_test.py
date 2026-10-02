@@ -456,7 +456,7 @@ def test_delete_movie_marker_hides_all_frames_and_preserves_raw_data(local_ddb):
     movie_id = create_trim_test_movie(local_ddb, total_frames=3)
     for frame in range(3):
         odb.put_frame_trackpoints(movie_id=movie_id, frame_number=frame, trackpoints=[
-            Trackpoint(x=10, y=20, label='Apex'),
+            Trackpoint(x=10, y=20, label='Leaf'),
             Trackpoint(x=30, y=40, label='Keep'),
             Trackpoint(x=40, y=50, label='Ruler 0mm', undeletable=True),
         ])
@@ -467,7 +467,7 @@ def test_delete_movie_marker_hides_all_frames_and_preserves_raw_data(local_ddb):
         point.pop(odb.MARKER_ID, None)
     local_ddb.movie_frames.update_item(Key=key, UpdateExpression='SET trackpoints=:points',
                                      ExpressionAttributeValues={':points': raw})
-    odb.rename_movie_marker(movie_id=movie_id, old_label='Apex', new_label='Tip')
+    odb.rename_movie_marker(movie_id=movie_id, old_label='Leaf', new_label='Tip')
     before = local_ddb.get_frames(movie_id)
     odb.delete_movie_marker(movie_id=movie_id, label='Tip')
     odb.delete_movie_marker(movie_id=movie_id, label='Tip')  # Repeat delivery is harmless.
@@ -481,10 +481,10 @@ def test_delete_movie_marker_hides_all_frames_and_preserves_raw_data(local_ddb):
                               trackpoints=[Trackpoint(x=80, y=90, label='Tip')])
     points = odb.get_movie_trackpoints(movie_id=movie_id)
     assert [(point['frame_number'], point['x']) for point in points if point['label'] == 'Tip'] == [(1, 80)]
-    assert not any(point['label'] == 'Apex' for point in points)
+    assert not any(point['label'] == 'Leaf' for point in points)
     odb.put_frame_trackpoints(movie_id=movie_id, frame_number=0,
-                              trackpoints=[Trackpoint(x=70, y=80, label='Apex')])
-    odb.rename_movie_marker(movie_id=movie_id, old_label='Apex', new_label='Fresh')
+                              trackpoints=[Trackpoint(x=70, y=80, label='Leaf')])
+    odb.rename_movie_marker(movie_id=movie_id, old_label='Leaf', new_label='Fresh')
     points = odb.get_movie_trackpoints(movie_id=movie_id)
     assert [(point['frame_number'], point['x']) for point in points if point['label'] == 'Fresh'] == [(0, 70)]
 
@@ -709,7 +709,7 @@ def test_trim_validation_rejects_start_after_end():
         odb.validate_trim_bounds(trim_start_frame=3, trim_end_frame=1, total_frames=10)
 
 
-def test_set_movie_trim_start_copies_old_start_markers(local_ddb):
+def test_set_movie_trim_start_preserves_marker_birth(local_ddb):
     movie_id = create_trim_test_movie(local_ddb, total_frames=5, trim_start_frame=2, trim_end_frame=4)
     odb.set_movie_metadata(movie_id=movie_id, movie_metadata={LAST_FRAME_TRACKED: 2})
     odb.put_frame_trackpoints(
@@ -721,9 +721,8 @@ def test_set_movie_trim_start_copies_old_start_markers(local_ddb):
     metadata = odb.set_movie_trim_frame(movie_id=movie_id, prop=odb.TRIM_START_FRAME, frame_number=0)
 
     assert metadata[odb.TRIM_START_FRAME] == 0
-    assert odb.get_movie_trackpoints(movie_id=movie_id, frame_start=0, frame_end=0) == [
-        {'frame_number': 0, 'x': 12, 'y': 22, 'label': 'apex'}
-    ]
+    assert odb.get_movie_trackpoints(movie_id=movie_id, frame_start=0, frame_end=1) == []
+    assert odb.get_movie_trackpoints(movie_id=movie_id, frame_start=2, frame_end=2)[0]['x'] == 12
     assert not odb.get_movie_trackpoints(movie_id=movie_id, frame_start=1, frame_end=1)
 
 
@@ -1056,3 +1055,20 @@ def test_rulers_calibrated():
     assert odb.rulers_calibrated(at_default, frame_height) is False
     # Fewer than two rulers.
     assert odb.rulers_calibrated(off_default[:1], frame_height) is False
+
+
+def test_retrace_retains_manual_births_and_corrections(local_ddb):
+    """Clearing computed results must preserve a later leaf birth and manual correction."""
+    movie_id = create_trim_test_movie(local_ddb, total_frames=5)
+    for frame_number in range(5):
+        points = [Trackpoint(x=10 + frame_number, y=20, label="Apex",
+                            is_manual=frame_number in (0, 3), is_traced=frame_number not in (0, 3))]
+        if frame_number >= 2:
+            points.append(Trackpoint(x=40, y=50, label="Leaf",
+                                     is_manual=frame_number == 2, is_traced=frame_number != 2))
+        odb.put_frame_trackpoints(movie_id=movie_id, frame_number=frame_number, trackpoints=points)
+    odb.clear_movie_tracking_after_frame(movie_id=movie_id, frame_number=0, frame_end=4)
+    saved = odb.get_movie_trackpoints(movie_id=movie_id)
+    assert [(point[odb.FRAME_NUMBER], point['label'], point['x']) for point in saved] == [
+        (0, "Apex", 10), (2, "Leaf", 40), (3, "Apex", 13)]
+    assert all(point[odb.IS_MANUAL] for point in saved)

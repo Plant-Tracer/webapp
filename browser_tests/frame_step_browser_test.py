@@ -136,6 +136,7 @@ def test_analyzer_carries_untraced_markers_without_creating_results(chrome_drive
             {label:'Ruler 0mm', x:5, y:5, undeletable:true},
             {label:'Ruler 10mm', x:5, y:25, undeletable:true}
         ];
+        c.invalidateMarkerSeeds();
         c.goto_frame(0).then(() => done(true));
     """)
     for control, frame in [('next-frame-button', 1), ('last-frame-button', 3),
@@ -155,18 +156,17 @@ def test_analyzer_carries_untraced_markers_without_creating_results(chrome_drive
                 && c.last_tracked_frame === -1
                 && !c.objects.some(obj => obj.constructor.name === 'Line');
         """)
-    # Moving the trim start backward copies carried seeds with destination indices.
+    # Earlier frames retain their own inherited positions independently of trim.
     chrome_driver.execute_async_script("""
         const done = arguments[arguments.length - 1], c = window.playerController;
         c.movie_metadata.status = 'tracing completed';
         c.last_tracked_frame = 0;
-        c.applyLocalTrimStartSeed(1, 2);
         c.goto_frame(1).then(() => done(true));
     """)
     assert len(chrome_driver.execute_script('return window.playerController.get_markers();')) == 3
     assert chrome_driver.find_element(By.CSS_SELECTOR, '#tracer .track_button').is_enabled()
     assert chrome_driver.execute_script(
-        'return window.playerController.frames[1].trim_seed_markers.every(marker => marker.frame_number === 1);')
+        'return window.playerController.get_markers().every(marker => marker.frame_number === 1);')
     assert chrome_driver.execute_script("""
         const c = window.playerController;
         return c.frames[1].markers.length === 0 && c.frames_for_graph()[1].markers.length === 0
@@ -207,14 +207,15 @@ def test_analyzer_carries_untraced_markers_without_creating_results(chrome_drive
         c.goto_frame(3).then(() => done(true));
     """)
     assert chrome_driver.execute_script('return window.playerController.get_markers()[0].x;') == 30
-    # Known gaps in traced results must remain missing rather than becoming seeds.
+    # A movie-wide frontier must not hide a valid earlier display seed.
     chrome_driver.execute_async_script("""
         const done = arguments[arguments.length - 1], c = window.playerController;
         c.movie_metadata.status = 'tracing completed';
         c.last_tracked_frame = 2;
         c.goto_frame(1).then(() => done(true));
     """)
-    assert chrome_driver.execute_script('return window.playerController.get_markers();') == []
+    assert len(chrome_driver.execute_script('return window.playerController.get_markers();')) == 3
+    assert chrome_driver.execute_script('return window.playerController.frames[1].markers;') == []
     # Explicitly clearing annotations stops seed propagation across that frame.
     chrome_driver.execute_async_script("""
         const done = arguments[arguments.length - 1], c = window.playerController;
@@ -228,18 +229,15 @@ def test_analyzer_carries_untraced_markers_without_creating_results(chrome_drive
         c.goto_frame(3).then(() => done(true));
     """)
     assert chrome_driver.execute_script('return window.playerController.get_markers();') == []
-    # Moving the cleared start backward mirrors the persisted empty annotation copy.
+    # An empty boundary on frame 2 cannot erase earlier frame 1.
     chrome_driver.execute_async_script("""
         const done = arguments[arguments.length - 1], c = window.playerController;
-        c.applyLocalTrimStartSeed(1, 2);
         c.goto_frame(1).then(() => done(true));
     """)
-    assert chrome_driver.execute_script('return window.playerController.get_markers();') == []
-    assert chrome_driver.execute_script(
-        'return window.playerController.frames[1].markers;') == []
-    assert chrome_driver.execute_script(
-        'return window.playerController.frames[1].marker_seed_boundary;')
-    assert not chrome_driver.find_element(By.CSS_SELECTOR, '#tracer .track_button').is_enabled()
+    assert len(chrome_driver.execute_script('return window.playerController.get_markers();')) == 3
+    assert chrome_driver.execute_script('return window.playerController.frames[1].markers;') == []
+    assert not chrome_driver.execute_script('return window.playerController.frames[1].marker_seed_boundary;')
+    assert chrome_driver.find_element(By.CSS_SELECTOR, '#tracer .track_button').is_enabled()
     # Reload can preserve empty boundaries when supplied as explicit frame entries.
     chrome_driver.execute_async_script("""
         const done = arguments[arguments.length - 1];

@@ -869,7 +869,7 @@ Reset annotations with one JSON request authenticated by the `x-api-key` header
 `frame_start` and `frame_end`, `seed_frame` inside that range, replacement
 `trackpoints` for the seed (1–100), and the owning browser's `analysis_lease_id`.
 The range must fit within the movie and the 50,000-frame application limit.
-The Analyze button sends the entire movie range and seeds the first trimmed frame
+The Analyze button sends the range from the trim start to the movie end and seeds the first trimmed frame
 with the default markers. Other frames in the range lose only their `trackpoints`
 attribute; frame URNs, source/analysis/traced MP4s, and frames outside the range
 are preserved. The traced download is marked stale (`needs_retracing=1`).
@@ -1014,15 +1014,10 @@ Set `research_use` (and optionally `credit_by_name`) for a movie. Only the movie
 Set one inclusive trim bound for a movie. Exactly one of `trim_start_frame` or
 `trim_end_frame` must be provided per call.
 
-Moving the start backward copies stored markers from the old start only when
-the destination has neither saved points nor an explicit empty annotation.
-An explicitly empty source is copied as a durable empty boundary too, so
-reopening Analyze cannot revive markers from an earlier frame at the new start.
-The browser waits for pending marker saves before requesting this copy.
-The copy reads source and destination consistently, preserving the latest save.
-Deleted markers are filtered through the marker map before copying, including
-legacy points without marker IDs. A source containing only deleted markers
-produces an explicit empty destination boundary.
+Changing either bound leaves every frame's annotations unchanged. In particular,
+moving the start backward does not copy a later marker into an earlier frame.
+The browser waits for pending marker saves before updating a trim bound and
+keeps trimming blocked after a failed save until it is retried or Analyze reloads.
 
 **Parameters**
 
@@ -1232,3 +1227,14 @@ analyzer and movie-list downloads use this endpoint instead of cached S3 URLs.
 tracing. Existing `analysis_mp4` fields refer to the **untraced MP4**; their names
 remain unchanged for compatibility. Trim changes update export freshness without
 enqueuing work; marker writes and renames/deletions update `render_revision`.
+
+### Marker provenance (issue #1256)
+
+Trackpoint values accepted by `POST /api/put-frame-trackpoints` and returned by
+`/api/get-movie-metadata` may include `is_manual` and `is_traced` booleans. Manual
+anchors survive retracing; computed points have `is_manual=false, is_traced=true`.
+A carried display copy has both false and does not establish a new manual anchor.
+Legacy records can omit both fields. Navigation does not persist copies.
+The client saves initial default markers on frame 0 and immediately saves additions.
+Apex and ruler labels are protected from deletion, including legacy records.
+See [Marker lifecycle](MarkerLifecycle.rst) for the full behavior contract.
