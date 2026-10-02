@@ -3018,6 +3018,31 @@ describe('TracerController.put_markers', () => {
         );
     });
 
+    test.each([undefined, null])('saving another marker preserves legacy positions with %s provenance', async (flag) => {
+        tc.frames = [
+            {frame_number: 0, markers: [{label: 'Apex', x: 10, y: 20}]},
+            {frame_number: 1, markers: [{label: 'Apex', x: 30, y: 40, is_manual: flag, is_traced: flag}]},
+        ];
+        tc.frame_number = 1;
+        tc.objects.push(new MockMarkerClass(30, 40, 5, 'red', 'red', 'Apex'));
+        mockPost.mockReturnValue({done: callback => {
+            callback({error: false}); return {fail: jest.fn()};
+        }});
+        tc.add_marker(60, 70, 'Leaf');
+        await tc.marker_save_tail;
+        const saved = JSON.parse(mockPost.mock.calls[0][1].trackpoints);
+        expect(saved.find(point => point.label === 'Apex').is_traced).toBe(flag);
+        expect(saved.find(point => point.label === 'Leaf')).toMatchObject({is_manual: true, is_traced: false});
+        // Simulate replacing in-memory annotations with the saved API payload.
+        tc.frames[1].markers = saved;
+        tc.invalidateMarkerSeeds();
+        expect(tc.markersForDisplay(0)).toEqual([expect.objectContaining({label: 'Apex', x: 10, y: 20})]);
+        expect(tc.markersForDisplay(1)).toEqual(expect.arrayContaining([
+            expect.objectContaining({label: 'Apex', x: 30, y: 40}),
+            expect.objectContaining({label: 'Leaf', x: 60, y: 70}),
+        ]));
+    });
+
     test('not demo_mode: trackpoints param is JSON of current markers', () => {
         tc.objects.push(new MockMarkerClass(10, 20, 5, 'red', 'red', 'Apex'));
         tc.put_markers();

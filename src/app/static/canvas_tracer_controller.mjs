@@ -1548,8 +1548,9 @@ class TracerController extends MovieController {
         const markers = (suppliedMarkers || this.get_markers()).map(marker => {
             const prior = previous.find(point => point.label === marker.label);
             const changed = !prior || prior.x !== marker.x || prior.y !== marker.y;
-            return {...marker, is_manual: changed || prior?.is_manual === true,
-                is_traced: !changed && prior?.is_traced === true};
+            // Keep legacy provenance absent on unchanged saved positions.
+            return {...marker, is_manual: changed ? true : prior.is_manual,
+                is_traced: changed ? false : prior.is_traced};
         });
         // Navigation must use the latest explicit edit while its save is in flight.
         // Older responses must not replace a newer local edit on the same frame.
