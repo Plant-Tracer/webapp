@@ -456,7 +456,7 @@ def test_delete_movie_marker_hides_all_frames_and_preserves_raw_data(local_ddb):
     movie_id = create_trim_test_movie(local_ddb, total_frames=3)
     for frame in range(3):
         odb.put_frame_trackpoints(movie_id=movie_id, frame_number=frame, trackpoints=[
-            Trackpoint(x=10, y=20, label='Apex'),
+            Trackpoint(x=10, y=20, label='Leaf'),
             Trackpoint(x=30, y=40, label='Keep'),
             Trackpoint(x=40, y=50, label='Ruler 0mm', undeletable=True),
         ])
@@ -467,7 +467,7 @@ def test_delete_movie_marker_hides_all_frames_and_preserves_raw_data(local_ddb):
         point.pop(odb.MARKER_ID, None)
     local_ddb.movie_frames.update_item(Key=key, UpdateExpression='SET trackpoints=:points',
                                      ExpressionAttributeValues={':points': raw})
-    odb.rename_movie_marker(movie_id=movie_id, old_label='Apex', new_label='Tip')
+    odb.rename_movie_marker(movie_id=movie_id, old_label='Leaf', new_label='Tip')
     before = local_ddb.get_frames(movie_id)
     odb.delete_movie_marker(movie_id=movie_id, label='Tip')
     odb.delete_movie_marker(movie_id=movie_id, label='Tip')  # Repeat delivery is harmless.
@@ -481,10 +481,10 @@ def test_delete_movie_marker_hides_all_frames_and_preserves_raw_data(local_ddb):
                               trackpoints=[Trackpoint(x=80, y=90, label='Tip')])
     points = odb.get_movie_trackpoints(movie_id=movie_id)
     assert [(point['frame_number'], point['x']) for point in points if point['label'] == 'Tip'] == [(1, 80)]
-    assert not any(point['label'] == 'Apex' for point in points)
+    assert not any(point['label'] == 'Leaf' for point in points)
     odb.put_frame_trackpoints(movie_id=movie_id, frame_number=0,
-                              trackpoints=[Trackpoint(x=70, y=80, label='Apex')])
-    odb.rename_movie_marker(movie_id=movie_id, old_label='Apex', new_label='Fresh')
+                              trackpoints=[Trackpoint(x=70, y=80, label='Leaf')])
+    odb.rename_movie_marker(movie_id=movie_id, old_label='Leaf', new_label='Fresh')
     points = odb.get_movie_trackpoints(movie_id=movie_id)
     assert [(point['frame_number'], point['x']) for point in points if point['label'] == 'Fresh'] == [(0, 70)]
 

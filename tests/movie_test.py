@@ -853,7 +853,7 @@ def test_trim_does_not_revive_deleted_markers(client, new_movie, legacy, keep_ma
     odb.ensure_bottom_left_trackpoints(movie_id=movie_id)
     odb.set_movie_metadata(movie_id=movie_id, movie_metadata={
         odb.TOTAL_FRAMES: 4, odb.TRIM_START_FRAME: 2, odb.TRIM_END_FRAME: 3})
-    points = [Trackpoint(x=10, y=20, label='Apex')]
+    points = [Trackpoint(x=10, y=20, label='Leaf')]
     if keep_marker:
         points.append(Trackpoint(x=30, y=40, label='Keep', color='blue'))
     odb.put_frame_trackpoints(movie_id=movie_id, frame_number=2, trackpoints=points)
@@ -864,7 +864,7 @@ def test_trim_does_not_revive_deleted_markers(client, new_movie, legacy, keep_ma
         for point in source[odb.TRACKPOINTS]:
             point.pop(odb.MARKER_ID, None)
         table.put_item(Item=source)
-    odb.rename_movie_marker(movie_id=movie_id, old_label='Apex', new_label='Tip')
+    odb.rename_movie_marker(movie_id=movie_id, old_label='Leaf', new_label='Tip')
     assert not client.post('/api/delete-marker', data={**params, 'label': 'Tip'}).get_json()['error']
     assert not client.post('/api/set-movie-trim', data={
         **params, odb.TRIM_START_FRAME: 1}).get_json()['error']
