@@ -78,6 +78,11 @@ Release Notes
 Unreleased Summary
 ******************
 
+    * Version 0.9.9.24: simplify Billing spend tables to charges, link positive
+      function error counts to period-specific CloudWatch log searches, and show
+      stack start/stop dates and elapsed days/hours/minutes in the Stack column.
+      Stack identity matching distinguishes recreated stacks; unavailable historical
+      dates remain explicit. Deploy the web reader before the schema-2 collector.
     * Version 0.9.9.23: add a dedicated superadmin Billing page, linked from Admin, with cached
       current/previous month gross spend (without credits/refunds or net columns),
       function activity with per-function error links to CloudWatch logs,

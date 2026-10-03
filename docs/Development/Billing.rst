@@ -26,6 +26,21 @@ invocation. The application log groups retain 30 days, so older logs may have
 expired even while monthly metrics remain available. Insights queries incur
 scan charges; the Billing page itself does not execute log queries.
 
+The existing Stack column also shows UTC start and stop dates, plus elapsed
+whole days, hours, and minutes. Existing stacks show **Still present**, with
+elapsed time measured to collection time. This is CloudFormation stack
+existence, not application uptime or Lambda execution time: retained functions
+can continue running after their stack is deleted. A deleted stack with no
+known stop date shows **Unknown** and no elapsed duration.
+
+The collector uses read-only ``cloudformation:ListStacks`` and matches each
+function's immutable ``aws:cloudformation:stack-id`` tag, never just its name.
+This distinguishes recreated stacks with the same name. AWS retains deleted
+stack summaries for 90 days; previously collected deletion dates are preserved
+while their functions remain in the cache. Older missing records or missing
+identity tags show **Dates unavailable**, without estimating dates from function
+modification timestamps.
+
 Costs and activity have different scopes: account costs cover every region;
 function statistics cover the configured region (initially ``us-east-1``).
 Activity is not a per-function cost allocation. Stack costs require activating
@@ -54,7 +69,8 @@ updates at least daily, so more frequent collection does not make it real time.
 See `Cost Explorer pricing <https://aws.amazon.com/aws-cost-management/aws-cost-explorer/pricing/>`_.
 
 The collector stores one encrypted, private ``summary.json`` in a dedicated S3
-bucket. Successful same-day retries reuse it; a failed collection leaves the
+bucket. Successful same-day retries reuse it; a schema upgrade refreshes it
+even on the same day. A failed collection leaves the
 last successful object intact. Reserved concurrency prevents overlapping runs.
 The web function receives only GetObject access to that object. Page loads
 perform an S3 read, never Cost Explorer, CloudWatch, or inventory queries.
@@ -84,7 +100,13 @@ performs read-only AWS queries and writes local evidence to
 ``BILLING_OUTPUT`` (default ``.tmp/billing-summary.json``). It incurs the same
 query charges but does not write AWS resources or refresh the deployed cache.
 
-Deployment is a separate, explicitly authorized operator action:
+Deployment is a separate, explicitly authorized operator action.
+For upgrades from cache schema 1, deploy the web application first: the new
+reader accepts schemas 1 and 2, whereas the previous reader accepts only 1.
+Then deploy and invoke the collector to publish schema 2 with stack lifetimes.
+Until refresh, the old cache remains readable and dates appear unavailable.
+For initial adoption:
+
 
 1. Run ``AWS_PROFILE=planttracer-admin AWS_REGION=us-east-1 make billing-deploy``.
    This always rebuilds the collector from the current checkout before deploying,

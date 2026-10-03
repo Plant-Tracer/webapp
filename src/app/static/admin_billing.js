@@ -82,6 +82,26 @@ function subtotal(values, divisor) {
     + (missing ? ` (${missing} ${missing === 1 ? "function" : "functions"}: no data)` : "");
 }
 
+function stackCell(fn, collectedAt) {
+  const cell = element('div');
+  element('strong', fn.stack, cell);
+  const life = fn.stack_lifetime;
+  if (!life) {
+    element('div', 'Dates unavailable', cell);
+    return cell;
+  }
+  const stamp = (value) => new Date(value).toISOString().slice(0, 16).replace('T', ' ');
+  element('div', `Start: ${stamp(life.started_at)}`, cell);
+  const deleted = life.status === 'DELETE_COMPLETE';
+  element('div', `Stop: ${life.stopped_at ? stamp(life.stopped_at) : (deleted ? 'Unknown' : 'Still present')}`, cell);
+  const end = life.stopped_at || (deleted ? null : collectedAt);
+  const minutes = end ? Math.floor((Date.parse(end) - Date.parse(life.started_at)) / 60000) : NaN;
+  const elapsed = Number.isFinite(minutes) && minutes >= 0
+    ? `${Math.floor(minutes / 1440)}d ${Math.floor((minutes % 1440) / 60)}h ${minutes % 60}m` : 'Unavailable';
+  element('div', `Elapsed: ${elapsed}`, cell);
+  return cell;
+}
+
 function renderBilling(payload) {
   const status = document.getElementById("billing-status");
   status.textContent = payload.message;
@@ -124,18 +144,21 @@ function renderBilling(payload) {
       + "Account credits may be unallocated. Function activity is not a cost allocation.", details);
   });
   ["current", "previous"].forEach((period) => {
-    const rows = snapshot.functions.map((fn) => [fn.stack, fn.name, fn.component,
+    const rows = snapshot.functions.map((fn) => [stackCell(fn, snapshot.collected_at), fn.name, fn.component,
       metric(fn[period].invocations), errorLink(fn, period, snapshot), metric(fn[period].duration_ms, 1000)]);
     rows.push(["Reported subtotal", "", "",
       ...["invocations", "errors", "duration_ms"].map((field) => subtotal(
         snapshot.functions.map((fn) => fn[period][field]), field === "duration_ms" ? 1000 : 1,
       ))]);
     table(content, `${snapshot[period].start.slice(0, 7)} function activity${period === "current" ? " (to collection time)" : ""}`,
-      ["Stack", "Function", "Component", "Invocations", "Errors", "Execution seconds"], rows);
+      ["Stack / lifetime (UTC)", "Function", "Component", "Invocations", "Errors", "Execution seconds"], rows);
   });
   element("p", "Web functions serve pages, static files and Flask APIs. Resize functions serve "
     + "resize APIs and video/tracing work. No data means AWS returned no samples; reported subtotals "
     + "identify functions with missing data. Activity covers existing functions across all their versions.", content);
+  element('p', 'Stack elapsed time runs from creation to deletion, or to collection time if still present. '
+    + 'It is not Lambda execution time; retained functions can outlive their stack. '
+    + 'Dates unavailable means AWS no longer exposes that stack record, or its identity is missing.', content);
   element("p", "Positive error counts open CloudWatch logs for that function and period (AWS login required). "
     + "Matching log messages can differ from failed-invocation counts. Older logs may have expired; "
     + "Logs Insights queries incur AWS scan charges.", content);

@@ -16,6 +16,7 @@ from pydantic import AwareDatetime, BaseModel, Field, computed_field
 BILLING_BUCKET_ENV = "PLANTTRACER_BILLING_BUCKET"
 CACHE_KEY = "summary.json"
 STALE_AFTER = timedelta(hours=36)
+CACHE_SCHEMA_VERSION = 2
 
 
 class Charges(BaseModel):
@@ -49,12 +50,21 @@ class Activity(BaseModel):
     duration_ms: float | None = None
 
 
+class StackLifetime(BaseModel):
+    """CloudFormation existence, not invocation time or retained-resource lifetime."""
+    started_at: AwareDatetime
+    stopped_at: AwareDatetime | None = None
+    status: str
+
+
 class FunctionUsage(BaseModel):
     """One physical function, aggregated across its versions without duplication."""
     name: str
     region: str
     stack: str
     component: str
+    stack_id: str | None = None
+    stack_lifetime: StackLifetime | None = None
     current: Activity = Field(default_factory=Activity)
     previous: Activity = Field(default_factory=Activity)
     snapshots: int = 0
@@ -63,7 +73,7 @@ class FunctionUsage(BaseModel):
 
 class BillingSnapshot(BaseModel):
     """Complete collector output; account costs and regional activity have distinct scopes."""
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2] = CACHE_SCHEMA_VERSION
     account_id: str = Field(pattern=r"^\d{12}$")
     collected_at: AwareDatetime
     activity_region: str

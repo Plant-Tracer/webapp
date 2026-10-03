@@ -108,3 +108,27 @@ test('links only positive function errors to the matching UTC period and escaped
   expect(document.querySelectorAll('#billing-content a')).toHaveLength(0);
   expect(document.querySelector('script')).toBeNull();
 });
+
+test('keeps stack dates and elapsed days/hours/minutes in one cell without inventing missing dates', () => {
+  const data = payload();
+  const fn = data.snapshot.functions[0];
+  fn.stack_lifetime = { started_at: '2026-09-01T01:02:00Z', stopped_at: '2026-09-03T04:07:59Z', status: 'DELETE_COMPLETE' };
+  renderBilling(data);
+  let rows = [...document.querySelectorAll('#billing-content table')][7].querySelectorAll('tbody tr');
+  expect(rows[0].children).toHaveLength(6);
+  expect(rows[0].children[0].textContent).toContain('Start: 2026-09-01 01:02');
+  expect(rows[0].children[0].textContent).toContain('Stop: 2026-09-03 04:07');
+  expect(rows[0].children[0].textContent).toContain('Elapsed: 2d 3h 5m');
+  fn.stack_lifetime = { started_at: '2026-10-02T08:55:00Z', status: 'UPDATE_COMPLETE' };
+  renderBilling(data);
+  rows = [...document.querySelectorAll('#billing-content table')][7].querySelectorAll('tbody tr');
+  expect(rows[0].children[0].textContent).toContain('Stop: Still present');
+  expect(rows[0].children[0].textContent).toContain('Elapsed: 1d 1h 5m');
+  fn.stack_lifetime.status = 'DELETE_COMPLETE';
+  renderBilling(data);
+  expect(document.getElementById('billing-content').textContent).toContain('Stop: Unknown');
+  expect(document.getElementById('billing-content').textContent).toContain('Elapsed: Unavailable');
+  delete fn.stack_lifetime;
+  renderBilling(data);
+  expect(document.getElementById('billing-content').textContent).toContain('Dates unavailable');
+});

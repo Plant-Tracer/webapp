@@ -22,11 +22,11 @@ from selenium.webdriver.support.ui import WebDriverWait
 from billing_email import (BILLING_URL_ENV, BODY, CHARSET, DATA, MESSAGE_ID, RECIPIENT, RECEIPT_KEY,
                            SENDER, SUBJECT, TEXT, TO, digest, send_weekly)
 from billing_collector import (MetricResult, add_charge, apply_metric, collect_activity,
-                               collect_costs, cost_pages, metric_queries)
+                               cache_is_current, collect_costs, collect_stack_lifetimes, cost_pages, metric_queries)
 
 from app import apikey, billing_service, odb, s3_presigned
 from app.billing_models import (BILLING_BUCKET_ENV, CACHE_KEY, BillingSnapshot, Charges,
-                                FunctionUsage, MonthCosts, month_boundaries)
+                                FunctionUsage, MonthCosts, StackLifetime, month_boundaries)
 
 from .constants import ADMIN_EMAIL
 
@@ -176,7 +176,11 @@ def test_admin_billing_authorization(client, new_course, cache_bucket):
 @pytest.mark.selenium
 def test_admin_billing_browser(live_server, chrome_driver, new_course, cache_bucket):
     """Authenticated admin renders real cached data and usable AWS destination links."""
-    publish(cache_bucket, snapshot(datetime.now(timezone.utc)).model_dump_json())
+    data = snapshot(datetime.now(timezone.utc))
+    data.functions[0].stack_lifetime = StackLifetime(
+        started_at=NOW - timedelta(days=3, hours=2, minutes=1), stopped_at=NOW, status="DELETE_COMPLETE")
+    data.functions[0].previous.errors = 1
+    publish(cache_bucket, data.model_dump_json())
     new_course["ddbo"].update_table(odb.DDBO().users, new_course[odb.USER_ID], {odb.SUPER_ROLE: odb.SUPER_ROLE_SUPERADMIN})
     chrome_driver.get(live_server)
     chrome_driver.add_cookie({"name": apikey.cookie_name(), "value": new_course[odb.API_KEY]})
@@ -189,6 +193,10 @@ def test_admin_billing_browser(live_server, chrome_driver, new_course, cache_buc
     assert panel.is_displayed()
     assert chrome_driver.find_element(By.TAG_NAME, "h1").text == "Billing"
     assert "No data" in panel.text and "$1.944" in panel.text
+    assert "Elapsed: 3d 2h 1m" in panel.text
+    error_link = panel.find_element(By.CSS_SELECTOR, "a[aria-label^='1 errors:']")
+    assert "#logs-insights:queryDetail=" in error_link.get_attribute("href")
+    assert "Credits / refunds" not in panel.text
     links = panel.find_elements(By.CSS_SELECTOR, "nav a")
     assert len(links) == 3
     assert all(link.get_attribute("href").startswith("https://console.aws.amazon.com/costmanagement/") for link in links)
@@ -266,3 +274,40 @@ def test_cost_reconciliation_and_unallocated_stack():
         stub.add_response("get_cost_and_usage", {"ResultsByTime": []})
         with pytest.raises(ValueError, match="omitted"):
             collect_costs(client, NOW)
+
+
+def test_stack_lifetimes_match_ids_paginate_and_preserve_deleted_history():
+    """Reused names never merge incarnations; deleted dates survive AWS history expiry."""
+    client = boto3.client("cloudformation", region_name="us-east-1", aws_access_key_id="test", aws_secret_access_key="test")
+    functions = [FunctionUsage(name=f"fn-{key}", stack="prod", stack_id=key, region="us-east-1", component="Web")
+                 for key in ("old", "new", "expired", "unavailable")]
+    previous = snapshot()
+    previous.functions = [functions[2].model_copy(deep=True)]
+    previous.functions[0].stack_lifetime = StackLifetime(
+        started_at=NOW - timedelta(days=200), stopped_at=NOW - timedelta(days=100), status="DELETE_COMPLETE")
+    with Stubber(client) as stub:
+        stub.add_response("list_stacks", {"StackSummaries": [
+            {"StackId": "old", "StackName": "prod", "CreationTime": NOW - timedelta(days=20),
+             "DeletionTime": NOW - timedelta(days=10), "StackStatus": "DELETE_COMPLETE"}], "NextToken": "next"}, {})
+        stub.add_response("list_stacks", {"StackSummaries": [
+            {"StackId": "new", "StackName": "prod", "CreationTime": NOW - timedelta(days=5),
+             "StackStatus": "UPDATE_COMPLETE"}]}, {"NextToken": "next"})
+        collect_stack_lifetimes(client, functions, previous)
+        stub.assert_no_pending_responses()
+    assert functions[0].stack_lifetime.stopped_at == NOW - timedelta(days=10)
+    assert functions[1].stack_lifetime.started_at == NOW - timedelta(days=5)
+    assert functions[1].stack_lifetime.stopped_at is None
+    assert functions[2].stack_lifetime.stopped_at == NOW - timedelta(days=100)
+    assert functions[3].stack_lifetime is None
+
+
+def test_same_day_cache_upgrade_and_legacy_reader():
+    """New deployments refresh an old same-day schema; readers still accept old caches."""
+    data = snapshot()
+    assert cache_is_current(data, NOW)
+    assert not cache_is_current(data, NOW + timedelta(days=1))
+    data.schema_version = 1
+    old = data.model_dump(exclude={"functions": {"__all__": {"stack_id", "stack_lifetime"}}})
+    read = BillingSnapshot.model_validate(old)
+    assert read.functions[0].stack_lifetime is None
+    assert not cache_is_current(read, NOW)

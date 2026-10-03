@@ -2,7 +2,7 @@
 
 Cost Explorer supplies both calendar months in three paginated queries.
 CloudWatch supplies regional function metrics across versions, never aliases.
-Lambda inventory supplies stack ownership and retained SnapStart snapshot sizes.
+Lambda inventory supplies ownership and snapshots; CloudFormation supplies lifetimes.
 Only a complete collection replaces the private S3 cache; failures leave it stale.
 This standalone scheduled function has billing access; the web function does not.
 """
@@ -20,8 +20,8 @@ from pydantic import BaseModel, Field, ValidationError
 
 from billing_email import send_weekly
 
-from app.billing_models import (BILLING_BUCKET_ENV, CACHE_KEY, BillingSnapshot,
-                                Charges, FunctionUsage, MonthCosts, month_boundaries)
+from app.billing_models import (BILLING_BUCKET_ENV, CACHE_KEY, CACHE_SCHEMA_VERSION, BillingSnapshot,
+                                Charges, FunctionUsage, MonthCosts, StackLifetime, month_boundaries)
 
 LOGGER = logging.getLogger(__name__)
 # AWS wire keys are centralized so requests and response parsing agree.
@@ -30,6 +30,9 @@ START, END, TOKEN = "Start", "End", "NextPageToken"
 COST, QUANTITY = "UnblendedCost", "UsageQuantity"
 SERVICE, RECORD, USAGE = "SERVICE", "RECORD_TYPE", "USAGE_TYPE"
 STACK_TAG, LOGICAL_TAG = "aws:cloudformation:stack-name", "aws:cloudformation:logical-id"
+STACK_ID_TAG = "aws:cloudformation:stack-id"
+STACK_SUMMARIES, STACK_ID, STACK_STATUS = "StackSummaries", "StackId", "StackStatus"
+CREATION_TIME, DELETION_TIME = "CreationTime", "DeletionTime"
 METRIC_NAMES = ("Invocations", "Errors", "Duration")
 ID, METRIC_STAT, METRIC, NAMESPACE = "Id", "MetricStat", "Metric", "Namespace"
 METRIC_NAME, NAME, VALUE, PERIOD, STAT = "MetricName", "Name", "Value", "Period", "Stat"
@@ -147,7 +150,7 @@ def collect_functions(client, region):
             name = function[FUNCTION_NAME]
             tags = client.list_tags(Resource=function[FUNCTION_ARN])[TAGS]
             item = FunctionUsage(name=name, region=region, stack=tags.get(STACK_TAG, "Unallocated / shared"),
-                                 component=tags.get(LOGICAL_TAG, "Other"))
+                                 component=tags.get(LOGICAL_TAG, "Other"), stack_id=tags.get(STACK_ID_TAG))
             for versions in client.get_paginator("list_versions_by_function").paginate(FunctionName=name):
                 for version in versions[VERSIONS]:
                     if version[VERSION] != "$LATEST" and version.get(SNAPSTART, {}).get(OPTIMIZATION) == "On":
@@ -155,6 +158,21 @@ def collect_functions(client, region):
                         item.snapshot_gb += Decimal(version[MEMORY]) / 1024
             result.append(item)
     return sorted(result, key=lambda item: (item.stack, item.name))
+
+
+def collect_stack_lifetimes(client, functions, previous=None):
+    """Match immutable stack IDs; preserve known deletions beyond AWS's 90-day history."""
+    lifetimes = {item.stack_id: item.stack_lifetime for item in previous.functions
+                 if item.stack_id and item.stack_lifetime and item.stack_lifetime.status == "DELETE_COMPLETE"} if previous else {}
+    for page in client.get_paginator("list_stacks").paginate():
+        for stack in page[STACK_SUMMARIES]:
+            if stack.get(STACK_ID):
+                status = stack[STACK_STATUS]
+                lifetimes[stack[STACK_ID]] = StackLifetime(
+                    started_at=stack[CREATION_TIME], status=status,
+                    stopped_at=stack.get(DELETION_TIME) if status == "DELETE_COMPLETE" else None)
+    for function in functions:
+        function.stack_lifetime = lifetimes.get(function.stack_id)
 
 
 def metric_queries(functions):
@@ -197,17 +215,23 @@ def collect_activity(client, functions, now):
             parameters[NEXT_TOKEN] = page[NEXT_TOKEN]
 
 
-def collect(session, now=None):
+def collect(session, now=None, previous=None):
     """Read AWS data without writing cloud resources; useful for local verification."""
     now = now or datetime.now(timezone.utc)
     region = session.region_name or "us-east-1"
     account = session.client("sts").get_caller_identity()[ACCOUNT]
     months, rate = collect_costs(session.client("ce", region_name="us-east-1"), now)
     functions = collect_functions(session.client("lambda", region_name=region), region)
+    collect_stack_lifetimes(session.client("cloudformation", region_name=region), functions, previous)
     collect_activity(session.client("cloudwatch", region_name=region), functions, now)
     return BillingSnapshot(account_id=account, collected_at=now, activity_region=region,
                            previous=months[0], current=months[1], functions=functions,
                            cache_rate_per_gb_second=rate)
+
+
+def cache_is_current(snapshot, now):
+    """A new collector schema refreshes immediately, even after today's older run."""
+    return snapshot.schema_version == CACHE_SCHEMA_VERSION and snapshot.collected_at.date() == now.date()
 
 
 def lambda_handler(event, _context):
@@ -219,18 +243,19 @@ def lambda_handler(event, _context):
     if event.get("weekly") is True:
         send_weekly(s3, session.client("ses"), bucket, now)
         return
+    snapshot = None
     try:
         existing = s3.get_object(Bucket=bucket, Key=CACHE_KEY)
         with existing[BODY] as body:
             snapshot = BillingSnapshot.model_validate_json(body.read())
-        if snapshot.collected_at.date() == now.date():
+        if cache_is_current(snapshot, now):
             return
     except ClientError as exc:
         if exc.response[ERROR][CODE] not in ("NoSuchKey", "404"):
             raise
     except ValidationError:
         LOGGER.warning("Replacing malformed billing cache")
-    snapshot = collect(session, now)
+    snapshot = collect(session, now, snapshot)
     s3.put_object(Bucket=bucket, Key=CACHE_KEY, Body=snapshot.model_dump_json().encode(),
                   ContentType="application/json")
     LOGGER.info("Published billing summary for account %s", snapshot.account_id)
