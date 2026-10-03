@@ -46,7 +46,7 @@ Resources:
       Policies:
         - Statement:
             - Effect: Allow
-              Action: [ce:GetCostAndUsage, cloudwatch:GetMetricData, lambda:ListFunctions, cloudformation:ListStacks]
+              Action: [ce:GetCostAndUsage, cloudwatch:GetMetricData, lambda:ListFunctions, cloudformation:ListStacks, s3:ListAllMyBuckets]
               Resource: '*'
             - Effect: Allow
               Action: [lambda:ListTags, lambda:ListVersionsByFunction]

@@ -16,7 +16,13 @@ from pydantic import AwareDatetime, BaseModel, Field, computed_field
 BILLING_BUCKET_ENV = "PLANTTRACER_BILLING_BUCKET"
 CACHE_KEY = "summary.json"
 STALE_AFTER = timedelta(hours=36)
-CACHE_SCHEMA_VERSION = 2
+CACHE_SCHEMA_VERSION = 3
+SERVICE_ACRONYMS = {
+    "Amazon Simple Storage Service": "S3", "Amazon Simple Email Service": "SES",
+    "Amazon Simple Queue Service": "SQS", "Amazon Relational Database Service": "RDS",
+    "AWS Key Management Service": "KMS", "Amazon Elastic Compute Cloud - Compute": "EC2",
+    "Amazon Elastic Container Registry (ECR)": "ECR",
+}
 
 
 class Charges(BaseModel):
@@ -24,6 +30,13 @@ class Charges(BaseModel):
     name: str
     gross: Decimal = Decimal(0)
     credits: Decimal = Decimal(0)
+
+    @computed_field
+    @property
+    def display_name(self) -> str:
+        """Keep AWS's billing name while adding familiar service abbreviations."""
+        acronym = SERVICE_ACRONYMS.get(self.name)
+        return f"{self.name} ({acronym})" if acronym and acronym not in self.name else self.name
 
     @computed_field
     @property
@@ -71,9 +84,30 @@ class FunctionUsage(BaseModel):
     snapshot_gb: Decimal = Decimal(0)
 
 
+class StorageDay(BaseModel):
+    """Daily CloudWatch gauges; missing reports remain null, including historical gaps."""
+    day: date
+    size_bytes: float | None = Field(default=None, ge=0)
+    objects: float | None = Field(default=None, ge=0)
+
+
+class BucketStorage(BaseModel):
+    """History for one existing account-owned general-purpose bucket."""
+    name: str
+    region: str
+    days: list[StorageDay] = Field(default_factory=list)
+
+
+class StorageSummary(BaseModel):
+    """Two-month daily inventory across current buckets, not a billing allocation."""
+    start: date
+    end: date
+    buckets: list[BucketStorage] = Field(default_factory=list)
+
+
 class BillingSnapshot(BaseModel):
     """Complete collector output; account costs and regional activity have distinct scopes."""
-    schema_version: Literal[1, 2] = CACHE_SCHEMA_VERSION
+    schema_version: Literal[1, 2, 3] = CACHE_SCHEMA_VERSION
     account_id: str = Field(pattern=r"^\d{12}$")
     collected_at: AwareDatetime
     activity_region: str
@@ -81,6 +115,7 @@ class BillingSnapshot(BaseModel):
     previous: MonthCosts
     functions: list[FunctionUsage]
     cache_rate_per_gb_second: Decimal | None = None
+    storage: StorageSummary | None = None
 
     @computed_field
     @property

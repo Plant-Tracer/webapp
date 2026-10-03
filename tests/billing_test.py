@@ -19,6 +19,7 @@ import pytest
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 
+from billing_storage import STORAGE_TYPES, bucket_history, storage_queries, storage_window
 from billing_email import (BILLING_URL_ENV, BODY, CHARSET, DATA, MESSAGE_ID, RECIPIENT, RECEIPT_KEY,
                            SENDER, SUBJECT, TEXT, TO, digest, send_weekly)
 from billing_collector import (MetricResult, add_charge, apply_metric, collect_activity,
@@ -26,7 +27,7 @@ from billing_collector import (MetricResult, add_charge, apply_metric, collect_a
 
 from app import apikey, billing_service, odb, s3_presigned
 from app.billing_models import (BILLING_BUCKET_ENV, CACHE_KEY, BillingSnapshot, Charges,
-                                FunctionUsage, MonthCosts, StackLifetime, month_boundaries)
+                                BucketStorage, StorageDay, StorageSummary, FunctionUsage, MonthCosts, StackLifetime, month_boundaries)
 
 from .constants import ADMIN_EMAIL
 
@@ -180,6 +181,11 @@ def test_admin_billing_browser(live_server, chrome_driver, new_course, cache_buc
     data.functions[0].stack_lifetime = StackLifetime(
         started_at=NOW - timedelta(days=3, hours=2, minutes=1), stopped_at=NOW, status="DELETE_COMPLETE")
     data.functions[0].previous.errors = 1
+    data.storage = StorageSummary(start=date(2026, 8, 3), end=date(2026, 10, 3), buckets=[
+        BucketStorage(name="test-bucket", region="us-east-1", days=[
+            StorageDay(day=date(2026, 10, 1), size_bytes=2e9, objects=10),
+            StorageDay(day=date(2026, 10, 2), size_bytes=3e9, objects=12)])])
+    data.current.services = [Charges(name="Amazon Simple Storage Service", gross=1)]
     publish(cache_bucket, data.model_dump_json())
     new_course["ddbo"].update_table(odb.DDBO().users, new_course[odb.USER_ID], {odb.SUPER_ROLE: odb.SUPER_ROLE_SUPERADMIN})
     chrome_driver.get(live_server)
@@ -197,6 +203,11 @@ def test_admin_billing_browser(live_server, chrome_driver, new_course, cache_buc
     error_link = panel.find_element(By.CSS_SELECTOR, "a[aria-label^='1 errors:']")
     assert "#logs-insights:queryDetail=" in error_link.get_attribute("href")
     assert "Credits / refunds" not in panel.text
+    assert "test-bucket" in panel.text and "Reported storage: 3 GB" in panel.text
+    assert panel.find_element(By.CSS_SELECTOR, "svg[role='img']").is_displayed()
+    panel.find_element(By.CSS_SELECTOR, "select[aria-label='Storage history bucket']").send_keys("test-bucket")
+    assert "1 of 1 buckets" in panel.text
+    chrome_driver.save_screenshot(".tmp/billing-storage-browser.png")
     links = panel.find_elements(By.CSS_SELECTOR, "nav a")
     assert len(links) == 3
     assert all(link.get_attribute("href").startswith("https://console.aws.amazon.com/costmanagement/") for link in links)
@@ -311,3 +322,54 @@ def test_same_day_cache_upgrade_and_legacy_reader():
     read = BillingSnapshot.model_validate(old)
     assert read.functions[0].stack_lifetime is None
     assert not cache_is_current(read, NOW)
+
+
+def test_s3_storage_history_aggregates_types_and_pages_without_filling_gaps():
+    """Sum storage classes, preserve real zeroes, and never duplicate paginated samples."""
+    client = boto3.client("cloudwatch", region_name="us-east-2", aws_access_key_id="test", aws_secret_access_key="test")
+    start, end = storage_window(NOW)
+    empty = [{"Id": f"s{i}", "Timestamps": [], "Values": [], "StatusCode": "Complete"}
+             for i in range(len(STORAGE_TYPES) + 1)]
+    one = NOW.replace(hour=0) - timedelta(days=2)
+    two = one + timedelta(days=1)
+    first = [dict(x) for x in empty]
+    first[0].update(Timestamps=[one, two], Values=[10, 0])
+    first[1].update(Timestamps=[one, two], Values=[100, 0], StatusCode="PartialData")
+    second = [{"Id": "s2", "Timestamps": [one, end], "Values": [200, 999], "StatusCode": "Complete"},
+              {"Id": "s1", "Timestamps": [one], "Values": [100], "StatusCode": "Complete"}]
+    params = {"StartTime": start, "EndTime": end, "MetricDataQueries": storage_queries("bucket")}
+    with Stubber(client) as stub:
+        stub.add_response("get_metric_data", {"MetricDataResults": first, "NextToken": "next"}, params)
+        stub.add_response("get_metric_data", {"MetricDataResults": second}, {**params, "NextToken": "next"})
+        bucket = bucket_history(client, "bucket", "us-east-2", start, end)
+        stub.assert_no_pending_responses()
+    assert bucket.days[-2].size_bytes == 300 and bucket.days[-2].objects == 10
+    assert bucket.days[-1].size_bytes == 0 and bucket.days[-1].objects == 0
+    assert bucket.days[0].size_bytes is None and bucket.days[0].objects is None
+    assert bucket.region == "us-east-2" and len(bucket.days) == 61
+    with Stubber(client) as stub:
+        stub.add_response("get_metric_data", {"MetricDataResults": [{**empty[0], "StatusCode": "PartialData"}]}, params)
+        with pytest.raises(ValueError, match="Incomplete S3 metric"):
+            bucket_history(client, "bucket", "us-east-2", start, end)
+    with Stubber(client) as stub:
+        stub.add_response("get_metric_data", {"MetricDataResults": []}, params)
+        with pytest.raises(ValueError, match="omitted"):
+            bucket_history(client, "bucket", "us-east-2", start, end)
+
+
+def test_storage_calendar_and_service_names_in_cache_and_digest():
+    """History spans two calendar months at year/leap boundaries; names retain AWS identity."""
+    start, end = storage_window(datetime(2024, 4, 30, 15, tzinfo=timezone.utc))
+    assert start.date() == date(2024, 2, 29) and end.hour == 0
+    start, _ = storage_window(datetime(2026, 1, 31, tzinfo=timezone.utc))
+    assert start.date() == date(2025, 11, 30)
+    data = snapshot()
+    data.current.services = [Charges(name="Amazon Simple Storage Service"), Charges(name="Amazon Simple Email Service")]
+    assert data.current.services[0].model_dump()["display_name"] == "Amazon Simple Storage Service (S3)"
+    assert Charges(name="Unknown service").display_name == "Unknown service"
+    assert "Amazon Simple Email Service (SES)" in digest(data)
+    data.storage = StorageSummary(start=start.date(), end=NOW.date(), buckets=[
+        BucketStorage(name="empty", region="us-east-1"),
+        BucketStorage(name="archive", region="us-east-2", days=[StorageDay(day=NOW.date(), size_bytes=2e9, objects=12)])])
+    message = digest(data)
+    assert "2.00 GB / 12.00 objects" in message and "empty (us-east-1): No data" in message

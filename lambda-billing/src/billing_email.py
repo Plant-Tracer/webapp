@@ -56,7 +56,7 @@ def digest(snapshot):
         for label, rows in (("Services", month.services), ("Lambda charge types", month.lambda_usage),
                             ("Billing stack tags", month.stack_gross)):
             lines.append(label + ":")
-            lines.extend(f"  {row.name}: charges {usd(row.gross)}, credits {usd(row.credits)}, net {usd(row.net)}"
+            lines.extend(f"  {row.display_name}: charges {usd(row.gross)}, credits {usd(row.credits)}, net {usd(row.net)}"
                          for row in rows)
         lines.append("Function activity (invocations / errors / execution seconds):")
         for function in snapshot.functions:
@@ -73,6 +73,14 @@ def digest(snapshot):
             totals.append(statistic(sum(known), divisor) + qualifier if known else "No data")
         lines.append("Reported subtotal: " + " / ".join(totals))
         lines.append("")
+    if snapshot.storage:
+        lines.append("S3 storage (daily metrics for current general-purpose buckets; GB = 1 billion bytes):")
+        for bucket in snapshot.storage.buckets:
+            latest = next((day for day in reversed(bucket.days) if day.size_bytes is not None or day.objects is not None), None)
+            lines.append(f"  {bucket.name} ({bucket.region}): " + (
+                f"{statistic(latest.size_bytes, 1e9)} GB / {statistic(latest.objects)} objects; measured {latest.day} UTC"
+                if latest else "No data"))
+        lines.append("Counts include old versions, delete markers and incomplete multipart parts; see Billing for history.")
     lines.extend([f"Retained SnapStart snapshots: {sum(item.snapshots for item in snapshot.functions)}",
                   f"Estimated 30-day caching run rate: {usd(snapshot.snapshot_monthly_estimate)} (excludes restores/credits).",
                   "Unallocated/shared costs lack an active stack billing tag; activity is not cost allocation.",

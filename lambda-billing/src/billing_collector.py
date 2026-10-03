@@ -19,6 +19,7 @@ from botocore.exceptions import ClientError
 from pydantic import BaseModel, Field, ValidationError
 
 from billing_email import send_weekly
+from billing_storage import collect_storage
 
 from app.billing_models import (BILLING_BUCKET_ENV, CACHE_KEY, CACHE_SCHEMA_VERSION, BillingSnapshot,
                                 Charges, FunctionUsage, MonthCosts, StackLifetime, month_boundaries)
@@ -226,7 +227,7 @@ def collect(session, now=None, previous=None):
     collect_activity(session.client("cloudwatch", region_name=region), functions, now)
     return BillingSnapshot(account_id=account, collected_at=now, activity_region=region,
                            previous=months[0], current=months[1], functions=functions,
-                           cache_rate_per_gb_second=rate)
+                           cache_rate_per_gb_second=rate, storage=collect_storage(session, now))
 
 
 def cache_is_current(snapshot, now):

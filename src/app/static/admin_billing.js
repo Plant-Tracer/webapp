@@ -71,7 +71,7 @@ function table(parent, caption, headings, rows) {
 }
 
 function chargeRows(month, field) {
-  return month[field].map((row) => [row.name, money(row.gross)]);
+  return month[field].map((row) => [row.display_name || row.name, money(row.gross)]);
 }
 
 function subtotal(values, divisor) {
@@ -80,6 +80,104 @@ function subtotal(values, divisor) {
   const missing = values.length - known.length;
   return metric(known.reduce((sum, value) => sum + value, 0), divisor)
     + (missing ? ` (${missing} ${missing === 1 ? "function" : "functions"}: no data)` : "");
+}
+
+function storagePoints(storage, bucketName) {
+  const buckets = storage.buckets.filter((b) => !bucketName || b.name === bucketName);
+  const days = new Map();
+  buckets.forEach((bucket) => bucket.days.forEach((sample) => {
+    if (!days.has(sample.day)) days.set(sample.day, { day: sample.day, size_bytes: null, objects: null, reporting: 0, object_reporting: 0 });
+    const point = days.get(sample.day);
+    if (sample.size_bytes !== null) {
+      point.size_bytes = (point.size_bytes ?? 0) + sample.size_bytes;
+      point.reporting += 1;
+    }
+    if (sample.objects !== null) {
+      point.objects = (point.objects ?? 0) + sample.objects;
+      point.object_reporting += 1;
+    }
+  }));
+  return [...days.values()].sort((a, b) => a.day.localeCompare(b.day));
+}
+
+function storageChart(parent, points) {
+  const svgNode = (tag, attrs, text, container) => {
+    const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, value));
+    if (text !== undefined) node.textContent = text;
+    container.append(node);
+    return node;
+  };
+  const known = points.filter((p) => p.size_bytes !== null);
+  if (!known.length) { element('p', 'No storage measurements available for this selection.', parent); return; }
+  const svg = svgNode('svg', { viewBox: '0 0 900 260', role: 'img',
+    'aria-label': 'Daily S3 storage in GB; gaps indicate missing reports. Exact values follow in the daily data table.',
+    width: '100%' }, undefined, parent);
+  const maximum = Math.max(...known.map((p) => p.size_bytes / 1e9), 0.001);
+  const first = Date.parse(points[0].day);
+  const span = Math.max(86400000, Date.parse(points.at(-1).day) - first);
+  const x = (p) => 70 + (Date.parse(p.day) - first) / span * 800;
+  const y = (p) => 215 - p.size_bytes / 1e9 / maximum * 185;
+  [0, 0.5, 1].forEach((fraction) => {
+    const position = 215 - 185 * fraction;
+    svgNode('line', { x1: 70, x2: 870, y1: position, y2: position, stroke: '#ddd' }, undefined, svg);
+    svgNode('text', { x: 60, y: position + 4, 'text-anchor': 'end', 'font-size': 12 },
+      (maximum * fraction).toLocaleString('en-US', { maximumFractionDigits: 3 }), svg);
+  });
+  svgNode('text', { x: 20, y: 18, 'font-size': 13 }, 'GB', svg);
+  svgNode('text', { x: 70, y: 245, 'font-size': 12 }, points[0].day, svg);
+  svgNode('text', { x: 870, y: 245, 'text-anchor': 'end', 'font-size': 12 }, points.at(-1).day, svg);
+  let previous = null;
+  points.forEach((point) => {
+    if (point.size_bytes === null) { previous = null; return; }
+    if (previous && previous.reporting === point.reporting && Date.parse(point.day) - Date.parse(previous.day) === 86400000) {
+      svgNode('line', { x1: x(previous), y1: y(previous), x2: x(point), y2: y(point), stroke: '#176c98', 'stroke-width': 2 }, undefined, svg);
+    }
+    const dot = svgNode('circle', { cx: x(point), cy: y(point), r: 3, fill: '#176c98' }, undefined, svg);
+    svgNode('title', {}, `${point.day}: ${metric(point.size_bytes, 1e9)} GB; ${point.reporting} buckets reporting`, dot);
+    previous = point;
+  });
+}
+
+function renderStorage(parent, snapshot) {
+  element('h3', 'S3 storage and objects', parent);
+  const storage = snapshot.storage;
+  if (!storage) { element('p', 'Storage data unavailable until the collector refreshes.', parent); return; }
+  element('p', `Daily measurements: ${storage.start} – ${storage.end} UTC (end exclusive). `
+    + 'Current general-purpose buckets across all regions; deleted buckets and directory buckets are excluded. '
+    + 'GB = 1 billion bytes. Includes versions, metadata and incomplete multipart uploads; object counts also include delete markers. '
+    + 'Shared buckets are not divided by stack. Missing measurements are not zero.', parent);
+  table(parent, 'Latest reported S3 measurements', ['Bucket', 'Region', 'Storage (GB)', 'Objects', 'Measured (UTC)'],
+    storage.buckets.map((bucket) => {
+      const latest = [...bucket.days].reverse().find((d) => d.size_bytes !== null || d.objects !== null);
+      const stale = latest && Date.parse(snapshot.collected_at) - Date.parse(latest.day) > 3 * 86400000;
+      return [bucket.name, bucket.region, metric(latest?.size_bytes, 1e9), metric(latest?.objects),
+        latest ? `${latest.day}${stale ? ' (stale)' : ''}` : 'No data'];
+    }));
+  const label = element('label', 'Storage history: ', parent);
+  const select = element('select', undefined, label);
+  select.setAttribute('aria-label', 'Storage history bucket');
+  const all = element('option', 'All buckets (reported subtotal)', select);
+  all.value = '';
+  storage.buckets.forEach((bucket) => { const option = element('option', bucket.name, select); option.value = bucket.name; });
+  const graph = element('div', undefined, parent);
+  const update = () => {
+    graph.replaceChildren();
+    const points = storagePoints(storage, select.value);
+    const latest = [...points].reverse().find((p) => p.size_bytes !== null);
+    element('p', latest ? `Reported storage: ${metric(latest.size_bytes, 1e9)} GB on ${latest.day}; `
+      + `${latest.reporting} of ${select.value ? 1 : storage.buckets.length} buckets reported size that day. `
+      + `Objects: ${metric(latest.objects)} (${latest.object_reporting} buckets reporting).` : 'No data', graph);
+    element('p', 'The subtotal includes only measurements reported on each date; coverage can change. '
+      + 'The line breaks when the reporting count changes or no sizes are reported. Hover over points or expand daily data for values.', graph);
+    storageChart(graph, points);
+    const details = element('details', undefined, graph);
+    element('summary', 'Daily storage data', details);
+    table(details, 'Daily S3 measurements (UTC)', ['Date', 'Storage (GB)', 'Objects', 'Buckets reporting size'],
+      points.map((p) => [p.day, metric(p.size_bytes, 1e9), metric(p.objects), String(p.reporting)]));
+  };
+  select.addEventListener('change', update);
+  update();
 }
 
 function stackCell(fn, collectedAt) {
@@ -169,6 +267,7 @@ function renderBilling(payload) {
     snapshot.functions.filter((fn) => fn.snapshots).map((fn) => [
       fn.stack, fn.name, String(fn.snapshots), metric(fn.snapshot_gb),
     ]));
+  renderStorage(content, snapshot);
 }
 
 async function loadBilling(role) {

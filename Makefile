@@ -221,7 +221,7 @@ pytest: $(LOCAL_TEST_REQ)
 pytest-coverage: $(LOCAL_TEST_REQ)
 	$(MAKE) vend-lambda-resize
 	$(MAKE) vend-lambda-web
-	$(LOCAL_AWS_ENV) PYTHONPATH=.:src:lambda-web/src:lambda-resize/src:lambda-billing/src:$$PYTHONPATH uv run pytest -vv --log-cli-level=$(LOG_LEVEL) --cov=src --cov=billing_collector --cov=billing_email --cov=lambda-web/src/lambda_web --cov=lambda-resize/src --cov-report=xml --cov-report=html tests lambda-web/tests lambda-resize/tests
+	$(LOCAL_AWS_ENV) PYTHONPATH=.:src:lambda-web/src:lambda-resize/src:lambda-billing/src:$$PYTHONPATH uv run pytest -vv --log-cli-level=$(LOG_LEVEL) --cov=src --cov=billing_collector --cov=billing_email --cov=billing_storage --cov=lambda-web/src/lambda_web --cov=lambda-resize/src --cov-report=xml --cov-report=html tests lambda-web/tests lambda-resize/tests
 	@echo coverage report in htmlcov/
 
 # This doesn't work yet...

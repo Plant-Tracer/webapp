@@ -6,6 +6,7 @@ page for superadmins. It loads independently of the Admin record summary and
 shows the current UTC month to date and previous calendar month: account-wide
 gross charges,
 service and Lambda usage-type breakdowns, and cost allocation by stack tag.
+Service names include familiar abbreviations such as S3, SES, SQS, RDS and KMS.
 The page omits credits/refunds and net columns to focus on usage costs; the
 cache and weekly digest retain those accounting details.
 It also shows invocations, errors, summed execution seconds, and retained
@@ -55,6 +56,44 @@ restore fees, credits, and taxes. It is unavailable when there is no observed
 cache usage; it is not a forecast or a published-price guarantee. Current
 SnapStart versions remain enabled; collection never changes Lambda versions.
 
+S3 storage history
+------------------
+
+The page includes daily storage GB and object counts for every current
+account-owned general-purpose bucket, across its actual AWS region. GB means
+1,000,000,000 bytes. Each row shows its measurement date; measurements older
+than three days are marked stale. The graph covers the preceding two calendar
+months, ending at today's UTC midnight. Select an individual bucket or the
+reported subtotal across buckets, hover over points, or expand the accessible
+daily data table. Missing reports are gaps rather than invented zeroes. The
+subtotal reports its bucket coverage and breaks its line when coverage counts
+change; it can change when buckets begin or stop reporting.
+
+The collector paginates ``ListBuckets`` using ``s3:ListAllMyBuckets`` and reads
+``AWS/S3`` daily ``Average`` gauges through ``cloudwatch:GetMetricData``.
+It sums reported ``BucketSizeBytes`` storage types, including archival and
+minimum-size overhead, and reads ``NumberOfObjects / AllStorageTypes`` once.
+It queries all documented general-purpose storage types, including classes no
+longer active, to preserve historical transitions. No object listing, downloads,
+S3 Inventory jobs, or paid request metrics are enabled. Missing individual
+storage-class reports can understate the reported subtotal; this is a daily
+inventory measurement, not an exact cost reconciliation.
+
+These metrics include older object versions and incomplete multipart parts;
+object counts also include delete markers. Size includes metadata/overhead.
+Deleted buckets and directory buckets are excluded. Shared bucket storage is
+not divided by application stack. Newly created buckets may have no daily data
+yet. Weekly email includes each bucket's latest reported totals and measurement
+date, with the Billing link providing the graph.
+
+AWS publishes these daily metrics without a metric-publishing fee. This collector
+requests 27 metric series per bucket per run to cover every supported storage
+type and objects: at $0.01 per 1,000 GetMetricData metrics, ten buckets collected
+daily cost approximately $0.081 per 30-day month, plus ancillary Lambda/S3 usage
+and any extra pagination requests. Page loads read the existing cache only.
+See `S3 metric definitions <https://docs.aws.amazon.com/AmazonS3/latest/userguide/metrics-dimensions.html>`_
+and `CloudWatch retrieval pricing <https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/metrics-classic-getdata.html>`_.
+
 Collection and cost
 -------------------
 
@@ -101,10 +140,10 @@ performs read-only AWS queries and writes local evidence to
 query charges but does not write AWS resources or refresh the deployed cache.
 
 Deployment is a separate, explicitly authorized operator action.
-For upgrades from cache schema 1, deploy the web application first: the new
-reader accepts schemas 1 and 2, whereas the previous reader accepts only 1.
-Then deploy and invoke the collector to publish schema 2 with stack lifetimes.
-Until refresh, the old cache remains readable and dates appear unavailable.
+For upgrades from cache schemas 1 or 2, deploy the web application first: the
+new reader accepts schemas 1, 2 and 3. Then deploy and invoke the collector to
+publish schema 3 with storage history. Older deployed readers reject schema 3.
+Until refresh, the old cache remains readable and storage appears unavailable.
 For initial adoption:
 
 

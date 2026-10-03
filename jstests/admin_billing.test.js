@@ -132,3 +132,36 @@ test('keeps stack dates and elapsed days/hours/minutes in one cell without inven
   renderBilling(data);
   expect(document.getElementById('billing-content').textContent).toContain('Dates unavailable');
 });
+
+
+test('storage graph preserves gaps, totals reported samples, and switches buckets', () => {
+  const data = payload();
+  data.snapshot.storage = { start: '2026-08-03', end: '2026-10-03', buckets: [
+    { name: 'prod', region: 'us-east-1', days: [
+      { day: '2026-09-29', size_bytes: 1e9, objects: 10 },
+      { day: '2026-09-30', size_bytes: null, objects: null },
+      { day: '2026-10-01', size_bytes: 2e9, objects: 20 },
+      { day: '2026-10-02', size_bytes: 3e9, objects: 30 }] },
+    { name: 'archive', region: 'us-east-2', days: [
+      { day: '2026-10-01', size_bytes: 4e9, objects: 40 },
+      { day: '2026-10-02', size_bytes: 0, objects: 0 }] },
+    { name: '<script>empty</script>', region: 'us-east-1', days: [] }] };
+  data.snapshot.current.services = [{ name: 'Amazon Simple Storage Service', display_name: 'Amazon Simple Storage Service (S3)', gross: '1' }];
+  renderBilling(data);
+  expect(document.body.textContent).toContain('Amazon Simple Storage Service (S3)');
+  expect(document.body.textContent).toContain('Reported storage: 3 GB on 2026-10-02; 2 of 3 buckets');
+  expect(document.body.textContent).toContain('Objects: 30 (2 buckets reporting)');
+  expect(document.querySelectorAll('svg circle')).toHaveLength(3);
+  expect(document.querySelectorAll('svg line[stroke="#176c98"]')).toHaveLength(1);
+  expect(document.querySelector('script')).toBeNull();
+  const select = document.querySelector('select');
+  select.value = 'prod';
+  select.dispatchEvent(new Event('change'));
+  expect(document.body.textContent).toContain('1 of 1 buckets');
+  expect(document.querySelectorAll('svg circle')).toHaveLength(3);
+  expect(document.querySelectorAll('svg line[stroke="#176c98"]')).toHaveLength(1);
+  select.value = '<script>empty</script>';
+  select.dispatchEvent(new Event('change'));
+  expect(document.querySelector('svg')).toBeNull();
+  expect(document.body.textContent).toContain('No storage measurements available');
+});

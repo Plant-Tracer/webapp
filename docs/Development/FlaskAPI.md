@@ -1254,10 +1254,15 @@ Superadmin-only account billing summary; other roles and invalid API keys receiv
 console links. The snapshot includes explicit UTC calendar periods, gross/credit/net
 USD costs, per-service/Lambda-usage/stack-tag charges, regional function metrics,
 and retained SnapStart estimates. Missing metrics are null, not zero.
-Readers accept cache schemas 1 and 2. Schema 2 adds optional per-function
+Readers accept cache schemas 1, 2 and 3. Schema 2 adds optional per-function
 `stack_id` and `stack_lifetime` (`started_at`, nullable `stopped_at`, and
 CloudFormation `status`). Missing historical stack records remain null.
 The Billing UI shows these dates and elapsed days/hours/minutes in the existing
 Stack column; elapsed time measures stack existence, not invocation duration.
+Schema 3 adds optional `storage` with an exclusive UTC `start`/`end` window and
+`buckets`, each containing `name`, `region` and daily `day`, nullable `size_bytes`
+and nullable `objects`. These are daily metrics for current general-purpose
+buckets, not current-only object listings. Charges also expose `display_name`,
+which preserves the AWS name and adds common acronyms where applicable.
 Responses are `private, no-store`. This endpoint never refreshes AWS billing data;
 see [Billing](Billing.rst) for collection, permissions, freshness, and scope.
