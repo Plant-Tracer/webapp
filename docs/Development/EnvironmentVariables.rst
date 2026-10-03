@@ -205,3 +205,13 @@ shell assignments emitted by ``show-local-vars``:
 This selects DynamoDB Local, MinIO, Mailpit, the ``demo-`` table prefix, and the
 local resize-lambda debug endpoint. It unsets AWS profile and demo-mode
 variables.
+
+Billing summary
+---------------
+
+``PLANTTRACER_BILLING_BUCKET`` names the private shared S3 billing cache bucket.
+The collector writes ``summary.json``; web stacks only read it. An unset value
+leaves the admin panel unconfigured. ``AWS_PROFILE`` supplies operator credentials,
+and ``AWS_REGION`` selects function activity collection (initially ``us-east-1``).
+``BILLING_OUTPUT`` controls the local JSON path for ``make billing-collect`` and
+defaults to ``.tmp/billing-summary.json``. See :doc:`Billing`.

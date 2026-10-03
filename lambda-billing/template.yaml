@@ -1,0 +1,86 @@
+# One account-level collector serves every Plant Tracer application stack.
+# It reads billing, Lambda inventory, and regional CloudWatch metrics once daily.
+# A private encrypted S3 object contains the last complete typed summary.
+# Web stacks receive only GetObject permission for that single object.
+# This infrequent background function has no SnapStart or published versions.
+# Deploy once in us-east-1; application deployments must not duplicate it.
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Shared daily Plant Tracer billing and Lambda activity cache
+Resources:
+  SummaryBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub planttracer-billing-${AWS::AccountId}-${AWS::Region}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+  BillingCollectorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: python3.12
+      Architectures: [arm64]
+      CodeUri: src/
+      Handler: billing_collector.lambda_handler
+      MemorySize: 256
+      Timeout: 300
+      ReservedConcurrentExecutions: 1
+      Environment:
+        Variables:
+          PLANTTRACER_BILLING_BUCKET: !Ref SummaryBucket
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: [ce:GetCostAndUsage, cloudwatch:GetMetricData, lambda:ListFunctions]
+              Resource: '*'
+            - Effect: Allow
+              Action: [lambda:ListTags, lambda:ListVersionsByFunction]
+              Resource: !Sub arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:*
+            - Effect: Allow
+              Action: s3:ListBucket
+              Resource: !GetAtt SummaryBucket.Arn
+            - Effect: Allow
+              Action: [s3:GetObject, s3:PutObject]
+              Resource:
+                - !Sub ${SummaryBucket.Arn}/summary.json
+                - !Sub ${SummaryBucket.Arn}/weekly-email.json
+            - Effect: Allow
+              Action: ses:SendEmail
+              Resource: !Sub arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/planttracer.com
+              Condition:
+                StringEquals:
+                  ses:FromAddress: admin@planttracer.com
+                ForAllValues:StringEquals:
+                  ses:Recipients: [plantadmin@planttracer.com]
+      Events:
+        Daily:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 10 * * ? *)
+            Enabled: true
+        WeeklyEmail:
+          Type: ScheduleV2
+          Properties:
+            ScheduleExpression: cron(0 9 ? * MON *)
+            ScheduleExpressionTimezone: America/Los_Angeles
+            FlexibleTimeWindow:
+              Mode: 'OFF'
+            Input: '{"weekly": true}'
+  CollectorLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${BillingCollectorFunction}
+      RetentionInDays: 14
+Outputs:
+  BillingSummaryBucket:
+    Value: !Ref SummaryBucket
+  CollectorFunction:
+    Value: !Ref BillingCollectorFunction

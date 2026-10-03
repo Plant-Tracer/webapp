@@ -24,6 +24,7 @@ Developer Documentation
    MOVIE_METADATA
    ArchitectureDesign
    LambdaWebMigration
+   Billing
    ClientLambdaAPI
    FlaskAPI
    TrackpointCoordinateSystem

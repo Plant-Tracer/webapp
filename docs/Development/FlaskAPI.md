@@ -1238,3 +1238,14 @@ Legacy records can omit both fields. Navigation does not persist copies.
 The client saves initial default markers on frame 0 and immediately saves additions.
 Apex and ruler labels are protected from deletion, including legacy records.
 See [Marker lifecycle](MarkerLifecycle.rst) for the full behavior contract.
+
+### `GET /api/admin/billing`
+
+Superadmin-only account billing summary; other roles and invalid API keys receive
+403. Reads the configured private S3 cache and returns `state` (`ready`, `stale`,
+`unavailable`, or `unconfigured`), `message`, optional typed `snapshot`, and AWS
+console links. The snapshot includes explicit UTC calendar periods, gross/credit/net
+USD costs, per-service/Lambda-usage/stack-tag charges, regional function metrics,
+and retained SnapStart estimates. Missing metrics are null, not zero.
+Responses are `private, no-store`. This endpoint never refreshes AWS billing data;
+see [Billing](Billing.rst) for collection, permissions, freshness, and scope.

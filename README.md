@@ -170,3 +170,15 @@ Developer entry points:
 - `docs/Development/FlaskAPI.md`
 - `docs/Development/ClientLambdaAPI.md`
 - `docs/Development/TechDebt.rst`
+
+### Admin billing summary
+
+Superadmins can view cached current/previous month AWS spend and function activity.
+Deploy the shared daily collector separately, then set the web stack's optional
+`BillingSummaryBucket` parameter. `PLANTTRACER_BILLING_BUCKET` names its private
+S3 summary bucket; unset means unconfigured. `AWS_PROFILE` selects operator
+credentials and `AWS_REGION` selects the collector's activity region (`us-east-1`).
+`BILLING_OUTPUT` sets the local evidence file for `make billing-collect` (default
+`.tmp/billing-summary.json`). See [billing operations](docs/Development/Billing.rst)
+for costs, permissions, setup, validation, and deployment boundaries. A weekly
+SES digest goes to `plantadmin@planttracer.com` on Mondays at 9 a.m. Pacific.

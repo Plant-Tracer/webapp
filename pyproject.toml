@@ -45,6 +45,7 @@ deployed_workflow_test = "deployed_workflow_test:main"
 s3_upload_trigger = "s3_upload_trigger:main"
 
 [dependency-groups]
+billing = ["boto3>=1.42.72,<2", "pydantic"]
 dev = [
     "aws-lambda-powertools",
     "boto3>=1.42.72,<2",
@@ -204,7 +205,7 @@ reportMissingTypeStubs = "warning"
 
 [[tool.pyright.executionEnvironments]]
 root = "."
-extraPaths = ["src", "lambda-web/src", "lambda-resize/src"]
+extraPaths = ["src", "lambda-web/src", "lambda-resize/src", "lambda-billing/src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

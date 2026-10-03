@@ -81,6 +81,7 @@ jobs:
         run: |
           make lint
           make eslint
+          make billing-template-lint
 
       - name: Check only
         if: runner.os != 'Linux'

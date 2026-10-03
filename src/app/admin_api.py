@@ -6,12 +6,26 @@ from flask import Blueprint, jsonify, request
 from pydantic import ValidationError
 from validate_email_address import validate_email
 
-from . import admin_service, course_management, mailer, odb, super_roles
+from . import admin_service, billing_service, course_management, mailer, odb, super_roles
 from .apikey import get_user_dict
 from .constants import logger
 from .odb import InvalidAPI_Key
 
 admin_api_bp = Blueprint("admin_api", __name__)
+
+
+@admin_api_bp.get("/billing")
+def api_admin_billing():
+    """Expose the cached account summary only to authenticated superadmins."""
+    try:
+        viewer = get_user_dict()
+        if odb.normalize_super_role(viewer) != odb.SUPER_ROLE_SUPERADMIN:
+            return jsonify({"error": True, "message": "Superadmin access required"}), 403
+    except InvalidAPI_Key:
+        return jsonify({"error": True, "message": "Invalid api_key"}), 403
+    response = jsonify(billing_service.billing_summary().model_dump(mode="json"))
+    response.headers["Cache-Control"] = "private, no-store"
+    return response
 
 
 def _admin_user_summary(user, viewer_user):
