@@ -228,6 +228,16 @@ changes, including environment parameters. This keeps the aliased SnapStart
 version's configuration synchronized with IAM policies generated from the same
 stack parameters instead of leaving ``live`` on an older environment.
 
+``VersionDeletionPolicy: Delete`` makes CloudFormation delete superseded web
+versions during deployment cleanup instead of retaining their billable SnapStart
+snapshots. Keep only the current ``live`` version after a successful deployment;
+SnapStart stays enabled for that version. Recover an older application by
+redeploying its source as a new release, rather than retaining old snapshots.
+Versions already orphaned by the previous ``Retain`` policy require a one-time
+cleanup; changing the policy does not bring those versions back under stack
+management. The first deployment adopting this policy may also retain its
+predecessor under the old policy; verify that only the current version remains.
+
 Do not replace SnapStart with a scheduled keepalive invocation. Lambda does not
 guarantee that a later request reuses the periodically invoked execution
 environment, especially during scaling or infrastructure recycling. A

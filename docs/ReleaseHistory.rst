@@ -78,6 +78,10 @@ Release Notes
 Unreleased Summary
 ******************
 
+    * Delete superseded web Lambda versions during deployment cleanup while
+      keeping SnapStart enabled for the current live version, avoiding ongoing
+      snapshot charges for old releases (fixes #1258).
+
     * Version 0.9.9.22: preserve frame-zero markers, carry new markers forward
       independently, retain manual placements through tracing, and start an
       initial trace at the trim start regardless of the viewed frame (fixes #1256).

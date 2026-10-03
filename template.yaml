@@ -227,6 +227,7 @@ Resources:
       Handler: lambda_web.main.lambda_handler
       AutoPublishAlias: live
       AutoPublishAliasAllProperties: true
+      VersionDeletionPolicy: Delete
       SnapStart:
         ApplyOn: PublishedVersions
       Timeout: 30
