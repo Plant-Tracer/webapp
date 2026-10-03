@@ -1187,7 +1187,7 @@ billing-collect:
 billing-build: vend-lambda-billing
 	sam build --template-file lambda-billing/template.yaml --build-dir .aws-sam/billing-build
 
-billing-deploy:
+billing-deploy: billing-build
 	@test "$(AWS_REGION)" = us-east-1 || (echo 'Deploy the shared billing collector once in us-east-1.'; exit 1)
 	aws sts get-caller-identity --no-cli-pager
 	sam deploy --config-file "$(CURDIR)/lambda-billing/billing-config.toml" --template-file .aws-sam/billing-build/template.yaml --stack-name planttracer-billing --resolve-s3 --capabilities CAPABILITY_IAM
