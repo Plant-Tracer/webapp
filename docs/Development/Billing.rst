@@ -15,6 +15,17 @@ Web functions combine pages, static assets, and Flask APIs; resize functions
 combine resize APIs and video/tracing work. These metrics cannot split those
 individual request paths or recover metrics for deleted functions.
 
+Positive per-function error counts link to CloudWatch Logs Insights, using the
+function's region and default ``/aws/lambda/<function>`` log group. The link
+prepares an error/exception/timeout search for that UTC month, capped at the
+cache collection time. Zero, missing values, and aggregate totals remain text.
+AWS console authentication and log-reading permissions are separate from app
+access. Log matches are not an exact reconciliation of Lambda's failed-invocation
+metric: a handled/logged error can produce multiple messages without failing an
+invocation. The application log groups retain 30 days, so older logs may have
+expired even while monthly metrics remain available. Insights queries incur
+scan charges; the Billing page itself does not execute log queries.
+
 Costs and activity have different scopes: account costs cover every region;
 function statistics cover the configured region (initially ``us-east-1``).
 Activity is not a per-function cost allocation. Stack costs require activating

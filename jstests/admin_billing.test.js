@@ -80,3 +80,31 @@ test('unavailable and stale states retain useful links and never fabricate zeroe
   await loadBilling('superadmin');
   expect(document.getElementById('billing-status').className).toBe('');
 });
+
+test('links only positive function errors to the matching UTC period and escaped log group', () => {
+  const data = payload();
+  const fn = data.snapshot.functions[0];
+  fn.current.errors = 2;
+  fn.previous.errors = 1;
+  renderBilling(data);
+  const links = [...document.querySelectorAll('#billing-content a')];
+  expect(links).toHaveLength(2);
+  links.forEach((link, index) => {
+    expect(link.target).toBe('_blank');
+    expect(link.rel).toBe('noopener noreferrer');
+    const url = new URL(link.href);
+    expect(url.origin).toBe('https://console.aws.amazon.com');
+    expect(url.searchParams.get('region')).toBe('us-east-1');
+    const detail = decodeURIComponent(url.hash.split('logs-insights:queryDetail=')[1]);
+    const values = decodeURIComponent(detail.replace(/\*/g, '%'));
+    expect(values).toContain("source~(~'/aws/lambda/<script>bad()</script>)");
+    expect(values).toContain('(?i)(error|exception|timed out|timeout)');
+    expect(values).toContain(index === 0 ? '2026-10-01T00:00:00.000Z' : '2026-09-01T00:00:00.000Z');
+    expect(values).toContain(index === 0 ? '2026-10-03T09:59:59.999Z' : '2026-09-30T23:59:59.999Z');
+  });
+  fn.current.errors = 0;
+  fn.previous.errors = null;
+  renderBilling(data);
+  expect(document.querySelectorAll('#billing-content a')).toHaveLength(0);
+  expect(document.querySelector('script')).toBeNull();
+});

@@ -3,7 +3,7 @@
 // This module never queries AWS directly or refreshes paid billing data.
 // Period labels and timestamps come from the cache, including stale snapshots.
 // Null metrics mean unavailable samples, while numeric zero remains a real zero.
-// All data is inserted as text; only server-generated AWS console links are used.
+// Data is inserted as text; error links encode the function, region and period.
 
 function element(tag, text, parent) {
   const node = document.createElement(tag);
@@ -24,6 +24,33 @@ function metric(value, divisor = 1) {
   );
 }
 
+function encodeConsole(value) {
+  return encodeURIComponent(value).replace(/[!'()*~]/g, (char) => `%${char.charCodeAt(0).toString(16)}`);
+}
+
+function errorLink(fn, period, snapshot) {
+  const count = fn[period].errors;
+  if (!(count > 0)) return metric(count);
+  const month = snapshot[period];
+  const start = `${month.start}T00:00:00.000Z`;
+  const end = new Date(Math.min(Date.parse(`${month.end}T00:00:00Z`),
+    Date.parse(snapshot.collected_at)) - 1).toISOString();
+  const query = 'fields @timestamp, @message, @logStream, @requestId\n'
+    + '| filter @message like /(?i)(error|exception|timed out|timeout)/\n'
+    + '| sort @timestamp desc\n| limit 200';
+  // CloudWatch serializes queryDetail with JSURL strings inside its encoded fragment.
+  const string = (value) => `'${encodeConsole(value).replace(/%/g, '*')}`;
+  const detail = `~(start~${string(start)}~end~${string(end)}~timeType~'ABSOLUTE~tz~'UTC`
+    + `~editorString~${string(query)}~source~(~${string(`/aws/lambda/${fn.name}`)}))`;
+  const link = element('a', metric(count));
+  link.href = `https://console.aws.amazon.com/cloudwatch/home?region=${encodeConsole(fn.region || snapshot.activity_region)}`
+    + `#logs-insights:queryDetail=${detail}`;
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+  link.setAttribute('aria-label', `${metric(count)} errors: view ${fn.name} logs for ${month.start.slice(0, 7)}`);
+  return link;
+}
+
 function table(parent, caption, headings, rows) {
   const wrapper = element("div", undefined, parent);
   wrapper.className = "admin-table-scroll";
@@ -35,7 +62,11 @@ function table(parent, caption, headings, rows) {
   const body = element("tbody", undefined, grid);
   rows.forEach((values) => {
     const row = element("tr", undefined, body);
-    values.forEach((text) => element("td", text, row));
+    values.forEach((text) => {
+      const cell = element("td", undefined, row);
+      if (text instanceof Node) cell.append(text);
+      else cell.textContent = text;
+    });
   });
 }
 
@@ -94,7 +125,7 @@ function renderBilling(payload) {
   });
   ["current", "previous"].forEach((period) => {
     const rows = snapshot.functions.map((fn) => [fn.stack, fn.name, fn.component,
-      metric(fn[period].invocations), metric(fn[period].errors), metric(fn[period].duration_ms, 1000)]);
+      metric(fn[period].invocations), errorLink(fn, period, snapshot), metric(fn[period].duration_ms, 1000)]);
     rows.push(["Reported subtotal", "", "",
       ...["invocations", "errors", "duration_ms"].map((field) => subtotal(
         snapshot.functions.map((fn) => fn[period][field]), field === "duration_ms" ? 1000 : 1,
@@ -105,6 +136,9 @@ function renderBilling(payload) {
   element("p", "Web functions serve pages, static files and Flask APIs. Resize functions serve "
     + "resize APIs and video/tracing work. No data means AWS returned no samples; reported subtotals "
     + "identify functions with missing data. Activity covers existing functions across all their versions.", content);
+  element("p", "Positive error counts open CloudWatch logs for that function and period (AWS login required). "
+    + "Matching log messages can differ from failed-invocation counts. Older logs may have expired; "
+    + "Logs Insights queries incur AWS scan charges.", content);
   const snapshots = snapshot.functions.reduce((sum, fn) => sum + fn.snapshots, 0);
   element("p", `${snapshots} retained SnapStart snapshots. Estimated 30-day caching run rate: `
     + `${money(snapshot.snapshot_monthly_estimate)} using the observed cache rate, excluding restores.`, content);
