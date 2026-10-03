@@ -1,6 +1,6 @@
 // Verify billing UI privacy and truthful presentation of incomplete data.
 // These tests exercise the actual DOM renderer with representative cache data.
-// Monetary credits and unknown metrics must remain visibly distinct from zero.
+// Spend tables show gross charges only; unknown metrics stay distinct from zero.
 // Role changes must clear previously rendered private account information.
 // Fetch is simulated only at the browser's HTTP boundary; Flask is covered
 // separately by the real MinIO/DynamoDB browser integration test.
@@ -26,7 +26,7 @@ function payload() {
         snapshots: 1, snapshot_gb: '0.5' }] } };
 }
 
-test('renders credits, periods, unknown totals and safely escaped function names', () => {
+test('renders gross charges only, periods, unknown totals and safely escaped function names', () => {
   const data = payload();
   data.snapshot.functions.push({ ...data.snapshot.functions[0], name: 'idle',
     current: { invocations: null, errors: null, duration_ms: null },
@@ -34,8 +34,13 @@ test('renders credits, periods, unknown totals and safely escaped function names
   renderBilling(data);
   const text = document.getElementById('billing-content').textContent;
   expect(text).toContain('$52.57');
-  expect(text).toContain('-$50.00');
-  expect(text).toContain('$2.57');
+  expect(text).not.toContain('-$50.00');
+  expect(text).not.toContain('$2.57');
+  const spendTables = [...document.querySelectorAll('#billing-content table')].slice(0, 7);
+  spendTables.forEach((table) => {
+    expect(table.querySelectorAll('thead th')).toHaveLength(2);
+    table.querySelectorAll('tbody tr').forEach((row) => expect(row.children).toHaveLength(2));
+  });
   expect(text).toContain('2026-10-01 – 2026-10-04 (estimated)');
   expect(text).toContain('No data');
   expect(text).toContain('0 (1 function: no data)');

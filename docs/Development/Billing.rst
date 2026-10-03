@@ -4,8 +4,10 @@ Administrative Billing page
 The dedicated ``/billing`` page is linked as **Billing** from the main Admin
 page for superadmins. It loads independently of the Admin record summary and
 shows the current UTC month to date and previous calendar month: account-wide
-gross charges, signed credits/refunds, net charges,
+gross charges,
 service and Lambda usage-type breakdowns, and cost allocation by stack tag.
+The page omits credits/refunds and net columns to focus on usage costs; the
+cache and weekly digest retain those accounting details.
 It also shows invocations, errors, summed execution seconds, and retained
 SnapStart snapshots for existing functions in the collector's region. Function
 activity includes all versions using only the ``FunctionName`` dimension.

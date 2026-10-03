@@ -79,7 +79,7 @@ Unreleased Summary
 ******************
 
     * Version 0.9.9.23: add a dedicated superadmin Billing page, linked from Admin, with cached
-      current/previous month spend,
+      current/previous month gross spend (without credits/refunds or net columns),
       function activity, SnapStart estimates, and AWS dashboard links. A shared
       daily collector keeps paid queries out of page loads; SES emails the
       cached summary to plantadmin weekly (fixes #1260).

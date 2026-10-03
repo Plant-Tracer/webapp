@@ -40,7 +40,7 @@ function table(parent, caption, headings, rows) {
 }
 
 function chargeRows(month, field) {
-  return month[field].map((row) => [row.name, money(row.gross), money(row.credits), money(row.net)]);
+  return month[field].map((row) => [row.name, money(row.gross)]);
 }
 
 function subtotal(values, divisor) {
@@ -77,15 +77,15 @@ function renderBilling(payload) {
   const snapshot = payload.snapshot;
   scope.textContent = `Account ${snapshot.account_id}: spend covers all regions and services. `
     + `Function activity covers ${snapshot.activity_region}. Updated ${snapshot.collected_at} (UTC).`;
-  table(content, "AWS spend (USD)", ["UTC period (end exclusive)", "Charges", "Credits / refunds", "Net"],
+  table(content, "AWS spend (USD)", ["UTC period (end exclusive)", "Charges"],
     [snapshot.current, snapshot.previous].map((month) => [
       `${month.start} – ${month.end}${month.estimated ? " (estimated)" : ""}`,
-      money(month.total.gross), money(month.total.credits), money(month.total.net),
+      money(month.total.gross),
     ]));
   [snapshot.current, snapshot.previous].forEach((month) => {
     const details = element("details", undefined, content);
     element("summary", `${month.start.slice(0, 7)} spend breakdown`, details);
-    const headings = ["Category", "Charges", "Credits / refunds", "Net"];
+    const headings = ["Category", "Charges"];
     table(details, "By service", headings, chargeRows(month, "services"));
     table(details, "Lambda charge types", headings, chargeRows(month, "lambda_usage"));
     table(details, "By billing stack tag", headings, chargeRows(month, "stack_gross"));
