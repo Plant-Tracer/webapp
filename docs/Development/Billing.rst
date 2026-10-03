@@ -76,7 +76,10 @@ Deployment is a separate, explicitly authorized operator action:
 1. Run ``AWS_PROFILE=planttracer-admin AWS_REGION=us-east-1 make billing-deploy``.
    This always rebuilds the collector from the current checkout before deploying,
    so an older local build cannot be published accidentally. It creates the
-   dedicated bucket, scheduled collector, IAM role, and 14-day log group. Inspect the resulting account and stack before adoption.
+   dedicated bucket, scheduled collector, IAM role, and 14-day log group.
+   Set ``BILLING_PAGE_URL=https://slg-dev.planttracer.com/billing`` when adopting
+   first on slg-dev; the default is the production Billing page. This supplies
+   the collector's ``PLANTTRACER_BILLING_URL`` environment variable. Inspect the resulting account and stack before adoption.
 2. Wait for the first scheduled run, or explicitly invoke the output
    ``CollectorFunction`` with the Lambda console. Verify ``summary.json`` and
    logs before attaching web stacks. Use CloudWatch's Lambda Errors metric and

@@ -221,7 +221,7 @@ pytest: $(LOCAL_TEST_REQ)
 pytest-coverage: $(LOCAL_TEST_REQ)
 	$(MAKE) vend-lambda-resize
 	$(MAKE) vend-lambda-web
-	$(LOCAL_AWS_ENV) PYTHONPATH=.:src:lambda-web/src:lambda-resize/src:lambda-billing/src:$$PYTHONPATH uv run pytest -vv --log-cli-level=$(LOG_LEVEL) --cov=src --cov=lambda-web/src/lambda_web --cov=lambda-resize/src --cov-report=xml --cov-report=html tests lambda-web/tests lambda-resize/tests
+	$(LOCAL_AWS_ENV) PYTHONPATH=.:src:lambda-web/src:lambda-resize/src:lambda-billing/src:$$PYTHONPATH uv run pytest -vv --log-cli-level=$(LOG_LEVEL) --cov=src --cov=billing_collector --cov=billing_email --cov=lambda-web/src/lambda_web --cov=lambda-resize/src --cov-report=xml --cov-report=html tests lambda-web/tests lambda-resize/tests
 	@echo coverage report in htmlcov/
 
 # This doesn't work yet...
@@ -1164,7 +1164,9 @@ list-stacks:
 # selects the activity region (deploy once in us-east-1). PLANTTRACER_BILLING_BUCKET
 # is the private cache bucket used by the collector and the admin reader.
 # BILLING_OUTPUT is the local JSON evidence path for read-only collection.
+# BILLING_PAGE_URL selects the deployed Billing page linked in weekly mail.
 BILLING_OUTPUT ?= .tmp/billing-summary.json
+BILLING_PAGE_URL ?= https://prod.planttracer.com/billing
 .PHONY: vend-lambda-billing billing-check billing-collect billing-build billing-deploy billing-template-lint billing-artifact-test
 vend-lambda-billing:
 	mkdir -p lambda-billing/src/app
@@ -1190,7 +1192,7 @@ billing-build: vend-lambda-billing
 billing-deploy: billing-build
 	@test "$(AWS_REGION)" = us-east-1 || (echo 'Deploy the shared billing collector once in us-east-1.'; exit 1)
 	aws sts get-caller-identity --no-cli-pager
-	sam deploy --config-file "$(CURDIR)/lambda-billing/billing-config.toml" --template-file .aws-sam/billing-build/template.yaml --stack-name planttracer-billing --resolve-s3 --capabilities CAPABILITY_IAM
+	sam deploy --config-file "$(CURDIR)/lambda-billing/billing-config.toml" --template-file .aws-sam/billing-build/template.yaml --stack-name planttracer-billing --resolve-s3 --capabilities CAPABILITY_IAM --parameter-overrides BillingPageUrl="$(BILLING_PAGE_URL)"
 
 # Import the packaged modules in the actual Linux/ARM64 Python runtime.
 billing-artifact-test:

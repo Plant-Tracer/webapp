@@ -78,7 +78,7 @@ Release Notes
 Unreleased Summary
 ******************
 
-    * Add a dedicated superadmin Billing page, linked from Admin, with cached
+    * Version 0.9.9.23: add a dedicated superadmin Billing page, linked from Admin, with cached
       current/previous month spend,
       function activity, SnapStart estimates, and AWS dashboard links. A shared
       daily collector keeps paid queries out of page loads; SES emails the

@@ -19,7 +19,7 @@ import pytest
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 
-from billing_email import (BODY, CHARSET, DATA, MESSAGE_ID, RECIPIENT, RECEIPT_KEY,
+from billing_email import (BILLING_URL_ENV, BODY, CHARSET, DATA, MESSAGE_ID, RECIPIENT, RECEIPT_KEY,
                            SENDER, SUBJECT, TEXT, TO, digest, send_weekly)
 from billing_collector import (MetricResult, add_charge, apply_metric, collect_activity,
                                collect_costs, cost_pages, metric_queries)
@@ -163,14 +163,14 @@ def test_admin_billing_authorization(client, new_course, cache_bucket):
         assert client.get("/billing").status_code == expected
         admin_page = client.get("/admin")
         assert 'id="billing-content"' not in admin_page.text
-        assert ('href="/billing"' in admin_page.text) == (role == odb.SUPER_ROLE_SUPERADMIN)
+        assert ('href="billing"' in admin_page.text) == (role == odb.SUPER_ROLE_SUPERADMIN)
     assert response.json["snapshot"]["previous"]["total"]["net"] == "2"
     assert response.headers["Cache-Control"] == "private, no-store"
     assert client.get("/api/admin/billing").json == response.json
     client.set_cookie(apikey.cookie_name(), odb.make_new_api_key(email=new_course[ADMIN_EMAIL]))
     assert client.get("/billing").status_code == 403
     assert client.get("/api/admin/billing").status_code == 403
-    assert 'href="/billing"' not in client.get("/admin").text
+    assert 'href="billing"' not in client.get("/admin").text
 
 
 @pytest.mark.selenium
@@ -202,14 +202,15 @@ def test_admin_billing_browser(live_server, chrome_driver, new_course, cache_buc
     chrome_driver.save_screenshot(".tmp/billing-admin-stale.png")
 
 
-def test_weekly_email_receipt_and_freshness(cache_bucket):
+def test_weekly_email_receipt_and_freshness(cache_bucket, monkeypatch):
     """SES is the remote boundary; real S3 persists receipts and suppresses retries."""
+    monkeypatch.setenv(BILLING_URL_ENV, "https://slg-dev.planttracer.com/billing")
     data = snapshot()
     data.functions[0].current.invocations = 0
     text = digest(data)
     assert "$52.0000" in text and "$-50.0000" in text and "No data" in text
     assert "2026-09-01 to 2026-10-01" in text
-    assert "https://prod.planttracer.com/billing" in text
+    assert "https://slg-dev.planttracer.com/billing" in text
     assert "0 functions: no data" not in text
     data.functions.append(data.functions[0].model_copy(deep=True))
     data.functions[1].current.invocations = None

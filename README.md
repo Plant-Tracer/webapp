@@ -183,3 +183,7 @@ credentials and `AWS_REGION` selects the collector's activity region (`us-east-1
 `.tmp/billing-summary.json`). See [billing operations](docs/Development/Billing.rst)
 for costs, permissions, setup, validation, and deployment boundaries. A weekly
 SES digest goes to `plantadmin@planttracer.com` on Mondays at 9 a.m. Pacific.
+
+The shared billing deployment accepts `BILLING_PAGE_URL` (default
+`https://prod.planttracer.com/billing`) to select the deployed page linked from
+weekly mail. It sets the collector's `PLANTTRACER_BILLING_URL` environment variable.

@@ -215,3 +215,8 @@ leaves the admin panel unconfigured. ``AWS_PROFILE`` supplies operator credentia
 and ``AWS_REGION`` selects function activity collection (initially ``us-east-1``).
 ``BILLING_OUTPUT`` controls the local JSON path for ``make billing-collect`` and
 defaults to ``.tmp/billing-summary.json``. See :doc:`Billing`.
+
+``PLANTTRACER_BILLING_URL``
+    Deployed Billing page linked in weekly SES mail. The shared collector
+    receives it from the ``BillingPageUrl`` SAM parameter; defaults to
+    ``https://prod.planttracer.com/billing``.

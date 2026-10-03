@@ -7,6 +7,12 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: Shared daily Plant Tracer billing and Lambda activity cache
+Parameters:
+  BillingPageUrl:
+    Type: String
+    Default: https://prod.planttracer.com/billing
+    AllowedPattern: 'https://[a-z0-9-]+[.]planttracer[.]com/billing'
+    Description: Deployed Billing page linked from the weekly digest
 Resources:
   SummaryBucket:
     Type: AWS::S3::Bucket
@@ -36,6 +42,7 @@ Resources:
       Environment:
         Variables:
           PLANTTRACER_BILLING_BUCKET: !Ref SummaryBucket
+          PLANTTRACER_BILLING_URL: !Ref BillingPageUrl
       Policies:
         - Statement:
             - Effect: Allow

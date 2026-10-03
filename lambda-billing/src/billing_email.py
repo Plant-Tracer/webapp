@@ -8,6 +8,7 @@ SES and S3 are not transactional, so a failed receipt write can duplicate mail.
 """
 
 import logging
+import os
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -19,6 +20,7 @@ from app.billing_models import CACHE_KEY, STALE_AFTER, BillingSnapshot, month_bo
 LOGGER = logging.getLogger(__name__)
 SENDER = "admin@planttracer.com"
 RECIPIENT = "plantadmin@planttracer.com"
+BILLING_URL_ENV = "PLANTTRACER_BILLING_URL"
 RECEIPT_KEY = "weekly-email.json"
 BODY, ERROR, CODE = "Body", "Error", "Code"
 TO, SUBJECT, TEXT, DATA, CHARSET = "ToAddresses", "Subject", "Text", "Data", "Charset"
@@ -75,7 +77,7 @@ def digest(snapshot):
                   f"Estimated 30-day caching run rate: {usd(snapshot.snapshot_monthly_estimate)} (excludes restores/credits).",
                   "Unallocated/shared costs lack an active stack billing tag; activity is not cost allocation.",
                   "No data means no samples, not zero. Execution time is not billed duration.",
-                  "Billing: https://prod.planttracer.com/billing",
+                  f"Billing: {os.environ.get(BILLING_URL_ENV, 'https://prod.planttracer.com/billing')}",
                   "AWS Cost Explorer: https://console.aws.amazon.com/costmanagement/home#/cost-explorer",
                   "AWS dashboards: https://console.aws.amazon.com/costmanagement/home#/dashboards"])
     return "\n".join(lines)
