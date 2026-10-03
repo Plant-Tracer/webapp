@@ -178,6 +178,12 @@ def test_admin_billing_browser(live_server, chrome_driver, new_course, cache_buc
     assert all(link.get_attribute("href").startswith("https://console.aws.amazon.com/costmanagement/") for link in links)
     Path(".tmp").mkdir(exist_ok=True)
     chrome_driver.save_screenshot(".tmp/billing-admin.png")
+    publish(cache_bucket, snapshot(datetime.now(timezone.utc) - timedelta(days=2)).model_dump_json())
+    chrome_driver.refresh()
+    WebDriverWait(chrome_driver, 20).until(
+        lambda driver: "stale" in driver.find_element(By.ID, "billing-status").text)
+    assert chrome_driver.find_element(By.ID, "billing-status").get_attribute("class") == "admin-error"
+    chrome_driver.save_screenshot(".tmp/billing-admin-stale.png")
 
 
 def test_weekly_email_receipt_and_freshness(cache_bucket):
@@ -187,6 +193,11 @@ def test_weekly_email_receipt_and_freshness(cache_bucket):
     text = digest(data)
     assert "$52.0000" in text and "$-50.0000" in text and "No data" in text
     assert "2026-09-01 to 2026-10-01" in text
+    assert "0 functions: no data" not in text
+    data.functions.append(data.functions[0].model_copy(deep=True))
+    data.functions[1].current.invocations = None
+    assert "Reported subtotal: 0.00 (1 function: no data)" in digest(data)
+    data.functions.pop()
     publish(cache_bucket, data.model_dump_json())
     ses = boto3.client("ses", region_name="us-east-1", aws_access_key_id="test", aws_secret_access_key="test")
     s3 = s3_presigned.s3_client()

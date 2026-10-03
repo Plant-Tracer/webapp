@@ -48,13 +48,13 @@ function subtotal(values, divisor) {
   if (!known.length) return "No data";
   const missing = values.length - known.length;
   return metric(known.reduce((sum, value) => sum + value, 0), divisor)
-    + (missing ? ` (${missing} functions: no data)` : "");
+    + (missing ? ` (${missing} ${missing === 1 ? "function" : "functions"}: no data)` : "");
 }
 
 function renderBilling(payload) {
   const status = document.getElementById("billing-status");
   status.textContent = payload.message;
-  status.className = payload.state === "ready" ? "" : "error";
+  status.className = payload.state === "ready" ? "" : "admin-error";
   const links = document.getElementById("billing-links");
   links.replaceChildren();
   [
@@ -122,13 +122,16 @@ async function loadBilling(role) {
   document.getElementById("billing-scope").textContent = "";
   document.getElementById("billing-links").replaceChildren();
   if (panel.hidden) return;
-  document.getElementById("billing-status").textContent = "Loading cached summary...";
+  const status = document.getElementById("billing-status");
+  status.className = "";
+  status.textContent = "Loading cached summary...";
   try {
     const response = await fetch(`${API_BASE}api/admin/billing`, { credentials: "same-origin", cache: "no-store" });
     if (!response.ok) throw new Error("Billing summary unavailable.");
     renderBilling(await response.json());
   } catch (_error) {
-    document.getElementById("billing-status").textContent = "Billing summary unavailable. No zero values have been assumed.";
+    status.className = "admin-error";
+    status.textContent = "Billing summary unavailable. No zero values have been assumed.";
   }
 }
 

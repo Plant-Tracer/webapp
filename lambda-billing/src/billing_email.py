@@ -67,7 +67,8 @@ def digest(snapshot):
             values = [getattr(getattr(item, period), field) for item in snapshot.functions]
             known = [value for value in values if value is not None]
             missing = len(values) - len(known)
-            totals.append(statistic(sum(known), divisor) + f" ({missing} functions: no data)" if known else "No data")
+            qualifier = f" ({missing} {'function' if missing == 1 else 'functions'}: no data)" if missing else ""
+            totals.append(statistic(sum(known), divisor) + qualifier if known else "No data")
         lines.append("Reported subtotal: " + " / ".join(totals))
         lines.append("")
     lines.extend([f"Retained SnapStart snapshots: {sum(item.snapshots for item in snapshot.functions)}",

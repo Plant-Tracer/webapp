@@ -38,7 +38,7 @@ test('renders credits, periods, unknown totals and safely escaped function names
   expect(text).toContain('$2.57');
   expect(text).toContain('2026-10-01 – 2026-10-04 (estimated)');
   expect(text).toContain('No data');
-  expect(text).toContain('0 (1 functions: no data)');
+  expect(text).toContain('0 (1 function: no data)');
   expect(text).toContain('Reported subtotal');
   expect(text).toContain('Unavailable');
   expect(text).toContain('<script>bad()</script>');
@@ -63,11 +63,15 @@ test('unavailable and stale states retain useful links and never fabricate zeroe
   stale.state = 'stale';
   stale.message = 'Showing the last successful collection';
   renderBilling(stale);
-  expect(document.getElementById('billing-status').className).toBe('error');
+  expect(document.getElementById('billing-status').className).toBe('admin-error');
   renderBilling({ ...stale, snapshot: null, state: 'unavailable' });
   expect(document.getElementById('billing-content').textContent).toBe('');
   expect(document.querySelectorAll('#billing-links a')).toHaveLength(3);
   fetch.mockRejectOnce(new Error('offline'));
   await loadBilling('superadmin');
   expect(document.getElementById('billing-status').textContent).toContain('No zero values');
+  expect(document.getElementById('billing-status').className).toBe('admin-error');
+  fetch.mockResponseOnce(JSON.stringify(payload()));
+  await loadBilling('superadmin');
+  expect(document.getElementById('billing-status').className).toBe('');
 });
