@@ -75,7 +75,7 @@ def digest(snapshot):
                   f"Estimated 30-day caching run rate: {usd(snapshot.snapshot_monthly_estimate)} (excludes restores/credits).",
                   "Unallocated/shared costs lack an active stack billing tag; activity is not cost allocation.",
                   "No data means no samples, not zero. Execution time is not billed duration.",
-                  "Admin: https://prod.planttracer.com/admin",
+                  "Billing: https://prod.planttracer.com/billing",
                   "AWS Cost Explorer: https://console.aws.amazon.com/costmanagement/home#/cost-explorer",
                   "AWS dashboards: https://console.aws.amazon.com/costmanagement/home#/dashboards"])
     return "\n".join(lines)

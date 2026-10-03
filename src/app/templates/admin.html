@@ -7,13 +7,9 @@
   <p id="admin-status">Loading admin summary...</p>
   <label><input id="admin-verbose-details" type="checkbox"> Verbose details</label>
 
-  <section id="admin-billing" class="admin-section" hidden aria-labelledby="billing-heading">
-    <h2 id="billing-heading">AWS spend and activity</h2>
-    <p id="billing-status" role="status">Loading cached summary...</p>
-    <p id="billing-scope"></p>
-    <nav id="billing-links" aria-label="AWS billing dashboards"></nav>
-    <div id="billing-content"></div>
-  </section>
+  {% if super_role == 'superadmin' %}
+  <p><a href="{{ url_for('func_billing') }}">Billing</a></p>
+  {% endif %}
 
   <section class="admin-kpis" aria-label="Admin summary counts">
     <div class="admin-kpi">

@@ -171,9 +171,10 @@ Developer entry points:
 - `docs/Development/ClientLambdaAPI.md`
 - `docs/Development/TechDebt.rst`
 
-### Admin billing summary
+### Administrative Billing page
 
-Superadmins can view cached current/previous month AWS spend and function activity.
+Superadmins can open **Billing** from Admin to view cached current/previous
+month AWS spend and function activity on the dedicated `/billing` page.
 Deploy the shared daily collector separately, then set the web stack's optional
 `BillingSummaryBucket` parameter. `PLANTTRACER_BILLING_BUCKET` names its private
 S3 summary bucket; unset means unconfigured. `AWS_PROFILE` selects operator

@@ -28,6 +28,8 @@ from app import apikey, billing_service, odb, s3_presigned
 from app.billing_models import (BILLING_BUCKET_ENV, CACHE_KEY, BillingSnapshot, Charges,
                                 FunctionUsage, MonthCosts, month_boundaries)
 
+from .constants import ADMIN_EMAIL
+
 
 NOW = datetime(2026, 10, 3, 12, tzinfo=timezone.utc)
 
@@ -151,14 +153,24 @@ def test_admin_billing_authorization(client, new_course, cache_bucket):
     """Account costs are private to superadmins, not course admins or auditors."""
     publish(cache_bucket, snapshot().model_dump_json())
     assert client.get("/api/admin/billing").status_code == 403
+    assert client.get("/billing").status_code == 302
     client.set_cookie(apikey.cookie_name(), new_course[odb.API_KEY])
     for role in (odb.SUPER_ROLE_NONE, odb.SUPER_ROLE_SUPERAUDITOR, odb.SUPER_ROLE_SUPERADMIN):
         new_course["ddbo"].update_table(odb.DDBO().users, new_course[odb.USER_ID], {odb.SUPER_ROLE: role})
         response = client.get("/api/admin/billing")
-        assert response.status_code == (200 if role == odb.SUPER_ROLE_SUPERADMIN else 403)
+        expected = 200 if role == odb.SUPER_ROLE_SUPERADMIN else 403
+        assert response.status_code == expected
+        assert client.get("/billing").status_code == expected
+        admin_page = client.get("/admin")
+        assert 'id="billing-content"' not in admin_page.text
+        assert ('href="/billing"' in admin_page.text) == (role == odb.SUPER_ROLE_SUPERADMIN)
     assert response.json["snapshot"]["previous"]["total"]["net"] == "2"
     assert response.headers["Cache-Control"] == "private, no-store"
     assert client.get("/api/admin/billing").json == response.json
+    client.set_cookie(apikey.cookie_name(), odb.make_new_api_key(email=new_course[ADMIN_EMAIL]))
+    assert client.get("/billing").status_code == 403
+    assert client.get("/api/admin/billing").status_code == 403
+    assert 'href="/billing"' not in client.get("/admin").text
 
 
 @pytest.mark.selenium
@@ -169,9 +181,13 @@ def test_admin_billing_browser(live_server, chrome_driver, new_course, cache_buc
     chrome_driver.get(live_server)
     chrome_driver.add_cookie({"name": apikey.cookie_name(), "value": new_course[odb.API_KEY]})
     chrome_driver.get(live_server + "/admin")
+    assert not chrome_driver.find_elements(By.ID, "billing-content")
+    chrome_driver.find_element(By.LINK_TEXT, "Billing").click()
+    assert chrome_driver.current_url == live_server + "/billing"
     WebDriverWait(chrome_driver, 20).until(lambda driver: "$52.00" in driver.find_element(By.ID, "billing-content").text)
     panel = chrome_driver.find_element(By.ID, "admin-billing")
     assert panel.is_displayed()
+    assert chrome_driver.find_element(By.TAG_NAME, "h1").text == "Billing"
     assert "No data" in panel.text and "$1.944" in panel.text
     links = panel.find_elements(By.CSS_SELECTOR, "nav a")
     assert len(links) == 3
@@ -193,6 +209,7 @@ def test_weekly_email_receipt_and_freshness(cache_bucket):
     text = digest(data)
     assert "$52.0000" in text and "$-50.0000" in text and "No data" in text
     assert "2026-09-01 to 2026-10-01" in text
+    assert "https://prod.planttracer.com/billing" in text
     assert "0 functions: no data" not in text
     data.functions.append(data.functions[0].model_copy(deep=True))
     data.functions[1].current.invocations = None

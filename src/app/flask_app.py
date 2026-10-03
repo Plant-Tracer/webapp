@@ -289,6 +289,15 @@ def func_admin() -> str | tuple[str, int]:
         return "<h1>403 Forbidden</h1><p>Admin read access required.</p>", 403
     return render_template('admin.html', **page_dict("Admin", require_auth=True))
 
+@app.route('/billing', methods=GET)
+def func_billing() -> str | tuple[str, int]:
+    """Serve account billing only to superadmins, separately from the Admin summary."""
+    user_dict = apikey.get_user_dict()
+    if odb.normalize_super_role(user_dict) != odb.SUPER_ROLE_SUPERADMIN:
+        return "<h1>403 Forbidden</h1><p>Superadmin access required.</p>", 403
+    return render_template('billing.html', **page_dict("Billing", require_auth=True))
+
+
 @app.route('/analyze', methods=GET)
 def func_analyze() -> str:
     """Serve the analyze page."""

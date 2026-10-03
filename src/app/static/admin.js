@@ -1,5 +1,3 @@
-import { loadBilling } from "./admin_billing.js";
-
 const TABLE_CONFIG = {
   courses: {
     bodyId: "admin-course-rows", markerParam: "course_marker",
@@ -1193,7 +1191,6 @@ async function reloadAdminSummary() {
 
 
 async function loadAdminSummary() {
-  await loadBilling("none");
   bindSortButtons();
   bindVerboseDetails();
   bindResizableTables();
@@ -1205,7 +1202,6 @@ async function loadAdminSummary() {
   status.textContent = "Loading all admin records...";
   const payload = await fetchAdminPage("all");
   state.viewerRole = payload.viewer.super_role;
-  const billing = loadBilling(state.viewerRole);
   state.viewerUserId = payload.viewer.user_id;
   state.viewerCourseIds = [...(payload.viewer.course_ids || [])];
   setText("admin-course-count", payload.counts.courses);
@@ -1217,7 +1213,6 @@ async function loadAdminSummary() {
   await Promise.all(TABLE_NAMES.map(
     (table) => loadRemainingPages(table, payload[table].restart_marker),
   ));
-  await billing;
   enrichCourseNames();
   TABLE_NAMES.forEach(renderTable);
   const newCourse = document.getElementById("admin-new-course");

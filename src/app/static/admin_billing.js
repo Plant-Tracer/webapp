@@ -1,4 +1,4 @@
-// Render the private daily AWS summary on the Admin page.
+// Render the private daily AWS summary on the dedicated Billing page.
 // Authorization is enforced by the API before any cached account data is read.
 // This module never queries AWS directly or refreshes paid billing data.
 // Period labels and timestamps come from the cache, including stale snapshots.
@@ -136,3 +136,7 @@ async function loadBilling(role) {
 }
 
 export { loadBilling, renderBilling };
+
+if (document.getElementById("billing-page")) {
+  loadBilling(super_role);
+}

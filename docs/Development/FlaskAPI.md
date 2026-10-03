@@ -1239,6 +1239,13 @@ The client saves initial default markers on frame 0 and immediately saves additi
 Apex and ruler labels are protected from deletion, including legacy records.
 See [Marker lifecycle](MarkerLifecycle.rst) for the full behavior contract.
 
+### `GET /billing`
+
+Dedicated Billing HTML page, linked from Admin for superadmins. Other logged-in
+roles receive 403; invalid/missing API keys follow the normal logout redirect.
+The page loads the cached summary independently of the main Admin records and
+includes a return link to Admin. The main Admin page does not load billing data.
+
 ### `GET /api/admin/billing`
 
 Superadmin-only account billing summary; other roles and invalid API keys receive

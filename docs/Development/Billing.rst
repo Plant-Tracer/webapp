@@ -1,8 +1,10 @@
-AWS billing on the Admin page
-=============================
+Administrative Billing page
+===========================
 
-The Admin page shows superadmins the current UTC month to date and previous
-calendar month: account-wide gross charges, signed credits/refunds, net charges,
+The dedicated ``/billing`` page is linked as **Billing** from the main Admin
+page for superadmins. It loads independently of the Admin record summary and
+shows the current UTC month to date and previous calendar month: account-wide
+gross charges, signed credits/refunds, net charges,
 service and Lambda usage-type breakdowns, and cost allocation by stack tag.
 It also shows invocations, errors, summed execution seconds, and retained
 SnapStart snapshots for existing functions in the collector's region. Function
@@ -59,7 +61,7 @@ Build, validate, and adopt
 
 All commands run from the repository root. ``make billing-check`` validates
 both SAM templates, lints the collector, and tests cache/API behavior against
-MinIO and DynamoDB Local, including a headless browser check. The normal
+MinIO and DynamoDB Local, including a headless browser check through the Admin-to-Billing link. The normal
 ``make check`` includes billing logic, API, and browser tests. ``make billing-build``
 builds an isolated ARM64 Python Lambda package using the ``billing`` dependency
 group. No app image or vision dependencies are needed.
@@ -78,7 +80,7 @@ Deployment is a separate, explicitly authorized operator action:
 2. Wait for the first scheduled run, or explicitly invoke the output
    ``CollectorFunction`` with the Lambda console. Verify ``summary.json`` and
    logs before attaching web stacks. Use CloudWatch's Lambda Errors metric and
-   the Admin stale warning to detect failures.
+   the Billing stale warning to detect failures.
 3. Set each web stack's ``BillingSummaryBucket`` SAM parameter to the collector
    stack's output and deploy the approved application version through the normal
    SAM workflow. This supplies ``PLANTTRACER_BILLING_BUCKET`` and read-only IAM.
@@ -100,7 +102,7 @@ EventBridge Scheduler sends the cached summary every Monday at 09:00
 ``America/Los_Angeles`` (automatically following daylight saving time) to
 ``plantadmin@planttracer.com`` from ``admin@planttracer.com``. It includes both
 months' gross/credit/net costs, charge breakdowns, function activity, snapshot
-estimate, collection timestamp, and Admin/AWS links. It performs no billing
+estimate, collection timestamp, and Billing/AWS links. It performs no billing
 queries. The IAM permission restricts SES to that domain identity, sender, and
 recipient. SES sending and the ``planttracer.com`` identity must be enabled in
 ``us-east-1``; sandbox accounts additionally require a verified recipient.
