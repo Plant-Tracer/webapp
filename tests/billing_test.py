@@ -373,3 +373,21 @@ def test_storage_calendar_and_service_names_in_cache_and_digest():
         BucketStorage(name="archive", region="us-east-2", days=[StorageDay(day=NOW.date(), size_bytes=2e9, objects=12)])])
     message = digest(data)
     assert "2.00 GB / 12.00 objects" in message and "empty (us-east-1): No data" in message
+
+
+def test_metric_pagination_rejects_abandoned_partial_series():
+    """A global next token cannot certify a metric omitted from later pages."""
+    functions = snapshot().functions
+    client = boto3.client("cloudwatch", region_name="us-east-1", aws_access_key_id="test", aws_secret_access_key="test")
+    expected = {"MetricDataQueries": metric_queries(functions),
+                "StartTime": datetime(2026, 9, 1, tzinfo=timezone.utc), "EndTime": NOW}
+    with Stubber(client) as stub:
+        stub.add_response("get_metric_data", {"MetricDataResults": [
+            {"Id": "f0m0", "Timestamps": [NOW-timedelta(days=3)], "Values": [7], "StatusCode": "PartialData"}],
+            "NextToken": "next"}, expected)
+        stub.add_response("get_metric_data", {"MetricDataResults": [
+            {"Id": "f0m1", "Timestamps": [], "Values": [], "StatusCode": "Complete"}]},
+            {**expected, "NextToken": "next"})
+        with pytest.raises(ValueError, match="Incomplete CloudWatch metric pages"):
+            collect_activity(client, functions, NOW)
+        stub.assert_no_pending_responses()

@@ -207,13 +207,21 @@ def collect_activity(client, functions, now):
     for offset in range(0, len(queries), 500):
         parameters = {QUERIES: queries[offset:offset + 500],
                       START_TIME: start, END_TIME: now}
+        incomplete = set()
         while True:
             page = client.get_metric_data(**parameters)
             for raw in page[RESULTS]:
-                apply_metric(functions, MetricResult.model_validate(raw), current, start, now, bool(page.get(NEXT_TOKEN)))
+                result = MetricResult.model_validate(raw)
+                apply_metric(functions, result, current, start, now, bool(page.get(NEXT_TOKEN)))
+                if result.status == "PartialData":
+                    incomplete.add(result.identifier)
+                else:
+                    incomplete.discard(result.identifier)
             if not page.get(NEXT_TOKEN):
                 break
             parameters[NEXT_TOKEN] = page[NEXT_TOKEN]
+        if incomplete:
+            raise ValueError("Incomplete CloudWatch metric pages")
 
 
 def collect(session, now=None, previous=None):
