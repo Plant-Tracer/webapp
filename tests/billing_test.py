@@ -207,18 +207,18 @@ def test_admin_billing_browser(live_server, chrome_driver, new_course, cache_buc
     assert panel.find_element(By.CSS_SELECTOR, "svg[role='img']").is_displayed()
     panel.find_element(By.CSS_SELECTOR, "select[aria-label='Storage history bucket']").send_keys("test-bucket")
     assert "1 of 1 buckets" in panel.text
-    chrome_driver.save_screenshot(".tmp/billing-storage-browser.png")
+    Path(".tmp").mkdir(exist_ok=True)
+    assert chrome_driver.save_screenshot(".tmp/billing-storage-browser.png")
     links = panel.find_elements(By.CSS_SELECTOR, "nav a")
     assert len(links) == 3
     assert all(link.get_attribute("href").startswith("https://console.aws.amazon.com/costmanagement/") for link in links)
-    Path(".tmp").mkdir(exist_ok=True)
-    chrome_driver.save_screenshot(".tmp/billing-admin.png")
+    assert chrome_driver.save_screenshot(".tmp/billing-admin.png")
     publish(cache_bucket, snapshot(datetime.now(timezone.utc) - timedelta(days=2)).model_dump_json())
     chrome_driver.refresh()
     WebDriverWait(chrome_driver, 20).until(
         lambda driver: "stale" in driver.find_element(By.ID, "billing-status").text)
     assert chrome_driver.find_element(By.ID, "billing-status").get_attribute("class") == "admin-error"
-    chrome_driver.save_screenshot(".tmp/billing-admin-stale.png")
+    assert chrome_driver.save_screenshot(".tmp/billing-admin-stale.png")
 
 
 def test_weekly_email_receipt_and_freshness(cache_bucket, monkeypatch):
