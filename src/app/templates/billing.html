@@ -1,0 +1,22 @@
+{# Dedicated administrative view of the shared AWS billing cache.
+   Only superadmins can load this page or its data endpoint.
+   The server supplies the normal application navigation and role context.
+   The billing module loads cached costs and metrics without paid AWS queries.
+   Keeping this view separate avoids loading billing data on the main Admin page.
+   The return link leads back to the role-scoped administrative summary. #}
+{% extends 'base.html' %}
+
+{% block body %}
+<main id="billing-page" class="admin-summary">
+  <h1>Billing</h1>
+  <p><a href="admin">Back to Admin</a></p>
+  <section id="admin-billing" class="admin-section" hidden aria-labelledby="billing-heading">
+    <h2 id="billing-heading">AWS spend and activity</h2>
+    <p id="billing-status" role="status">Loading cached summary...</p>
+    <p id="billing-scope"></p>
+    <nav id="billing-links" aria-label="AWS billing dashboards"></nav>
+    <div id="billing-content"></div>
+  </section>
+</main>
+<script type="module" src="{{ url_for('static', filename='admin_billing.js') }}"></script>
+{% endblock %}

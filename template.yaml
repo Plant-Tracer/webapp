@@ -43,6 +43,11 @@ Parameters:
     AllowedValues: [CRITICAL, ERROR, WARNING, INFO, DEBUG, NOTSET]
     Description: Default LOG_LEVEL environment value for the functions.
 
+  BillingSummaryBucket:
+    Type: String
+    Default: ""
+    Description: "Private bucket from the single account billing stack; empty disables the cached summary."
+
   MailerDryRun:
     Type: String
     Default: "false"
@@ -56,6 +61,9 @@ Parameters:
     MaxLength: 220
     AllowedPattern: "[A-Za-z0-9_.-]+"
     ConstraintDescription: "Use only letters, numbers, dots, hyphens, and underscores."
+
+Conditions:
+  HasBillingSummary: !Not [!Equals [!Ref BillingSummaryBucket, ""]]
 
 Mappings:
   StackConstants:
@@ -162,6 +170,19 @@ Resources:
     Properties:
       MessageRetentionPeriod: 1209600
 
+  BillingSummaryReadPolicy:
+    Type: AWS::IAM::Policy
+    Condition: HasBillingSummary
+    Properties:
+      PolicyName: ReadBillingSummary
+      Roles: [!Ref LambdaWebExecutionRole]
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: s3:GetObject
+            Resource: !Sub "arn:${AWS::Partition}:s3:::${BillingSummaryBucket}/summary.json"
+
   LambdaResizeExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -242,6 +263,7 @@ Resources:
           PLANTTRACER_LAMBDA_API_BASE: !Sub "https://${AWS::StackName}.${BaseDomain}/"
           PLANTTRACER_S3_BUCKET: !Ref ImageBucketName
           PLANTTRACER_STACK_NAME: !Ref AWS::StackName
+          PLANTTRACER_BILLING_BUCKET: !Ref BillingSummaryBucket
           PLANTTRACER_WEB_RUNTIME: lambda
           POWERTOOLS_LOG_LEVEL: !Ref LogLevel
           POWERTOOLS_SERVICE_NAME: "planttracer-web"

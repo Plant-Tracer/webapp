@@ -2969,7 +2969,7 @@ wheels = [
 
 [[package]]
 name = "webapp"
-version = "0.9.9.22"
+version = "0.9.9.25"
 source = { editable = "." }
 dependencies = [
     { name = "apig-wsgi" },
@@ -2998,6 +2998,10 @@ dependencies = [
 ]
 
 [package.dev-dependencies]
+billing = [
+    { name = "boto3" },
+    { name = "pydantic" },
+]
 dev = [
     { name = "aws-lambda-powertools" },
     { name = "boto3" },
@@ -3103,6 +3107,10 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
+billing = [
+    { name = "boto3", specifier = ">=1.42.72,<2" },
+    { name = "pydantic" },
+]
 dev = [
     { name = "aws-lambda-powertools" },
     { name = "boto3", specifier = ">=1.42.72,<2" },

@@ -78,6 +78,23 @@ Release Notes
 Unreleased Summary
 ******************
 
+    * Version 0.9.9.25: add daily S3 storage and object counts, a two-month storage
+      graph with bucket selection and accessible daily values, and familiar AWS
+      service abbreviations to Billing. Include bucket totals in weekly email.
+      Cache measurements across regions without scanning bucket contents and require
+      Linux/ARM64 collector artifact validation before deployment.
+    * Version 0.9.9.24: simplify Billing spend tables to charges, link positive
+      function error counts to period-specific CloudWatch log searches, and show
+      stack start/stop dates and elapsed days/hours/minutes in the Stack column.
+      Stack identity matching distinguishes recreated stacks; unavailable historical
+      dates remain explicit. Deploy the web reader before the schema-2 collector.
+    * Version 0.9.9.23: add a dedicated superadmin Billing page, linked from Admin, with cached
+      current/previous month gross spend (without credits/refunds or net columns),
+      function activity with per-function error links to CloudWatch logs,
+      SnapStart estimates, and AWS dashboard links. A shared
+      daily collector keeps paid queries out of page loads; SES emails the
+      cached summary to plantadmin weekly (fixes #1260).
+
     * Delete superseded web Lambda versions during deployment cleanup while
       keeping SnapStart enabled for the current live version, avoiding ongoing
       snapshot charges for old releases (fixes #1258).

@@ -184,7 +184,7 @@ lint: $(REQ)
 pylint:
 	$(MAKE) vend-lambda-resize
 	$(MAKE) vend-lambda-web
-	uv run pylint $(PYLINT_OPTS) browser_tests lambda-web/src/lambda_web lambda-web/tests lambda-resize src tests \
+	PYTHONPATH=src:lambda-billing/src uv run pylint $(PYLINT_OPTS) lambda-billing/src/*.py browser_tests lambda-web/src/lambda_web lambda-web/tests lambda-resize src tests \
 		bin/deployed_workflow_test.py etc/sam_config_tool.py etc/sam_config_writer.py *.py
 
 ## Mypy static analysis
@@ -216,12 +216,12 @@ dump.txt:
 pytest: $(LOCAL_TEST_REQ)
 	$(MAKE) vend-lambda-resize
 	$(MAKE) vend-lambda-web
-	$(LOCAL_AWS_ENV) PYTHONPATH=.:src:lambda-web/src:lambda-resize/src:$$PYTHONPATH uv run pytest -vv --log-cli-level=$(LOG_LEVEL) tests lambda-web/tests lambda-resize/tests
+	$(LOCAL_AWS_ENV) PYTHONPATH=.:src:lambda-web/src:lambda-resize/src:lambda-billing/src:$$PYTHONPATH uv run pytest -vv --log-cli-level=$(LOG_LEVEL) tests lambda-web/tests lambda-resize/tests
 
 pytest-coverage: $(LOCAL_TEST_REQ)
 	$(MAKE) vend-lambda-resize
 	$(MAKE) vend-lambda-web
-	$(LOCAL_AWS_ENV) PYTHONPATH=.:src:lambda-web/src:lambda-resize/src:$$PYTHONPATH uv run pytest -vv --log-cli-level=$(LOG_LEVEL) --cov=src --cov=lambda-web/src/lambda_web --cov=lambda-resize/src --cov-report=xml --cov-report=html tests lambda-web/tests lambda-resize/tests
+	$(LOCAL_AWS_ENV) PYTHONPATH=.:src:lambda-web/src:lambda-resize/src:lambda-billing/src:$$PYTHONPATH uv run pytest -vv --log-cli-level=$(LOG_LEVEL) --cov=src --cov=billing_collector --cov=billing_email --cov=billing_storage --cov=lambda-web/src/lambda_web --cov=lambda-resize/src --cov-report=xml --cov-report=html tests lambda-web/tests lambda-resize/tests
 	@echo coverage report in htmlcov/
 
 # This doesn't work yet...
@@ -256,7 +256,7 @@ analysis-mp4-browser-test: .venv/pyvenv.cfg
 TEST1MODULE=tests/endpoint_test.py
 #TEST1FUNCTION="-k test_ver1"
 pytest1:
-	$(LOCAL_AWS_ENV) PYTHONPATH=.:src:lambda-web/src:lambda-resize/src:$$PYTHONPATH uv run pytest -v --log-cli-level=$(LOG_LEVEL) --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
+	$(LOCAL_AWS_ENV) PYTHONPATH=.:src:lambda-web/src:lambda-resize/src:lambda-billing/src:$$PYTHONPATH uv run pytest -v --log-cli-level=$(LOG_LEVEL) --maxfail=1 $(TEST1MODULE) $(TEST1FUNCTION)
 
 ################################################################
 ### Debug targets to develop and run locally.
@@ -697,7 +697,7 @@ lambda-web/src/requirements.txt:
 template-lint: .venv/pyvenv.cfg
 	sam validate --lint
 	@echo cfn-lint requires a valid AWS_REGION so we use us-east-1
-	AWS_REGION=us-east-1 uv run cfn-lint template.yaml
+	AWS_REGION=us-east-1 uv run cfn-lint template.yaml lambda-billing/template.yaml
 
 sam-config-show: sam-config-sync
 	@echo "SAM_CONFIG=$(SAM_CONFIG)"
@@ -814,7 +814,7 @@ sam-build: $(REQ)
 	finch vm start || echo AWS finch is already running
 	sam validate --lint
 	@echo cfn-lint requires a valid AWS_REGION so we use us-east-1
-	AWS_REGION=us-east-1 uv run cfn-lint template.yaml
+	AWS_REGION=us-east-1 uv run cfn-lint template.yaml lambda-billing/template.yaml
 	@# Do not add --parallel here; SAM emits urllib3 cleanup tracebacks during parallel container builds.
 	DOCKER_DEFAULT_PLATFORM=linux/arm64 sam build --use-container
 	$(MAKE) sam-resize-artifact-test
@@ -1159,3 +1159,42 @@ list-stacks:
 
 %.js: %.ts
 	tsc $<
+
+# Shared billing collector: AWS_PROFILE selects operator credentials; AWS_REGION
+# selects the activity region (deploy once in us-east-1). PLANTTRACER_BILLING_BUCKET
+# is the private cache bucket used by the collector and the admin reader.
+# BILLING_OUTPUT is the local JSON evidence path for read-only collection.
+# BILLING_PAGE_URL selects the deployed Billing page linked in weekly mail.
+BILLING_OUTPUT ?= .tmp/billing-summary.json
+BILLING_PAGE_URL ?= https://prod.planttracer.com/billing
+.PHONY: vend-lambda-billing billing-check billing-collect billing-build billing-deploy billing-template-lint billing-artifact-test
+vend-lambda-billing:
+	mkdir -p lambda-billing/src/app
+	cp src/app/billing_models.py src/app/__init__.py lambda-billing/src/app/
+	uv export --quiet --locked --only-group billing --no-emit-project --no-hashes --output-file lambda-billing/src/requirements.txt
+
+billing-template-lint:
+	AWS_REGION=us-east-1 uv run cfn-lint template.yaml lambda-billing/template.yaml
+
+billing-check: vend-lambda-billing
+	AWS_REGION=us-east-1 sam validate --lint --template-file lambda-billing/template.yaml
+	AWS_REGION=us-east-1 uv run cfn-lint template.yaml lambda-billing/template.yaml
+	PYTHONPATH=src:lambda-billing/src uv run pylint src/app/billing_models.py src/app/billing_service.py lambda-billing/src/*.py
+	$(LOCAL_AWS_ENV) PYTHONPATH=.:src:lambda-web/src:lambda-resize/src:lambda-billing/src uv run pytest tests/billing_test.py -q
+
+billing-collect:
+	@mkdir -p "$$(dirname "$(BILLING_OUTPUT)")"
+	PYTHONPATH=src:lambda-billing/src uv run python lambda-billing/src/billing_collector.py --output "$(BILLING_OUTPUT)"
+
+billing-build: vend-lambda-billing
+	sam build --template-file lambda-billing/template.yaml --build-dir .aws-sam/billing-build
+
+billing-deploy: billing-build
+	@test "$(AWS_REGION)" = us-east-1 || (echo 'Deploy the shared billing collector once in us-east-1.'; exit 1)
+	$(MAKE) billing-artifact-test
+	aws sts get-caller-identity --no-cli-pager
+	sam deploy --config-file "$(CURDIR)/lambda-billing/billing-config.toml" --template-file .aws-sam/billing-build/template.yaml --stack-name planttracer-billing --resolve-s3 --capabilities CAPABILITY_IAM --parameter-overrides BillingPageUrl="$(BILLING_PAGE_URL)"
+
+# Import the packaged modules in the actual Linux/ARM64 Python runtime.
+billing-artifact-test:
+	finch run --rm --platform linux/arm64 -v "$(CURDIR)/.aws-sam/billing-build/BillingCollectorFunction:/var/task:ro" -w /var/task public.ecr.aws/sam/build-python3.12:1.163.0 python -c 'import billing_collector, billing_email; from app.billing_models import BillingSnapshot; print("Billing artifact imports passed")'
