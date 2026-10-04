@@ -1191,6 +1191,7 @@ billing-build: vend-lambda-billing
 
 billing-deploy: billing-build
 	@test "$(AWS_REGION)" = us-east-1 || (echo 'Deploy the shared billing collector once in us-east-1.'; exit 1)
+	$(MAKE) billing-artifact-test
 	aws sts get-caller-identity --no-cli-pager
 	sam deploy --config-file "$(CURDIR)/lambda-billing/billing-config.toml" --template-file .aws-sam/billing-build/template.yaml --stack-name planttracer-billing --resolve-s3 --capabilities CAPABILITY_IAM --parameter-overrides BillingPageUrl="$(BILLING_PAGE_URL)"
 

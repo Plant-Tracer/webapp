@@ -81,7 +81,8 @@ Unreleased Summary
     * Version 0.9.9.25: add daily S3 storage and object counts, a two-month storage
       graph with bucket selection and accessible daily values, and familiar AWS
       service abbreviations to Billing. Include bucket totals in weekly email.
-      Cache measurements across regions without scanning bucket contents.
+      Cache measurements across regions without scanning bucket contents and require
+      Linux/ARM64 collector artifact validation before deployment.
     * Version 0.9.9.24: simplify Billing spend tables to charges, link positive
       function error counts to period-specific CloudWatch log searches, and show
       stack start/stop dates and elapsed days/hours/minutes in the Stack column.

@@ -148,7 +148,8 @@ For initial adoption:
 
 
 1. Run ``AWS_PROFILE=planttracer-admin AWS_REGION=us-east-1 make billing-deploy``.
-   This always rebuilds the collector from the current checkout before deploying,
+   This always rebuilds the collector from the current checkout and verifies its
+   imports in Linux/ARM64 before deploying,
    so an older local build cannot be published accidentally. It creates the
    dedicated bucket, scheduled collector, IAM role, and 14-day log group.
    Set ``BILLING_PAGE_URL=https://slg-dev.planttracer.com/billing`` when adopting

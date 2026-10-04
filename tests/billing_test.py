@@ -19,7 +19,7 @@ import pytest
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 
-from billing_storage import STORAGE_TYPES, bucket_history, storage_queries, storage_window
+from billing_storage import STORAGE_TYPES, bucket_history, collect_storage, storage_queries, storage_window
 from billing_email import (BILLING_URL_ENV, BODY, CHARSET, DATA, MESSAGE_ID, RECIPIENT, RECEIPT_KEY,
                            SENDER, SUBJECT, TEXT, TO, digest, send_weekly)
 from billing_collector import (MetricResult, add_charge, apply_metric, collect_activity,
@@ -391,3 +391,30 @@ def test_metric_pagination_rejects_abandoned_partial_series():
         with pytest.raises(ValueError, match="Incomplete CloudWatch metric pages"):
             collect_activity(client, functions, NOW)
         stub.assert_no_pending_responses()
+
+
+def test_storage_bucket_pagination_and_regional_routing(monkeypatch):
+    """Real SDK stubs enforce each bucket page and each regional metric request."""
+    session = boto3.Session(aws_access_key_id="test", aws_secret_access_key="test", region_name="us-east-1")
+    s3 = session.client("s3")
+    east = session.client("cloudwatch", region_name="us-east-1")
+    west = session.client("cloudwatch", region_name="us-west-2")
+    # Only the SDK client factory is substituted; Stubber checks the real protocol.
+    clients = {("s3", "us-east-1"): s3, ("cloudwatch", "us-east-1"): east, ("cloudwatch", "us-west-2"): west}
+    monkeypatch.setattr(session, "client", lambda service, region_name: clients[(service, region_name)])
+    start, end = storage_window(NOW)
+    results = [{"Id": f"s{i}", "Timestamps": [], "Values": [], "StatusCode": "Complete"}
+               for i in range(len(STORAGE_TYPES) + 1)]
+    with Stubber(s3) as inventory, Stubber(east) as eastern, Stubber(west) as western:
+        inventory.add_response("list_buckets", {"Buckets": [{"Name": "z-east", "BucketRegion": "us-east-1"}],
+                                                "ContinuationToken": "next"}, {"MaxBuckets": 1000})
+        inventory.add_response("list_buckets", {"Buckets": [{"Name": "a-west", "BucketRegion": "us-west-2"}]},
+                               {"MaxBuckets": 1000, "ContinuationToken": "next"})
+        for stub, name in ((eastern, "z-east"), (western, "a-west")):
+            stub.add_response("get_metric_data", {"MetricDataResults": results},
+                              {"MetricDataQueries": storage_queries(name), "StartTime": start, "EndTime": end})
+        result = collect_storage(session, NOW)
+        for stub in (inventory, eastern, western):
+            stub.assert_no_pending_responses()
+    assert [(b.name, b.region) for b in result.buckets] == [("a-west", "us-west-2"), ("z-east", "us-east-1")]
+    assert all(b.days[0].size_bytes is None for b in result.buckets)
