@@ -1,0 +1,46 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap');
+
+body, .document, .bodywrapper, p, li, td, th, dt, dd,
+div.body, div.body p, div.body li {
+    font-family: 'Outfit', sans-serif;
+    color: #606061;
+}
+
+h1, h2, h3, h4, h5, h6,
+div.body h1, div.body h2, div.body h3,
+div.body h4, div.body h5, div.body h6,
+div.sphinxsidebar h3, div.sphinxsidebar h4 {
+    font-family: 'Outfit', sans-serif;
+    color: rgb(53, 181, 147);
+}
+
+a, a:visited {
+    color: #606061;
+}
+
+a:hover {
+    color: rgb(53, 181, 147);
+}
+
+.sphinxsidebarwrapper h1,
+.sphinxsidebarwrapper h1 a,
+.sphinxsidebarwrapper h1 a:visited {
+    font-family: 'Outfit', sans-serif;
+    color: #ffffff;
+    background: linear-gradient(to right, rgb(53, 181, 147), rgb(161, 210, 68));
+    padding: 6px 10px;
+    border-radius: 4px;
+    display: block;
+}
+
+.sphinxsidebar a {
+    color: #606061;
+}
+
+.sphinxsidebar a:hover {
+    color: rgb(53, 181, 147);
+}
+
+div.highlight {
+    border-left: 3px solid rgb(53, 181, 147);
+}
