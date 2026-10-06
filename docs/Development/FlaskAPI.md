@@ -1238,3 +1238,31 @@ Legacy records can omit both fields. Navigation does not persist copies.
 The client saves initial default markers on frame 0 and immediately saves additions.
 Apex and ruler labels are protected from deletion, including legacy records.
 See [Marker lifecycle](MarkerLifecycle.rst) for the full behavior contract.
+
+### `GET /billing`
+
+Dedicated Billing HTML page, linked from Admin for superadmins. Other logged-in
+roles receive 403; invalid/missing API keys follow the normal logout redirect.
+The page loads the cached summary independently of the main Admin records and
+includes a return link to Admin. The main Admin page does not load billing data.
+
+### `GET /api/admin/billing`
+
+Superadmin-only account billing summary; other roles and invalid API keys receive
+403. Reads the configured private S3 cache and returns `state` (`ready`, `stale`,
+`unavailable`, or `unconfigured`), `message`, optional typed `snapshot`, and AWS
+console links. The snapshot includes explicit UTC calendar periods, gross/credit/net
+USD costs, per-service/Lambda-usage/stack-tag charges, regional function metrics,
+and retained SnapStart estimates. Missing metrics are null, not zero.
+Readers accept cache schemas 1, 2 and 3. Schema 2 adds optional per-function
+`stack_id` and `stack_lifetime` (`started_at`, nullable `stopped_at`, and
+CloudFormation `status`). Missing historical stack records remain null.
+The Billing UI shows these dates and elapsed days/hours/minutes in the existing
+Stack column; elapsed time measures stack existence, not invocation duration.
+Schema 3 adds optional `storage` with an exclusive UTC `start`/`end` window and
+`buckets`, each containing `name`, `region` and daily `day`, nullable `size_bytes`
+and nullable `objects`. These are daily metrics for current general-purpose
+buckets, not current-only object listings. Charges also expose `display_name`,
+which preserves the AWS name and adds common acronyms where applicable.
+Responses are `private, no-store`. This endpoint never refreshes AWS billing data;
+see [Billing](Billing.rst) for collection, permissions, freshness, and scope.

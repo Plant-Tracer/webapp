@@ -1,0 +1,9 @@
+# Dedicated deployment settings for the shared billing stack.
+# Keep application stack parameters out of collector build and deployment.
+# The Makefile supplies the template, stack name, and artifact configuration.
+# Operators select credentials with AWS_PROFILE and deploy only in us-east-1.
+# No live resources are created until the explicit billing-deploy target runs.
+version = 0.1
+[default.deploy.parameters]
+region = "us-east-1"
+confirm_changeset = true
