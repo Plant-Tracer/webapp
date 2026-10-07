@@ -32,15 +32,22 @@ Every PR body must include an Issue keyword for each related Issue. Use `fixes #
 
 ## GitHub Identities
 
-Use `@simsong-codex` for all GitHub activity: commits, pushes, issues, pull requests, comments, reviews, labels, and repository administration. The sole exception is requesting or re-requesting GitHub Copilot review, which must be performed as `@simsong` because that account has the required Copilot entitlement.
+Codex and Claude Code use the shared `@simsong-agent` account for all GitHub
+writes, pushes, issues, pull requests, comments, reviews, labels, and repository
+administration; never use the personal `@simsong` account. Each agent uses its
+own commit email. Codex keeps `Codex AI Assistant <simsong+codex@acm.org>` and
+its existing signing key; Claude must not claim to be Codex or use that key.
 
-For that exception only, switch the active GitHub CLI account to `simsong`, request exactly `copilot-pull-request-reviewer[bot]` for the specified Plant-Tracer pull request, and switch immediately back to `simsong-codex`. Restore `simsong-codex` even if the request fails. Verify the resulting review-request event only after restoring `simsong-codex`; do not perform any other GitHub action while `simsong` is active.
+Request Copilot review as `simsong-agent` with the exact reviewer
+`copilot-pull-request-reviewer[bot]`. Verify the resulting review-request event.
+If unavailable to this account, keep the PR draft and report the blocker;
+never switch to the personal account as a fallback.
 
 ### Codex commits and pr-to-ready lifecycle
 
-GitHub activity authored by Codex must use `@simsong-codex`; do not use the
+GitHub activity authored by Codex must use `@simsong-agent`; do not use the
 personal `@simsong` account for writes, pushes, issues, pull requests, reviews,
-or comments, except for the specific review-request exception above.
+or comments.
 
 Before creating or amending a Codex-authored commit, configure and verify the
 author and committer as `Codex AI Assistant <simsong+codex@acm.org>` and verify
@@ -62,14 +69,14 @@ For every Codex-authored issue implementation, follow the shared
    immediately before marking ready. Resolve conflicts, validate, and
    push updates before continuing the review cycle. The ready branch
    must contain current `origin/main`.
-3. Follow the narrowly scoped Copilot-entitlement account exception
-   under GitHub Identities; restore `simsong-codex` immediately.
+3. Request Copilot review under the shared agent account as specified
+   under GitHub Identities; never use the personal account as a fallback.
 4. Keep Codecov passing through substantive tests when practical; it
    blocks completion only when repository rules require it.
 
 When the pr-to-ready timer is active, wake every 20 minutes and reconcile
 live GitHub state. For the current release milestone, scan its open issues
-assigned to `@simsong-codex`, then resume the highest-priority unblocked work or
+assigned to `@simsong-agent`, then resume the highest-priority unblocked work or
 pending pull-request review/CI follow-through. Verify milestone, assignment, PR
 head, Copilot state, and checks live; do not rely on an earlier heartbeat. Do
 not change issue assignments or milestones, approve, merge, or close anything
