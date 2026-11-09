@@ -43,6 +43,13 @@ These commands assume that AWS authentication and `AWS_REGION` are already set,
 the branch is clean and pushed, and the deployment's pre-existing S3 bucket and
 other guided parameters are available. Replace the angle-bracketed values.
 
+Run `make list-stacks` to list completed or rolled-back CloudFormation stacks
+with named columns for stack name, status, creation time, and last-update time.
+Set `AWS_REGION` to a real AWS region; the Makefile defaults to local service
+credentials when it is unset. Optional `AWS_PROFILE` selects an AWS credentials
+profile. Newly created stacks may have no last-update time. This command is
+read-only.
+
 Create a new stack with a new, stack-specific DynamoDB database:
 
 ```bash

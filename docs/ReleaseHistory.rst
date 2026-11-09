@@ -78,6 +78,14 @@ Release Notes
 Unreleased Summary
 ******************
 
+    * Use the shared ``@simsong-agent`` GitHub account for Codex and Claude Code,
+      use the shared agent commit email and signing key with distinct author
+      names, and prohibit personal account fallbacks for agent writes (refs #1046).
+
+    * Show named CloudFormation stack columns and last-update timestamps in
+      ``make list-stacks``, and run the target even when a file named
+      ``list-stacks`` exists.
+
     * Version 0.9.9.25: add daily S3 storage and object counts, a two-month storage
       graph with bucket selection and accessible daily values, and familiar AWS
       service abbreviations to Billing. Include bucket totals in weekly email.

@@ -1146,6 +1146,7 @@ sam-reload:
 list-all-instances:
 	for r in us-east-1 us-east-2 ; do echo ; echo "=== ZONE $$r ===" ; AWS_REGION=$$r aws ec2 describe-instances | etc/ifmt ; done
 
+# AWS_REGION selects the region; optional AWS_PROFILE selects operator credentials.
 .PHONY: list-stacks
 list-stacks:
 	aws cloudformation list-stacks \

@@ -30,6 +30,21 @@ Every commit message should reference a GitHub Issue number (preferred) or PR nu
 
 Every PR body must include `fixes #N` or `refs #N` for each Issue the PR resolves or references. This is the canonical place GitHub uses to auto-close Issues on merge and that release note tooling uses to associate PRs with Issues.
 
+## GitHub Identities
+
+Codex and Claude Code use the shared `@simsong-agent` account for all GitHub
+writes, pushes, issues, pull requests, comments, reviews, labels, and repository
+administration; never use the personal `@simsong` account. Agent commits use
+`simsong+agent@acm.org` and the shared GPG key
+`4499250C3C89FE58AC6E92AD737897AAFB061983`. Codex uses the author name
+`Codex AI Assistant`; Claude uses `Claude Code Agent`. Neither agent may claim
+to be the other. Preserve earlier commits' identities.
+
+Request Copilot review as `simsong-agent` with the exact reviewer
+`copilot-pull-request-reviewer[bot]`. Verify the resulting review-request event.
+If unavailable to this account, keep the PR draft and report the blocker;
+never switch to the personal account as a fallback.
+
 ## Common Commands
 
 ```bash
