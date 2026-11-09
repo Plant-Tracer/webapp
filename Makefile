@@ -1146,12 +1146,12 @@ sam-reload:
 list-all-instances:
 	for r in us-east-1 us-east-2 ; do echo ; echo "=== ZONE $$r ===" ; AWS_REGION=$$r aws ec2 describe-instances | etc/ifmt ; done
 
+.PHONY: list-stacks
 list-stacks:
 	aws cloudformation list-stacks \
 		--stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE ROLLBACK_COMPLETE \
-		--query 'StackSummaries[*].[StackName, StackStatus, CreationTime, Region]' \
+		--query 'StackSummaries[*].{StackName: StackName, StackStatus: StackStatus, CreationTime: CreationTime, LastUpdatedTime: LastUpdatedTime }' \
 		--output table
-
 
 
 ################################################################
