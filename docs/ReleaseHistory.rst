@@ -112,6 +112,12 @@ Unreleased Summary
       processes a time-lapse movie when the user presses STOP, and removes
       temporary frames after processing succeeds (refs #1245).
 
+    * Add a standalone camera demo for testing capture settings, the audible
+      ten-second countdown over the live preview, and portrait and landscape
+      controls. It compensates for reported device rotation during capture,
+      checks EXIF capture times on locally encoded JPEGs, and discards the
+      frames after encoding (refs #1246, #1247, #1251).
+
     * Operations: show the UTC stack deployment time on ``/ver`` for deployed
       lambda-web stacks
 
