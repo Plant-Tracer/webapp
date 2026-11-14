@@ -126,6 +126,20 @@ Demo mode:
 make run-local-demo-debug
 ```
 
+### Camera UX demo
+
+Run `make -C src/app/static serve` and open
+<http://localhost:8765/camera-demo.html>. Allow camera access and enter a title
+and description of at least four characters each. The default frame interval
+is one minute. **START** begins a ten-second countdown before the first frame.
+**CANCEL** returns to setup during the countdown. Press **DONE** during
+recording to see the frame count.
+The demo encodes frames locally and discards the JPEGs after encoding.
+
+The demo server needs only Python. To test on a phone, copy
+`src/app/static/camera-demo.html` and `src/app/static/camera-demo.js` to the same
+directory on an HTTPS web server with a certificate the phone trusts.
+
 ## Validation
 
 Use Makefile targets:
