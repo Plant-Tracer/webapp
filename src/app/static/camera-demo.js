@@ -2,14 +2,15 @@
 // The live preview uses the browser's camera and never creates a server movie.
 // A ten-second lead-in gives time to move into position before the first frame.
 // Monotonic deadlines drive both countdowns, shutters, and recording limits.
-// Each shutter draws the image and its label before encoding a local JPEG.
-// The demo tracks encoding results and discards the JPEGs after encoding.
+// Each shutter normalizes the image to the first frame and draws its timestamp.
+// The demo checks each JPEG's capture metadata before discarding the image.
 // The summary reports the frame count after the live camera is released.
 
 const $ = (id) => document.getElementById(id);
 const video = $('preview');
 const setup = $('setup');
 const startButton = $('start');
+const motionButton = $('enable-motion');
 const abortButton = $('abort-recording');
 const flash = $('flash');
 const progress = $('progress');
@@ -22,6 +23,7 @@ const MAX_SHUTTER_SOUNDS = 10;
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const timeZoneName = new Intl.DateTimeFormat('en-US', { timeZoneName: 'short' });
 const characterSegments = typeof Intl.Segmenter === 'function' ? new Intl.Segmenter() : undefined;
+const ascii = new TextEncoder();
 
 let screen = 'setup';
 let stream;
@@ -29,17 +31,25 @@ let cameraRequest = 0;
 let session;
 let audio;
 let flashAnimation;
+let deviceAngle;
+let flatReference;
 
 const pad = (value) => String(value).padStart(2, '0');
 
-function localTimestamp(date) {
+function captureTime(date) {
   const offset = -date.getTimezoneOffset();
   const hours = pad(Math.floor(Math.abs(offset) / 60));
   const minutes = pad(Math.abs(offset) % 60);
   const zone = timeZoneName.formatToParts(date).find(({ type }) => type === 'timeZoneName').value;
-  const day = [date.getFullYear(), pad(date.getMonth() + 1), pad(date.getDate())].join('-');
+  const day = [String(date.getFullYear()).padStart(4, '0'), pad(date.getMonth() + 1), pad(date.getDate())];
   const time = [date.getHours(), date.getMinutes(), date.getSeconds()].map(pad).join(':');
-  return `${day} ${time}${offset < 0 ? '-' : '+'}${hours}:${minutes} ${zone}`;
+  const utcOffset = `${offset < 0 ? '-' : '+'}${hours}:${minutes}`;
+  return {
+    label: `${day.join('-')} ${time}${utcOffset} ${zone}`,
+    exifDate: `${day.join(':')} ${time}`,
+    utcOffset,
+    milliseconds: String(date.getMilliseconds()).padStart(3, '0'),
+  };
 }
 
 function showScreen(next) {
@@ -52,6 +62,7 @@ function showScreen(next) {
   for (const panel of [setup, $('starting'), $('recording'), $('summary')]) {
     panel.hidden = panel.id !== next;
   }
+  document.querySelector('main').inert = next === 'starting';
   $('preview-panel').hidden = next === 'summary';
   $('status').textContent = '';
 }
@@ -86,11 +97,6 @@ async function openPreview() {
     startButton.disabled = false;
     $('status').textContent = '';
     const track = opened.getVideoTracks()[0];
-    track.addEventListener('mute', () => {
-      if (opened !== stream) return;
-      cancelStart('Countdown canceled because the camera was paused.');
-      finish('Recording ended because the camera was paused.');
-    });
     track.addEventListener('ended', () => {
       if (opened !== stream) return;
       if (screen === 'recording') {
@@ -123,18 +129,192 @@ function beep(frequency, volume) {
   tone.stop(now + 0.075);
 }
 
-function drawFrame(current, now, takenAt, index) {
-  const { videoWidth: width, videoHeight: height } = video;
-  if (!width || !height) throw new Error('The camera image is unavailable.');
+function addCaptureExif(jpeg, time, width, height) {
+  const asciiTag = (tag, value) => [tag, 2, value.length + 1, ascii.encode(`${value}\0`)];
+  const original = [
+    [0x9000, 7, 4, ascii.encode('0232')],
+    asciiTag(0x9003, time.exifDate),
+    asciiTag(0x9011, time.utcOffset),
+    [0x9101, 7, 4, Uint8Array.of(1, 2, 3, 0)],
+    asciiTag(0x9291, time.milliseconds),
+    [0xa000, 7, 4, ascii.encode('0100')],
+    [0xa001, 3, 1, 1],
+    [0xa002, 4, 1, width],
+    [0xa003, 4, 1, height],
+  ];
+  const directorySize = (entries) => 2 + 12 * entries + 4;
+  const primary = [
+    [0x0112, 3, 1, 1],
+    [0x011a, 5, 1, Uint8Array.of(72, 0, 0, 0, 1, 0, 0, 0)],
+    [0x011b, 5, 1, Uint8Array.of(72, 0, 0, 0, 1, 0, 0, 0)],
+    [0x0128, 3, 1, 2],
+    [0x0213, 3, 1, 1],
+  ];
+  const exifOffset = 8 + directorySize(primary.length + 1);
+  primary.push([0x8769, 4, 1, exifOffset]);
+  let dataOffset = exifOffset + directorySize(original.length);
+  const dataSize = [...primary, ...original].reduce((size, [, , , value]) =>
+    size + (value.length > 4 ? value.length + value.length % 2 : 0), 0);
+  const app1 = new Uint8Array(10 + dataOffset + dataSize);
+  const view = new DataView(app1.buffer);
+  view.setUint16(0, 0xffe1);
+  view.setUint16(2, app1.length - 2);
+  app1.set(ascii.encode('Exif\0\0II'), 4);
+  view.setUint16(12, 42, true);
+  view.setUint32(14, 8, true);
+  for (const [start, entries] of [[8, primary], [exifOffset, original]]) {
+    view.setUint16(10 + start, entries.length, true);
+    entries.forEach(([tag, type, count, value], index) => {
+      const entry = 12 + start + 12 * index;
+      view.setUint16(entry, tag, true);
+      view.setUint16(entry + 2, type, true);
+      view.setUint32(entry + 4, count, true);
+      if (typeof value === 'number') {
+        view.setUint32(entry + 8, value, true);
+      } else if (value.length <= 4) {
+        app1.set(value, entry + 8);
+      } else {
+        view.setUint32(entry + 8, dataOffset, true);
+        app1.set(value, 10 + dataOffset);
+        dataOffset += value.length + value.length % 2;
+      }
+    });
+  }
+  return writeAndCheckExif(jpeg, app1, time);
+}
+
+async function writeAndCheckExif(jpeg, app1, time) {
+  if (jpeg?.type !== 'image/jpeg') return false;
+  const bytes = new DataView(await jpeg.arrayBuffer());
+  const end = bytes.byteLength - 2;
+  if (end < 4 || bytes.getUint16(0) !== 0xffd8 || bytes.getUint16(end) !== 0xffd9) return false;
+  const parts = [jpeg.slice(0, 2), app1];
+  let offset = 2;
+  // Keep the encoder's color metadata and image data, replacing JFIF and prior EXIF headers.
+  while (offset + 4 <= end) {
+    const marker = bytes.getUint16(offset);
+    if (marker === 0xffda) break;
+    if ((marker & 0xff00) !== 0xff00) return false;
+    const length = bytes.getUint16(offset + 2);
+    const next = offset + 2 + length;
+    if (length < 2 || next > end) return false;
+    const jfif = marker === 0xffe0 && length >= 7 && bytes.getUint32(offset + 4) === 0x4a464946
+      && bytes.getUint8(offset + 8) === 0;
+    const exif = marker === 0xffe1 && length >= 8 && bytes.getUint32(offset + 4) === 0x45786966
+      && bytes.getUint16(offset + 8) === 0;
+    if (!jfif && !exif) parts.push(jpeg.slice(offset, next));
+    offset = next;
+  }
+  if (offset + 4 > end) return false;
+  const result = new Blob([...parts, jpeg.slice(offset)], { type: 'image/jpeg' });
+  const segment = new DataView(await result.slice(2, 2 + app1.length).arrayBuffer());
+  if (segment.getUint16(0) !== 0xffe1 || segment.getUint16(2) !== app1.length - 2
+      || segment.getUint32(4) !== 0x45786966 || segment.getUint32(10) !== 0x49492a00) return false;
+  const findTag = (directory, tag) => {
+    const count = segment.getUint16(10 + directory, true);
+    for (let index = 0; index < count; index += 1) {
+      const entry = 12 + directory + 12 * index;
+      if (segment.getUint16(entry, true) === tag) return entry;
+    }
+    return -1;
+  };
+  const pointer = findTag(segment.getUint32(14, true), 0x8769);
+  if (pointer < 0) return false;
+  const directory = segment.getUint32(pointer + 8, true);
+  return [[0x9003, time.exifDate], [0x9011, time.utcOffset], [0x9291, time.milliseconds]].every(([tag, value]) => {
+    const entry = findTag(directory, tag);
+    if (entry < 0 || segment.getUint16(entry + 2, true) !== 2
+        || segment.getUint32(entry + 4, true) !== value.length + 1) return false;
+    const offset = value.length < 4 ? entry + 8 : 10 + segment.getUint32(entry + 8, true);
+    return ascii.encode(`${value}\0`).every((byte, index) => segment.getUint8(offset + index) === byte);
+  });
+}
+
+function screenAngle() {
+  return window.screen.orientation?.angle ?? window.orientation ?? 0;
+}
+
+function readDeviceAngle({ alpha, beta, gamma }) {
+  if (!Number.isFinite(beta) || !Number.isFinite(gamma)) return;
+  const pitch = beta * Math.PI / 180;
+  const x = -Math.cos(pitch) * Math.sin(gamma * Math.PI / 180);
+  const y = Math.sin(pitch);
+  let angle;
+  if (Math.hypot(x, y) < 0.3) {
+    if (!Number.isFinite(alpha)) return;
+    // Near horizontal, gravity cannot distinguish turns around the camera axis.
+    flatReference ??= { alpha, angle: deviceAngle ?? screenAngle() };
+    angle = flatReference.angle + (alpha - flatReference.alpha) * Math.sign(Math.cos(pitch));
+  } else {
+    flatReference = undefined;
+    angle = Math.atan2(x, y) * 180 / Math.PI;
+  }
+  if (deviceAngle === undefined || Math.abs((angle - deviceAngle + 540) % 360 - 180) > 55) {
+    deviceAngle = Math.round(angle / 90) * 90;
+  }
+}
+
+function frameRotation(current, width, height, rotation, mirrored) {
+  const display = screenAngle();
+  const portrait = height > width;
+  const direction = current.frontCamera ? 1 : -1;
+  if (!current.reference) {
+    current.reference = { display, physical: deviceAngle, portrait, rotation, mirrored };
+    current.size = portrait ? [480, 640] : [640, 480];
+  }
+  const reference = current.reference;
+  const displayTurn = display - reference.display;
+  if (reference.physical === undefined && deviceAngle !== undefined) {
+    reference.physical = deviceAngle - displayTurn;
+  }
+  const physicalTurn = reference.physical === undefined ? displayTurn : deviceAngle - reference.physical;
+  // Compare each frame to the first rather than accumulating changes between shutters.
+  const reportedTurn = rotation === undefined || reference.rotation === undefined ? 0 : rotation - reference.rotation;
+  const swapped = portrait !== reference.portrait;
+  if (reference.physical === undefined && displayTurn === 0) return 0;
+  const swappedTurn = Math.abs(displayTurn) % 180 === 90 ? displayTurn : physicalTurn;
+  const applied = reportedTurn || (swapped ? direction * swappedTurn : 0);
+  return (direction * physicalTurn - applied) * (current.reference.mirrored ? -1 : 1) % 360;
+}
+
+function drawCameraImage(context, current) {
+  let frame;
+  try {
+    if ('rotation' in (window.VideoFrame?.prototype ?? {})) frame = new VideoFrame(video);
+  } catch {
+    // Some browsers can display a live stream but cannot wrap it in VideoFrame.
+  }
+  try {
+    const width = frame?.displayWidth ?? video.videoWidth;
+    const height = frame?.displayHeight ?? video.videoHeight;
+    if (!width || !height) throw new Error('The camera image is unavailable.');
+    const mirrored = frame?.flip ?? current.reference?.mirrored ?? false;
+    const angle = frameRotation(current, width, height, frame?.rotation, mirrored);
+    const [outputWidth, outputHeight] = current.size;
+    const quarterTurn = Math.abs(angle) % 180 === 90;
+    const scale = Math.min(outputWidth / (quarterTurn ? height : width),
+      outputHeight / (quarterTurn ? width : height));
+    context.canvas.width = outputWidth;
+    context.canvas.height = outputHeight;
+    context.fillStyle = '#000';
+    context.fillRect(0, 0, outputWidth, outputHeight);
+    context.save();
+    context.translate(outputWidth / 2, outputHeight / 2);
+    context.rotate(angle * Math.PI / 180);
+    if (mirrored !== current.reference.mirrored) context.scale(-1, 1);
+    context.drawImage(frame ?? video, -width * scale / 2, -height * scale / 2, width * scale, height * scale);
+    context.restore();
+  } finally {
+    frame?.close();
+  }
+}
+
+async function drawFrame(current, now, takenAt, index) {
   const canvas = document.createElement('canvas');
-  [canvas.width, canvas.height] = current.size;
   const context = canvas.getContext('2d');
-  const scale = Math.min(canvas.width / width, canvas.height / height);
-  context.fillStyle = '#000';
-  context.fillRect(0, 0, canvas.width, canvas.height);
-  context.drawImage(video, (canvas.width - width * scale) / 2, (canvas.height - height * scale) / 2,
-    width * scale, height * scale);
-  const text = `${index}  ${Math.round((now - current.started) / 1000)} s  ${localTimestamp(takenAt)}`;
+  drawCameraImage(context, current);
+  const time = captureTime(takenAt);
+  const text = `${index}  ${Math.round((now - current.started) / 1000)} s  ${time.label}`;
   context.font = 'bold 14px system-ui, sans-serif';
   context.textBaseline = 'middle';
   const labelWidth = Math.ceil(context.measureText(text).width) + 12;
@@ -143,13 +323,13 @@ function drawFrame(current, now, takenAt, index) {
   context.fillRect(left, 6, labelWidth, 24);
   context.fillStyle = '#fff';
   context.fillText(text, left + 6, 18);
-  return new Promise((resolve) => canvas.toBlob((blob) => resolve(Boolean(blob)), 'image/jpeg', 0.9));
+  const jpeg = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+  return addCaptureExif(jpeg, time, canvas.width, canvas.height);
 }
 
 function capture(current, now) {
-  if (!cameraReady()) throw new Error('Recording ended because the camera was unavailable.');
   const index = current.frames.length;
-  const frame = drawFrame(current, now, new Date(), index);
+  const frame = drawFrame(current, now, new Date(), index).catch(() => false);
   current.frames.push(frame);
   $('frame-count').textContent = index + 1;
   flashAnimation?.cancel();
@@ -167,11 +347,11 @@ function tick(current) {
   const remaining = Math.max(0, current.nextAt - now);
   abortButton.hidden = now >= current.abortAt;
   if (remaining === 0) {
-    try {
+    if (cameraReady()) {
       capture(current, now);
-    } catch (error) {
-      finish(error.message);
-      return;
+      $('status').textContent = '';
+    } else {
+      $('status').textContent = 'Camera temporarily unavailable. Waiting for the next shutter.';
     }
     const capturedAt = performance.now();
     const slot = Math.floor((capturedAt - current.started) / current.interval) + 1;
@@ -221,7 +401,7 @@ function prepareRecording(event) {
     description,
     interval: Number($('interval').value) * 1000,
     duration: Number($('duration').value) * 3_600_000,
-    startAt: performance.now() + START_DELAY_MS,
+    frontCamera: stream?.getVideoTracks()[0]?.getSettings().facingMode === 'user',
     frames: [],
   };
   session = current;
@@ -231,14 +411,11 @@ function prepareRecording(event) {
   } catch {
     // The preview and capture can continue when browser audio is unavailable.
   }
-  if (document.fullscreenEnabled) {
-    document.documentElement.requestFullscreen().then(() => {
-      if (screen !== 'starting' && screen !== 'recording') exitFullscreen();
-    }).catch(() => {});
-  }
   showScreen('starting');
+  startCountdown.textContent = START_DELAY_MS / 1000;
   $('cancel-start').focus({ preventScroll: true });
   holdScreenAwake(current);
+  current.startAt = performance.now() + START_DELAY_MS;
   tickStartCountdown(current);
 }
 
@@ -249,7 +426,14 @@ function tickStartCountdown(current) {
   }
   const remaining = current.startAt - performance.now();
   if (remaining <= 0) {
-    startRecording(current);
+    if (cameraReady()) {
+      startRecording(current);
+    } else if (remaining > -2000) {
+      startCountdown.textContent = '1';
+      current.timer = setTimeout(() => tickStartCountdown(current), TICK_MS);
+    } else {
+      cancelStart('The camera is unavailable. Wait for the preview to resume before starting.');
+    }
     return;
   }
   const seconds = Math.ceil(remaining / 1000);
@@ -273,15 +457,10 @@ function cameraReady() {
 }
 
 function startRecording(current) {
-  if (!cameraReady()) {
-    cancelStart('The camera is unavailable. Wait for the preview to resume before starting.');
-    return;
-  }
   current.started = performance.now();
   current.nextAt = current.started;
   current.endsAt = current.started + current.duration;
   current.abortAt = current.started + ABORT_WINDOW_MS;
-  current.size = video.videoWidth >= video.videoHeight ? [640, 480] : [480, 640];
   showScreen('recording');
   $('start-time').textContent = new Date().toLocaleTimeString();
   $('frame-count').textContent = '0';
@@ -294,15 +473,10 @@ function releaseCaptureResources(current) {
   current.wakeLock?.release().catch(() => {});
 }
 
-function exitFullscreen() {
-  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-}
-
 function cancelStart(reason = '') {
   if (screen !== 'starting') return;
   releaseCaptureResources(session);
   session = undefined;
-  exitFullscreen();
   showScreen('setup');
   $('status').textContent = reason;
   startButton.focus({ preventScroll: true });
@@ -312,7 +486,6 @@ function stopRecording(current) {
   releaseCaptureResources(current);
   flashAnimation?.cancel();
   releasePreview();
-  exitFullscreen();
 }
 
 async function finish(reason) {
@@ -328,7 +501,7 @@ async function finish(reason) {
   if (session !== current) return;
   const count = results.filter(Boolean).length;
   $('summary-count').textContent = `${count} ${count === 1 ? 'frame' : 'frames'} captured`;
-  $('status').textContent = [reason, count < results.length ? 'Some frames could not be encoded.' : '']
+  $('status').textContent = [reason, count < results.length ? 'Some JPEGs could not be encoded with verified EXIF.' : '']
     .filter(Boolean).join(' ');
 }
 
@@ -370,6 +543,24 @@ abortButton.addEventListener('click', () => {
   returnHome();
 });
 $('new-recording').addEventListener('click', reset);
+window.addEventListener('deviceorientation', readDeviceAngle);
+if (window.DeviceOrientationEvent?.requestPermission) {
+  motionButton.hidden = false;
+  motionButton.addEventListener('click', async () => {
+    motionButton.disabled = true;
+    try {
+      if (await DeviceOrientationEvent.requestPermission() === 'granted') {
+        motionButton.hidden = true;
+        return;
+      }
+    } catch {
+      // Screen orientation is still available when motion access is declined.
+    } finally {
+      motionButton.disabled = false;
+    }
+    if (screen === 'setup') $('status').textContent = 'Motion access is off. Using screen orientation.';
+  });
+}
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) return;
   cancelStart('Countdown canceled when the camera went into the background.');

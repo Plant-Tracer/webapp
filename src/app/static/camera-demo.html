@@ -118,12 +118,28 @@
 
     .timer { display: flex; justify-content: space-between; align-items: baseline; gap: 0.75rem; }
     #countdown { font-size: 2rem; font-variant-numeric: tabular-nums; }
-    #starting { text-align: center; }
+    #starting {
+      position: fixed;
+      inset: 0;
+      z-index: 2;
+      display: grid;
+      place-items: center;
+      background: rgb(64 64 64 / 55%);
+      color: white;
+    }
     #start-countdown {
-      font-size: clamp(3.5rem, 18dvh, 8rem);
+      font-size: clamp(5rem, 30dvh, 13rem);
       font-weight: 700;
       font-variant-numeric: tabular-nums;
       line-height: 1;
+      text-shadow: 0 2px 12px #000;
+    }
+    #cancel-start {
+      position: absolute;
+      bottom: max(1rem, env(safe-area-inset-bottom));
+      left: 50%;
+      translate: -50% 0;
+      width: min(12rem, 80%);
     }
     .metadata { display: grid; gap: inherit; }
     progress {
@@ -208,16 +224,12 @@
           </label>
         </div>
         <button id="enable-camera" type="button" hidden>Enable camera</button>
+        <button id="enable-motion" type="button" hidden>Enable motion tracking</button>
         <div class="actions">
           <button id="start" class="primary" disabled>START</button>
           <button id="abort-setup" class="abort" type="button">ABORT</button>
         </div>
       </form>
-      <section id="starting" class="panel" aria-label="Start countdown" hidden>
-        <p>Recording starts in</p>
-        <p id="start-countdown" role="timer" aria-live="polite">10</p>
-        <button id="cancel-start" class="abort" type="button">CANCEL</button>
-      </section>
       <section id="recording" class="panel" aria-label="Recording controls" hidden>
         <div class="timer">
           <span id="countdown-label">Next shutter</span>
@@ -242,7 +254,11 @@
     </div>
     <p id="status" class="status" role="status"></p>
   </main>
+  <section id="starting" aria-label="Start countdown" hidden>
+    <p id="start-countdown" role="timer" aria-label="Seconds before recording" aria-live="polite">10</p>
+    <button id="cancel-start" class="abort" type="button">CANCEL</button>
+  </section>
   <div id="flash" aria-hidden="true"></div>
-  <script type="module" src="./camera-demo.js"></script>
+  <script type="module" src="./camera-demo.js?v=2"></script>
 </body>
 </html>

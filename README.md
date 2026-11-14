@@ -131,10 +131,15 @@ make run-local-demo-debug
 Run `make -C src/app/static serve` and open
 <http://localhost:8765/camera-demo.html>. Allow camera access and enter a title
 and description of at least four characters each. The default frame interval
-is one minute. **START** begins a ten-second countdown before the first frame.
+is one minute. **START** shows a ten-second countdown over the live preview.
 **CANCEL** returns to setup during the countdown. Press **DONE** during
-recording to see the frame count.
-The demo encodes frames locally and discards the JPEGs after encoding.
+recording to see the frame count. The output keeps the dimensions and reference
+orientation of the first frame and compensates for quarter turns when the
+browser reports them. Select **Enable motion tracking** in Setup if offered.
+Rotation may be inaccurate if a shutter fires while the sensor and camera
+orientation are updating, or if the browser provides neither signal for the
+turn. The demo adds and checks EXIF capture time and UTC offset on every JPEG,
+then discards it.
 
 The demo server needs only Python. To test on a phone, copy
 `src/app/static/camera-demo.html` and `src/app/static/camera-demo.js` to the same
