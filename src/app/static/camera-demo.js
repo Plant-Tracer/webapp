@@ -173,8 +173,11 @@ function tick(current) {
       finish(error.message);
       return;
     }
-    current.nextAt += current.interval;
-    if (current.nextAt <= now) current.nextAt = now + current.interval;
+    const capturedAt = performance.now();
+    const slot = Math.floor((capturedAt - current.started) / current.interval) + 1;
+    const deadline = current.started + slot * current.interval;
+    // Subtraction can round down at an exact slot boundary.
+    current.nextAt = deadline > capturedAt ? deadline : current.started + (slot + 1) * current.interval;
   }
   const nextBoundary = Math.min(current.nextAt, current.endsAt);
   const timeLeft = Math.max(0, nextBoundary - performance.now());
