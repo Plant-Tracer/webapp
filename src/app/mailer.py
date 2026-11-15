@@ -15,6 +15,7 @@ import time
 from email.parser import BytesParser
 from email import policy
 from email.utils import formataddr
+from urllib.parse import urlencode
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
@@ -195,17 +196,22 @@ def _render_mime_template(template_name: str, **kwargs):
     return env.render(**kwargs)
 
 
-def send_links(*, email, planttracer_endpoint, new_api_key, debug=False):
+def send_links(*, email, planttracer_endpoint, new_api_key, course_id=None, debug=False):
     """Send login/magic-link email. Uses SMTP if configured, else SES."""
 
     to_addrs = [email]
     from_addr = get_server_email()
     from_header = get_server_from_header()
+    endpoint = (planttracer_endpoint or '').rstrip('/')
+    params = {odb.API_KEY: new_api_key}
+    if course_id:
+        params[odb.COURSE_ID] = course_id
     msg = _render_mime_template(
         C.LOGIN_EMAIL_TEMPLATE_FNAME,
         to_addrs=",".join([email]),
         from_header=from_header,
-        planttracer_endpoint=planttracer_endpoint,
+        planttracer_endpoint=endpoint,
+        camera_url=f"{endpoint}/camera?{urlencode(params)}",
         api_key=new_api_key,
     )
 

@@ -79,6 +79,7 @@ class TracedMovieFrameRange(BaseModel):
     start:int = 0
     end:int | None = None
     seconds_per_frame: float | None = Field(default=None, gt=0)
+    frame_labels_baked_in: bool = False
 
 
 class TracePathOverlay(BaseModel):
@@ -317,6 +318,7 @@ def trace_movie_v2(*, movie_url,  # pylint: disable=too-many-arguments
     """
 
     seconds_per_frame = movie_traced_frame_range.seconds_per_frame if movie_traced_frame_range else None
+    add_frame_label = not (movie_traced_frame_range and movie_traced_frame_range.frame_labels_baked_in)
 
     # frame_start is the first computed frame; its predecessor supplies the seed.
 
@@ -419,10 +421,13 @@ def trace_movie_v2(*, movie_url,  # pylint: disable=too-many-arguments
                     path_overlay = trace_path_overlay(frame, points_by_frame, movie_traced_frame_start,
                                                       movie_traced_frame_end, colors_by_label)
                 frame_to_label = frame.copy()
+                frame_label = None
+                if add_frame_label:
+                    frame_label = (f"{frame_number}  {frame_number * seconds_per_frame:g} s"
+                                   if seconds_per_frame else str(frame_number))
                 cv2_label_frame(frame=frame_to_label,
                                 trackpoints=trackpoints_this,
-                                frame_label=(f"{frame_number}  {frame_number * seconds_per_frame:g} s"
-                                             if seconds_per_frame else str(frame_number)),
+                                frame_label=frame_label,
                                 trackpoint_segments=trackpoint_segments,
                                 path_overlay=path_overlay,
                                 colors_by_label=colors_by_label)

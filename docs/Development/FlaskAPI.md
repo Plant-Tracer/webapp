@@ -564,11 +564,17 @@ Both routes are equivalent. Return users and courses visible to the caller.
 
 Create a fresh ``uploading`` movie row for a browser camera capture. This route
 requires a non-demo authenticated user and accepts ``title``, ``description``,
-and optional ``course_id`` form fields. It sets the capture interval to four
-frames per minute (one frame every 15 seconds), marks the row as a camera
-capture, assigns a new ``movie_id``, and records the durable source movie URN.
-It returns ``movie_id``; the browser uses that ID for every frame upload and
-the STOP request. Calling this endpoint again creates an independent movie.
+and optional ``course_id`` form fields. The current Camera tab sends
+``capture_interval_seconds`` (15, 30, 60, 120, or 300). This sets frames per
+minute and marks the new movie as having labels already drawn on its frames.
+Omitting the field keeps the legacy 15-second interval and export labels.
+Invalid interval values return HTTP 400. The route assigns a ``movie_id`` and
+records the durable source movie URN in the same write. It returns the ID for
+frame uploads and finalization. The Camera tab supplies a ``recording_id`` UUID
+so a retry for the same user and course returns the existing movie ID. An
+invalid UUID returns HTTP 400. Reusing an ID from another course or a deleted
+recording returns HTTP 409. Requests without a ``recording_id`` create a new
+movie each time.
 
 #### `POST /api/camera/frame-upload`
 

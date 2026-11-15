@@ -2,6 +2,7 @@ from pathlib import Path
 import subprocess
 
 import cv2
+import pytest
 import imageio_ffmpeg
 import numpy as np
 
@@ -295,14 +296,16 @@ def test_new_tracing_renders_computed_future_positions(tmp_path):
     assert first[117:124, 105:113, 2].astype(int).sum() > 400
 
 
-def test_download_label_uses_capture_time_and_original_zero_based_frame(tmp_path):
+@pytest.mark.parametrize('frame_labels_baked_in', [False, True])
+def test_download_label_uses_capture_time_and_original_zero_based_frame(tmp_path, frame_labels_baked_in):
     """A trimmed download keeps original frame indices and uses capture, not playback time."""
     output = tmp_path / 'timed.mp4'
     tracer.trace_movie_v2(
         movie_url=TEST_MOVIE, frame_start=1, frame_end=2,
         trackpoints=[Trackpoint(x=370, y=298, label="Apex", frame_number=0)],
         movie_traced_path=output,
-        movie_traced_frame_range=tracer.TracedMovieFrameRange(start=2, end=2, seconds_per_frame=30),
+        movie_traced_frame_range=tracer.TracedMovieFrameRange(
+            start=2, end=2, seconds_per_frame=30, frame_labels_baked_in=frame_labels_baked_in),
         callback=None,
     )
     capture = cv2.VideoCapture(str(output))
@@ -314,7 +317,10 @@ def test_download_label_uses_capture_time_and_original_zero_based_frame(tmp_path
     tracer.cv2_label_frame(frame=reference, trackpoints=[], frame_label="2  60 s")
     # Blue pixels establish export styling; white glyph pixels distinguish the exact label.
     region = decoded[:35, -140:].astype(int)
-    assert np.any((region[:, :, 0] > 150) & (region[:, :, 2] < 100))
+    blue_background = (region[:, :, 0] > 150) & (region[:, :, 2] < 100)
+    assert bool(np.any(blue_background)) != frame_labels_baked_in
+    if frame_labels_baked_in:
+        return
     glyphs = np.all(reference[:35, -140:] > 200, axis=2)
     assert glyphs.sum() > 100
     assert np.mean(region[glyphs]) > 175

@@ -711,6 +711,7 @@ def run_tracing(*, movie_id, frame_start, frame_end=None, job_id=None):
                                                 end=movie_traced_frame_end,
                                                 seconds_per_frame=(60 / float(movie_record[odb.FPM])
                                                                    if float(movie_record.get(odb.FPM) or 0) > 0 else None),
+                                                frame_labels_baked_in=bool(movie_record.get(odb.CAMERA_FRAMES_STAMPED)),
                                             ),
                                             rotation = rotation,
                                             callback = tracer_callback,

@@ -107,16 +107,12 @@ Unreleased Summary
     * Show ``[zipfile]`` or ``[pending]`` beside admin movie names when an
       uploaded movie has no recorded analysis MP4 (refs #1177).
 
-    * Add an iOS browser camera flow that captures one photo every 15 seconds,
-      uploads frames independently of the capture schedule, assembles and
-      processes a time-lapse movie when the user presses STOP, and removes
-      temporary frames after processing succeeds (refs #1245).
-
-    * Add a standalone camera demo for testing capture settings, the audible
-      ten-second countdown over the live preview, and portrait and landscape
-      controls. It compensates for reported device rotation during capture,
-      checks EXIF capture times on locally encoded JPEGs, and discards the
-      frames after encoding (refs #1246, #1247, #1251).
+    * The Camera tab and standalone camera demo share adjustable capture
+      intervals, an audible ten-second countdown, rotation controls, and
+      timestamped JPEGs. The Camera tab uploads one frame at a time, assembles
+      a movie when recording ends, and removes the temporary JPEGs after
+      processing. Registration and login-link emails include an **Open Camera**
+      link (refs #1245, #1246, #1247, #1249, #1251).
 
     * Operations: show the UTC stack deployment time on ``/ver`` for deployed
       lambda-web stacks

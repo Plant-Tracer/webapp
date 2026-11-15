@@ -6,7 +6,6 @@ All done through get_user_dict() below, which is kind of gross.
 
 """
 
-import copy
 import os
 import functools
 import subprocess
@@ -18,7 +17,7 @@ from flask import request
 
 from . import odb
 from .paths import STATIC_DIR
-from .constants import C,__version__,logger,printable80,log_level,env_value
+from .constants import C,__version__,logger,log_level,env_value
 from .odb import InvalidAPI_Key
 
 def in_demo_mode():
@@ -116,8 +115,8 @@ def get_user_api_key():
     # If we are in demo mode, get the demo mode api_key
     if log_level=='DEBUG':
         logger.debug(
-            "get_user_api_key. request.values=%s request.cookie_names=%s",
-            printable80(request.values),
+            "get_user_api_key. request.fields=%s request.cookie_names=%s",
+            list(request.values.keys()),
             list(request.cookies.keys()),
         )
 
@@ -148,16 +147,16 @@ def get_user_dict():
     api_key = get_user_api_key()
     logger.debug("get_user_dict api_key_present=%s", api_key is not None)
     if api_key is None:
-        logger.info("api_key is none or invalid. request=%s",request.full_path)
+        logger.info("api_key is none or invalid. path=%s",request.path)
         # Check if we were running under an API. All calls under /api must be authenticated.
-        if request.full_path.startswith('/api/'):
+        if request.path.startswith('/api/'):
             raise InvalidAPI_Key("get_user_dict 1")
 
     # We have a key. Get the userdict
     # No special code required for demo mode, since DEMO_MODE_API_KEY is a valid key for this user.
     userdict = user_dict_for_api_key(api_key)
     if userdict is None:
-        logger.info("api_key is invalid ipaddr=%s request.url=%s", request.remote_addr, request.url)
+        logger.info("api_key is invalid ipaddr=%s path=%s", request.remote_addr, request.path)
         raise InvalidAPI_Key("get_user_dict 2")
     return userdict
 
@@ -275,7 +274,5 @@ def page_dict(title='', *, require_auth=False, lookup=True, logout=False):
         if v is None:
             ret[k] = "null"
 
-    ret_without_favicon = copy.copy(ret)
-    ret_without_favicon['favicon_base64'] = '(removed)'
-    logger.debug("page_dict=%s",ret_without_favicon)
+    logger.debug("page_dict=%s", {**ret, 'favicon_base64': '(removed)', 'api_key': '(removed)'})
     return ret

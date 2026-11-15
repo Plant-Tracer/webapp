@@ -23,10 +23,12 @@ from botocore.exceptions import ClientError
 from boto3.dynamodb.conditions import Key,Attr
 from pydantic import BaseModel, ValidationError
 
+from . import s3_presigned
 from .schema import (
     User,
     AdminCourse,
     AnalysisMp4,
+    CameraUploadOptions,
     Movie,
     LogEntry,
     MovieAnalysisLock,
@@ -41,7 +43,7 @@ from .schema import (
     fix_movie_prop_value,
     validate_user_field,
 )
-from .constants import C,logger
+from .constants import C,logger,storage_deployment_id
 
 # tables
 API_KEYS = 'api_keys'
@@ -76,6 +78,10 @@ ROOT_USER_ID = 'u0'                # the root user
 
 class MovieTracingLocked(ValueError):
     """The movie has an active tracing lease."""
+
+
+class CameraRecordingConflict(ValueError):
+    """The capture's movie already belongs to a different course or is deleted."""
 
 
 class MovieCoordinateMigrationRequired(ValueError):
@@ -185,6 +191,7 @@ LAST_ACTIVITY_AT = 'last_activity_at'
 UPLOAD_BYTES_EXPECTED = 'upload_bytes_expected'
 UPLOAD_STAGING_URN = 'upload_staging_urn'
 CAMERA_CAPTURE = 'camera_capture'
+CAMERA_FRAMES_STAMPED = 'camera_frames_stamped'
 UPLOAD_EVENT_ID = 'upload_event_id'
 RESIZE_QUEUED_AT = 'resize_queued_at'
 RESIZE_STARTED_AT = 'resize_started_at'
@@ -1350,7 +1357,8 @@ class DDBO:
             return movie_dict
         raise InvalidMovie_Id(movie_id)
 
-    def put_movie(self, moviedict):
+    def put_movie(self, moviedict, *, create_only=False):
+        """Store a validated movie, optionally requiring a new movie ID."""
         assert is_movie_id(moviedict[MOVIE_ID])
         assert MOVIE_ZIPFILE_URL not in moviedict
         moviedict = copy.copy(moviedict)
@@ -1360,7 +1368,10 @@ class DDBO:
         except ValidationError:
             logger.error("moviedict=%s",moviedict)
             raise
-        self.movies.put_item(Item=moviedict)
+        if create_only:
+            self.movies.put_item(Item=moviedict, ConditionExpression=Attr(MOVIE_ID).not_exists())
+        else:
+            self.movies.put_item(Item=moviedict)
 
     def batch_delete_movie_ids(self, ids):
         """Delete movie items from the table using batch_writer."""
@@ -2446,7 +2457,7 @@ def can_edit_movie(*, user_id, movie_id):
 
 def create_new_movie(*, user_id, course_id=None, title=None, description=None, orig_movie=None,
                      research_use=None, credit_by_name=None, attribution_name=None, fpm=None,
-                     upload_bytes_expected=None):
+                     upload_bytes_expected=None, camera: CameraUploadOptions | None = None):
     """
     Creates an entry for a new movie and returns the movie_id. The movie content must be uploaded separately.
 
@@ -2459,6 +2470,7 @@ def create_new_movie(*, user_id, course_id=None, title=None, description=None, o
     :param attribution_name: - name for attribution when credit_by_name is 1, else None
     :param fpm: - capture interval in frames/minute (time-lapse), as a string, or None
     :param upload_bytes_expected: exact byte size signed into the S3 upload policy
+    :param camera: add camera upload metadata and reuse the ID on a recording retry
     :return: movie_id of the created movie
 
     """
@@ -2467,9 +2479,12 @@ def create_new_movie(*, user_id, course_id=None, title=None, description=None, o
     user = ddbo.get_user(user_id)
     if course_id is None:
         course_id = user[DEFAULT_COURSE_ID]
-    movie_id = new_movie_id()
+    if camera and camera.recording_id:
+        movie_id = f"m{uuid.uuid5(uuid.NAMESPACE_URL, f'planttracer:camera:{user_id}:{camera.recording_id}')}"
+    else:
+        movie_id = new_movie_id()
     created_at = int(time.time())
-    ddbo.put_movie({MOVIE_ID: movie_id,
+    movie = {MOVIE_ID: movie_id,
                     COURSE_ID: course_id,
                     USER_ID: user_id,
                     USER_NAME: user[USER_NAME],
@@ -2494,7 +2509,23 @@ def create_new_movie(*, user_id, course_id=None, title=None, description=None, o
                     ATTRIBUTION_NAME: attribution_name,
                     ROTATION_STEPS: 0,
                     MOVIE_STATUS: MOVIE_STATE_UPLOADING,
-                    })
+             }
+    if camera:
+        movie.update({
+            CAMERA_CAPTURE: True,
+            CAMERA_FRAMES_STAMPED: camera.frames_stamped,
+            MOVIE_DATA_URN: s3_presigned.make_urn(object_name=s3_presigned.movie_object_key(
+                deployment_id=storage_deployment_id(), course_id=course_id, movie_id=movie_id)),
+        })
+    try:
+        ddbo.put_movie(movie, create_only=camera is not None)
+    except ClientError as exc:
+        if not camera or exc.response['Error']['Code'] != 'ConditionalCheckFailedException':
+            raise
+        existing = ddbo.get_movie(movie_id)
+        if (not existing.get(CAMERA_CAPTURE) or existing.get(DELETED)
+                or existing[USER_ID] != user_id or existing[COURSE_ID] != course_id):
+            raise CameraRecordingConflict(movie_id) from exc
     return movie_id
 
 def set_research_use(*, user_id, movie_id, research_use):

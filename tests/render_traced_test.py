@@ -30,10 +30,13 @@ def seed_render(cfg, tmp_path):
     return ddbo
 
 
-def test_download_renders_trim_once_and_keeps_saved_data(new_movie_record, tmp_path, monkeypatch):
+@pytest.mark.parametrize('stamped', [False, True])
+def test_download_renders_trim_once_and_keeps_saved_data(new_movie_record, tmp_path, monkeypatch, stamped):
     cfg = new_movie_record
     ddbo = seed_render(cfg, tmp_path)
     movie_id = cfg[odb.MOVIE_ID]
+    if stamped:
+        ddbo.update_movie(movie_id, {odb.CAMERA_FRAMES_STAMPED: True})
     before = ddbo.get_movie(movie_id)
     before_frontier = odb.last_tracked_movie_frame(movie_id=movie_id)
     frames = ddbo.get_frames(movie_id)
@@ -97,6 +100,8 @@ def test_download_renders_trim_once_and_keeps_saved_data(new_movie_record, tmp_p
             # Original frames 1 and 2 are green and blue. Rendering does not renumber or replace them.
             assert np.max(np.abs(output[0][400, 50].astype(int) - [0, 255, 0])) < 8
             assert np.max(np.abs(output[1][400, 50].astype(int) - [255, 0, 0])) < 8
+            top_unchanged = np.allclose(output[0][:48], [0, 255, 0], atol=8)
+            assert bool(top_unchanged) == stamped
         finally:
             capture.release()
         client = local_lambda_debug.bridge_app.test_client()

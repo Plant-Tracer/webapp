@@ -68,7 +68,7 @@ from .odb_movie_data import (
     delete_movie,
     read_object,
 )
-from .schema import DefaultCourseRequest, TrackpointCoordinateMetadata
+from .schema import CameraUploadOptions, DefaultCourseRequest, TrackpointCoordinateMetadata
 
 
 api_bp = Blueprint('api', __name__)
@@ -724,19 +724,21 @@ def api_get_logs():
 
 @api_bp.route('/register', methods=GET_POST)
 def api_register():
-    """Register the email address if it does not exist. Send a login and upload link"""
+    """Register the email address and send login and camera links."""
     email = request.values.get('email')
     planttracer_endpoint = request.values.get('planttracer_endpoint')
     if not validate_email(email, check_mx=False):
         logger.info("email not valid: %s", email)
         return E.INVALID_EMAIL
-    course_key = request.values.get('course_key').strip()
-    if not odb.validate_course_key(course_key=course_key):
+    course_key = (request.values.get('course_key') or '').strip()
+    try:
+        course = DDBO().get_course_by_course_key(course_key)
+    except IndexError:
         return E.INVALID_COURSE_KEY
     if odb.remaining_course_registrations(course_key=course_key) < 1:
         return E.NO_REMAINING_REGISTRATIONS
     user_name = request.values.get('name')
-    user = odb.register_email(email=email, course_key=course_key, user_name=user_name)
+    user = odb.register_email(email=email, course_id=course[COURSE_ID], user_name=user_name)
     user_id = user[USER_ID]
     new_api_key = odb.make_new_api_key_for_user_id(user_id=user_id)
     if not new_api_key:
@@ -744,7 +746,8 @@ def api_register():
         return E.INVALID_EMAIL
     link_html = f"<p/><p>You can also log in by clicking this link: <a href='/list?api_key={new_api_key}'>login</a></p>"
     try:
-        mailer.send_links(email=email, planttracer_endpoint=planttracer_endpoint, new_api_key=new_api_key)
+        mailer.send_links(email=email, planttracer_endpoint=planttracer_endpoint,
+                          new_api_key=new_api_key, course_id=course[COURSE_ID])
         ret = {'error': False, 'message': 'Registration key sent to '+email+link_html, 'user_id':user_id}
     except mailer.InvalidMailerConfiguration:
         logger.error("Mailer reports Mailer not properly configured.")
@@ -818,7 +821,8 @@ def api_bulk_register():
             new_api_key = odb.make_new_api_key_for_user_id(user_id=user_id)
             user_ids.append(user_id)
             try:
-                mailer.send_links(email=email, planttracer_endpoint=planttracer_endpoint, new_api_key=new_api_key)
+                mailer.send_links(email=email, planttracer_endpoint=planttracer_endpoint,
+                                  new_api_key=new_api_key, course_id=course_id)
             except mailer.NoMailerConfiguration:
                 logger.error("no mailer configuration")
                 email_error = "No mailer configured on server; users were registered but login links could not be sent."
@@ -853,6 +857,8 @@ MIME_MAP = {'.jpg':'image/jpeg',
 # Movie APIs. All of these need to only be POST to avoid an api_key from being written into the logfile
 ##
 
+CAMERA_INTERVAL_FPM = {'15': '4', '30': '2', '60': '1', '120': '0.5', '300': '0.2'}
+
 @api_bp.route('/camera/new-movie', methods=POST)
 def api_camera_new_movie():
     """Create an uploading movie record for an authenticated camera capture."""
@@ -868,23 +874,20 @@ def api_camera_new_movie():
     if not title or not description:
         return jsonify({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: 'title and description are required'}), 400
 
-    fpm = '4'  # one frame every 15 seconds
-    movie_id = odb.create_new_movie(
-        user_id=user_id,
-        course_id=context.effective_course_id,
-        title=title[:256],
-        description=description[:1024],
-        fpm=fpm,
-    )
-    movie_urn = make_urn(object_name=movie_object_key(
-        deployment_id=storage_deployment_id(),
-        course_id=context.effective_course_id,
-        movie_id=movie_id,
-    ))
-    DDBO().update_movie(movie_id, {
-        MOVIE_DATA_URN: movie_urn,
-        odb.CAMERA_CAPTURE: True,
-    }, touch_activity=False)
+    interval = request.form.get('capture_interval_seconds')
+    fpm = CAMERA_INTERVAL_FPM.get('15' if interval is None else interval)
+    if fpm is None:
+        return jsonify({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: 'invalid capture interval'}), 400
+    try:
+        camera = CameraUploadOptions(recording_id=request.form.get('recording_id'), frames_stamped=interval is not None)
+    except ValidationError:
+        return jsonify({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: 'invalid recording ID'}), 400
+    try:
+        movie_id = odb.create_new_movie(
+            user_id=user_id, course_id=context.effective_course_id,
+            title=title[:256], description=description[:1024], fpm=fpm, camera=camera)
+    except odb.CameraRecordingConflict:
+        return jsonify({C.API_KEY_ERROR: True, C.API_KEY_MESSAGE: 'recording ID conflicts with an existing movie'}), 409
     return jsonify({C.API_KEY_ERROR: False, MOVIE_ID: movie_id})
 
 

@@ -104,7 +104,8 @@ def process(job: async_work.RenderTracedJob):
                                                         frame_height=int(frame_height))),
                 movie_traced_frame_range=tracer.TracedMovieFrameRange(
                     start=first, end=last,
-                    seconds_per_frame=(60 / float(movie[odb.FPM]) if float(movie.get(odb.FPM) or 0) > 0 else None)),
+                    seconds_per_frame=(60 / float(movie[odb.FPM]) if float(movie.get(odb.FPM) or 0) > 0 else None),
+                    frame_labels_baked_in=bool(movie.get(odb.CAMERA_FRAMES_STAMPED))),
                 callback=progress,
                 comment=mp4_metadata_lib.build_comment(movie.get(odb.RESEARCH_USE, 0) or 0,
                                                       movie.get(odb.CREDIT_BY_NAME, 0) or 0,

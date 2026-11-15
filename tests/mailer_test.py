@@ -9,12 +9,14 @@ TODO: Test with real mail server when running on Dreamhost?
 import time
 import uuid
 import copy
+from urllib.parse import urlencode
 
 import pytest
 from jinja2.nativetypes import NativeEnvironment
 from app import odb
+from app import apikey
 from app import mailer
-from app.constants import logger
+from app.constants import E, logger
 
 from app.odb import COURSE_KEY
 
@@ -83,11 +85,14 @@ def test_register_email(client, mailer_config,new_course):
         odb.register_email(email=FAKE_USER_EMAIL, user_name='valid-name', course_key='invalid-course-key', course_id=None)
 
 
-    # try register api
+    invalid_course = client.post('/api/register', data={'email': FAKE_USER_EMAIL, 'course_key': 'invalid-course-key'})
+    assert invalid_course.json == E.INVALID_COURSE_KEY
+
     response = client.post('/api/register',
                            data = {'email':FAKE_USER_EMAIL,
                                    'course_key':course_key,
-                                   'name':FAKE_NAME})
+                                   'name':FAKE_NAME,
+                                   'planttracer_endpoint': 'http://localhost/'})
     assert response.status_code == 200
 
     try:
@@ -95,6 +100,32 @@ def test_register_email(client, mailer_config,new_course):
     except KeyError as e:
         raise ValueError(f"/api/register response {response.json} is invalid") from e
 
-    # TODO: verify if registration mail appeared
-    # Now delete the user
-    odb.delete_user(user_id=user_id, purge_movies=True)
+    key = odb.get_first_api_key_for_user(user_id)
+    login_url = f'http://localhost/login?api_key={key}'
+    params = {odb.API_KEY: key, odb.COURSE_ID: cfg[odb.COURSE_ID]}
+    camera_url = f'http://localhost/camera?{urlencode(params)}'
+
+    def check_registration_email(_number, message):
+        if message['To'] != FAKE_USER_EMAIL:
+            return None
+        plain = message.get_body(preferencelist=('plain',)).get_content()
+        html = message.get_body(preferencelist=('html',)).get_content()
+        assert login_url in plain and login_url in html
+        assert camera_url in plain
+        assert camera_url.replace('&', '&amp;') in html
+        return mailer.DELETE
+
+    try:
+        for _ in range(50):
+            if mailer.imap_inbox_scan(mailer_config['imap'], check_registration_email):
+                break
+            time.sleep(0.1)
+        else:
+            pytest.fail('Registration message did not arrive')
+        camera = client.get(camera_url, follow_redirects=True)
+        assert camera.status_code == 200
+        assert camera.request.path == '/camera'
+        assert b'id="camera-root"' in camera.data
+        assert client.get_cookie(apikey.cookie_name()).value == key
+    finally:
+        odb.delete_user(user_id=user_id, purge_movies=True)

@@ -47,15 +47,23 @@ Uploading Movies (optional)
   finish within five minutes, the upload page retains the movie record and
   tells you to contact an administrator.
 
-Recording with an iPhone or iPad
---------------------------------
-- Open Plant Tracer in Safari on the iPhone or iPad, sign in, and select **Camera** from the menu. The camera runs in that same browser tab; allow camera access when prompted.
-- Keep the page open while recording. Plant Tracer captures one frame every 15 seconds, even if an earlier frame is still uploading.
-- Press **STOP** to end capture. The page waits for pending photo uploads, then processes the time-lapse movie. When it is ready, select **Analyze this movie**.
-- If a photo cannot be captured or uploaded, recording stops and the page reports the error. The movie remains in the Movies list for status review.
-
 .. image:: tutorial_images/upload_movie.png
    :alt: Plant Tracer Upload page with fields for movie title, description, research use radio buttons, capture interval, and file chooser
+
+Recording with the Camera tab
+-----------------------------
+- Select **Open Camera** in your Plant Tracer registration email, or sign in
+  and select **Camera** from the menu. Allow camera access when prompted.
+- Enter a title and description, choose a frame interval and maximum
+  duration, then press **START**. The first frame is captured after the
+  ten-second countdown. Keep the camera tab visible during recording.
+  If you switch apps, the Camera tab ends the recording and starts saving.
+  The tab also saves the frames already captured if the browser runs a shutter
+  more than one second late, preserving the scheduled spacing for analysis.
+- **ABORT** is available for the first minute and discards the recording.
+  Press **DONE** at any time to save it. When the movie is ready, select
+  **Analyze this movie**.
+- If saving fails, keep the Camera tab open and select **RETRY SAVE**.
 
 Tracking the Uploaded Movie
 ---------------------------
