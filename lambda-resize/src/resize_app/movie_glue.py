@@ -530,7 +530,8 @@ def process_uploaded_movie(*, movie_id: str, processing_attempt=None, completed_
                     options=AnalysisMp4Options(rotation=movie_rotation(movie), max_width=640, max_height=640,
                                                frame_height=(saved_coordinate_height(movie)
                                                              if processing_attempt and not movie.get(odb.CAMERA_CAPTURE)
-                                                             else None)),
+                                                             else None),
+                                               frame_labels_baked_in=bool(movie.get(odb.CAMERA_FRAMES_STAMPED))),
                     comment=mp4_metadata_lib.build_comment(
                         movie.get('research_use', 0) or 0, movie.get('credit_by_name', 0) or 0,
                         movie.get('attribution_name')),

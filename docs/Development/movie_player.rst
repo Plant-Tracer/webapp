@@ -183,6 +183,8 @@ analysis derivative: rotation is applied once, the frame fits within the chosen
 analysis dimensions (enlarging small sources as needed), and every output frame
 has its zero-based frame number burned into the upper-right corner. The MP4 uses a fixed 15 FPS H.264
 ``yuv420p`` baseline profile with P-frames and no B-frames.
+For Camera recordings whose frames already have labels, Lambda preserves the
+original frame number and timestamp in the analysis MP4.
 
 For example:
 

@@ -111,8 +111,9 @@ Unreleased Summary
       intervals, an audible ten-second countdown, rotation controls, and
       timestamped JPEGs. The Camera tab uploads one frame at a time, assembles
       a movie when recording ends, and removes the temporary JPEGs after
-      processing. Registration and login-link emails include an **Open Camera**
-      link (refs #1245, #1246, #1247, #1249, #1251).
+      processing. Analyze and traced exports retain the capture timestamps.
+      Registration and login-link emails include an **Open Camera** link
+      (refs #1245, #1246, #1247, #1249, #1251).
 
     * Operations: show the UTC stack deployment time on ``/ver`` for deployed
       lambda-web stacks
