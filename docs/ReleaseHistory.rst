@@ -115,6 +115,9 @@ Unreleased Summary
       Registration and login-link emails include an **Open Camera** link
       (refs #1245, #1246, #1247, #1249, #1251).
 
+    * Clarify the labels and instructions for registration, capture rate,
+      trimming, marker positions, movie restoration, and research consent.
+
     * Operations: show the UTC stack deployment time on ``/ver`` for deployed
       lambda-web stacks
 
@@ -400,7 +403,7 @@ Unreleased Summary
 *************
     * Analyze: aggregate trace result statistics — Gravitropism (Distance, Angle) and Circumnutation (Max Amplitude), selectable via a results control
     * Analyze: special Inflection Point marker used as the pivot for the gravitropism Angle
-    * Analyze: Rate statistics, computed from a user-entered capture interval (frames/minute) set on the Upload or Analyze page
+    * Analyze: Rate statistics, computed from a user-entered capture rate (frames/minute) set on the Upload or Analyze page
     * Analyze: trackpoints now use a bottom-left coordinate system; position graphs unflipped; lazy migration of existing movies made concurrency-safe
     * Analyze: multi-marker graphing with per-marker colors
     * Analyze/Movies: video trimming — trace and export a selected frame range

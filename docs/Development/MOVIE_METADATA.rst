@@ -122,10 +122,10 @@ Traceability
   exports, copies, or downstream systems can enforce or display attribution
   and research-use without relying solely on the application database.
 
-Capture interval (frames per minute)
+Capture rate (frames per minute)
 ====================================
 
-The **capture interval** ``fpm`` (frames per minute) is a separate, optional
+The **capture rate** ``fpm`` (frames per minute) is a separate, optional
 per-movie value used by the Analyze page to report results per minute of real
 time (see :doc:`AnalysisResults` and issues #1056/#1053). It is distinct from the
 encoded playback ``fps``.

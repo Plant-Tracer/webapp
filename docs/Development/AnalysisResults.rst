@@ -48,10 +48,10 @@ Circumnutation
 * **Rate** — ``Max Amplitude ÷ elapsed time between the x-extreme frames`` (legacy
   semantics; see #1053). Null when the extremes fall on the same frame.
 
-Rate and the capture interval (fpm)
+Rate and the capture rate (fpm)
 -----------------------------------
 
-Rate is displacement per unit time. The time base is the **capture interval**
+Rate is displacement per unit time. To convert frames to elapsed time, use the **capture rate**
 ``fpm`` (frames per minute), a per-movie value the user supplies at upload or on the
 Analyze page (#1056). The conversion is::
 

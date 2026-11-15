@@ -317,7 +317,7 @@ object metadata fields:
 * ``fpm``
 
 The server-side staging-to-durable copy preserves this metadata. Research-use,
-attribution, and capture-interval metadata are also stored in DynamoDB and,
+attribution, and capture-rate metadata are also stored in DynamoDB and,
 where supported, in MP4 metadata. See :doc:`MOVIE_METADATA`.
 
 Access, CORS, and Local Development

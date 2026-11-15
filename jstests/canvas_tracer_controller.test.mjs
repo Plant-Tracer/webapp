@@ -820,6 +820,23 @@ describe('TracerController constructor', () => {
         expect(tc.track_button.val).toHaveBeenCalledWith(RETRACE_TO_END_OF_MOVIE);
     });
 
+    test.each([
+        [null, 'Trace through the last included frame'],
+        ['https://example.com/traced.mp4', 'Retrace through the last included frame'],
+    ])('pending trace stops at the selected trim end for traced source %s', (tracedUrl, label) => {
+        const tc = new TracerController('div#tc', makeMovieMetadata({
+            total_frames: 6,
+            trim_end_frame: 3,
+            movie_traced_url: tracedUrl,
+        }), 'k');
+        tc.pending_retrace_to_end = true;
+
+        tc.refreshTrackButtonState();
+
+        expect(tc.track_button.val).toHaveBeenLastCalledWith(label);
+        expect(tc.traceEndFrameForRequest()).toBe(3);
+    });
+
     test('traced movie download is shown when metadata has movie_traced_url', () => {
         const tracedControl = makeEl();
         const tracedLink = makeEl();

@@ -18,12 +18,15 @@ faster, cost less to store, and process faster.
 PlantTracer video size limits and guidelines
 --------------------------------------------
 
-File size: The size of all uploaded video files must be 256 megabytes or less.
+File size: Each uploaded video file must be 256 MiB (268,435,456 bytes) or less.
 Files larger than this will be rejected.
 
 Image size: PlantTracer prefers videos in standard definition (480p) and recommends selecting that option when recording or exporting your video. As a general guideline, ensure that the largest dimension of your video is 640 pixels. As an example, a typical 480p video is 640 pixels wide by 480 pixels high. It is important to preserve the aspect ratio of the video when resizing it so that distance calculations remain accurate as items move in both the x and y dimensions of the video.
 
-Movie length and cropping: PlantTracer recommends that movie files have no more than 1000 frames. Some videos have a header or trailer section (often with the recording tool's logo, etc.) that it would be good to crop off prior to uploading, as PlantTracer does not have the ability to crop the movie after uploading. In any case, crop or otherwise edit the movie to remove sections where movement tracking is not intended or desired.
+Movie length and trimming: Plant Tracer recommends at most 1,000 frames per
+movie. Some recording apps add an introduction or trailer with their logo.
+Trim those frames before uploading, or set the trim bounds in Analyze to
+exclude them from tracking.
 
 How to Resize a Video
 ---------------------

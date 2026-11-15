@@ -32,7 +32,7 @@
         <span class="pure-form-message-inline">required (at least 3 characters)</span>
       </div>
       <div class='pure-control-group'>
-        <label for='movie-fpm'>Capture interval (frames/minute):</label>
+        <label for='movie-fpm'>Capture rate (frames/minute):</label>
         <input type='number' id='movie-fpm' name='fpm' min='0' step='any'>
         <span class="pure-form-message-inline">optional (time-lapse rate; can be set later)</span>
       </div>
@@ -89,13 +89,12 @@
   <h2>Next steps</h2>
   <p>Review the processed first frame, then continue to analysis.</p>
   <ul>
-    <li><a href='javascript:;' id='process_movie_link'><strong>Analyze</strong></a> — go to the analysis page.</li>
+    <li><a href='javascript:;' id='process_movie_link'><strong>Open Analyze</strong></a></li>
   </ul>
   <p>Or:</p>
   <ul>
     <li><a href='javascript:;' id='delete_movie_link' onclick='purge_movie()'>
         Delete the movie (if you uploaded the wrong movie)</a></li>
-    <li><a href='' id='trace_movie_link' >Trace the uploaded movie</a></li>
     <li><a href='list'>List all uploaded movies</a></li>
     <li><a href='upload'>Upload another movie</a></li>
   </ul>

@@ -748,7 +748,7 @@ def api_register():
     try:
         mailer.send_links(email=email, planttracer_endpoint=planttracer_endpoint,
                           new_api_key=new_api_key, course_id=course[COURSE_ID])
-        ret = {'error': False, 'message': 'Registration key sent to '+email+link_html, 'user_id':user_id}
+        ret = {'error': False, 'message': 'Sign-in email sent to '+email+link_html, 'user_id':user_id}
     except mailer.InvalidMailerConfiguration:
         logger.error("Mailer reports Mailer not properly configured.")
         ret =  {'error':True, 'message':'Mailer not properly configured (InvalidMailerConfiguration).'+link_html}
@@ -951,7 +951,7 @@ def api_new_movie():
     movie_data_length = get_int('movie_data_length')
 
     if (movie_data_sha256 is None) or (len(movie_data_sha256)!=64):
-        return {'error':True,'message':'Movie SHA256 not provided or is invalid. Uploaded failed.'}
+        return {'error':True,'message':'Upload failed. The movie checksum is missing or invalid.'}
     if movie_data_length is None or not 1 <= movie_data_length <= C.MAX_FILE_UPLOAD:
         return {
             'error': True,
@@ -1333,7 +1333,7 @@ def api_set_movie_trim():
 
 @api_bp.route('/set-movie-fpm', methods=POST)
 def api_set_movie_fpm():
-    """Set the capture interval (frames/minute) for a movie. Owner/admin only."""
+    """Set the capture rate (frames/minute) for a movie. Owner/admin only."""
     user_id = get_user_id(allow_demo=False)
     movie_id = get_movie_id()
     movie = odb.can_edit_movie(user_id=user_id, movie_id=movie_id)

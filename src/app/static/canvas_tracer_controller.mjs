@@ -106,9 +106,11 @@ import {
     RETRACE_MOVIE,
     RETRACE_REQUIRED_MESSAGE,
     RETRACE_TO_END_OF_MOVIE,
+    RETRACE_TO_TRIM_END,
     RESET_TRACING_CONFIRM_MESSAGE,
     TRACE_MOVIE,
     TRACE_TO_END_OF_MOVIE,
+    TRACE_TO_TRIM_END,
     TRACE_MOVIE_TRIM_DISABLED_TITLE,
     TRACING_STARTING_MESSAGE,
 } from "./ui_constants.js";
@@ -170,7 +172,7 @@ function get_ruler_size(str) {
     return match ? parseInt(match[1], 10) : null;
 }
 
-// Parse a stored capture interval (frames/minute) to a positive number, or null when unset/invalid.
+// Parse a stored capture rate (frames/minute) to a positive number, or null when unset/invalid.
 function parse_fpm(value) {
     return (value != null && Number(value) > 0) ? Number(value) : null;
 }
@@ -261,7 +263,7 @@ class TracerController extends MovieController {
         this.api_key = api_key;
         this.movie_id = movie_metadata.movie_id;
         this.movie_rotation = (movie_metadata.rotation == null) ? 0 : movie_metadata.rotation;
-        // Capture interval (frames/minute); null when unset => graphs/Rate fall back to frames.
+        // Capture rate (frames/minute); null when unset => graphs/Rate fall back to frames.
         this.fpm = parse_fpm(movie_metadata.fpm);
         this.trim_start_frame_missing = movie_metadata[TRIM_START_FRAME] == null;
         this.trim_end_frame_missing = movie_metadata[TRIM_END_FRAME] == null;
@@ -343,7 +345,7 @@ class TracerController extends MovieController {
         this.trim_set_start_button.off('click').on('click', () => { this.set_trim_bound(TRIM_START_FRAME); });
         this.trim_set_end_button.off('click').on('click', () => { this.set_trim_bound(TRIM_END_FRAME); });
 
-        // Capture interval (frames/minute) input — edits update the DB only (no retrace).
+        // Capture rate (frames/minute) input — edits update the DB only (no retrace).
         this.fpm_input = $(this.div_selector + " input.fpm_input");
         this.fpm_set_button = $(this.div_selector + " input.fpm_set_button");
         if (this.fpm != null) {
@@ -383,7 +385,7 @@ class TracerController extends MovieController {
         return parsed;
     }
 
-    // POST the capture interval (frames/minute) and refresh graphs/results. No retrace needed.
+    // POST the capture rate (frames/minute) and refresh graphs/results. No retrace needed.
     set_fpm() {
         if (this.editingLocked()) {
             return;
@@ -410,7 +412,7 @@ class TracerController extends MovieController {
                 this.refreshVisibleGraphs();
                 this.refreshResults();
             })
-            .fail(() => { alert('Failed to set the capture interval.'); });
+            .fail(() => { alert('Failed to set the capture rate.'); });
     }
 
     ensure_trim_defaults() {
@@ -853,9 +855,12 @@ class TracerController extends MovieController {
     }
 
     traceToEndLabel() {
-        return this.movie_metadata[MOVIE_TRACED_URL] && !this.tracing_was_reset
-            ? RETRACE_TO_END_OF_MOVIE
-            : TRACE_TO_END_OF_MOVIE;
+        this.ensure_trim_defaults();
+        const stopsAtTrimEnd = this.trim_end_frame < this.lastMovieFrameIndex();
+        if (this.movie_metadata[MOVIE_TRACED_URL] && !this.tracing_was_reset) {
+            return stopsAtTrimEnd ? RETRACE_TO_TRIM_END : RETRACE_TO_END_OF_MOVIE;
+        }
+        return stopsAtTrimEnd ? TRACE_TO_TRIM_END : TRACE_TO_END_OF_MOVIE;
     }
 
     refreshTrackButtonState() {

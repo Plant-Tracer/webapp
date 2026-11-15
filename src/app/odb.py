@@ -2239,7 +2239,7 @@ FPM_MAX = 6000  # soft upper bound to catch typos (frames/minute)
 
 
 def normalize_fpm(raw):
-    """Normalize a user-supplied capture interval (frames/minute) for storage.
+    """Normalize a user-supplied capture rate (frames/minute) for storage.
 
     Returns a trimmed string for a valid positive number, or None when blank/absent.
     Raises ValueError when the value is non-numeric, not positive, or above FPM_MAX.
@@ -2468,7 +2468,7 @@ def create_new_movie(*, user_id, course_id=None, title=None, description=None, o
     :param research_use: - 1 if movie may be used in research, 0 if not, None if not yet answered
     :param credit_by_name: - 1 if user wants credit by name, 0 if anonymous, None if not yet answered
     :param attribution_name: - name for attribution when credit_by_name is 1, else None
-    :param fpm: - capture interval in frames/minute (time-lapse), as a string, or None
+    :param fpm: - capture rate in frames/minute (time-lapse), as a string, or None
     :param upload_bytes_expected: exact byte size signed into the S3 upload policy
     :param camera: add camera upload metadata and reuse the ID on a recording retry
     :return: movie_id of the created movie

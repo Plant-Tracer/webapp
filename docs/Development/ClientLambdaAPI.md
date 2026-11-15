@@ -19,8 +19,8 @@ Flask injects the Lambda API base URL into pages as the browser global
 - Fallback when no explicit base is configured: `https://{HOSTNAME}.{DOMAIN}/`,
   or the current request origin when those variables are absent.
 
-All client calls are authorized. The browser sends the current `api_key`; the
-Lambda validates it against DynamoDB.
+Protected endpoints validate the browser's `api_key` against DynamoDB and check
+permissions for the requested operation. The health check is public.
 
 Static JavaScript and CSS are not part of `LAMBDA_API_BASE`; they are served
 same-origin by Flask/`lambda-web` under `/static/*` until there is a versioned

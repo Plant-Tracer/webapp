@@ -229,16 +229,17 @@ than guessing. Movies already containing mixed coordinate spaces require an
 explicit data repair; coordinates must not be rescaled indiscriminately.
 
 Tracing starts after the selected seed frame. Earlier frames are read to render
-the download, but their points and tracing progress are not rewritten. Downloads
-use a blue frame/time label; elapsed seconds appear only when capture timing is
-known, never inferred from the playback frame rate.
+the download, but their points and tracing progress are not rewritten. Traced
+downloads from ordinary uploads use a blue frame label and show elapsed seconds
+when the capture rate is set. Camera recordings preserve their capture labels
+in both traced downloads and Analyze.
 
 On-demand Traced Downloads
 --------------------------
 
 Both download controls POST to ``/resize-api/v1/download-traced``. Trim edits
 only change metadata. The request compares a versioned fingerprint of the source,
-geometry, trim, annotation revision, capture interval, and attribution against
+geometry, trim, annotation revision, capture rate, and attribution against
 ``traced_render_key``. A matching existing object returns a signed URL; otherwise
 one ``render_traced`` event is queued. Legacy exports without a fingerprint are
 rebuilt once when requested. There is no per-frame database query to decide
