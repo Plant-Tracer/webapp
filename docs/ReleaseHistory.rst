@@ -78,6 +78,10 @@ Release Notes
 Unreleased Summary
 ******************
 
+    * Version 1.0.0: mark the first major release of Plant Tracer, including
+      browser-based time-lapse recording, direct Camera links in registration
+      emails, and capture timestamps preserved in Analyze and traced downloads.
+
     * Use the shared ``@simsong-agent`` GitHub account for Codex and Claude Code,
       use the shared agent commit email and signing key with distinct author
       names, and prohibit personal account fallbacks for agent writes (refs #1046).
