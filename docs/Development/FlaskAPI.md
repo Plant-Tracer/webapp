@@ -420,7 +420,7 @@ receives HTTP 403.
 
 #### `POST /api/register`
 
-Register a new user by email address and course key. Sends a login link by email.
+Register a new user by email address and course key. Sends links to sign in and open the Camera tab.
 
 **Parameters**
 
@@ -434,7 +434,7 @@ Register a new user by email address and course key. Sends a login link by email
 **Response**
 
 ```json
-{ "error": false, "message": "Registration key sent to alice@example.com ...", "user_id": "u..." }
+{ "error": false, "message": "Sign-in email sent to alice@example.com ...", "user_id": "u..." }
 ```
 
 Returns `error: true` if the email is invalid, the course key is invalid, or the course is full.
@@ -444,7 +444,7 @@ Returns `error: true` (but still registers the user) if the mailer is not config
 
 #### `POST /api/resend-link`
 
-Resend a login link to an already-registered email address.
+Resend sign-in and Camera links to an already-registered email address.
 
 **Parameters**
 
@@ -564,11 +564,17 @@ Both routes are equivalent. Return users and courses visible to the caller.
 
 Create a fresh ``uploading`` movie row for a browser camera capture. This route
 requires a non-demo authenticated user and accepts ``title``, ``description``,
-and optional ``course_id`` form fields. It sets the capture interval to four
-frames per minute (one frame every 15 seconds), marks the row as a camera
-capture, assigns a new ``movie_id``, and records the durable source movie URN.
-It returns ``movie_id``; the browser uses that ID for every frame upload and
-the STOP request. Calling this endpoint again creates an independent movie.
+and optional ``course_id`` form fields. The current Camera tab sends
+``capture_interval_seconds`` (15, 30, 60, 120, or 300). This sets frames per
+minute and marks the new movie as having labels already drawn on its frames.
+Omitting the field keeps the legacy 15-second interval and export labels.
+Invalid interval values return HTTP 400. The route assigns a ``movie_id`` and
+records the durable source movie URN in the same write. It returns the ID for
+frame uploads and finalization. The Camera tab supplies a ``recording_id`` UUID
+so a retry for the same user and course returns the existing movie ID. An
+invalid UUID returns HTTP 400. Reusing an ID from another course or a deleted
+recording returns HTTP 409. Requests without a ``recording_id`` create a new
+movie each time.
 
 #### `POST /api/camera/frame-upload`
 
@@ -609,7 +615,7 @@ saves source dimensions, measured `frame_height_px`, and completion state togeth
 | `research_use` | No | `"1"` = yes, `"0"` = no, omit = not answered |
 | `credit_by_name` | No | `"1"` = yes, `"0"` = no, omit = not answered (only meaningful when `research_use=1`) |
 | `attribution_name` | No | Attribution name (only stored when `credit_by_name=1`) |
-| `fpm` | No | Capture interval in frames/minute (time-lapse). Positive number, fractional allowed; stored on the movie and included as `x-amz-meta-fpm` in the presigned post |
+| `fpm` | No | Capture rate in frames/minute (time-lapse). Positive number, fractional allowed; stored on the movie and included as `x-amz-meta-fpm` in the presigned post |
 
 **Response**
 
@@ -775,7 +781,7 @@ so subsequent downloads can work without those artifacts.
 With `format=xlsx`, returns an Excel workbook served with `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` and `Content-Disposition: attachment; filename="trackpoints.xlsx"`. The workbook contains:
 
 - `Trackpoints`: the frame and marker columns, values, trim filtering, and unit conversion from CSV; coordinate metadata appears only on the Metadata sheet.
-- `Metadata`: export context including movie id, title, trim bounds, exported frame count, marker count, coordinate origin, inferred frame height, calibration status, units, scale, and capture interval (`fpm`) when available.
+- `Metadata`: export context including movie id, title, trim bounds, exported frame count, marker count, coordinate origin, inferred frame height, calibration status, units, scale, and capture rate (`fpm`) when available.
 - `Markers`: one row per marker label with marker type (`apex`, `ruler`, `inflection point`, or `marker`), graphable status, color, marker id, ruler size, undeletable status, frame range, trackpoint count, and any status/error values found in exported trackpoints.
 - `Chart Data`: displacement from each graphable marker's first exported position, using frames as the x-axis or minutes when `fpm` is set. Ruler markers are excluded from chart data.
 - `Charts`: native Excel line charts for X Position and Y Position, backed by `Chart Data`.
@@ -824,7 +830,7 @@ The tracer UI disables marker editing and reset actions while a trace request is
 
 Returns HTTP 409 when an active trace lease makes the movie read-only, or when
 another browser owns the active analysis lease. The same rule applies to marker
-rename, trim, and capture-interval writes; the owning browser includes its
+rename, trim, and capture-rate writes; the owning browser includes its
 `analysis_lease_id` with those requests.
 The marker-map, frame, and movie updates are committed together only if no
 trace lease is active and the supplied Analyze lease is still current. A stale
@@ -1041,7 +1047,7 @@ the resulting trim bounds are invalid (e.g. `trim_start_frame > trim_end_frame`)
 
 #### `POST /api/set-movie-fpm`
 
-Set the capture interval (frames/minute) for a movie. Owner or course admin only.
+Set the capture rate (frames/minute) for a movie. Owner or course admin only.
 Editing this value only rescales the Analyze time axis and Rate statistics; it does
 not require retracing. See `docs/Development/AnalysisResults.rst`.
 
@@ -1051,7 +1057,7 @@ not require retracing. See `docs/Development/AnalysisResults.rst`.
 |------|----------|-------------|
 | `api_key` | Yes | Must not be the demo key |
 | `movie_id` | Yes | |
-| `fpm` | Yes | Capture interval in frames/minute. Positive number, fractional allowed (e.g. `0.5`) |
+| `fpm` | Yes | Capture rate in frames/minute. Positive number, fractional allowed (e.g. `0.5`) |
 
 **Response**
 

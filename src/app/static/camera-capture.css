@@ -1,0 +1,188 @@
+/* Shared Camera tab and standalone camera demo styles.
+ * The camera root keeps these styles separate from the site navigation.
+ * The preview and controls stack on narrow viewports and sit side by side
+ * on wide ones. The lead-in overlay covers the viewport while the live
+ * preview beneath it keeps playing and responding to orientation.
+ */
+#camera-root {
+  color-scheme: dark;
+  font-family: Inter, system-ui, sans-serif;
+  color: #f3f6fa;
+  background: #10151d;
+}
+
+#camera-root * { box-sizing: border-box; }
+#camera-root [hidden] { display: none !important; }
+body.camera-demo { margin: 0; background: #10151d; }
+body.camera-busy { background: #10151d; }
+body.camera-busy > header,
+body.camera-busy > .footer,
+body.camera-busy > div:has(> #current-course-select) { display: none; }
+
+#camera-root main {
+  width: min(100%, 1120px);
+  margin: auto;
+  padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right))
+    max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+}
+
+#camera-root header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.4rem 1rem;
+  margin-bottom: 1rem;
+}
+
+#camera-root h1, #camera-root h2, #camera-root p, #camera-root figure, #camera-root dl, #camera-root dd { margin: 0; }
+#camera-root h1 { font-size: clamp(1.25rem, 4vw, 1.8rem); }
+#camera-root h2 { font-size: 1.2rem; overflow-wrap: anywhere; }
+#camera-root .step, #camera-root .status, #camera-root dt { color: #afbdce; font-size: 0.875rem; }
+
+#camera-root .layout { display: grid; gap: 1rem; align-items: start; }
+@media (min-width: 700px), (min-width: 520px) and (orientation: landscape) {
+  #camera-root .layout { grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); }
+}
+
+#camera-root .preview {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  max-height: min(65dvh, 560px);
+  border: 1px solid #344457;
+  border-radius: 0.8rem;
+  background: #070a0e;
+}
+
+#camera-root video { display: block; width: 100%; height: 100%; object-fit: contain; }
+
+#camera-root #flash {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  background: white;
+  opacity: 0;
+  pointer-events: none;
+}
+
+#camera-root .panel {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1rem;
+  border: 1px solid #344457;
+  border-radius: 0.8rem;
+  background: #1a2330;
+}
+
+#camera-root .pair, #camera-root dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+#camera-root .actions { display: flex; gap: 0.75rem; }
+#camera-root .actions > button { flex: 1; }
+
+#camera-root label { display: grid; gap: 0.35rem; font-weight: 600; }
+#camera-root input, #camera-root textarea, #camera-root select, #camera-root button {
+  width: 100%;
+  border: 1px solid #506079;
+  border-radius: 0.45rem;
+  padding: 0.6rem 0.7rem;
+  font: inherit;
+  color: inherit;
+  background: #111925;
+}
+
+#camera-root textarea { resize: vertical; }
+#camera-root button {
+  min-height: 44px;
+  font-weight: 700;
+  text-align: center;
+  cursor: pointer;
+}
+
+#camera-root button:disabled { opacity: 0.5; cursor: default; }
+#camera-root #enable-motion svg {
+  width: 1.25em;
+  height: 1.25em;
+  margin-inline-end: 0.35em;
+  vertical-align: -0.25em;
+}
+#camera-root #enable-motion[aria-pressed="true"] .rotation-slash { visibility: hidden; }
+#camera-root :focus-visible { outline: 2px solid #8ac7ff; outline-offset: 2px; }
+#camera-root .primary, #camera-root .abort { min-height: 54px; border-color: transparent; }
+#camera-root .primary { background: #1b5dcc; }
+#camera-root .abort { background: #aa2938; }
+
+#camera-root .timer { display: flex; justify-content: space-between; align-items: baseline; gap: 0.75rem; }
+#camera-root #countdown { font-size: 2rem; font-variant-numeric: tabular-nums; }
+#camera-root #starting {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  background: rgb(64 64 64 / 55%);
+  color: white;
+}
+#camera-root #start-countdown {
+  font-size: clamp(5rem, 30dvh, 13rem);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  text-shadow: 0 2px 12px #000;
+}
+#camera-root #cancel-start {
+  position: absolute;
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  left: 50%;
+  translate: -50% 0;
+  width: min(12rem, 80%);
+}
+#camera-root .metadata { display: grid; gap: inherit; }
+#camera-root progress {
+  display: block;
+  width: 100%;
+  height: 0.55rem;
+  appearance: none;
+  border: 0;
+  border-radius: 1rem;
+  overflow: hidden;
+  color: #74b7ff;
+  background: #111925;
+}
+#camera-root progress::-webkit-progress-bar { background: #111925; }
+#camera-root progress::-webkit-progress-value { background: #74b7ff; }
+#camera-root progress::-moz-progress-bar { background: #74b7ff; }
+#camera-root dd { margin-top: 0.25rem; font-variant-numeric: tabular-nums; }
+#camera-root .status { margin-top: 0.75rem; min-height: 1.2em; }
+#camera-root #summary { grid-column: 1 / -1; width: min(100%, 32rem); }
+#camera-root #summary-description { color: #afbdce; white-space: pre-wrap; overflow-wrap: anywhere; }
+#camera-root #camera-analyze { color: #8ac7ff; }
+@media (max-width: 699px) and (orientation: portrait) {
+  #camera-root .preview { max-height: 36dvh; }
+}
+
+@media (max-height: 650px) {
+  #camera-root main { padding-top: max(0.5rem, env(safe-area-inset-top)); }
+  #camera-root header { margin-bottom: 0.5rem; }
+  #camera-root .layout, #camera-root .panel { gap: 0.5rem; }
+  #camera-root .panel { padding: 0.65rem; }
+  #camera-root .primary, #camera-root .abort { min-height: 44px; }
+}
+
+@media (max-height: 650px) and (max-width: 699px) and (orientation: portrait) {
+  #camera-root .preview { max-height: 28dvh; }
+}
+
+@media (max-height: 420px) and (min-width: 520px) and (orientation: landscape) {
+  #camera-root .layout { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  #camera-root header { gap: 0.25rem; }
+  #camera-root label { gap: 0.25rem; font-size: 0.875rem; }
+  #camera-root input, #camera-root textarea, #camera-root select { padding-block: 0.4rem; }
+  #camera-root .metadata { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  #camera-root .metadata label { min-width: 0; }
+}

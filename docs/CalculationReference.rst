@@ -29,9 +29,9 @@ pixels.
 Time base (fpm)
 ---------------
 
-Rate calculations require elapsed time. The time base is the **capture interval**
-``fpm`` (frames per minute), a per-movie value entered by the user at upload or on
-the Analyze page::
+Rate calculations use the **capture rate** ``fpm`` (frames per minute) to
+convert frame spans to elapsed time. You can enter the rate when uploading
+the movie or on the Analyze page::
 
    elapsed_time (minutes) = frame_span ÷ fpm
 

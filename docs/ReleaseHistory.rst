@@ -78,6 +78,14 @@ Release Notes
 Unreleased Summary
 ******************
 
+    * Use the shared ``@simsong-agent`` GitHub account for Codex and Claude Code,
+      use the shared agent commit email and signing key with distinct author
+      names, and prohibit personal account fallbacks for agent writes (refs #1046).
+
+    * Show named CloudFormation stack columns and last-update timestamps in
+      ``make list-stacks``, and run the target even when a file named
+      ``list-stacks`` exists.
+
     * Version 0.9.9.25: add daily S3 storage and object counts, a two-month storage
       graph with bucket selection and accessible daily values, and familiar AWS
       service abbreviations to Billing. Include bucket totals in weekly email.
@@ -107,10 +115,16 @@ Unreleased Summary
     * Show ``[zipfile]`` or ``[pending]`` beside admin movie names when an
       uploaded movie has no recorded analysis MP4 (refs #1177).
 
-    * Add an iOS browser camera flow that captures one photo every 15 seconds,
-      uploads frames independently of the capture schedule, assembles and
-      processes a time-lapse movie when the user presses STOP, and removes
-      temporary frames after processing succeeds (refs #1245).
+    * The Camera tab and standalone camera demo share adjustable capture
+      intervals, an audible ten-second countdown, rotation controls, and
+      timestamped JPEGs. The Camera tab uploads one frame at a time, assembles
+      a movie when recording ends, and removes the temporary JPEGs after
+      processing. Analyze and traced exports retain the capture timestamps.
+      Registration and login-link emails include an **Open Camera** link
+      (refs #1245, #1246, #1247, #1249, #1251).
+
+    * Clarify the labels and instructions for registration, capture rate,
+      trimming, marker positions, movie restoration, and research consent.
 
     * Operations: show the UTC stack deployment time on ``/ver`` for deployed
       lambda-web stacks
@@ -397,7 +411,7 @@ Unreleased Summary
 *************
     * Analyze: aggregate trace result statistics — Gravitropism (Distance, Angle) and Circumnutation (Max Amplitude), selectable via a results control
     * Analyze: special Inflection Point marker used as the pivot for the gravitropism Angle
-    * Analyze: Rate statistics, computed from a user-entered capture interval (frames/minute) set on the Upload or Analyze page
+    * Analyze: Rate statistics, computed from a user-entered capture rate (frames/minute) set on the Upload or Analyze page
     * Analyze: trackpoints now use a bottom-left coordinate system; position graphs unflipped; lazy migration of existing movies made concurrency-safe
     * Analyze: multi-marker graphing with per-marker colors
     * Analyze/Movies: video trimming — trace and export a selected frame range

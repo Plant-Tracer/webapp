@@ -3,6 +3,7 @@ schema.py - the types we store in DynamoDB
 """
 
 from decimal import Decimal, ROUND_HALF_UP
+from uuid import UUID
 
 from typing import Any, List, Annotated, Literal
 from pydantic import (
@@ -141,6 +142,12 @@ class AnalysisMp4(BaseModel):
 MovieWorkPurpose = Literal["trace", "reset", "render_traced", "render_untraced"]
 
 
+class CameraUploadOptions(BaseModel):
+    """Options for creating a camera movie before any frames upload."""
+    recording_id: UUID | None = None
+    frames_stamped: bool = False
+
+
 class Movie(BaseModel):
     """DynamoDB movies table"""
 
@@ -180,6 +187,7 @@ class Movie(BaseModel):
     upload_bytes_expected: Annotated[int | None, Field(ge=1)] = None
     upload_staging_urn: str | None = None
     camera_capture: bool | None = None
+    camera_frames_stamped: bool | None = None
     upload_event_id: str | None = None
     resize_queued_at: int | None = None
     resize_started_at: int | None = None
@@ -193,7 +201,7 @@ class Movie(BaseModel):
     date_uploaded: int | None = None
     orig_movie: str | None = None
     fps: str | None = None  # encoded playback frame rate; string to avoid roundoff errors
-    fpm: str | None = None  # capture interval in frames/minute (time-lapse); string to avoid roundoff
+    fpm: str | None = None  # capture rate in frames/minute (time-lapse); string to avoid roundoff
     width: Annotated[int | None, Field(ge=0, le=10000)] = None
     height: Annotated[int | None, Field(ge=0, le=10000)] = None
     trackpoint_origin: Literal["bottom-left"] | None = None

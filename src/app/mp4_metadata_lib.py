@@ -8,7 +8,7 @@ from typing import Optional
 from mutagen.mp4 import MP4, MP4Tags, MP4FreeForm
 
 COMMENT_ATOM = "\xa9cmt"
-# Dedicated freeform atom for the capture interval (frames/minute), kept separate from the
+# Dedicated freeform atom for the capture rate (frames/minute), kept separate from the
 # research-attribution comment atom. DynamoDB remains authoritative; this is a best-effort
 # snapshot written when the movie is processed (see docs/Development/MOVIE_METADATA.rst).
 FPM_ATOM = "----:com.planttracer:capture_fpm"
@@ -63,7 +63,7 @@ def set_comment(path: str, comment: str) -> None:
 
 
 def get_fpm(path: str) -> str | None:
-    """Read the capture-interval (frames/minute) atom from an MP4/MOV file. None if missing/error."""
+    """Read the capture-rate (frames/minute) atom from an MP4/MOV file. None if missing/error."""
     try:
         mp4 = MP4(path)
         if mp4.tags is None:
@@ -80,7 +80,7 @@ def get_fpm(path: str) -> str | None:
 
 
 def set_fpm(path: str, fpm: str) -> None:
-    """Set the capture-interval (frames/minute) atom and save the file."""
+    """Set the capture-rate (frames/minute) atom and save the file."""
     mp4 = MP4(path)
     if mp4.tags is None:
         mp4.add_tags()

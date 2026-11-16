@@ -15,7 +15,7 @@
  *     Inflection Point pivot, via the law of cosines).
  *   - Circumnutation: Max Amplitude (horizontal x-range of the tip over all frames).
  *
- * Rate (displacement per unit time) is computed from the capture interval `fpm`
+ * Rate (displacement per unit time) is computed from the capture rate `fpm`
  * (frames/minute, see #1056): elapsed_time(min) = frame_span / fpm. When fpm is not set,
  * Rate is expressed per frame instead of per minute (the `rateTimeUnit` field is
  * 'min' or 'frame' accordingly). See #1053.
@@ -113,7 +113,7 @@ function inflection_angle(firstTip, lastTip, firstInflection, lastInflection) {
  *
  * @param {Array}  tipPoints  tip positions {x, y, frame_number} across all (trimmed) frames
  * @param {number} scale      mm/pixel (default 1 = pixels)
- * @param {number} fpm        capture interval in frames/minute (null/0 => Rate per frame)
+ * @param {number} fpm        capture rate in frames/minute (null/0 => Rate per frame)
  *
  * Returns { maxAmplitude, rate, rateTimeUnit }. maxAmplitude = (max x - min x) * scale.
  * Rate = maxAmplitude / elapsed time between the x-extreme frames (legacy semantics); it is
