@@ -133,6 +133,30 @@ Demo mode:
 make run-local-demo-debug
 ```
 
+### Camera UX demo
+
+Run `make -C src/app/static serve` and open
+<http://localhost:8765/camera-demo.html>. Allow camera access and enter a title
+and description of at least four characters each. The default frame interval
+is one minute. **START** shows a ten-second countdown over the live preview.
+**CANCEL** returns to setup during the countdown. Press **DONE** during
+recording to see the frame count. The output keeps the dimensions and reference
+orientation of the first frame and compensates for quarter turns when the
+browser reports them. The circular arrow on **Use rotation sensor** shows
+whether the demo uses the phone's orientation sensors. A slash means the
+demo uses screen orientation instead. The browser may ask for permission
+when you turn rotation correction on.
+Rotation may be inaccurate if a shutter fires while the sensor and camera
+orientation are updating, or if the browser provides neither signal for the
+turn. The demo adds and checks EXIF capture time and UTC offset on every JPEG,
+then discards it.
+
+The demo server needs only Python. To test on a phone, copy
+`camera-demo.html`, `camera-demo.js`, `camera-capture.js`, and
+`camera-capture.css` from `src/app/static` to the same directory on an HTTPS
+web server with a certificate the phone trusts. The signed-in Camera tab uses
+the same capture module and saves recordings to the selected course.
+
 ## Validation
 
 Use Makefile targets:

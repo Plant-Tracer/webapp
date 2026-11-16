@@ -17,7 +17,7 @@ lease on that same movie row. The normal browser can edit; a later browser is
 explicitly view-only and sees the existing holder's name and start time. The
 holder releases its lease when leaving the page, while a heartbeat and expiry
 recover from crashes or lost connectivity. Flask requires the opaque lease ID
-on marker, trim, and capture-interval writes, so client-side disabled controls
+on marker, trim, and capture-rate writes, so client-side disabled controls
 cannot bypass ownership.
 
 Starting a trace atomically replaces the initiating browser's analysis lease
@@ -42,7 +42,7 @@ Metadata and user interface
 Movie-list and movie-metadata responses include an active lock's start time
 and initiating user's display name. Analyze is read-only while the lock is
 active: viewing, playback, and downloads remain available, while marker,
-trim, retrace, and capture-interval writes are disabled in the browser and
+trim, retrace, and capture-rate writes are disabled in the browser and
 rejected by the Flask API. The active Analyze page polls movie metadata,
 displays frame progress, and loads the results when tracing completes. The
 progress message also tells the user that it is safe to leave the page and

@@ -377,7 +377,6 @@ function showUploadPreviewAfterUpload(movie_id, movie_title, description) {
   $('#uploaded_movie_title').text(description ? `${movie_title} — ${description}` : movie_title);
   $('#movie_id').text(movie_id);
   $('#process_movie_link').attr('href', `/analyze?movie_id=${movie_id}`);
-  $('#trace_movie_link').attr('href', `/analyze?movie_id=${movie_id}`);
   $('#upload-preview').show();
 
   const img = $('#image-preview').get(0);
@@ -396,7 +395,7 @@ function showUploadPreviewAfterUpload(movie_id, movie_title, description) {
         statusEl.text(`First frame not ready (${attempt}/${maxAttempts})…`);
         setTimeout(tryLoadFirstFrame, delayMs);
       } else {
-        statusEl.text('First frame could not be loaded. You can click Analyze.');
+        statusEl.text('First frame could not be loaded. You can click Open Analyze.');
       }
     };
     img.onload = () => {

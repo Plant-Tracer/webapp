@@ -246,7 +246,7 @@ def make_presigned_post(*, urn, maxsize=C.MAX_FILE_UPLOAD, exact_size=None,
                         research_use='not-answered', credit_by_name='not-answered', attribution_name='',
                         fpm=''):
     """Returns a dictionary with 'url' and 'fields'.
-    research_use, credit_by_name, attribution_name, and fpm (capture interval, frames/minute) are included in
+    research_use, credit_by_name, attribution_name, and fpm (capture rate, frames/minute) are included in
     the signature and set as S3 object metadata.
     Uses the bucket's region so the presigned URL is regional and S3 does not 307-redirect (avoids connection
     reset in the browser when POST body is not re-sent on redirect).

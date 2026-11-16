@@ -49,6 +49,7 @@ class AnalysisMp4Options(BaseModel):
     rotation: int = 0
     max_width: int = Field(default=DEFAULT_ANALYSIS_WIDTH, gt=0)
     max_height: int = Field(default=DEFAULT_ANALYSIS_HEIGHT, gt=0)
+    frame_labels_baked_in: bool = False
 
     @field_validator("rotation")
     @classmethod
@@ -175,7 +176,7 @@ def burn_frame_number(frame: np.ndarray, frame_number: int) -> np.ndarray:
 
 def encode_analysis_mp4(*, source_path: Path, output_path: Path, options: AnalysisMp4Options,
                         comment: str = "PlantTracer untraced MP4") -> AnalysisMp4Result:
-    """Encode one rotated, scaled, frame-numbered untraced MP4."""
+    """Encode an untraced MP4, adding frame numbers when the source has no labels."""
     capture = cv2.VideoCapture(str(source_path))
     if not capture.isOpened():
         capture.release()
@@ -199,10 +200,11 @@ def encode_analysis_mp4(*, source_path: Path, output_path: Path, options: Analys
         )
         for frame in source_frames(str(source_path)):
             frame = scale_frame(rotate_frame(frame, options.rotation), options)
-            labelled = burn_frame_number(frame, frame_count)
+            if not options.frame_labels_baked_in:
+                frame = burn_frame_number(frame, frame_count)
             frame_count += 1
-            writer.append_data(cv2.cvtColor(labelled, cv2.COLOR_BGR2RGB))
-            height, width = labelled.shape[:2]
+            writer.append_data(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+            height, width = frame.shape[:2]
     finally:
         if writer is not None:
             writer.close()

@@ -11,6 +11,7 @@ from pathlib import Path
 from threading import Barrier
 
 import cv2
+import pytest
 from resize_app import async_work, camera_capture
 from resize_app.main import lambda_handler
 from resize_app.src.app.odb import DDBO as ResizeDDBO
@@ -56,7 +57,7 @@ def _finish_camera_event(*, api_key=None, body=None):
     }
 
 
-def _prepare_camera_movie(new_movie_record, local_s3, request, monkeypatch):
+def _prepare_camera_movie(new_movie_record, local_s3, request, monkeypatch, *, stamped=False):
     """Store ordered camera frames for a local finalization test."""
     monkeypatch.delenv("TRACING_QUEUE_MODE", raising=False)
     monkeypatch.delenv("TRACKING_QUEUE_MODE", raising=False)
@@ -74,6 +75,7 @@ def _prepare_camera_movie(new_movie_record, local_s3, request, monkeypatch):
     ddbo.update_movie(movie_id, {
         odb.MOVIE_DATA_URN: source_urn,
         odb.CAMERA_CAPTURE: True,
+        odb.CAMERA_FRAMES_STAMPED: stamped,
         odb.FPM: "4",
         odb.WIDTH: None,
         odb.HEIGHT: None,
@@ -110,6 +112,8 @@ def _prepare_camera_movie(new_movie_record, local_s3, request, monkeypatch):
         )
         frame = cv2.imread(str(frame_path))
         frame = cv2.resize(frame, (640, 480))
+        if stamped:
+            frame[5:30, 270:636] = (158, 79, 18)  # Capture label's blue background in BGR.
         encoded, frame_bytes = cv2.imencode(".jpg", frame)
         assert encoded
         client.put_object(
@@ -121,12 +125,13 @@ def _prepare_camera_movie(new_movie_record, local_s3, request, monkeypatch):
     return ddbo, movie_id, source_urn, bucket, client
 
 
+@pytest.mark.parametrize("stamped", [False, True])
 def test_stop_assembles_uploaded_frames_and_processes_movie(
-    new_movie_record, local_s3, request, monkeypatch,
+    new_movie_record, local_s3, request, monkeypatch, stamped,
 ):
     """STOP converts complete, ordered MinIO frames into a ready source movie."""
     ddbo, movie_id, source_urn, bucket, client = _prepare_camera_movie(
-        new_movie_record, local_s3, request, monkeypatch,
+        new_movie_record, local_s3, request, monkeypatch, stamped=stamped,
     )
 
     response = lambda_handler(
@@ -147,6 +152,18 @@ def test_stop_assembles_uploaded_frames_and_processes_movie(
     assert movie[odb.MOVIE_STATUS] == odb.MOVIE_STATE_READY
     assert movie[odb.TOTAL_FRAMES] == 3
     assert movie[odb.ANALYSIS_MP4]
+    if stamped:
+        analysis_bucket, analysis_key = parse_s3_urn(urn=movie[odb.ANALYSIS_MP4]["urn"])
+        with tempfile.NamedTemporaryFile(suffix=".mp4") as analysis_file:
+            client.download_file(analysis_bucket, analysis_key, analysis_file.name)
+            capture = cv2.VideoCapture(analysis_file.name)
+            try:
+                success, frame = capture.read()
+                assert success
+                blue, _green, red = frame[8:17, 621:634].mean(axis=(0, 1))
+                assert blue > red + 50  # A red frame number would cover this part of the label.
+            finally:
+                capture.release()
 
     frame_prefix = frame_object_key(
         deployment_id=storage_deployment_id(),

@@ -15,6 +15,8 @@ Keep this email message! You can use it to upload plant movies to the website an
 
 Click this link to log in (then upload or list your movies): {{ planttracer_endpoint }}/login?api_key={{ api_key }}
 
+Open the time-lapse camera: {{ camera_url }}
+
 --{{ boundary }}
 Content-Type: text/html; charset=UTF-8
 
@@ -59,6 +61,8 @@ Content-Type: text/html; charset=UTF-8
                   </td>
                 </tr>
               </table>
+
+              <p><a ses:no-track href="{{ camera_url | e }}" style="color:#2a6496;">Open Camera</a> to record a time-lapse with your phone.</p>
 
               <!-- Fallback URL -->
               <p style="font-size:13px;color:#666666;">

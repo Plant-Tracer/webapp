@@ -38,7 +38,7 @@ Uploading Movies (optional)
 - To upload your movie, select Upload from the menu bar at the top of the browser frame.
 - Enter the title of the file and a description of the movie.
 - The upload form asks whether your movie may be used in academic research. Before answering, review the `Contributor Agreement <tos#contributor-agreement>`_ linked on the form. Select **Yes** or **No**. If you select **Yes**, you will also be asked whether you want to be credited by name; your display name is pre-filled as the attribution name, which you can edit.
-- If you know the capture interval of your recording (how many frames were captured per minute of real time), enter it in the **Capture interval (frames/minute)** field. You can also set or change this later on the Analyze page.
+- If you know the capture rate of your recording (how many frames were captured per minute of real time), enter it in the **Capture rate (frames/minute)** field. You can also set or change this later on the Analyze page.
 - Choose a file to upload.
 - Before clicking Upload, use the local movie preview and Rotate 90° clockwise button to choose the orientation. The orientation cannot change after upload completes; upload a new movie if it needs to change afterward.
 - After S3 accepts the file, the page reports a separate processing phase,
@@ -47,35 +47,48 @@ Uploading Movies (optional)
   finish within five minutes, the upload page retains the movie record and
   tells you to contact an administrator.
 
-Recording with an iPhone or iPad
---------------------------------
-- Open Plant Tracer in Safari on the iPhone or iPad, sign in, and select **Camera** from the menu. The camera runs in that same browser tab; allow camera access when prompted.
-- Keep the page open while recording. Plant Tracer captures one frame every 15 seconds, even if an earlier frame is still uploading.
-- Press **STOP** to end capture. The page waits for pending photo uploads, then processes the time-lapse movie. When it is ready, select **Analyze this movie**.
-- If a photo cannot be captured or uploaded, recording stops and the page reports the error. The movie remains in the Movies list for status review.
-
 .. image:: tutorial_images/upload_movie.png
-   :alt: Plant Tracer Upload page with fields for movie title, description, research use radio buttons, capture interval, and file chooser
+   :alt: Plant Tracer Upload page with a movie title, description, and file chooser
+
+Recording with the Camera tab
+-----------------------------
+- Select **Open Camera** in your Plant Tracer registration email, or sign in
+  and select **Camera** from the menu. Allow camera access when prompted.
+- Enter a title and description, choose a frame interval and maximum
+  duration, then press **START**. The first frame is captured after the
+  ten-second countdown. Keep the camera tab visible during recording.
+  If you switch apps, the Camera tab ends the recording and starts saving.
+  The tab also saves the frames already captured if the browser runs a shutter
+  more than one second late, preserving the scheduled spacing for analysis.
+- **ABORT** is available for the first minute and discards the recording.
+  Press **DONE** at any time to save it. When the movie is ready, select
+  **Analyze this movie**.
+- If saving fails, keep the Camera tab open and select **RETRY SAVE**.
 
 Tracking the Uploaded Movie
 ---------------------------
-- Once the file is uploaded, the page shows a first frame of your movie and a "Next steps" section. Click **Analyze** to go to the Analyze page. (The **Track the uploaded movie** link goes to the same place.)
-
-.. image:: tutorial_images/track_uploaded_movie.png
-   :alt: Post-upload confirmation page showing the movie's first frame and a Next Steps section with Analyze and Track the uploaded movie links
+- When processing finishes, the upload page shows the first frame of your movie.
+  Click **Open Analyze** to place markers and start tracing. Set the movie's
+  orientation in the preview before uploading.
 
 - On the Analyze page, position the markers (described below), then click **Trace movie** to begin tracking. When you step or jump into an untraced frame, the latest preceding marker positions are carried forward unchanged so you can adjust them and begin tracing there.
 - Before or after tracing, you can optionally trim the movie to a specific frame range. Use the **Trim start** and **Trim end** controls to set the first and last frame Plant Tracer will analyze. Trimming lets you exclude frames before the plant starts moving or after tracking becomes unreliable without re-uploading the movie. When you reopen a trimmed movie, Plant Tracer starts on the first included frame.
 - Plant Tracer places three markers on newly uploaded movies automatically. They initially appear on the left side of the movie frame. These also appear in the Marker Table to the right (or beneath) the video frame.
 - Plant Tracer will attempt to track the motion of whatever part of the image a marker is placed over, frame by frame.
 - It is the user's job to position the markers appropriately. To move a marker, click on it, and drag it to the desired location.
-- You may use the Marker Table to add and delete markers. There may be any number of markers. Markers cannot be renamed; to use a different name, delete the marker and add a new one with the desired name.
+- Use the Marker Table to add or delete markers. Use the pencil icon next to a
+  marker's name to rename it.
 - To measure the gravitropism bending angle, click **Add Inflection Point** (below the Marker Table) to add a special pivot marker at the base or bend point of the stem. Position it like any other marker. Only one Inflection Point may be added per movie.
 - Plant Tracer will attempt to track the motion related to every marker.
 - Typically, the apex of some part of the plant is tracked. So, to do that, move the Apex marker, for example, to the top of the vertical stem.
-- Markers whose names have the form ``RulerXXmm`` are special. ``XX`` is any non-negative integer representing a real-world distance in millimeters. These markers are used for distance calibration. Place one marker at a known position and a second marker at a point that is exactly ``XX`` millimeters away — for example, ``Ruler 0mm`` at one end of a ruler and ``Ruler 30mm`` at a point 30mm further along it. The XX values specify the distance between the marker positions; they do not need to correspond to specific tick marks on any ruler in the video. The default markers are named ``Ruler 0mm`` and ``Ruler 10mm``; if you want to calibrate over a different distance, delete the default marker and add a new one with the correct name (e.g. ``Ruler 30mm``) using the Marker Table. In this way, Plant Tracer can report analysis results in millimeters rather than pixels.
-- There can be any number of RulerXXmm markers, but Plant Tracer will only use the RulerXXmm markers with the lowest and highest XX values in its calculations, and ignores any intermediate RulerXXmm markers for purposes of distance calculations. Plant Tracer only uses mm distances.
-- If there are fewer than two RulerXXmm markers on a given analysis, then analysis results are calclulated and presented using units of pixels.
+- To calibrate distances in millimeters, place two ruler markers over points
+  a known distance apart. The difference between their values should equal
+  that distance. For points 30 mm apart, you can use ``Ruler 0mm`` and
+  ``Ruler 30mm`` or ``Ruler 20mm`` and ``Ruler 50mm``. To change the value
+  on a default ruler marker, rename it with the pencil icon in the Marker Table.
+- If you add more than two ruler markers, Plant Tracer calibrates using the
+  markers with the lowest and highest values.
+- If there are fewer than two RulerXXmm markers, analysis results are reported in pixels.
 
 .. image:: tutorial_images/moving_marker.png
    :alt: Plant Tracer Analyze page showing three markers stacked at the left edge of the frame in their initial positions, with a Trace movie button
@@ -99,7 +112,8 @@ Viewing the trace of a Movie
 Interpreting and Reading Results
 --------------------------------
 - Use the arrow buttons just below the tracked movie to play, or navigate to a particular frame.
-- The Position Graphs visualize the change in the non-RulerXX markers'horizontal (x position) and vertical (y position) since frame 0.
+- The position graphs show each non-ruler marker's horizontal and vertical change
+  from its first saved position in the selected frame range.
 - Above the graphs, Plant Tracer shows aggregate result statistics. Use the **Results** selector to choose **All**, **Gravitropism**, or **Circumnutation**:
 
   - **Gravitropism** reports the **Distance** the tracked tip moved from the first to the last frame, a **Rate**, and (when an Inflection Point marker is present) the bending **Angle** at that pivot.
@@ -113,10 +127,10 @@ Interpreting and Reading Results
 .. image:: tutorial_images/coming_soon.png
    :alt: Plant Tracer results panel showing Circumnutation Max Amplitude and Rate statistics with the Results selector set to Circumnutation
 
-- **Rate** is reported per minute when you have entered the capture interval (frames/minute); otherwise it is reported per frame. Enter the capture interval in the **Capture interval (frames/minute)** field and click **Set** — the graphs' time axis and the Rate update immediately, with no need to retrace. You can also set it on the Upload page.
+- **Rate** is reported per minute when you have entered the capture rate (frames/minute); otherwise it is reported per frame. Enter the capture rate in the **Capture rate (frames/minute)** field and click **Set** — the graphs' time axis and the Rate update immediately, with no need to retrace. You can also set it on the Upload page.
 
 .. image:: tutorial_images/coming_soon.png
-   :alt: Plant Tracer Analyze page showing the Capture interval field with a value entered and a Set button
+   :alt: Plant Tracer Analyze page showing the Capture rate field with a value entered and a Set button
 
 - To compute the gravitropism Angle, click **Add Inflection Point** to place the reference pivot marker (the base or bend point of the stem), then position it like any other marker. The marker name ``Inflection Point`` is reserved (matched case-insensitively) and only one may be added per movie.
 
@@ -143,7 +157,9 @@ Further Adjustments to Tracking
    :alt: Plant Tracer Analyze page showing the Apex marker drifted away from the plant tip at a later frame, indicating lost tracking
 
 - Use the arrow buttons just below the original movie to navigate to the frame where tracking was lost.
-- **Retrace movie** remains disabled until you move a marker or add a new marker. Move the apex marker to the correct position, then press **Retrace movie**.
+- Move the apex marker to the correct position, then press the retrace button.
+  When the selected range ends before the movie does, the button can read
+  **Retrace through the last included frame**.
 
 .. image:: tutorial_images/retrack_movie.png
    :alt: Plant Tracer Analyze page with the Apex marker manually repositioned on the plant tip and a Retrace movie button to restart tracking from this frame
@@ -151,11 +167,14 @@ Further Adjustments to Tracking
 Converting Frames to Time
 -------------------------
 
-If you enter the **capture interval (frames/minute)** — on the Upload page or in the field on the Analyze page — Plant Tracer converts frames to elapsed time for you: the position graphs are labeled in minutes and the **Rate** statistics are reported per minute. The capture interval is the number of time-lapse frames captured per minute of real time (for example, one frame every two minutes is ``0.5`` frames/minute). It is independent of the movie's encoded playback frame rate.
+If you enter the **capture rate (frames/minute)** — on the Upload page or in the field on the Analyze page — Plant Tracer converts frames to elapsed time for you: the position graphs are labeled in minutes and the **Rate** statistics are reported per minute. The capture rate is the number of time-lapse frames captured per minute of real time (for example, one frame every two minutes is ``0.5`` frames/minute). It is independent of the movie's encoded playback frame rate.
 
-If you do **not** enter a capture interval, the webapp tracks time only as frame numbers and reports Rate per frame; it is then up to the user to convert frames to elapsed timestamps as described below. When recording the movie, the frame period was set: you must know what that was. In Lapse-It, this is one of the parameters set for the recording. Typically, the frame period is one frame every two minutes (120 seconds) or 0.5 frames per minute.
+Without a capture rate, Plant Tracer uses frame numbers for time and reports Rate
+per frame. You can convert frame numbers to elapsed time if you know the frame
+period from your recording settings. A frame period of two minutes per frame
+corresponds to a capture rate of 0.5 frames per minute.
 
-While the program automatically does these conversions for you when a capture interval is present, here are the calculations if you need to do them yourself.
+While the program automatically does these conversions for you when a capture rate is present, here are the calculations if you need to do them yourself.
 
 To convert frame numbers to time, multiply the frame number by the frame period:
 
@@ -251,14 +270,19 @@ shown as ``n/a``.
 The **untraced MP4** is the analyzer's playback video; the **traced MP4** is the
 export with saved markers and paths. Neither operation creates JPEG ZIPs.
 
-Downloaded traced movies show a blue frame-number label at the top right.
-During playback, future paths are also visible at 50 percent opacity and
+For ordinary uploads, Analyze shows a red frame number and traced downloads show
+a blue frame label. If you set the capture rate, the download label also shows
+elapsed time from frame 0. Camera recordings keep the blue label drawn at
+capture in both Analyze and traced downloads. It shows the frame number,
+elapsed time, and local timestamp. Changing the capture rate updates the graphs
+and calculated rates for a Camera recording. Its label preserves the original
+capture information.
+
+During playback, future paths are visible at 50 percent opacity and
 1 pixel wide; paths already reached are fully opaque and 2 pixels wide, matching
 the analyzer. Only paths within the selected trim are included.
-When you have set the capture interval, the label also shows elapsed capture seconds
-from the original frame 0. The red analysis-player label uses the same zero-based
-frame index. Older analysis movies are recoded when opened; old downloads need
-to be generated again to receive the new labels.
+Older analysis movies are recoded when opened. Regenerate older downloads to
+get the current labels.
 
 Marker placement across frames
 ------------------------------

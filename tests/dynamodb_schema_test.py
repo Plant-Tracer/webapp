@@ -11,6 +11,7 @@ from app.schema import (
     AdminCourse,
     AnalysisMp4,
     ApiKey,
+    CameraUploadOptions,
     Course,
     CourseAdmin,
     CourseUser,
@@ -45,6 +46,7 @@ PERSISTED_MODELS = {
 }
 NON_PERSISTED_SCHEMA_MODELS = {
     AdminCourse,
+    CameraUploadOptions,
     CourseAdmin,
     DefaultCourseRequest,
     DeleteMarkerRequest,
@@ -172,7 +174,7 @@ def test_persisted_pydantic_models_round_trip_through_dynamodb_local(local_ddb):
             last_frame_tracked=119, needs_retracing=1, version=2,
                 research_use=1, credit_by_name=1,
                 attribution_name="Alyssa P. Hacker", rotation=90,
-                camera_capture=True,
+                camera_capture=True, camera_frames_stamped=True,
         ),
     )
     trackpoints = (

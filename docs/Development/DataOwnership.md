@@ -68,7 +68,7 @@ the `movies` table is named `demo-movies`.
 | `api_keys` | `ApiKey` plus runtime fields | `api_key` | Login/API token records: `user_id`, `enabled`, `use_count`, `created`, `first_used_at`, and `last_used_at` |
 | `courses` | `Course` | `course_id` | Course metadata: `course_name`, `course_key`, `admins_for_course`, and `max_enrollment` |
 | `course_users` | `CourseUser` | `course_id`, `user_id` | Enrollment join rows connecting users to courses |
-| `movies` | `Movie` | `movie_id` | Movie metadata and artifact pointers, including ownership, visibility, upload/post-upload state, geometry, capture interval, trim bounds, research metadata, and staging/durable S3 URNs |
+| `movies` | `Movie` | `movie_id` | Movie metadata and artifact pointers, including ownership, visibility, upload/post-upload state, geometry, capture rate, trim bounds, research metadata, and staging/durable S3 URNs |
 | `movie_frames` | `MovieFrame` and internal marker-map item | `movie_id`, `frame_number` | Per-frame trackpoints, optional frame URNs, and the marker map stored at `frame_number=-100` |
 | `logs` | `LogEntry` | `log_id` | Audit/query records indexed by `ipaddr`, acting `user_id`, and `course_id`/`time_t`; movie lifecycle events also identify `movie_id` and `event_type`, while administrative events may identify `target_user_id` |
 

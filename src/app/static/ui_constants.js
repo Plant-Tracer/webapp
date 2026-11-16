@@ -15,8 +15,10 @@ const PRESS_PLAY_STATUS_TEXT = 'Press play';
 const RETRACE_REQUIRED_MESSAGE = 'marker moved; movie may require retracing';
 const RETRACE_MOVIE = 'Retrace movie';
 const RETRACE_TO_END_OF_MOVIE = 'Retrace to end of movie';
+const RETRACE_TO_TRIM_END = 'Retrace through the last included frame';
 const RESET_TRACING_CONFIRM_MESSAGE = 'Reset markers from the trim start through the end of the movie? Earlier frames will be preserved.';
 const TRACE_TO_END_OF_MOVIE = 'Trace to end of movie';
+const TRACE_TO_TRIM_END = 'Trace through the last included frame';
 const TRACE_MOVIE_TRIM_DISABLED_TITLE = 'Trimming requires at least two loaded movie frames.';
 const TRACING_COMPLETE_LOADING_MOVIE_MESSAGE = 'Tracing complete. Loading movie...';
 const TRACING_STARTING_MESSAGE = 'Tracing starting...';
@@ -36,9 +38,11 @@ export {
     RETRACE_MOVIE,
     RETRACE_REQUIRED_MESSAGE,
     RETRACE_TO_END_OF_MOVIE,
+    RETRACE_TO_TRIM_END,
     RESET_TRACING_CONFIRM_MESSAGE,
     TRACE_MOVIE,
     TRACE_TO_END_OF_MOVIE,
+    TRACE_TO_TRIM_END,
     TRACE_MOVIE_TRIM_DISABLED_TITLE,
     TRACING_COMPLETE_LOADING_MOVIE_MESSAGE,
     TRACING_STARTING_MESSAGE,

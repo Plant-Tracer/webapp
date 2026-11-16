@@ -19,8 +19,8 @@ Flask injects the Lambda API base URL into pages as the browser global
 - Fallback when no explicit base is configured: `https://{HOSTNAME}.{DOMAIN}/`,
   or the current request origin when those variables are absent.
 
-All client calls are authorized. The browser sends the current `api_key`; the
-Lambda validates it against DynamoDB.
+Protected endpoints validate the browser's `api_key` against DynamoDB and check
+permissions for the requested operation. The health check is public.
 
 Static JavaScript and CSS are not part of `LAMBDA_API_BASE`; they are served
 same-origin by Flask/`lambda-web` under `/static/*` until there is a versioned
@@ -32,7 +32,7 @@ asset plan for external static hosting.
 |-----------|--------|------|------|---------|
 | Ping | GET | `/resize-api/v1/ping` | none | Health check; returns `{ "error": false, "status": "ok", ... }` with `app_version`, `deployed_at`, and selected stack parameters. |
 | Complete upload (local adapter) | POST | `/resize-api/v1/process-upload` | `x-api-key` header | Completes a MinIO staging upload through the same service used by the AWS EventBridge handler. |
-| Finish camera capture | POST | `/resize-api/v1/finish-camera` | `x-api-key` header | After STOP and all frame uploads finish, assembles ordered JPEG frames into the durable source MP4 and starts normal movie processing. |
+| Finish camera capture | POST | `/resize-api/v1/finish-camera` | `x-api-key` header | After all frame uploads finish, assembles ordered JPEG frames into the durable source MP4 and starts normal movie processing. |
 | First frame | GET | `/resize-api/v1/first-frame?api_key=...&movie_id=...` | query `api_key` | Returns JPEG frame 0 with saved rotation applied and scaled to the analysis size. |
 | Movie data | GET | `/resize-api/v1/movie-data?api_key=...&movie_id=...&format=json` | query `api_key` | Returns signed playback/download URLs as JSON. |
 | Movie data redirect | GET | `/resize-api/v1/movie-data?api_key=...&movie_id=...` | query `api_key` | 302 redirect to signed movie URL. |
@@ -80,13 +80,13 @@ Content-Type: application/json
 The caller must have edit access to a camera movie still in ``uploading``
 state. The service verifies that uploaded frame numbers are contiguous from
 zero, claims the movie's processing lease, and queues camera assembly. A
-concurrent STOP that loses the lease claim returns HTTP 409. The
+concurrent finalization that loses the lease claim returns HTTP 409. The
 worker encodes the frames into the durable source MOV/MP4 object, writes capture
 and research attribution metadata, records frame and byte counts, and invokes
 normal post-upload processing. After processing succeeds, it removes the
 temporary camera JPEGs; retries repeat this cleanup safely. Invalid credentials
 or missing movie access return HTTP 403, while missing frames or a movie that is
-not accepting STOP return HTTP 409. Local development processes immediately
+not accepting finalization return HTTP 409. Local development processes immediately
 unless local async queue mode is enabled; deployed stacks publish the job to
 EventBridge.
 

@@ -390,12 +390,16 @@ def func_upload():
 
 @app.route('/camera', methods=GET)
 def func_camera():
-    """Serve the authenticated, same-browser camera capture page."""
-    response = make_response(render_template(
-        'camera.html',
-        **page_dict('Camera', require_auth=True),
-    ))
-    apikey.add_cookie(response)
+    """Open the camera and exchange an emailed key for the session cookie."""
+    context = page_dict('Camera', require_auth=True)
+    if request.args.get('api_key') not in (None, '', 'undefined'):
+        course_id = context['course_view_id'] or context['user_default_course_id']
+        response = redirect(url_for('func_camera', course_id=None if course_id == 'null' else course_id))
+        apikey.add_cookie(response)
+        response.headers['Referrer-Policy'] = 'no-referrer'
+    else:
+        response = make_response(render_template('camera.html', **context))
+    response.headers['Cache-Control'] = 'no-store'
     return response
 
 @app.route('/processing', methods=GET)

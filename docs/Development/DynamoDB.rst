@@ -338,6 +338,6 @@ retain ownership and expiry. These operations remain mutually exclusive per
 movie; names do not permit conflicting workers to run together.
 ``render_revision`` changes when saved annotations change. ``traced_render_key``
 records the versioned input fingerprint of a published traced MP4. Trim, source,
-geometry, capture interval and attribution also participate in that fingerprint.
+geometry, capture rate and attribution also participate in that fingerprint.
 ``render_failed_at`` and ``render_failure_summary`` describe a failed render
 without replacing a successful export or declaring tracing complete.
