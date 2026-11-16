@@ -78,7 +78,7 @@ Release Notes
 Unreleased Summary
 ******************
 
-    * Version 1.0.0: mark the first major release of Plant Tracer, including
+    * Version 1.0.0a1: mark the first alpha release of Plant Tracer 1.0, including
       browser-based time-lapse recording, direct Camera links in registration
       emails, and capture timestamps preserved in Analyze and traced downloads.
 

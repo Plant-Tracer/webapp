@@ -1,6 +1,6 @@
 [project]
 name = "webapp"
-version = "1.0.0"
+version = "1.0.0a1"
 description = "PlantTracer webapp"
 readme = "README.md"
 license = "GPL-3.0-or-later"
